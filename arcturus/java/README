@@ -2,17 +2,34 @@ ARCTURUS IN JAVA
 
 This directory contains the Java implementation of Arcturus.
 
-The "src" directory contains the source file hierarchy. Everything
-is under src/uk/ac/sanger/arcturus and thus the base package name is
-uk.ac.sanger.arcturus
+WHICH VERSION OF JAVA?
 
-The "test" directory contains the suite of test programs.
+The Java implementation of Arcturus requires Java 1.6 or higher.
 
-The "scripts" directory contains wrapper scripts which run the main
-applications and test suites.
+All software development is carried out using Eclipse.  The CVS
+checkout is a self-contained Eclipse project.
+
+There is also an Ant build file which is used to create and deploy
+the software.
+
+MINERVA
+
+The principal GUI application, Minerva, can be run by invoking the
+main Arcturus JAR file as an application under Windows or OS X and
+via the command
+
+  java -jar arcturus.jar
+
+BUILDING ARCTURUS AND MINERVA WITH ANT
 
 There is an Ant build file named build.xml which puts compiled classes
 in build/classes and the main Arcturus JAR file in the top-level directory.
+
+The build file also contains targets for creating the Windows stub
+application and for deplying the main Arcturus JAR file to the Sanger
+internal web server.
+
+Use "ant -p" to list the available build targets.
 
 REQUIRED JAR FILES
 
@@ -33,29 +50,8 @@ Arcturus currently requires the following external JAR files:
   * The Ganymed SSH library,
 
 They are kept in the "lib" sub-directory.  The manifest file for
-the Arcturus JAR file expects them to be in this location.
-
-You should invoke Ant with a command such as
-
-  ant -lib lib <target>
-
-A NOTE ON THE WRAPPER SCRIPTS
-
-Most of the scripts in the "scripts" directory are only six or seven lines
-long. They all read the csh script fragment named setup.csh which defines
-the classpath, various environment variables and other run-time options
-for the Java VM.
-
-DON'T MESS WITH SETUP.CSH
-
-Do not alter setup.csh without careful thought. You could prevent the entire
-Arcturus system from working.
-
-WHICH VERSION OF JAVA?
-
-The Arcturus Java classes require Java 1.6 or higher.
-
-You also need Apache Ant in order to build everything from scratch.
+the Arcturus JAR file expects them to be in this location, as does
+the Ant build file.
 
 WHAT'S IN THE DIFFERENT PACKAGES?
 
