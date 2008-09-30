@@ -914,7 +914,7 @@ sub writeCafSequence {
     if (my $tags = $this->getTags()) {
 # tag selection        
         my %toptions = (annotag => 1); # default allow finishers annotation
-        foreach my $key ("annotag","infotag","anno2info") { # investigate other
+        foreach my $key ("annotag","infotag") { # investigate other
             $toptions{$key} = $options{$key} if defined $options{$key};
         }
 
