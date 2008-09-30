@@ -891,11 +891,8 @@ sub linkToContig {
     my %options = @_;
 
     &verifyKeys('linkToContig',\%options,'sequenceonly','banded',
-                                         'bandedoffset','bandedlinear',
-                                         'bandedwindow',
-                                           'new',
-                                         'forcelink',
-                                         'strong','readclipping'); # + others
+#                                         'forcelink',
+                                         'strong','readclipping');
     return ContigHelper->crossmatch($this,$compare,%options);
 }
 
@@ -1064,9 +1061,8 @@ sub writeToCaf {
     if (!$options{notags} && $this->hasTags(1)) {
         my $tags = $this->getTags();
 # decide on which tags to export; default no annotation (assembly export)
-        my $includetag;
-#        my $excludetag = 'ANNO'; # default ?
-        my $excludetag;
+        my ($includetag,$excludetag);
+        $excludetag = "ANNO|ASIT"; # default exclude these
         if ($options{alltags}) {
             undef $excludetag;
         }
