@@ -154,15 +154,17 @@ sub getHostClass {
     return ref($host) || ucfirst($host) || '';
 }
 
-sub setParentSequenceID {
+sub setParentTagID {
 # parent sequence ID for inherited tags
     my $this = shift;
-    $this->{parent_seq_id} = shift; 
+    $this->{parent_tag_id} = shift; 
 }
 
-sub getParentSequenceID {
+sub getParentTagID {
     my $this = shift;
-    return $this->{parent_seq_id}; 
+# my %options = @_;
+# return TagFactory->traceTagParents($this) if $options{source};
+    return $this->{parent_tag_id}; 
 }
 
 # positions are stored as begin-end pairs (array of arrays)
@@ -542,7 +544,6 @@ sub remap {
     &verifyKeys('remap',\%options,'prewindowstart' ,'prewindowfinal',
                                   'postwindowstart','postwindowfinal',
                                   'split','nosplit','tracksegments',
-'usenew','list','useold', # to be removed later
                                   'minimumsegmentsize',        
                                   'annooptions','sysIDoptions','changestrand');
 
@@ -595,7 +596,7 @@ sub writeToCaf {
     my $FILE = shift; # optional output file handle
     my %options = @_; # option 'annotag' allows override of default
 
-    &verifyKeys('writeToCaf',\%options,'pair','annotag','infotag','anno2info');
+    &verifyKeys('writeToCaf',\%options,'pair','annotag','infotag');
 
     my $pair = $options{pair};
 
@@ -617,9 +618,8 @@ sub writeToCaf {
     my $tagcomment = $this->getTagComment();
     my $comment = $this->getComment();
 
-    return '' if ($type eq 'ANNO' && !$options{annotag});
-
-# various types of tag, NOTE and ANNO are two special cases
+# of various types of tag, NOTE and ANNO are two special cases
+# contig tags can (optionally) have added an INFO tag 
 
     my $host = $this->getHostClass() || 'Contig'; # if no host, assume contig
 
@@ -629,29 +629,20 @@ sub writeToCaf {
 # GAP4 NOTE tag, no position info
     }
 
-    elsif ($options{anno2info} && ($type eq 'ANNO') && ($host eq 'Contig')) {
-# contig annotation tags may have special status
-# generate two tags, ANNO contains the systematic ID and comment
+    elsif ($host eq 'Contig' && $type eq 'ANNO') {
+# generate one or two tags, ANNO contains the systematic ID and comment
         $string .= "@pos ";
 # add the systematic ID
         my $tagtext = $this->getSystematicID() || 'unspecified'; 
         $tagtext .= ' ' . $comment if $comment;
-        $string .= "\"$tagtext\"\n" ;
+        $string .= "\"$tagtext\"\n";
 # if also a comment available add an info tag
-        $string .= "Tag ASIT @pos \"$tagcomment\"\n" if $tagcomment;
+        if ($tagcomment && $options{infotag}) {
+            $string .= "Tag INFO @pos \"$tagcomment\"\n";
+	}
     }
 
-    elsif ($host eq 'Read') {
-# standard output of tag with position and tag comment (including ANNO)
-        $string .= "@pos ";
-        if ($tagcomment) {
-            $tagcomment =~ s/\n/\\n\\/g; # new-line to caf format
-            $tagcomment =~ s/\\n\\/\\n\\\n/g; # if there are others
-            $string .= "\"$tagcomment\"";
-	}
-        $string .= "\n";
-    }
-    elsif ($host eq 'Contig') {
+    elsif ($host eq 'Contig' || !$host) {
 # standard output of tag with position and tag comment (except ANNO)
         $string .= "@pos "; 
         if ($tagcomment) {
@@ -666,20 +657,19 @@ sub writeToCaf {
 	}
     }
 
-    elsif ($host) {
-        print STDERR "Unknown host type $host in tag\n";
+    elsif ($host eq 'Read') {
+# standard output of tag with position and tag comment (including ANNO)
+        $string .= "@pos ";
+        if ($tagcomment) {
+            $tagcomment =~ s/\n/\\n\\/g; # new-line to caf format
+            $tagcomment =~ s/\\n\\/\\n\\\n/g; # if there are others
+            $string .= "\"$tagcomment\"";
+	}
+        $string .= "\n";
     }
 
-    else {
-# standard output of tag with position and tag comment
-        $string .= "@pos "; 
-        $tagcomment =~ s/\\n\\/\\n\\\n/g if $tagcomment;
-        $string .= "\"$tagcomment\"" if $tagcomment;
-        $string .= "\n";
-# if comment available add an INFO tag
-        if ($comment && $options{infotag}) {
-            $string .= "Tag INFO @pos \"$comment\"\n";
-	}
+    else { # just in case: host neither Read or Contig
+        print STDERR "Unknown host type $host in tag\n";
     }
 
     $string  =~ s/(\"\s*\")/\"/g; # remove doubly occurring quotes
