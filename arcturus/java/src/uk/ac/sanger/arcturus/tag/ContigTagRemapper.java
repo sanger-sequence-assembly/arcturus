@@ -70,8 +70,9 @@ public class ContigTagRemapper {
 
 		if (mapping == null)
 			return;
-		
-		System.err.println("Mapping from contig " + parent_id + " to contig " + child_id + ":");
+
+		System.err.println("Mapping from contig " + parent_id + " to contig "
+				+ child_id + ":");
 		System.err.println(mapping);
 		for (int i = 0; i < mapping.segments.length; i++)
 			System.err.println("\t" + mapping.segments[i]);
@@ -153,143 +154,32 @@ public class ContigTagRemapper {
 			tag.cfinal = rs.getInt(5);
 			tag.setStrand(rs.getString(6));
 
-			System.err.println("Original: " + tag);
-			
+			System.err.println("\nOriginal: " + tag);
+
 			int rc = mapping.remapTag(tag);
 
-			if (rc == Mapping.NO_MATCH)
-				System.err.println("\t-- NO MATCH --");
-			else
-				System.err.println("Remapped (code = " + rc + "): " + tag);
+			switch (rc) {
+				case Mapping.NO_MATCH:
+				case Mapping.LEFT_END_OUTSIDE_RANGE:
+				case Mapping.RIGHT_END_OUTSIDE_RANGE:
+					System.err.println("\tUnable to re-map: " + Mapping.codeToString(rc));
+					break;
+			
+				case Mapping.WITHIN_SINGLE_SEGMENT:
+				case Mapping.SPANS_MULTIPLE_SEGMENTS:
+				case Mapping.LEFT_END_BETWEEN_SEGMENTS:
+				case Mapping.RIGHT_END_BETWEEN_SEGMENTS:
+				case Mapping.BOTH_ENDS_BETWEEN_SEGMENTS:
+					System.err.println("Remapped (" + Mapping.codeToString(rc) + "): " + tag);
+					break;
+					
+				default:
+					System.err.println("\tUnknown code returned by remapTag: " + rc);
+					break;
+			}
 		}
 
 		rs.close();
-	}
-
-	class Mapping {
-		public static final int NO_MATCH = 0;
-		public static final int WITHIN_SINGLE_SEGMENT = 1;
-		public static final int SPANS_MULTIPLE_SEGMENTS = 2;
-		public static final int LEFT_END_OUTSIDE_RANGE = 3;
-		public static final int RIGHT_END_OUTSIDE_RANGE = 4;
-		public static final int LEFT_END_BETWEEN_SEGMENTS = 5;
-		public static final int RIGHT_END_BETWEEN_SEGMENTS = 6;
-
-		protected int parent_id;
-		protected int contig_id;
-		protected int cstart;
-		protected int cfinish;
-		protected int pstart;
-		protected int pfinish;
-		protected boolean forward;
-		protected Segment[] segments;
-
-		public int remapTag(Tag tag) {
-			// Test whether tag lies outside this mapping
-			if (tag.cfinal < pstart || tag.cstart > pfinish)
-				return NO_MATCH;
-
-			int segStart = findParentSegmentNumber(tag.cstart);
-			int segFinish = findParentSegmentNumber(tag.cfinal);
-			
-			System.err.println("Tag start is in segment " + segStart);
-			System.err.println("Tag end is in segment " + segFinish);
-			
-			if (segStart >= 0 && segFinish >= 0) {
-				tag.cstart = segments[segStart].mapToChild(tag.cstart, forward);
-				tag.cfinal = segments[segFinish].mapToChild(tag.cfinal, forward);
-				
-				tag.contig_id = contig_id;
-				tag.parent_id = tag.id;
-				tag.id = 0;
-				
-				return (segStart == segFinish) ? WITHIN_SINGLE_SEGMENT : SPANS_MULTIPLE_SEGMENTS;
-			}
-			
-			return NO_MATCH;
-		}
-		
-		private int findParentSegmentNumber(int pos) {
-			if (segments == null)
-				return -1;
-			
-			for (int i = 0; i < segments.length; i++)
-				if (segments[i].pstart <= pos && segments[i].pfinish >= pos)
-					return i;
-				else if (segments[i].pstart > pos)
-					return -1;
-			
-			return -1;
-		}
-		
-		public String toString() {
-			return "Mapping[parent_id=" + parent_id + ", contig_id=" + contig_id +
-				", cstart=" + cstart + ", cfinish=" + cfinish + ", pstart=" + pstart +
-				", pfinish=" + pfinish + ",sense=" + (forward ? "forward" : "reverse") +
-				", " + (segments == null ? "no " : segments.length) + " segments]";
-		}
-	}
-
-	class Segment {
-		protected int cstart;
-		protected int pstart;
-		protected int pfinish;
-
-		public Segment(int cstart, int pstart, int length, boolean forward) {
-			if (forward) {
-				this.cstart = cstart;
-				this.pstart = pstart;
-				this.pfinish = pstart + length - 1;
-			} else {
-				this.cstart = cstart + length - 1;
-				this.pstart = pstart - length + 1;
-				this.pfinish = pstart;
-			}
-		}
-
-		public int mapToChild(int pos, boolean forward) {
-			if (pos >= pstart && pos <= pfinish) {
-				int offset = pos - pstart;
-				return forward ? cstart + offset : cstart - offset;
-			} else
-				return -1;
-		}
-		
-		public String toString() {
-			return "Segment[pstart=" + pstart + ", pfinish=" + pfinish + ", cstart=" + cstart + "]";
-		}
-	}
-
-	class Tag {
-		public static final int FORWARD = 1;
-		public static final int REVERSE = 2;
-		public static final int UNKNOWN = 3;
-
-		protected int id;
-		protected int contig_id;
-		protected int parent_id;
-		protected int tag_id;
-		protected int cstart;
-		protected int cfinal;
-		protected int strand;
-		protected String tagtype;
-		protected String tagcomment;
-
-		public void setStrand(String s) {
-			if (s == null)
-				strand = UNKNOWN;
-			else if (s.equalsIgnoreCase("F"))
-				strand = FORWARD;
-			else if (s.equalsIgnoreCase("R"))
-				strand = REVERSE;
-			else
-				strand = UNKNOWN;
-		}
-		
-		public String toString() {
-			return "Tag[id=" + id + ", parent_id=" + parent_id + ", contig_id=" + contig_id +
-				", tag_id=" + tag_id + ", cstart=" + cstart + ", cfinal=" + cfinal + "]";
-		}
 	}
 
 	public static void main(String[] args) {
@@ -355,6 +245,7 @@ public class ContigTagRemapper {
 		ps.println("\t-child\t\tContig ID of child contig");
 		ps.println();
 		ps.println("OPTIONAL PARAMETERS:");
-		ps.println("\t-tags\t\tComma-separated list of tag types to remap [default: TEST]");
+		ps
+				.println("\t-tags\t\tComma-separated list of tag types to remap [default: TEST]");
 	}
 }
