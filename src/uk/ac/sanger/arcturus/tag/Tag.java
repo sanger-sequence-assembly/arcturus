@@ -25,11 +25,23 @@ public class Tag {
 		else
 			strand = UNKNOWN;
 	}
+	
+	public String getStrandAsString() {
+		switch (strand) {
+			case FORWARD:
+				return "F";
+				
+			case REVERSE:
+				return "R";
+				
+			default:
+				return "U";
+		}
+	}
 
 	public String toString() {
 		return "Tag[id=" + id + ", parent_id=" + parent_id + ", contig_id="
 				+ contig_id + ", tag_id=" + tag_id + ", cstart=" + cstart
 				+ ", cfinal=" + cfinal + "]";
 	}
-
 }
