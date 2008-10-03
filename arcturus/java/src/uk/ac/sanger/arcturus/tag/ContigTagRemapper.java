@@ -186,9 +186,6 @@ public class ContigTagRemapper {
 	}
 	
 	private void storeTag(Tag tag) throws SQLException {
-		//"insert into TAG2CONTIG(parent_id,contig_id,tag_id,cstart,cfinal,strand,comment)"
-		//	+ " values(?,?,?,?,?,?,?)";
-
 		pstmtPutChildTag.setInt(1, tag.parent_id);
 		pstmtPutChildTag.setInt(2, tag.contig_id);
 		pstmtPutChildTag.setInt(3, tag.tag_id);
