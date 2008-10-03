@@ -64,7 +64,7 @@ public class ContigTagRemapper {
 			conn.close();
 	}
 
-	public void remapTags(int parent_id, int child_id, String[] tagtypes)
+	public void remapTags(int parent_id, int child_id, String[] tagtypes, boolean store)
 			throws SQLException {
 		Mapping mapping = findMapping(parent_id, child_id);
 
@@ -78,7 +78,7 @@ public class ContigTagRemapper {
 			System.err.println("\t" + mapping.segments[i]);
 
 		for (int i = 0; i < tagtypes.length; i++)
-			remapTags(mapping, tagtypes[i]);
+			remapTags(mapping, tagtypes[i],store);
 	}
 
 	protected Mapping findMapping(int parent_id, int child_id)
@@ -136,7 +136,7 @@ public class ContigTagRemapper {
 		return segments;
 	}
 
-	protected void remapTags(Mapping mapping, String tagtype)
+	protected void remapTags(Mapping mapping, String tagtype, boolean store)
 			throws SQLException {
 		pstmtGetParentTags.setInt(1, mapping.parent_id);
 		pstmtGetParentTags.setString(2, tagtype);
@@ -170,6 +170,9 @@ public class ContigTagRemapper {
 				case Mapping.LEFT_END_BETWEEN_SEGMENTS:
 				case Mapping.RIGHT_END_BETWEEN_SEGMENTS:
 				case Mapping.BOTH_ENDS_BETWEEN_SEGMENTS:
+					if (store)
+						storeTag(tag);
+					
 					System.err.println("Remapped (" + Mapping.codeToString(rc) + "): " + tag);
 					break;
 					
@@ -181,6 +184,34 @@ public class ContigTagRemapper {
 
 		rs.close();
 	}
+	
+	private void storeTag(Tag tag) throws SQLException {
+		//"insert into TAG2CONTIG(parent_id,contig_id,tag_id,cstart,cfinal,strand,comment)"
+		//	+ " values(?,?,?,?,?,?,?)";
+
+		pstmtPutChildTag.setInt(1, tag.parent_id);
+		pstmtPutChildTag.setInt(2, tag.contig_id);
+		pstmtPutChildTag.setInt(3, tag.tag_id);
+		pstmtPutChildTag.setInt(4, tag.cstart);
+		pstmtPutChildTag.setInt(5, tag.cfinal);
+		pstmtPutChildTag.setString(6, tag.getStrandAsString());
+		
+		if (tag.tagcomment == null)
+			pstmtPutChildTag.setNull(7, Types.VARCHAR);
+		else
+			pstmtPutChildTag.setString(7, tag.tagcomment);
+
+		int rc = pstmtPutChildTag.executeUpdate();
+		
+		if (rc == 1) {
+			ResultSet rs = pstmtPutChildTag.getGeneratedKeys();
+			
+			if (rs.next())
+				tag.id = rs.getInt(1);
+			
+			rs.close();
+		}
+	}
 
 	public static void main(String[] args) {
 		String instance = null;
@@ -188,6 +219,7 @@ public class ContigTagRemapper {
 		int parent_id = -1;
 		int child_id = -1;
 		String[] tagtypes = { "TEST" };
+		boolean store = false;
 
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equalsIgnoreCase("-instance"))
@@ -204,6 +236,9 @@ public class ContigTagRemapper {
 
 			if (args[i].equalsIgnoreCase("-tags"))
 				tagtypes = args[++i].split(",");
+			
+			if (args[i].equalsIgnoreCase("-store"))
+				store = true;
 		}
 
 		if (instance == null || organism == null || parent_id < 0
@@ -227,7 +262,7 @@ public class ContigTagRemapper {
 
 			ContigTagRemapper crm = new ContigTagRemapper(adb);
 
-			crm.remapTags(parent_id, child_id, tagtypes);
+			crm.remapTags(parent_id, child_id, tagtypes, store);
 
 			crm.close();
 		} catch (Exception e) {
@@ -245,7 +280,7 @@ public class ContigTagRemapper {
 		ps.println("\t-child\t\tContig ID of child contig");
 		ps.println();
 		ps.println("OPTIONAL PARAMETERS:");
-		ps
-				.println("\t-tags\t\tComma-separated list of tag types to remap [default: TEST]");
+		ps.println("\t-tags\t\tComma-separated list of tag types to remap [default: TEST]");
+		ps.println("\t-store\t\tStore the re-mapped tags");
 	}
 }
