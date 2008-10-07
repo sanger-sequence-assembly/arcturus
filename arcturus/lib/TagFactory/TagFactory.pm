@@ -158,7 +158,8 @@ sub verifyTagContent {
 	$returnstatus = 0 unless $status;
     }
 # for other types, check if a tag descriptor is available
-    elsif ($tagtype ne 'POLY' && $tagtype ne 'WARN') {
+#    elsif ($tagtype !~ /^(POLY|WARN|COMM)$/) {
+    elsif ($tagtype ne 'POLY' && $tagtype ne 'WARN' && $tagtype ne 'COMM') {
         $returnstatus = 0 unless $tag->getTagComment();
     }
 
@@ -339,211 +340,15 @@ sub processAdditiveTag {
     return 2,"Invalid ADDI tag start position $tposs corrected";
 }
 
-sub oldprocessOligoTag {
-# test/complete oligo information
-    my $class = shift;
-    my $tag  = shift;
-    my %options = @_; # used in repair mode
- 
-    return undef unless &verifyParameter($tag,'processOligoTag');
-
-    my $tagtype = $tag->getType();
-
-    return undef unless ($tagtype eq 'OLIG' || $tagtype eq 'AFOL');
-
-    my $report = '';
-    my $warning = 0;
-
-# extract the oligo DNA from the tag comment
-# compare it with stored tag sequence, if any
-
-    my $tagcomment = $tag->getTagComment();
-  
-    my ($DNA,$newcomment) = &get_oligo_DNA($tagcomment);
-
-    if (!$DNA && !$tag->getDNA()) {
-        $report .= "Missing DNA sequence in oligo tag info\n";
-        $warning++;
-    }
-    else {
-# has the tag comment changed?
-        if ($newcomment) {
-	    $report .= "Multiple DNA info removed from $tagtype tag\n";
-            $tagcomment = &cleanupreadtaginfo($newcomment);
-	    $tag->setTagComment($tagcomment);
-            $warning++;
-        }
-# compare DNA with stored version (if any)
-        if (!$tag->getDNA()) {
-            $report .= "Oligo tag DNA sequence $DNA added\n";
-            $tag->setDNA($DNA);
-            $warning++;
-        }
-        elsif ($DNA && $tag->getDNA() ne $DNA) {
-            $report .= "Oligo tag DNA sequence ($DNA) conflicts with tag\n"
-	            .  "comment $tagcomment\nDNA sequence replaced\n";
-            $tag->setDNA($DNA); # always repair
-            $warning++;
-	}
-    }
-
-# test DNA length against position specification
-
-    $DNA = $tag->getDNA(); # may have changed
-    if ($DNA && (my $length = length($DNA))) {
-
-	my ($tposs,$tposf) = $tag->getPosition();
-        
-        unless ($tposf > $tposs) {
-            $report .= "oligo length error ($tposs $tposf) in tag comment\n"
-	            .  "$tagcomment\n";
-	    $warning++;
-# abort: invalid position information
-            return $warning, $report;
-        }
-
-        if ($tposf-$tposs+1 != $length) {
-            $report .= "oligo length mismatch ($tposs $tposf $length) "
-                    .  "in tag comment\n$tagcomment\n";
-# you might want to correct the positions by matching against read?
-	    $warning++;
-        }
-    }
-
-# get the tag sequence name from the oligo information ($tagcomment)
-
-    if ($tagtype eq 'AFOL') {
-# these tags are supposed to have a standard (Staden) format with the
-# tag sequence name specified; test/assign to the $tag instance 
-        if ($tagcomment =~ /oligoname\s*(\w+)/i) {
-            my $newtagseqname = $1;
-# check the name against the one of this $tag, if it is defined
-            if (my $oldtagseqname = $tag->getTagSequenceName()) {
-                if ($oldtagseqname ne $newtagseqname) {
-                    $report .= "oligo tag sequence name mismatch "
-                            .  "($oldtagseqname <> $newtagseqname) "
-                            .  "in tag comment\n$tagcomment\n";
-	            $warning++;
-		}
-                $tag->setTagSequenceName($newtagseqname); # if $options{forcen}
-	    }
-	    else {
-# assign/replace name derived from tag comment
-                $tag->setTagSequenceName($newtagseqname);
-	    }
-        }
-	else {
-            $report .= "Unrecognized tag information\n$tagcomment\n";
-	    $warning++;
-	}
-    }
-
-    elsif ($tagtype eq 'OLIG') {
-# these tags have a loosly defined structure which has to be "decoded"
-# we try to extract a tagsequence name from the tag information 
-        my ($newname,$newcomment) = &decode_oligo_info($tagcomment,$DNA);
-
-# test if the comment contains a place holder
-
-        if ($newcomment && $newcomment =~ /\<\w+\>/) {
-# if the tag sequence name is defined, and matches the generic place
-# holder name, then substitute the place holder in the tag comment
-            my $placeholder = $1;
-            my $tagseqname = $tag->getTagSequenceName(); # existing name,if any
-            if ($tagseqname && $tagseqname =~ /^$placeholder\w+/) {
-                $newcomment =~ s/\<$placeholder\>/$tagseqname/;
-                $report .= "place holder <$placeholder> replaced by "
-		        .  "existing tag sequence name $tagseqname\n";
-                $warning++;
-            }
-            elsif ($tagseqname) {
-# the tag sequence name is defined, but differs from the placeholder name
-# two options: replace the place holder by the tag sequence name, or
-# overwrite the currrent sequence name and substitute by the place holder
-                $report .= "Conflicting tag sequence name and place holder: "
-		        .  "($tagseqname, <$placeholder>)\n";
-                $warning++;
-# choose which one by specifying the name with the force option (repair mode)
-                if (my $force = $options{nameforcing}) {
-                    if ($tagseqname =~ /$force/ && $placeholder =~ /$force/) {
-                        $report .= "'force' option not discriminating\n";
-                    }
-		    elsif ($tagseqname =~ /$force/) {
-                        $newcomment =~ s/\<$placeholder\>/$tagseqname/;
-                    }
-                    else {
-                        $tag->setTagSequenceName($placeholder);
-		    }
-		}
-            }
-	    else {
-# the tag name is not defined, enter the placeholder
-                $tag->setTagSequenceName($newname);
-	    }
-            $tag->setTagComment($newcomment);
-	}
-
-        elsif ($newname && $tag->getTagSequenceName()) {
-# test the name (from comment) against existing name
-            my $tagseqname = $tag->getTagSequenceName();
-            unless ($newname eq $tagseqname) {
-                $report .= "tag sequence name change indicated: "
-		        .  "($tagseqname --> $newname)\n";
-# specify with the force option if the new name is selected
-                my $force = $options{nameforcing};
-                if ($force && ($newname =~ /$force/ || $tagseqname =~ /$force/)) {
-                    $tag->setTagSequenceName($newname);
-                }
-	    }
-            $tag->setTagComment($newcomment) if $newcomment;
-	}
-
-        elsif ($newname) {
-# there is no existing name; assign the tag sequence name
-            $tag->setTagSequenceName($newname);
-            $tag->setTagComment($newcomment) if $newcomment;
-	}
-
-        else {
-	    $report .= "Failed to decode OLIGO description:\n$tagcomment\n";
-            $warning++;
-	}
-    }
-
-    return $warning,$report;
-}
-
-sub get_oligo_DNA { # TO BE DEPRECATED
-# get DNA sequence from tag comment and remove possible multiple occurrences
-    my $info = shift;
-
-    if ($info =~ /([ACGT\*]{5,})/i) {
-        my $DNA = $1;
-# test if the DNA occurs twice in the data
-        if ($info =~ /$DNA[^ACGT].*(sequence\=)?$DNA/i) {
-# multiple occurrences of DNA to be removed ...
-            $info =~ s/($DNA[^ACGT].*?)(sequence\=)?$DNA/$1/i;
-            return $DNA,$info;
-        }
-	return $DNA,0; # no change
-    }
-
-    return 0,0; # no DNA
-}
-
-#---------------------------------------------------------------------------------------
-
-my $USEOLD = 0;
-
 sub processOligoTag {
 # test/complete oligo information
     my $class = shift;
     my $tag  = shift;
- my %options = @_; # used in repair mode
-if ($USEOLD) {
-    my ($status,$report) = &oldprocessOligoTag($class,$tag,@_);
+    my %options = @_; # nameforcing =>  used in repair mode
 
-}
+#if ($USEOLD) {
+#    my ($status,$report) = &oldprocessOligoTag($class,$tag,@_);
+#}
  
     return undef unless &verifyParameter($tag,'processOligoTag');
 
@@ -1089,22 +894,10 @@ sub transpose {
     my $align = shift;
     my $offset = shift;
     my %options = @_;
-
-# TO BE DEPRECATED from here; catch old usage
-    if (ref($offset) eq 'ARRAY') { # use the old form (to be deprecated)
-        my $logger = &verifyLogger('transpose');
-        $logger->warning("deprecated use of 'transpose' detected (@$offset,$align");
-        unless ($offset->[0] == $offset->[1]) {
-            my $wfinal = $options{postwindowfinal};
-            return &oldtranspose($class,$tag,$align,$offset,$wfinal);
-        }
-#      my $wfinal = $options{postwindowfinal};
-#      return &oldtranspose($class,$tag,$align,$offset,$wfinal);
-        $offset = $offset->[0];
-    }
-# TO HERE
     
     return undef unless &verifyParameter($tag,'transpose');
+
+# test $align and $offset ? (no ref type)
 
     $tag = $tag->copy() unless $options{nonew}; # nostatus => 1 ?
 
@@ -1130,7 +923,7 @@ sub remapper {
 # private, remap position of tag and corresponding sequence, if any
     my $tag   = shift;
     my $mapping = shift;
-    my %options = @_;
+    my %options = @_; # tracksegments, repair
 
     return undef unless &verifyPrivate($tag,'remapper');
 
@@ -1146,11 +939,11 @@ sub remapper {
         return undef unless $newmapping; # mapped tag out of range
     }
 
-    my %moptions; # copy to local hash
-    $moptions{nonzerostart} = $options{nonzerostart} || 0;
-    $moptions{repair}       = $options{repair}       || 0;
+#    my %moptions; # copy to local hash
+#    $moptions{tracksegments} = $options{tracksegments} || 0;
+#    $moptions{repair}        = $options{repair}       || 0;
 
-    $newmapping = $newmapping->multiply($mapping,%moptions) if $mapping;
+    $newmapping = $newmapping->multiply($mapping,%options) if $mapping;
 
     return undef unless $newmapping; # mapped tag out of range
 
@@ -1195,8 +988,8 @@ $logger->debug($newmapping->toString()) unless $isequal;
         return undef;
     }
 
-$logger->debug("mapping $crossmapping");
-$logger->debug($crossmapping->toString());
+$logger->info("cross mapping $crossmapping");
+$logger->fine($crossmapping->toString());
 
 # count number of segments of cross comparison: is one more than frameshift(s)
 
@@ -1215,11 +1008,11 @@ $logger->debug($crossmapping->toString());
 # if there are no truncations or frameshifts, the (possible) DNA is unchanged
 
     return 1 unless ($frameshift || $ltruncate || $rtruncate);
+$logger->info("remapper: there are truncations or frameshifts $frameshift | $ltruncate | $rtruncate");
 
     if (my $olddna = $tag->getDNA()) {
 # DNA sequence remapping (use oldmapping newmapping)
 
-$logger->debug("remapper: there are truncations or frameshifts");
 $logger->debug($oldmapping->toString());
 $logger->debug($newmapping->toString());
 
@@ -1243,13 +1036,11 @@ sub remap {
     my $class = shift;
     my $tag   = shift;
     my $mapping = shift;
-    my %options = @_;
+    my %options = @_; # split, nosplit=>collapse/composite, (no)tracksegments=>
 
     return undef unless &verifyParameter($tag,'remap');
 
     return undef unless &verifyParameter($mapping,'remap', class=>'Mapping');
-
-    return $class->oldremap($tag,$mapping,@_) if $options{useold}; # test
 
 my $logger = &verifyLogger('newremap');
 
@@ -1259,8 +1050,8 @@ my $logger = &verifyLogger('newremap');
 
     $tag = $tag->copy() unless $options{nonew};
 
-$logger->info($mapping->toString());
-$logger->info($oldposition->toString());
+$logger->fine($mapping->toString());
+$logger->fine($oldposition->toString());
 
     return undef unless &remapper($tag,$mapping,%options);
 
@@ -1268,13 +1059,18 @@ $logger->info($oldposition->toString());
 
     my @tags;
 
+    my $split = $options{split};
+    $split = 1 unless defined($split); # default
+    $split = 0 if $options{nosplit}; # overrides
+    my $nosplit = $options{nosplit};
+
     if (!$tag->isComposite()) {
         push @tags,$tag; # as is
     }
 
 # case > 1 segments (composite tag) to be split into out array of tags
 
-    elsif ($options{split} || (!defined($options{split}) && !$options{nosplit}) ) {
+    elsif ($split) {
         my $tags = $tag->split();
         push @tags, @$tags if $tags;
     }
@@ -1283,11 +1079,11 @@ $logger->info($oldposition->toString());
 
     else {
 # either out 1 tag with composite position
-        if ($options{nosplit} && $options{nosplit} eq 'composite') {
+        if ($nosplit && $nosplit eq 'composite') {
             push @tags,$tag; # as is
 	}
 # or out 1 tag with overall position and new comment
-        elsif ($options{nosplit} && $options{nosplit} eq 'collapse') {
+        elsif ($nosplit && $nosplit eq 'collapse') {
             push @tags,$tag->collapse();
 	}
 # else, invalid option, fall back on collapse
@@ -1402,303 +1198,6 @@ my $logger = &verifyLogger("collapse"); $logger->debug("ENTER collapse");
     return $tag;
 }
 
-# -------------------
-# old stuff, to be DEPRECATED
-# -------------------
-
-sub oldtranspose { # used in Tag, ContigHelper TO BE DEPRECATED
-# transpose a tag by applying a linear transformation
-# (apply only to contig tags)
-# returns new Tag instance (or undef)
-    my $class = shift;
-    my $tag   = shift;
-    my $align = shift;
-    my $offset = shift; # array length 2 with offset at begin and end
-    my $window = shift || 1; # new position in range 1 .. window
-
-    return undef unless &verifyParameter($tag,'oldtranspose');
-
-    my $logger = &verifyLogger('oldtranspose');
-$logger->warning("oldtranspose (o: @$offset, a: $align, w:$window TO BE DEPRECATED");
-
-# transpose the position range using the offset info. An undefined offset
-# indicates a boundery outside the range 1 .. length; adjust accordingly
-
-    return undef unless (defined($offset->[0]) && defined($offset->[1])); 
-
-    my @tpos = $tag->getPosition();
-    
-$logger->debug("position @tpos");
-
-    for my $i (0,1) {
-        $tpos[$i] *= $align if ($align eq -1);
-        $tpos[$i] += $offset->[$i];
-    }
-
-    if ($tpos[0] > $window && $tpos[1] > $window or $tpos[0] < 1 && $tpos[1] < 1) {
-# the transposed tag is completely out of range
-        return undef;
-    }
-
-# adjust boundaries to ensure tag position inside allowed window
-    
-$logger->debug("new position @tpos");
- 
-   my $truncated;
-    for my $i (0,1) {
-        if ($tpos[$i] > $window) {
-            $tpos[$i] = $window;
-            $truncated++;
-        }
-        elsif ($tpos[$i] <= 0) {
-            $tpos[$i] = 1;
-            $truncated++;
-	}
-    }
-
-$logger->debug("new position after truncate test");
-
-    @tpos = sort {$a <=> $b} @tpos if @tpos;
-
-# transpose the strand (if needed) (transpose DNA on export only)
-
-    my $strand = $tag->getStrand();
-    if ($strand eq 'Forward' and $align < 0) {
-        $strand = 'Reverse';
-    }
-    elsif ($strand eq 'Reverse' and $align < 0) {
-        $strand = 'Forward';
-    }
-
-# get a systematic ID if not already defined
-
-    &composeName($tag) unless $tag->getSystematicID();
-
-# transport the comment; add import details, if any
-
-    my $newcomment = $tag->getComment() || '';
-    $newcomment .= ' ' if $newcomment;
-    $newcomment .= "imported ".$tag->getSystematicID(); # if $options{sysID}; # ?
-    $newcomment .= " truncated" if $truncated;
-    $newcomment .= " frame-shifted" if ($offset->[0] != $offset->[1]);
-
-# create (spawn) a new tag instance
-
-    my $newtag = $tag->new($tag->{label});
-
-    $newtag->setTagID($tag->getTagID());
-# TAG2CONTIG table items
-    $newtag->setPosition(@tpos); 
-    $newtag->setStrand($strand);
-    $newtag->setComment($newcomment);
-# CONTIGTAG table items
-    $newtag->setType($tag->getType());
-    $newtag->setSystematicID($tag->getSystematicID());
-    $newtag->setTagSequenceID($tag->getTagSequenceID());
-    $newtag->setTagComment($tag->getTagComment());
-# TAGSEQUENCE table items
-    $newtag->setTagSequenceName($tag->getTagSequenceName()); 
-    $newtag->setDNA($tag->getDNA());
-
-    return $newtag;
-}
-
-sub oldremap { # TO BE DEPRECATED
-# takes a mapping and transforms the tag positions to the mapped domain
-# returns an array of (one or more) new tags, or undef
-    my $class = shift;
-    my $tag   = shift;
-    my $mapping = shift;
-    my %options = @_;
-my $logger = &verifyLogger('oldremap');
-$logger->debug("TagFactory->oldremap 1 $tag $mapping  o: @_");
-
-# options:  break = 1 to allow splitting of a tag straddling mapping segments
-#                     and return a separate tag for each segment
-#                   0 (default) to not allow that; if a sequence is provided
-#                     generate a tag sequence with pad(s)
-#           sequence, if provided used to generate a tagsequence, possibly 
-#                     with pads; in its absence a long comment is generated
-
-    return undef unless &verifyParameter($tag,'remap');
-
-    return undef unless &verifyParameter($mapping,'remap', class=>'Mapping');
-
-# get current tag position
-
-    my @currentposition = $tag->getPosition();
-
-    my $tagsequencespan = $tag->getSpan();
-
-# generate a helper 1-1 mapping
-
-    my $helpermapping = new Mapping('helper');
-# and add the one segment
-    $helpermapping->putSegment(@currentposition,@currentposition);
-
-# multiply by input mapping; the helper mapping may be masked
-# by the input mapping, which would result in a truncated tag
-
-$logger->info("Tag position: @currentposition");
-
-# the next block initializes start position for searching the mappings
-
-    if (my $nzs = $options{nonzerostart}) {
-# initialize the starting positions if that has not been done
-        $nzs->{tstart} = 0 unless defined $nzs->{tstart}; # count along
-$logger->info(" previous positions : $nzs->{tstart}");
-        $nzs->{tstart}-- if ($nzs->{tstart} > 0); # skip one back
-        $nzs->{rstart} = 0; # always reset
-$logger->info(" starting positions : $nzs->{rstart},$nzs->{tstart}");
-    }
-
-$logger->info("Mapping: ".$mapping->toString());
-$logger->info("Helper : ".$helpermapping->toString());
-
-    my $maskedmapping = $helpermapping->multiply($mapping,%options);
-
-# trap problems with mapping by running again with debug option
-
-    unless ($maskedmapping) {
-# something wrong with mapping
-$logger->debug("Tag position: @currentposition");
-$logger->debug($helpermapping->toString());    
-$logger->debug($mapping->toString()); 
-        $helpermapping->multiply($mapping,debug=>1);
-        return undef; 
-    }
-
-$logger->info("Masked Mapping: ".$maskedmapping->toString());
-
-    return undef unless $maskedmapping->hasSegments(); # just in case
-          
-    my $segments = $maskedmapping->getSegments();
-    my $numberofsegments = scalar(@$segments);
-    my $invert  = ($maskedmapping->getAlignment() < 0) ? 1 : 0;
-# input parameter definition takes precedence
-    $options{changestrand} = $invert unless defined $options{changestrand};
-
-# OK, here we have the mapping of the tag sorted
-
-# test if the tag is clipped
-
-    my @range = $maskedmapping->getContigRange();
-    my $lclip = $range[0] - $currentposition[0];
-    my $rclip = $currentposition[1] - $range[1];
-    my $truncated = ($lclip > 0 || $rclip < 0) ? 1 : 0; 
-    $truncated = "truncated (L:$lclip R:$rclip)" if $truncated; # used later
-
-# now output of transformed tags; consider three cases
-
-    my @tags;
-    
-    my $sequence = $options{sequence};
-#    my $sequence = $tag->getDNA();
-#    $sequence = $options{sequence} if $options{sequence};
-
-    if ($numberofsegments == 1) { 
-# CASE 1: one shift for the whole tag
-        my $newtag = $tag->copy(%options);
-        my @segment = $segments->[0]->getSegment();
-        my @newposition = ($segment[2],$segment[3]);
-        $newtag->setPosition(sort {$a <=> $b} @newposition);
-        $newtag->setDNA(substr $sequence,$segment[0],$segment[1]) if $sequence;
-        my $comment = $tag->getComment() || '';
-# append a warning to the comment if the tag is truncated
-        if ($truncated && $comment !~ /truncated/) {
-            $newtag->setComment($truncated,append=>1);
-	}
-        push @tags,$newtag;
-    }
-
-    elsif ($options{break} || $options{split}) {
-# CASE 2 : more than one segment, generate multiple tags
-        my $number = 0;
-        my $minimumsegmentsize = $options{minimumsegmentsize} || 1;
-# XXX how do we handle clipping?
-        for (my $i = 0 ; $i < $numberofsegments ; $i++) {
-            my $newtag = $tag->copy(%options);
-            my @segment = $segments->[$i]->getSegment();
-            my @newposition = sort {$a <=> $b} ($segment[2],$segment[3]);
-            my $segmentlength = $newposition[1] - $newposition[0] + 1;
-            next if ($segmentlength < $minimumsegmentsize);
-            $newtag->setPosition(@newposition);
-            my $tagcomment = $newtag->getTagComment() || '';
-# compose the sequence for this tag fragment
-            if ($sequence) {
-                my $fragment = substr $sequence,$segment[0],$segment[1];
-                $newtag->setDNA($fragment);
-	    }
-# add comment to possibly existing one
-	    $number++;
-            $tagcomment .= ' ' if $tagcomment;
-            $tagcomment .= "fragment $number of $numberofsegments";
-            $newtag->setTagComment($tagcomment);
-            my $comment = $newtag->getComment();
-            unless ($comment =~ /\bsplit\b/) {
-                $newtag->setComment("split! ($tagsequencespan)",append=>1);
-	    }
-            push @tags,$newtag;
-	}
-    }
-
-    else {
-# CASE 3 : more than one segment, but only one tag to be generated
-# copy whatever we already have about this tag
-        my $newtag = $tag->copy(%options);
-# amend the comment to signal frame shifts and possible truncation
-        my $comment = $newtag->getComment() || '';
-        unless ($comment =~ /frame\s+shift/) {
-            $newtag->setComment("frame shifts!",append=>1);
-	}
-        if ($truncated && $comment !~ /truncated/) {
-            $newtag->setComment($truncated,append=>1);
-	}
-# generate a tag sequence with pads for this new tag
-        my $tagcomment = '';
-        my $tagsequence = '';
-        my ($spos,$fpos) = (0,0);
-        foreach my $segment (@$segments) {
-# either generate a sequence with pads, or a comment about pad positions
-            my @segment = $segment->getSegment();
-            if ($fpos > 0) {
-                my $length = $segment[1] - $segment[0] + 1;
-                my $gapsize = $segment[2] - 1 - $fpos;
-
-                if (my $sequence = $options{sequence}) {
-# add pads if gapsize > 0 (insertions)
-                    foreach my $i (1..$gapsize) {
-                        $tagsequence .= '-'; # add pads
-		    }
-# if gapsize < 0 there has been a deletion 
-                    if ($gapsize < 0) {
-$logger->info("$gapsize : sequence deletion detected"); 
-# check for pads removed from the sequence, if so, no message
-########## TO BE COMPLETED ##########
-		    }
-# add sequence fragment
-                    $tagsequence .= substr $sequence,$segment[0]-1,$length;
-	        }
-                my $offset = $segment[2] - $spos;
-                $tagcomment .= ' ' if $tagcomment;
-                $tagcomment .= "pad by $gapsize at pos $offset";
-#?              $newtag->setTagComment("pad by $gapsize at pos $offset",append=>1);
-	    }
-# update the position
-            $spos = $segment[2] unless $spos;
-            $fpos = $segment[3];
-        }
-        $newtag->setPosition(sort {$a <=> $b} ($spos,$fpos));
-        $newtag->setDNA($tagsequence) if $tagsequence;
-        $newtag->setTagComment($tagcomment);
-# generate an new comment signaling frame shifts
-        push @tags,$newtag;
-    }
-
-    return [@tags];
-}
-
-#---------------------- TO HERE -------------
 #------------------------------------------------------------------------------
 # sorting tags
 #------------------------------------------------------------------------------
@@ -1707,7 +1206,7 @@ sub sortTags {
 # sort an array of Tag instances in situ on position and/or comment; weedout duplicates
     my $class = shift;
     my $tags = shift; # array reference
-    my %options = @_; # sort=>['position', 'full'), merge=>[0,1]
+    my %options = @_; # sort=>['position', 'full'], merge=>[0,1]
 
     &verifyParameter($tags,'sortTags',class=>'ARRAY');
 
@@ -1948,7 +1447,9 @@ sub mergeTags {
 # merge tags from a list of input tags, where possible
     my $class = shift;
     my $tags = shift; # array reference
-    my %options = @_;
+    my %options = @_; # mergetaglist, overlap
+     
+    return undef unless &verifyParameter($tags,'mergeTags',class=>'ARRAY');
 
 my $logger = &verifyLogger('mergeTags');
 
@@ -1960,7 +1461,7 @@ my $logger = &verifyLogger('mergeTags');
         next unless &verifyParameter($tag,'mergeTags');
         my $tagtype = $tag->getType() || next; # ignore undefined types
         my $systematicid = $tag->getSystematicID();
-        $tagtype .= $systematicid if defined($systematicid);
+        $tagtype .= "-$systematicid" if defined($systematicid);
         $tagtypehash->{$tagtype} = [] unless $tagtypehash->{$tagtype};
         push @{$tagtypehash->{$tagtype}},$tag; # add tag to list
     }
@@ -1973,12 +1474,27 @@ $logger->debug(scalar(keys %$tagtypehash)." tag SIDs");
 
     my %option = (overlap => ($options{overlap} || 0));
 
+    my $nomergetaglist;
+    if ($nomergetaglist = $options{nomergetaglist}) {
+        $nomergetaglist =~ s/^\s+|\s+$//g; # remove leading/trailing blanks
+        $nomergetaglist =~ s/\W+/|/g; # add separator for use in regexp
+    }
 
     foreach my $tagtype (keys %$tagtypehash) {
         my $tags = $tagtypehash->{$tagtype};
 # sort subset of tags according to position
-        @$tags = sort {$a->getPositionLeft <=> $b->getPositionLeft()} @$tags;
-# test if some tags can be merged
+        $class->sortTags($tags,sort=>'full',merge=>1,adjoin=>0);
+# if the tags are not to be merged, append directly to output list
+        if ($nomergetaglist && $tagtype =~ /$nomergetaglist/) {
+            push @mtags,@$tags;
+	    next;
+	}
+# test if some tags can be merged     (NOTE can use $i & $i+1 only)
+
+#print STDOUT "merging tag type $tagtype\n";
+#foreach my $tag (@$tags) {print STDOUT "inputtag ".$tag->writeToCaf();}
+#print STDOUT "merging ..\n";
+
         my ($i,$j) = (0,1);
         while ($i < scalar(@$tags) && $j < scalar(@$tags) ) {
 # test for possible merger of tags i and j
