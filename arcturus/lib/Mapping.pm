@@ -449,7 +449,7 @@ sub normalise {
 
     if ($errmsg && !$options{silent}) {
         print STDOUT "$errmsg in mapping "
-            . ($this->getMappingName || $this->getSequenceID) . "\n";
+            . ($this->getMappingName || $this->getSequenceID || 0) . "\n";
     }
 
 # register the alignment direction
