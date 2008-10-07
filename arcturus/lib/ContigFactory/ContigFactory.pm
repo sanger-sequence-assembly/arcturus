@@ -32,7 +32,7 @@ sub new {
 }
 
 # ----------------------------------------------------------------------------
-# building Contig instances from a Fasta file
+# building Contig instances from a flat file
 # ----------------------------------------------------------------------------
 
 sub getContigs {
@@ -51,7 +51,7 @@ sub getContigs {
     }
 
     
-    if ($format eq 'fasta' || $format eq 'fas') {
+    if ($format eq 'fasta' || $format eq 'fas' || $format eq 'fna') {
         return &fastaFileParser($class,$filename,%options);
     }
     elsif ($format eq 'embl') {
@@ -67,6 +67,10 @@ sub getContigs {
 
     return undef;
 }
+
+# ----------------------------------------------------------------------------
+# building Contig instances from a Fasta file
+# ----------------------------------------------------------------------------
 
 sub fastaFileParser {
 # build contig objects from a Fasta file 
@@ -104,8 +108,9 @@ sub fastaFileParser {
             next; # empty
 	}
 # new contig 
-        elsif ($record =~ /\>(\S+)/) {
+        elsif ($record =~ /\>(\S+)\s(.*)$/) {
             my $contigname = $1;
+            my $attributes = $2;
 # add existing contig to output stack
             if ($contig && $sequence) {
                 $contig->setSequence($sequence);
@@ -118,6 +123,7 @@ sub fastaFileParser {
             $contig = new Contig();
 # assign name
             $contig->setContigName($contigname);
+            $contig->setContigNote($attributes);
 # and reset sequence
             $sequence = '';
 	}
