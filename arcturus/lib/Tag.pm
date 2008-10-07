@@ -36,12 +36,14 @@ sub copy {
                  'Strand','Comment','SequenceID', #  TAG2CONTIG table items
                  'TagID','Type','SystematicID',   #   CONTIGTAG table items
                  'TagComment','TagSequenceID',    #   CONTIGTAG table items
-                 'TagSequenceName','DNA');        # TAGSEQUENCE table items
+                 'TagSequenceName','DNA',         # TAGSEQUENCE table items
+                 'FrameShiftStatus' ,
+                 'TruncationStatus');
 
     foreach my $item (@items) {
-        eval("\$tag->set$item(\$this->get$item())");
+        my $nostatus = ($item eq 'Comment') ? ',nostatus=>1' : '';
+        eval("\$tag->set$item(\$this->get$item()$nostatus)");
         print STDERR "failed to copy Tag $item ('$@')\n" if $@;
-#        $LOGGER->error("failed to copy $item ('$@')") if ($LOGGER && $@);
     }
 
     return $tag;
