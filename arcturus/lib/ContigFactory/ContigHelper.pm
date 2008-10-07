@@ -1837,7 +1837,7 @@ sub crossmatch {
     my $cthism = $cthis->hasMappings();
     my $cthatm = $cthat->hasMappings();
 
-    if (@$cthis && @$cthat && !$options{sequenceonly}) {
+    if ($cthism && $cthatm && !$options{sequenceonly}) {
 # find the alignment from the read-to-contig mappings
 # option strong       : set True for comparison at read mapping level
 # option noguillotine : if NOT set, require a minumum number of reads in C2C segment
@@ -2559,7 +2559,223 @@ sub propagateTagsToContig {
 
     my $logger = &verifyLogger('propagateTagsToContig',1);
 
-#    my $mapping = &getMappingFromParentToContig($parent,$target);
+# use (delayed) autoloading to probe for c2cmapping on target; specify asis=>1 if not to be used 
+# for new contigs built from a CAF source this will have no effect as contig_id is not defined
+
+    $target->hasContigToContigMappings(1) unless $options{asis};
+
+# get the mapping from parent to target
+
+    my $unique = $options{unique} || 0; # default accept all matching mappings
+
+    my @mapping = &getMappingFromParentToContig($parent,$target,unique=>$unique);
+
+    unless (@mapping) {
+        $logger->info("Finding mapping from scratch");
+        return 0 if $options{norerun}; # prevent endless loop
+        my %loptions; # to be refined
+        my ($nrofsegments,$deallocated) = $target->linkToContig($parent,%loptions);
+        unless ($nrofsegments) {
+	    $logger->info("Failed to determine parent to target mapping");
+            return 0;
+	}
+# now that we have a mapping use recursion
+        return $class->propagateTagsToContig($parent,$target,norerun=>1,%options);
+    }
+
+#--------------------------- test the mapping ---------------------------
+
+    my @p2tmapping;
+    foreach my $p2tmapping (@mapping) {     
+        unless ($p2tmapping->isRegularMapping()) {
+            my $name = $p2tmapping->getMappingName();
+	    $logger->warning($name." is not a regular mapping");
+            next;
+# or try a split ?
+        }
+	push @p2tmapping,$p2tmapping;
+    }
+
+    unless (@p2tmapping) {
+        my $pname = $parent->getContigName();
+        my $tname = $target->getContigName();
+        $logger->warning("NO valid mapping found between $pname and $tname");
+        return 0;
+    }
+
+#-------------------------------------------------------------------------
+# propagate the tags from parent to target; define tag selection
+#-------------------------------------------------------------------------
+
+# tagfilter  : selects specific tag type(s) (comma-separated) for in- or exclusion
+# tagscreen  : 0 to exclude tags listed in tagfilter, 1 to include only them 
+# tagtosplit : list of tags which may be split/rejoined
+# tagmarked  : tags which are analysed for frameshifts/truncation etc and marked
+
+    my $includetag; # default include all
+    my $excludetag; # default exclude none
+    if (my $tagfilter = $options{tagfilter}) {
+        $tagfilter =~ s/^\s+|\s+$//g; # leading/trailing blanks
+        $tagfilter =~ s/\W+/|/g; # put separators in include list
+        my $screen = $options{tagscreen}; # 1 include; 0 exclude
+        $screen = 1 unless defined $screen; # default include
+        $excludetag = $tagfilter unless $screen;
+        $includetag = $tagfilter if $screen;
+    }
+# tags which may be split or rejoined
+    my $tagtosplit = $options{tagtosplit}; # default split none
+    $tagtosplit = 'ANNO|FCDS|CDS' unless defined $tagtosplit;
+    if ($tagtosplit) { # specified takes precedence
+        $tagtosplit =~ s/^\s+|\s+$//g; # leading/trailing blanks
+        $tagtosplit =~ s/\W+/|/g; # put separators in include list
+    }
+# specific tags can have their type changed on output to become "Arcturus Special Info Tags"
+    my $markedtypehash = {};
+    my $markedtype = $options{tagmarked};
+    $markedtype = "REPT|RP20" unless defined $markedtype;
+    my $newtypetag = $options{newtypetag} || 'ASIT';
+    if ($markedtype) { # build a hash list keyed on tagtype
+        $markedtype =~ s/^\s+|\s+$//g; # leading/trailing blanks
+        foreach my $tag (split /\W/,$markedtype) {
+            $markedtypehash->{$tag} = $newtypetag;
+        }
+    }
+
+# get the tags in the parent (as they are, but sorted and unique)
+
+    my $ptags = $parent->getTags(0,sort=>'full',merge=>1);
+
+    $logger->info("parent contig $parent has tags: ".scalar(@$ptags),skip=>1);
+
+    foreach my $tag (@$ptags) {
+        $logger->fine($tag->writeToCaf()); # test
+    }
+
+#-----------------------------------------------------------------------------------
+# deal with the tags that may be split when remapped
+#-----------------------------------------------------------------------------------
+
+    my %splittagoptions = (split=>1);
+# activate speedup for mapping multiplication
+    $options{speedmode} = 3 unless defined $options{speedmode}; # default
+    $splittagoptions{tracksegments} = $options{speedmode};
+
+#    $splittagoptions{nonzerostart} = {} if $options{speedmode}; # TO BE REPLACED
+#    $splittagoptions{backskip}      = 0 if $options{speedmode};
+#    $splittagoptions{minimumsegmentsize} = $options{minimumsegmentsize} || 0;
+
+    my @rtags; # for (remapped) imported tags
+    my $remapped = 0;
+    foreach my $ptag (@$ptags) {
+        last unless $tagtosplit; # default do not split any tag; exit loop
+        my $tagtype = $ptag->getType();
+        next if ($tagtype =~ /\b$newtypetag\b/);
+        next if ($tagtype !~ /\b$tagtosplit\b/i);
+        next if ($excludetag && $tagtype =~ /\b$excludetag\b/i);
+        next if ($includetag && $tagtype !~ /\b$includetag\b/i);
+# remapping can be SLOW for large number of tags if not in speedmode
+        foreach my $p2tmapping (@mapping) {
+            $splittagoptions{changestrand} = ($p2tmapping->getAlignment() < 0) ? 1 : 0;
+            my $tptags = $ptag->remap($p2tmapping,%splittagoptions);
+            next unless $tptags;
+            $remapped++;
+            foreach my $tag (@$tptags) {
+                $tag->setParentTagID($ptag->getTagID());
+                push @rtags, $tag;
+                $logger->fine($tag->writeToCaf()); # test
+	    }
+        }
+    }
+
+# if remapped annotation tags found, (try to) merge tag fragments
+
+    if (@rtags) {
+        $logger->info("remapped (split allowed) ".scalar(@rtags)
+                     ." tags from $remapped input");
+        my %moptions = (overlap => ($options{overlap} || 0));
+        my $newtags = TagFactory->mergeTags(\@rtags,%moptions);
+
+        if ($newtags && @$newtags) {
+            $logger->info(scalar(@$newtags)." remapped tags added");
+            $target->addTag($newtags);
+        } 
+    }
+
+#------------------------------------------------------------------------------
+# remap tags which may not be split and can have frameshifts after remapping
+#------------------------------------------------------------------------------
+
+    $remapped = 0;
+    foreach my $ptag (@$ptags) {
+# apply include or exclude filter
+        my $tagtype = $ptag->getType();
+        next if ($tagtype =~ /\b$newtypetag\b/); # always ignore special tag
+        next if ($excludetag && $tagtype =~ /\b$excludetag\b/i);
+        next if ($includetag && $tagtype !~ /\b$includetag\b/i);
+        next if ($tagtosplit && $tagtype =~ /\b$tagtosplit\b/i);
+
+        my @newtags;
+        foreach my $p2tmapping (@mapping) {
+            my $tptags = $ptag->remap($p2tmapping,nosplit=>'collapse',tracksegments=>3);
+            next unless ($tptags && @$tptags);
+            push @newtags, $tptags->[0]; 
+	}
+        unless (@newtags) {
+    	    $logger->info("tag $tagtype could not be re-mapped (1)");
+	    next;
+	}
+
+ my $tptag = $newtags[0]; 
+ $logger->info("tag on parent :". $ptag->writeToCaf(),pskip=>1);
+ $logger->info("tag on child :". $tptag->writeToCaf(),skip=>1);
+
+# if the remapped tag has frameshifts or is truncated & the tagtype is among
+# the keys of the hash list $newtypetag the tagtype is to be renamed  
+
+        foreach my $tptag (@newtags) {
+ $logger->info("tag on child :". $tptag->dump(),skip=>1);
+	    $remapped++;
+            my $newtagtype = $markedtypehash->{$tagtype};
+            unless ($newtagtype) {
+                $target->addTag($tptag);
+		next;
+	    }
+# rename the tag and mark with a comment about about frame shifts or truncations, if present
+            my $comment = $tptag->getComment();
+$logger->info("tag has frameshifts") if ($tptag->getFrameShiftStatus());
+$logger->info("tag has truncations") if ($tptag->getTruncationStatus());
+#	    next unless ($tag->getFrameShiftStatus() || $tag->getTruncationStatus());
+            next unless ($comment =~ /split|truncated|frame|shift/);
+            my $tagcomment = $tptag->getTagComment();
+            my $newcomment = "Alteration detected of previous version of tag "
+                           . "at this position\\n\\$tagcomment\\n\\$comment";
+# rename the tag type and amend the comment
+            $tptag->setType($newtagtype);
+            $tptag->setTagComment($newcomment);
+            $tptag->setParentTagID($ptag->getTagID());
+# and add the tag to the contig
+            $target->addTag($tptag);
+            $logger->info($tptag->writeToCaf()); # test
+        }
+    }
+
+    $logger->info("$remapped tags remapped (no-split) ",skip=>1) if $remapped;
+
+# finally, remove duplicates on the target
+
+    $target->getTags(0,sort=>'full',merge=>1);
+}
+
+sub getMappingFromParentToContig {
+# private: take input contig and return the mapping from contig to it's parent
+    my $parent = shift;
+    my $target = shift;
+    my %options = @_;
+
+# option : unique  to require one single mapping; reject multiple mappings
+
+    my $logger = &verifyLogger('getMappingFromParentToContig');
+
 #----------------------------------------------------------------------------
 # check/get the parent-child mapping: is there a mapping between them and
 # is the ID of the one of the parents identical to the input $parent?
@@ -2569,11 +2785,6 @@ sub propagateTagsToContig {
     my $parent_id = $parent->getContigID() || 0;
 
     my $target_id = $target->getContigID() || 0;
-
-# use (delayed) autoloading to ensure mappings on target; explicitly specify if not to be used 
-# for new contigs built from a CAF source this will have no effect as contig_id is not defined
-
-    $target->hasContigToContigMappings(1) unless $options{noparentload};
 
 # if parents are specified on the $target then test if $parent is among them
 # if no parents specified on $target then accept the the current $parent
@@ -2591,7 +2802,7 @@ sub propagateTagsToContig {
 	}
         unless ($verifyparent) {
             $logger->info("no valid parent ($parent_id) provided for contig ($target_id)");
-            return 0;
+            return (); # empty array
         }
     }
 
@@ -2603,7 +2814,8 @@ sub propagateTagsToContig {
         next unless ($cmappings && @$cmappings);
         push @c2cmappings, @$cmappings;
     }
-    $logger->info("Collecting Mappings : ".scalar(@c2cmappings));
+
+    $logger->info(scalar(@c2cmappings)." mappings to be tested");
 
 # the tags are on the parent, therefore we look for a mapping with the parent as
 # xdomainsequence (see Mapping) (and the target as ydomainsequence, if defined) 
@@ -2611,6 +2823,7 @@ sub propagateTagsToContig {
     my @mapping;
     my @reserve;
 # collect the possible matching mapping(s) or inverse by matching the parent_id then target_id 
+    $logger->info("parent ID $parent_id   target ID $target_id");
     foreach my $mapping (@c2cmappings) {
         my $xdomainseq_id = $mapping->getSequenceID('x') || 0;
         my $ydomainseq_id = $mapping->getSequenceID('y') || 0;
@@ -2635,27 +2848,27 @@ sub propagateTagsToContig {
         foreach my $mapping (@c2cmappings) {
             my $xdomainseq_id = $mapping->getSequenceID('x') || 0;
             my $ydomainseq_id = $mapping->getSequenceID('y') || 0;
-            push @reserve,$mapping            if ($target_id == $ydomainseq_id);
-            push @reserve,$mapping->inverse() if ($target_id == $xdomainseq_id);
+            push @reserve,$mapping            if ($target_id == $ydomainseq_id && !$xdomainseq_id);
+            push @reserve,$mapping->inverse() if ($target_id == $xdomainseq_id && !$ydomainseq_id);
         }
     }
-# if still no mapping identified, then no sequence id info is available to identify a mapping
+# if still no mapping identified, then no sequence id info may be available to identify a mapping
 # in this case we assume that any (single) mapping on the parent or on the target is the one to use
     unless (@mapping || @reserve) {
         foreach my $contig ($target,$parent) { # look in both contigs
             my $cmappings = $contig->getContigToContigMappings();
             next unless ($cmappings && @$cmappings == 1);
-            push @reserve,$cmappings->[0]->inverse() if ($contig eq $target); # IS THIS CORRECT ?
+            next if $contig->getContigID(); # was picked up earlier and rejected
+            push @reserve,$cmappings->[0]->inverse() if ($contig eq $target);
             push @mapping,$cmappings->[0] if ($contig eq $parent);
         }
     }
+
     $logger->warning("mapping @reserve taken as backup") if @reserve;
 
-# ok, decide on which mapping to use (assume only one mapping per link)
+# ok, decide on which mapping to use (allow more than one mapping per link)
 
-    my $p2tmapping;
     if (scalar(@mapping) == 1) {
-        $p2tmapping = $mapping[0];
 	$logger->fine("only 1 mapping matches");
     }
     elsif (@mapping) {
@@ -2665,15 +2878,14 @@ sub propagateTagsToContig {
             last unless ($mapping[0]->isEqual($mapping[1]));
             shift @mapping;
         }
-        unless (@mapping == 1) {
+        if (@mapping > 1 && $options{unique}) {
   	    $logger->warning("ambiguous parent-to-contig mapping: several (reserve) matches");
             return 0; # this case is unrecoverable
 	}
-        $p2tmapping = $mapping[0];
     }
     elsif (scalar(@reserve) == 1) {
 	$logger->info("using backup mapping option");
-        $p2tmapping = $reserve[0]; # fall back position: use the only mapping provided
+        push @mapping, @reserve;
     }
 # the next branches do not return but proceed with an attempt to determine mapping from scratch
     elsif (@reserve) {
@@ -2683,169 +2895,7 @@ sub propagateTagsToContig {
 	$logger->warning("no (valid) parent-to-contig mapping provided");
     }
 
-# if mapping is not defined here, we try to find it from scratch (unless option norerun is set)
-
-    unless ($p2tmapping) {
-        $logger->info("Finding mapping from scratch: @_");
-        return 0 if $options{norerun}; # prevent endless loop
-        my ($nrofsegments,$deallocated) = $target->linkToContig($parent,%options);
-        return 0 unless $nrofsegments;
-# now that we have a mapping use recursion
-        return $class->propagateTagsToContig($parent,$target,norerun=>1,%options);
-    }
-
-    $logger->fine("mapping selected: ".$p2tmapping->assembledFromToString(),ss=>1);
-    $logger->info("mapping selected: ".$p2tmapping->toString(),ss=>1);
-
-#--------------------------- test the mapping ---------------------------
-
-    return 0 unless $p2tmapping->isRegularMapping();
-# or try a split ?
-
-#-------------------------------------------------------------------------
-# propagate the tags from parent to target; define tag selection
-#-------------------------------------------------------------------------
-
-    my $includetag; # default include all
-    my $excludetag; # default exclude none
-    if (my $tagfilter = $options{tagfilter}) {
-        $tagfilter =~ s/^\s+|\s+$//g; # leading/trailing blanks
-        $tagfilter =~ s/\W+/|/g; # put separators in include list
-        my $screen = $options{tagscreen}; # 1 include; 0 exclude
-        $screen = 1 unless defined $screen; # default include
-        $excludetag = $tagfilter unless $screen;
-        $includetag = $tagfilter if $screen;
-    }
-# tags which may be split 
-    my $tagtosplit = $options{tagtosplit}; # default split none
-    if ($tagtosplit) { # specified takes precedence
-        $tagtosplit =~ s/^\s+|\s+$//g; # leading/trailing blanks
-        $tagtosplit =~ s/\W+/|/g; # put separators in include list
-    }
-# specific tags can have their type changed on output to become "Arcturus Special Info Tags"
-    my $changetypehash = {};
-    my $changetype = $options{changetype};
-    $changetype = "ANNO|REPT|RP20" unless defined $changetype;
-    my $newtypetag = $options{newtypetag} || 'ASIT';
-    if ($changetype) { # build a hash list keyed on tagtype
-        $changetype =~ s/^\s+|\s+$//g; # leading/trailing blanks
-        foreach my $tag (split /\W/,$changetype) {
-            $changetypehash->{$tag} = $newtypetag;
-        }
-    }
-
-# get the tags in the parent (as they are, but sorted and unique)
-
-    my $ptags = $parent->getTags(0,sort=>'full',merge=>1);
-
-    $logger->info("parent contig $parent has tags: ".scalar(@$ptags),skip=>1);
-
-    foreach my $tag (@$ptags) {
-        $logger->info($tag->writeToCaf());
-    }
-
-#-----------------------------------------------------------------------------------
-# deal with the tags that may be split when remapped
-#-----------------------------------------------------------------------------------
-
-    my %splittagoptions = (split=>1);
-# activate speedup for mapping multiplication 
-#    $splittagoptions{nonzerostart} = {} if $options{speedmode}; # TO BE REPLACED
-    $splittagoptions{tracksegments} = 3 if $options{speedmode};
-    $splittagoptions{backskip}      = 0 if $options{speedmode};
-    $splittagoptions{minimumsegmentsize} = $options{minimumsegmentsize} || 0;
-    $splittagoptions{changestrand} = ($p2tmapping->getAlignment() < 0) ? 1 : 0;
-
-    $logger->info("Doing the remapping with split allowed",skip=>2);
-
-    my @rtags; # for (remapped) imported tags
-    foreach my $ptag (@$ptags) {
-        last unless $tagtosplit; # default do not split any tag; exit loop
-        my $tagtype = $ptag->getType();
-        next if ($tagtype =~ /\b$newtypetag\b/);
-        next if ($tagtype !~ /\b$tagtosplit\b/i);
-        next if ($excludetag && $tagtype =~ /\b$excludetag\b/i);
-        next if ($includetag && $tagtype !~ /\b$includetag\b/i);
-# remapping can be SLOW for large number of tags if not in speedmode
-        my $tptags = $ptag->remap($p2tmapping,%splittagoptions);
-# note: could be extended to more than one mapping
-        push @rtags,@$tptags if $tptags;
-    }
-
-    $logger->info("remapped ".scalar(@rtags)." from ".scalar(@$ptags)." input",skip=>1);
-
-# if annotation tags found, (try to) merge tag fragments
-
-    if (@rtags) {
-        my %moptions = (overlap => ($options{overlap} || 0));
-        my $newtags = TagFactory->mergeTags(\@rtags,%moptions);
-
-my $oldttags = $target->getTags() || [];
-$logger->debug(scalar(@$oldttags) . " existing tags on TARGET PT");
-$logger->debug(scalar(@$newtags) . " added (merged) tags PT");
-        $target->addTag($newtags) if $newtags;
-my $newttags = $target->getTags() || [];
-$logger->debug(scalar(@$newttags) . " updated tags on TARGET PT");
-
-    }
-    else {
-        $logger->info("No tags were remapped (with split allowed) from parent contig $parent_id",skip=>1);
-    }
-
-#------------------------------------------------------------------------------
-# remap tags which may not be split and can have frameshifts after remapping
-#------------------------------------------------------------------------------
-
-    $logger->info("Doing the remapping without split allowed",skip=>2);
-
-    foreach my $ptag (@$ptags) {
-# apply include or exclude filter
-        my $tagtype = $ptag->getType();
-        next if ($tagtype =~ /\b$newtypetag\b/); # always ignore special tag
-        next if ($excludetag && $tagtype =~ /\b$excludetag\b/i);
-        next if ($includetag && $tagtype !~ /\b$includetag\b/i);
-        next if ($tagtosplit && $tagtype =~ /\b$tagtosplit\b/i);
-
-        my $tptags = $ptag->remap($p2tmapping,nosplit=>'collapse',tracksegments=>3);
-# note: could be extended to more than one mapping
-
-        unless ($tptags && @$tptags) {
-    	    $logger->info("tag $tagtype could not be re-mapped (1)");
-# test
-#if ($options{testremap}) {
-#    $tptags = $ptag->remap($p2tmapping,nosplit=>'collapse',useold=>1);
-#    unless ($tptags && @$tptags) {
-#        $logger->info("tag $tagtype could not be re-mapped (2)");
-#        next;
-#    }
-#}
-#next unless $options{testremap};
-	    next;
-	}
-
-        my $tptag = $tptags->[0]; 
-
- $logger->info("tag on parent :". $ptag->writeToCaf(),pskip=>1);
- $logger->info("tag on child :". $tptag->writeToCaf(),skip=>1);
-
-# if the remapped tag has frameshifts or is truncated & the tagtype is among
-# the keys of the hash list $newtypetag the tagtype is to be renamed  
-
-        if (my $newtagtype = $changetypehash->{$tagtype}) {
-            my $comment = $tptag->getComment();
-            next unless ($comment =~ /split|truncated|frame|shift/);
-            my $tagcomment = $tptag->getTagComment();
-            my $newcomment = "Alteration detected of previous version of tag "
-                           . "at this position\\n\\$tagcomment\\n\\$comment";
-# rename the tag type and amend the comment
-            $tptag->setType($newtagtype);
-            $tptag->setTagComment($newcomment);
-        }
-# and add the tag to the contig
-        $target->addTag($tptag);
-    }
-# finally, remove duplicates on the target
-    $target->getTags(0,sort=>'full',merge=>1);
+    return @mapping;
 }
 
 sub sortContigTags {
@@ -2865,127 +2915,6 @@ sub sortContigTags {
 # sort the tags with increasing tag position
 
     return TagFactory->sortTags($tags,@_);
-}
-
-sub getMappingFromParentToContig {
-# ? private: take input contig and return the mapping from contig to it's parent
-    my $parent = shift;
-    my $target = shift;
-
-#----------------------------------------------------------------------------
-# check/get the parent-child mapping: is there a mapping between them and
-# is the ID of the one of the parents identical to the input $parent?
-# we do this by getting the parents on the $target and compare with $parent
-#----------------------------------------------------------------------------
-
-    my $parent_id = $parent->getContigID() || 0;
-
-    my $target_id = $target->getContigID() || 0;
-
-# if parents are specified on $target then we test if $parent is among them
-# if no parents are specified, we accept the given $parent as such
-
-    if ($target->hasParentContigs()) {
-
-        my $verifyparent = 0;
-        my $tparents = $target->getParentContigs();
-        foreach my $tparent (@$tparents) {
-            my $tparent_id = $tparent->getContigID();
-	    next unless ($tparent_id && $tparent_id == $parent_id);
-            $verifyparent = 1;
-            last;
-	}
-
-        return 0, "no valid parent ($parent_id) provided for "
-                . "contig ($target_id)" unless $verifyparent;
-    }
-
-# $parent is accepted as a parent of $target; now find the mapping to be used
-
-    my @c2cmappings;
-    foreach my $contig ($target,$parent) { # look in both contigs
-        my $cmappings = $contig->getContigToContigMappings();
-        next unless ($cmappings && @$cmappings);
-        push @c2cmappings, @$cmappings;
-    }
-
-# we look for a mapping with the parent as x-domain sequence (see Mapping)
-# (and the target as y-domain sequence, if it is defined) 
-
-    my @mapping;
-    my @reserve;
-# collect matching mapping(s) or inverse using the parent_id then target_id 
-    foreach my $mapping (@c2cmappings) {
-        my $xdomainseq_id = $mapping->getSequenceID('x') || 0;
-        my $ydomainseq_id = $mapping->getSequenceID('y') || 0;
-# collect mapping(s), or inverse(s), which match the parent in the x-domain
-        if ($xdomainseq_id && $xdomainseq_id == $parent_id) {
-            next if ($target_id && $ydomainseq_id && $target_id != $ydomainseq_id);
-            push @mapping,$mapping;
-        }
-        elsif ($ydomainseq_id && $ydomainseq_id == $parent_id) {
-# the inverse mapping matches the parent domain
-            next if ($target_id && $xdomainseq_id && $target_id != $xdomainseq_id);
-            push @mapping,$mapping->inverse();
-        }
-    }
-# if no mapping was found (e.g. parent id is undefined (0), use target_id on its own
-    if (!@mapping && $target_id) {
-        foreach my $mapping (@c2cmappings) {
-            my $xdomainseq_id = $mapping->getSequenceID('x') || 0;
-            my $ydomainseq_id = $mapping->getSequenceID('y') || 0;
-            push @reserve,$mapping            if ($target_id == $ydomainseq_id);
-            push @reserve,$mapping->inverse() if ($target_id == $xdomainseq_id);
-        }
-    }
-
-# if still no mapping identified, then no sequence id info is available to enable
-# identification; in this case we assume that any (single) mapping on the parent
-# or on the target is the one to use
-
-    unless (@mapping || @reserve) {
-        foreach my $contig ($target,$parent) { # look in both contigs
-            my $cmappings = $contig->getContigToContigMappings();
-            next unless ($cmappings && @$cmappings == 1);
-            push @reserve,$cmappings->[0]->inverse() if ($contig eq $target); # ???
-            push @mapping,$cmappings->[0] if ($contig eq $parent);
-#$logger->warning("mapping @reserve accepted as backup (experimental no sequence id)") if @reserve;
-        }
-    }
-
-# ok, decide on which of the collected mappings to use
-
-    my $report;
-    my $p2tmapping;
-    if (scalar(@mapping) == 1) {
-        $report = "mapping on contig $target_id used";
-        $p2tmapping = $mapping[0]; 
-    }
-    elsif (@mapping) {
-# test for duplicate mappings, exit loop on first mismatch (implies at least 2 different ones)
-        while (@mapping > 1) {
-            last unless ($mapping[0]->isEqual($mapping[1]));
-            shift @mapping;
-        }
-        unless (@mapping == 1) {
-  	    return 0, "ambiguous parent-to-contig mapping: more than one "
-                    . "mapping matches"; # this case is unrecoverable
-	}
-        $p2tmapping = $mapping[0];
-    }
-    elsif (scalar(@reserve) == 1) {
-        $report = "mapping on parent $parent_id used";
-        $p2tmapping = $reserve[0];
-    }
-    elsif (@reserve) {
-        return 0, "ambiguous parent-to-contig mapping: more than one "
-                . "mapping matches"; # this case is unrecoverable
-    }
-    else {
-	return 0, "no (valid) parent-to-contig mapping provided";
-    }
-
-    return $p2tmapping,$report;
 }
 
 #-----------------------------------------------------------------------------
