@@ -2551,9 +2551,20 @@ sub propagateTagsToContig {
 
     &verifyParameter($target,'propagateTagsToContig 2-nd parameter');
 
+# options, delayed loading of data
+#          asis       : default 0, if no mapping/tags on target, get by delayed loading (if any)
+# options, mapping selection
+#          unique     : default 0, insist on 1 valid mapping between parent and target
+#          norerun    : default 0, do not, if no mapping found, determine from scratch
+# options, tagselection and marking
+#          annotation : comma-separated list of selected annotation tag types (def: FCDS,CDS)
+#          finishing  : comma-separated list of selected finishing tag types (def: REPT,RP20) 
+#          markftags  : comma-separated list of finishing tag types, which are marked 
+#                                       if frame shifts or truncations are are detected
+
 # autoload tags unless tags are already defined or notagload specified
 
-    $parent->getTags(($options{notagload} ? 0 : 1),sort=>'full',merge=>1);
+    $parent->getTags(($options{asis} ? 0 : 1),sort=>'full',merge=>1);
 
     return 0 unless $parent->hasTags();
 
@@ -2573,7 +2584,7 @@ sub propagateTagsToContig {
     unless (@mapping) {
         $logger->info("Finding mapping from scratch");
         return 0 if $options{norerun}; # prevent endless loop
-        my %loptions; # to be refined
+        my %loptions; # to be refined (e.g. banded?)
         my ($nrofsegments,$deallocated) = $target->linkToContig($parent,%loptions);
         unless ($nrofsegments) {
 	    $logger->info("Failed to determine parent to target mapping");
@@ -2607,40 +2618,6 @@ sub propagateTagsToContig {
 # propagate the tags from parent to target; define tag selection
 #-------------------------------------------------------------------------
 
-# tagfilter  : selects specific tag type(s) (comma-separated) for in- or exclusion
-# tagscreen  : 0 to exclude tags listed in tagfilter, 1 to include only them 
-# tagtosplit : list of tags which may be split/rejoined
-# tagmarked  : tags which are analysed for frameshifts/truncation etc and marked
-
-    my $includetag; # default include all
-    my $excludetag; # default exclude none
-    if (my $tagfilter = $options{tagfilter}) {
-        $tagfilter =~ s/^\s+|\s+$//g; # leading/trailing blanks
-        $tagfilter =~ s/\W+/|/g; # put separators in include list
-        my $screen = $options{tagscreen}; # 1 include; 0 exclude
-        $screen = 1 unless defined $screen; # default include
-        $excludetag = $tagfilter unless $screen;
-        $includetag = $tagfilter if $screen;
-    }
-# tags which may be split or rejoined
-    my $tagtosplit = $options{tagtosplit}; # default split none
-    $tagtosplit = 'ANNO|FCDS|CDS' unless defined $tagtosplit;
-    if ($tagtosplit) { # specified takes precedence
-        $tagtosplit =~ s/^\s+|\s+$//g; # leading/trailing blanks
-        $tagtosplit =~ s/\W+/|/g; # put separators in include list
-    }
-# specific tags can have their type changed on output to become "Arcturus Special Info Tags"
-    my $markedtypehash = {};
-    my $markedtype = $options{tagmarked};
-    $markedtype = "REPT|RP20" unless defined $markedtype;
-    my $newtypetag = $options{newtypetag} || 'ASIT';
-    if ($markedtype) { # build a hash list keyed on tagtype
-        $markedtype =~ s/^\s+|\s+$//g; # leading/trailing blanks
-        foreach my $tag (split /\W/,$markedtype) {
-            $markedtypehash->{$tag} = $newtypetag;
-        }
-    }
-
 # get the tags in the parent (as they are, but sorted and unique)
 
     my $ptags = $parent->getTags(0,sort=>'full',merge=>1);
@@ -2651,71 +2628,99 @@ sub propagateTagsToContig {
         $logger->fine($tag->writeToCaf()); # test
     }
 
-#-----------------------------------------------------------------------------------
-# deal with the tags that may be split when remapped
-#-----------------------------------------------------------------------------------
+# define annotation tags explicitly or use defaults
 
-    my %splittagoptions = (split=>1);
-# activate speedup for mapping multiplication
-    $options{speedmode} = 3 unless defined $options{speedmode}; # default
-    $splittagoptions{tracksegments} = $options{speedmode};
+    $options{annotation} = 'CDS|FCDS' unless defined $options{annotation}; # default
+    my $annotation = $options{annotation};
+# all other tags are considered as finishing tags, unless explicitly specified
+    my $finishing  = $options{finishing};
 
-#    $splittagoptions{nonzerostart} = {} if $options{speedmode}; # TO BE REPLACED
-#    $splittagoptions{backskip}      = 0 if $options{speedmode};
-#    $splittagoptions{minimumsegmentsize} = $options{minimumsegmentsize} || 0;
-
-    my @rtags; # for (remapped) imported tags
-    my $remapped = 0;
-    foreach my $ptag (@$ptags) {
-        last unless $tagtosplit; # default do not split any tag; exit loop
-        my $tagtype = $ptag->getType();
-        next if ($tagtype =~ /\b$newtypetag\b/);
-        next if ($tagtype !~ /\b$tagtosplit\b/i);
-        next if ($excludetag && $tagtype =~ /\b$excludetag\b/i);
-        next if ($includetag && $tagtype !~ /\b$includetag\b/i);
-# remapping can be SLOW for large number of tags if not in speedmode
-        foreach my $p2tmapping (@mapping) {
-            $splittagoptions{changestrand} = ($p2tmapping->getAlignment() < 0) ? 1 : 0;
-            my $tptags = $ptag->remap($p2tmapping,%splittagoptions);
-            next unless $tptags;
-            $remapped++;
-            foreach my $tag (@$tptags) {
-                $tag->setParentTagID($ptag->getTagID());
-                push @rtags, $tag;
-                $logger->fine($tag->writeToCaf()); # test
-	    }
-        }
+    my @rtags; # remapped tags
+    if ($annotation) {
+        my %aoptions = (tagfilter => $annotation);     
+        my $atags = &remapAnnotationTags($ptags,\@p2tmapping,%aoptions);
+        $logger->info(scalar(@$atags)." remapped annotation tags added",skip=>1) if $atags;
+        $target->addTag($atags);
     }
 
-# if remapped annotation tags found, (try to) merge tag fragments
+    unless (defined($finishing) && !$finishing) { # i.e. unless finishing set to '0'   
+        my %foptions;
+        if ($finishing) {
+            $foptions{tagfilter} = $finishing; # explicitly defined
+            $foptions{tagscreen} = 1; # to include
+        }
+        else {
+# default all tag typs not listed as annotation are considered as finishing tags
+            $foptions{tagfilter} = $annotation;
+            $foptions{tagfilter} = 'CDS|FCDS' unless $annotation; # default
+            $foptions{tagscreen} = 0; # to exclude
+	}
+        $foptions{markftags} = 'REPT|RP20' unless defined $options{markftags}; # default
+        $foptions{markftags} = $options{markftags} if defined $options{markftags};
+        my $ftags = &remapFinishingTags($ptags,\@p2tmapping,%foptions);
+        $logger->info(scalar(@$ftags)." remapped finishing tags added",skip=>1) if $ftags;
+        $target->addTag($ftags);
+    }
 
-    if (@rtags) {
-        $logger->info("remapped (split allowed) ".scalar(@rtags)
-                     ." tags from $remapped input");
-        my %moptions = (overlap => ($options{overlap} || 0));
-        my $newtags = TagFactory->mergeTags(\@rtags,%moptions);
+# finally, remove possible duplicates on the target
 
-        if ($newtags && @$newtags) {
-            $logger->info(scalar(@$newtags)." remapped tags added");
-            $target->addTag($newtags);
-        } 
+    $target->getTags(0,sort=>'full',merge=>1);
+
+    return;
+}
+
+sub remapFinishingTags {
+# private, remap input tags without splitting (marking frameshifts/truncations) 
+    my $tags = shift;
+    my $maps = shift;
+    my %options = @_;
+
+    &verifyPrivate ($tags,'remapFinishingTags');
+
+    my $logger = &verifyLogger('remapFinishingTags',1);
+
+# options
+
+# tagfilter : comma-separated list of selected tagtypes (def: FCDS,CDS)
+# tagscreen : default 0, exclude (only) the tags in tagfilter; set 1 to include
+# markftags : if set, rename the remapped tags to a type used internally by
+#             Arcturus, but ONLY if frame shifts or truncations are are detected
+
+    my $includetag; # default include all
+    my $excludetag; # default exclude none
+
+    my $tagfilter = $options{tagfilter};
+    $tagfilter = 'FCDS|CDS' unless defined $tagfilter; # default annotation tags
+
+    if ($tagfilter) { # can be defined and 0
+        $tagfilter =~ s/^\s+|\s+$//g; # leading/trailing blanks
+        $tagfilter =~ s/\W+/|/g; # put separators in include list
+        my $screen = $options{tagscreen}; # 1 include; 0 exclude
+        $screen = 0 unless defined $screen; # default exclude
+        $excludetag = $tagfilter unless $screen;
+        $includetag = $tagfilter if $screen;
+    }
+# specific tags can have their type changed on output to flag frame shifts or truncations
+    my $markftags = $options{markftags};
+    if ($markftags) {
+        $markftags =~ s/^\s+|\s+$//g; # leading/trailing blanks
+        $markftags =~ s/\W+/|/g; # put separators in include list
     }
 
 #------------------------------------------------------------------------------
 # remap tags which may not be split and can have frameshifts after remapping
 #------------------------------------------------------------------------------
 
-    $remapped = 0;
-    foreach my $ptag (@$ptags) {
+    my @rtags; # for (remapped) tags
+    my $remapped = 0;
+    foreach my $ptag (@$tags) {
 # apply include or exclude filter
-        my $tagtype = $ptag->getType();
-        next if ($tagtype =~ /\b$newtypetag\b/); # always ignore special tag
+        my $tagtype = $ptag->getType() || '';
         next if ($excludetag && $tagtype =~ /\b$excludetag\b/i);
         next if ($includetag && $tagtype !~ /\b$includetag\b/i);
-        next if ($tagtosplit && $tagtype =~ /\b$tagtosplit\b/i);
 
         my @newtags;
-        foreach my $p2tmapping (@mapping) {
+        foreach my $p2tmapping (@$maps) {
             my $tptags = $ptag->remap($p2tmapping,nosplit=>'collapse',tracksegments=>3);
             next unless ($tptags && @$tptags);
             push @newtags, $tptags->[0]; 
@@ -2725,37 +2730,29 @@ sub propagateTagsToContig {
 	    next;
 	}
 
- my $tptag = $newtags[0]; 
- $logger->info("tag on parent :". $ptag->writeToCaf(),pskip=>1);
- $logger->info("tag on child :". $tptag->writeToCaf(),skip=>1);
-
 # if the remapped tag has frameshifts or is truncated & the tagtype is among
 # the keys of the hash list $newtypetag the tagtype is to be renamed  
 
         foreach my $tptag (@newtags) {
- $logger->info("tag on child :". $tptag->dump(),skip=>1);
-	    $remapped++;
-            my $newtagtype = $markedtypehash->{$tagtype};
-            unless ($newtagtype) {
-                $target->addTag($tptag);
+            my $tagtype = $tptag->getType();
+            $tptag->setParentTagID($ptag->getTagID());
+            unless ($markftags && $tagtype =~ /$markftags/) {
+                push @rtags,$tptag;
+   	        $remapped++;
 		next;
 	    }
 # rename the tag and mark with a comment about about frame shifts or truncations, if present
+	    next unless ($tptag->getFrameShiftStatus() || $tptag->getTruncationStatus());
             my $comment = $tptag->getComment();
-$logger->info("tag has frameshifts") if ($tptag->getFrameShiftStatus());
-$logger->info("tag has truncations") if ($tptag->getTruncationStatus());
-#	    next unless ($tag->getFrameShiftStatus() || $tag->getTruncationStatus());
-            next unless ($comment =~ /split|truncated|frame|shift/);
             my $tagcomment = $tptag->getTagComment();
             my $newcomment = "Alteration detected of previous version of tag "
                            . "at this position\\n\\$tagcomment\\n\\$comment";
 # rename the tag type and amend the comment
-            $tptag->setType($newtagtype);
+            $tptag->setType('ASIT');
             $tptag->setTagComment($newcomment);
-            $tptag->setParentTagID($ptag->getTagID());
-# and add the tag to the contig
-            $target->addTag($tptag);
             $logger->info($tptag->writeToCaf()); # test
+            push @rtags,$tptag;
+	    $remapped++;
         }
     }
 
@@ -2763,7 +2760,78 @@ $logger->info("tag has truncations") if ($tptag->getTruncationStatus());
 
 # finally, remove duplicates on the target
 
-    $target->getTags(0,sort=>'full',merge=>1);
+    return [@rtags];
+}
+
+sub remapAnnotationTags {
+# private, remap input tags with split allowed 
+    my $tags = shift;
+    my $maps = shift;
+    my %options = @_;
+
+    &verifyPrivate ($tags,'remapAnnotationTags');
+
+    my $logger = &verifyLogger('remapAnnotationTags',1);
+
+# options
+
+# tagfilter : comma-separated list of selected tagtypes (def: FCDS,CDS)
+# tagscreen : default 1, include (only) the tags in tagfilter; set 0 to exclude 
+
+    my $includetag; # default include all
+    my $excludetag; # default exclude none
+    my $tagfilter = $options{tagfilter};
+    $tagfilter = 'FCDS|CDS' unless defined $tagfilter; # default annotation tags
+    if ($tagfilter) { # can be 0
+        $tagfilter =~ s/^\s+|\s+$//g; # leading/trailing blanks
+        $tagfilter =~ s/\W+/|/g; # put separators in include list
+        my $screen = $options{tagscreen}; # 1 include; 0 exclude
+        $screen = 1 unless defined $screen; # default include
+        $excludetag = $tagfilter unless $screen;
+        $includetag = $tagfilter if $screen;
+    }
+
+#-----------------------------------------------------------------------------------
+# deal with the tags that may be split when remapped
+#-----------------------------------------------------------------------------------
+
+    my %splittagoptions = (split => 1, tracksegments => 3);
+
+    my @rtags; # for (remapped) tags
+    my $remapped = 0;
+    foreach my $ptag (@$tags) {
+        my $tagtype = $ptag->getType();
+        next if ($excludetag && $tagtype =~ /\b$excludetag\b/i);
+        next if ($includetag && $tagtype !~ /\b$includetag\b/i);
+# remap 
+        foreach my $p2tmapping (@$maps) {
+            $splittagoptions{changestrand} = ($p2tmapping->getAlignment() < 0) ? 1 : 0;
+            my $tptags = $ptag->remap($p2tmapping,%splittagoptions);
+            next unless $tptags;
+            $remapped++;
+            foreach my $tag (@$tptags) {
+                $tag->setParentTagID($ptag->getTagID());
+                $logger->fine($tag->writeToCaf()); # test
+                push @rtags, $tag;
+	    }
+        }
+    }
+
+# if remapped annotation tags found, (try to) merge tag fragments
+
+    my $atags = [];
+
+    if (@rtags) {
+        $logger->info("remapped (split allowed) ".scalar(@rtags)
+                     ." tags from $remapped input");
+        my %moptions = (overlap => ($options{overlap} || 0));
+        $atags = TagFactory->mergeTags(\@rtags,%moptions);
+
+        $logger->info(scalar(@$atags)." tags after merge") if ($atags && @$atags);
+
+    }
+
+    return $atags;
 }
 
 sub getMappingFromParentToContig {
