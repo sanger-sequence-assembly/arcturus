@@ -29,7 +29,7 @@ sub copy {
 # spawn an exact copy of this tag
     my $this = shift;
 
-    my $tag = $this->new();
+    my $copy = $this->new();
 
     my @items = ('Host',
                  'PositionMapping', # copy positions via mapping intermediate
@@ -37,16 +37,19 @@ sub copy {
                  'TagID','Type','SystematicID',   #   CONTIGTAG table items
                  'TagComment','TagSequenceID',    #   CONTIGTAG table items
                  'TagSequenceName','DNA',         # TAGSEQUENCE table items
-                 'FrameShiftStatus' ,
-                 'TruncationStatus');
+                 'FrameShiftStatus');
 
     foreach my $item (@items) {
-        my $nostatus = ($item eq 'Comment') ? ',nostatus=>1' : '';
-        eval("\$tag->set$item(\$this->get$item()$nostatus)");
+        my $nostatus = ($item eq 'Comment') ? 'nostatus=>1' : '';
+        eval("\$copy->set$item(\$this->get$item($nostatus))");
         print STDERR "failed to copy Tag $item ('$@')\n" if $@;
     }
 
-    return $tag;
+    foreach my $ts ('r','l') {
+        $copy->setTruncationStatus($ts,$this->getTruncationStatus($ts));
+    }
+
+    return $copy;
 }
 
 #----------------------------------------------------------------------
@@ -804,6 +807,7 @@ sub dump {
     push @line, "tag sequence name ".($tag->getTagSequenceName(@_) || 'undef')."\n";
     push @line, "sequence          ".($tag->getDNA(%options) || 'undef')."\n";
     push @line, "tag host class    ".($tag->getHostClass() || 'undef')."\n";
+    push @line, "parent tag ID     ".($tag->getParentTagID() || 'undef')."\n";
 
     foreach my $line (@line) {
 	next if ($skip && $line =~ /undef/);
