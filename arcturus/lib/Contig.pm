@@ -911,7 +911,6 @@ sub inheritTags {
     my %options = @_;
 
     my $logger = &verifyLogger('inheritTag');
-    $logger->debug("Contig->inheritTags: this $this ; opts: @_");
 
 # depth 1 or less: parents; depths 2 for grandparents (if no tags on parents)
 
@@ -961,20 +960,13 @@ sub propagateTagsToContig {
     my %options = @_;
 
     my @validoptionkeys = ('depth',
-                           'notagload',    # take tags as is
-                           'noparentload', # take parent contig(s) as is
-                           'speedmode',    # 
-                           'tagfilter',    # list of tags to be screened
-                           'tagscreen',    # 1 to include, 0 to exclude 
-                           'split','nosplit',
-                           'minimumsegmentsize',  # re : anno tags
-#                           'change strand',      # re : anno tags
-                           'overlap',             # re : anno tags
-                           'sequenceonly','banded',    # re : anno tags ?
-                           'bandedlinear',             # re : anno tags ?
-                           'bandedoffset',             # re : anno tags ?
-                           'bandedwindow',             # re : anno tags ?
-                           'debug');
+                           'asis',         # take parent contig(s) and tags as is
+                           'unique',       # specify mapping expected
+                           'norerun',      # inhibit default link determination if no mapping found
+                           'annotation',   # list of tags to be screened
+                           'finishing',    # 1 to include, 0 to exclude 
+                           'markftags',    # mark tags if different tag on parent
+                           'banded');      # (not in use at the moment) link determination
 
     &verifyKeys('propagateTags',\%options,@validoptionkeys);
     return ContigHelper->propagateTagsToContig($parent,$target,%options);
