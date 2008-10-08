@@ -418,7 +418,7 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS for results filtering:\n";
     print STDERR "\n";
     print STDERR "-fuzz\t\tmismatch allowed on read cover; default 1, use up to 5\n";
-    print STDERR "-partials\taccept partial matches of reads at end of contigs\n";
+    print STDERR "-partial\taccept partial matches of reads at end of contigs\n";
 #    print STDERR "-mmo\t\t(multiplematchesonly) select reads having more than one match\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS for loading new contigs:\n";
@@ -431,7 +431,7 @@ sub showUsage {
     print STDERR "-verbose\t\n";
     print STDERR "\n";
     print STDERR "-ft\t\t(filtertest) set to 1,2 to list results of filtering and abort\n";
-    print STDERR "-caffile\texport new contigs in caf format on file specified\n";
+    print STDERR "-caf\t\texport new contigs in caf format on file specified\n";
     print STDERR "-contig\t\tcontig name filter to select contig(s) for processing\n";
     print STDERR "-read\t\tread name filter to select specific read(s)\n";
     print STDERR "\n";
