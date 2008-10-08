@@ -19,7 +19,7 @@ set MYSQL_COMMAND=$<:q
 
 echo Command is "$MYSQL_COMMAND"
 
-set MYSQL="mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER --password=$MYSQL_PASSWORD"
+set MYSQL="mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER --batch --skip-column-name --password=$MYSQL_PASSWORD"
 
 foreach DB (`$MYSQL --batch --skip-column-name \
     -e "select table_schema from tables where table_name = 'READINFO'" \
