@@ -485,16 +485,16 @@ if ($projectlock) {
 
 # set-up tag selection
 
-if (!$rtagtypeaccept) {
+if (!$rtagtypeaccept || $rtagtypeaccept eq 'default') {
+# use standard pattern to catch all tag types
+    $rtagtypeaccept = '\w{3,4}';
+}
+elsif ($rtagtypeaccept eq 'standard') {
 # no specification: use pre-defined list of accepted tags
     my $FTAGS = &tagList('FTAGS');
     my $STAGS = &tagList('STAGS');
     my $ETAGS = &tagList('ETAGS');
     $rtagtypeaccept = "$FTAGS|$STAGS|ETAGS";
-}
-elsif ($rtagtypeaccept eq 'default') {
-# use standard pattern to catch all tag types
-    $rtagtypeaccept = '\w{3,4}';
 }
 else {
 # replace any non-word symbol by '|' to act as separator in a list 
