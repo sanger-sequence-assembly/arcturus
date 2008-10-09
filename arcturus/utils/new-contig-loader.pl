@@ -143,13 +143,13 @@ while (my $nextword = shift @ARGV) {
         &showUsage("Invalid keyword '$nextword' \n($validkeys)");
     }
 
-    if ($nextword eq '-instance' || $nextword eq '-i') {
+    if ($nextword eq '-i' || $nextword eq '-instance') {
 # the next statement prevents redefinition when used with e.g. a wrapper script
         die "You can't re-define instance" if $instance;
         $instance     = shift @ARGV;
     }
 
-    elsif ($nextword eq '-organism' || $nextword eq '-o') {
+    elsif ($nextword eq '-o' || $nextword eq '-organism') {
 # the next statement prevents redefinition when used with e.g. a wrapper script
         die "You can't re-define organism" if $organism;
         $organism     = shift @ARGV;
@@ -160,7 +160,7 @@ while (my $nextword = shift @ARGV) {
     if ($nextword eq '-caf') {
         $caffilename  = shift @ARGV; # specify input file
     }
-    elsif ($nextword eq '-stdin'     || $nextword eq '-batch') {
+    elsif ($nextword eq '-stdin' || $nextword eq '-batch') {
         $caffilename  = 0;           # input with "<" operator
     }
 
@@ -168,20 +168,25 @@ while (my $nextword = shift @ARGV) {
 
 # caf file processing
 
-    if ($nextword eq '-nofrugal' || $nextword eq '-nf') {
+    if ($nextword eq '-nf' || $nextword eq '-nofrugal') {
         $frugal       = 0;
     }            
 
-    if ($nextword eq '-linelimit'    ||$nextword eq '-ll') {
+    if ($nextword eq '-ll'    || $nextword eq '-linelimit' ) {
         $linelimit    = shift @ARGV; 
     } 
-    elsif ($nextword eq '-readlimit' ||$nextword eq '-rl') {
+    elsif ($nextword eq '-rl' || $nextword eq '-readlimit') {
         $readlimit    = shift @ARGV; 
     } 
-    elsif ($nextword eq '-parseonly') {
+    elsif ($nextword eq '-po' || $nextword eq '-parseonly') {
         $parseonly    = 1;
 #	$readload     = 0;
     }
+
+    if ($nextword eq '-padded') {
+	$acceptpadded   = 1;
+        $consensus      = 1;
+    }    
 
 # contig selection and processing
 
@@ -189,27 +194,27 @@ while (my $nextword = shift @ARGV) {
     $maxnrofreads     = shift @ARGV  if ($nextword eq '-maximum');
     $contignamefilter = shift @ARGV  if ($nextword eq '-filter'); 
 
-    if ($nextword eq '-blocksize' || $nextword eq '-bs') {
+    if ($nextword eq '-bs' || $nextword eq '-blocksize') {
         $blocksize    = shift @ARGV;
         $blocksize = 1 if ($blocksize <= 0);
     } 
 
-    if ($nextword eq '-withoutparents' || $nextword eq '-wp') {
+    if ($nextword eq '-wp' || $nextword eq '-withoutparents') {
         $withoutparents = 1;
     } 
 
     $consensus        = 1            if ($nextword eq '-consensus');
 
-    if ($nextword eq '-noload' || $nextword eq '-nl') {
+    if ($nextword eq '-nl' || $nextword eq '-noload') {
         $contigload     = 0;
         $loadcontigtags = 0;
 	$readload       = 0;
         $loadreadtags   = 0;
     }
-    elsif ($nextword eq '-notest' || $nextword eq '-nt') { # redundent
+    elsif ($nextword eq '-nt' || $nextword eq '-notest') { # redundent
         $contigtest     = 0;            
     }
-    elsif ($nextword eq '-testcontig' || $nextword eq '-tc') {
+    elsif ($nextword eq '-tc' || $nextword eq '-testcontig') {
         $contigtest     = 1;
         $contigload     = 0;
         $loadcontigtags = 0;
@@ -223,61 +228,57 @@ while (my $nextword = shift @ARGV) {
     $safemode           = 1            if ($nextword eq '-safemode');
     $breakcontig        = 0            if ($nextword eq '-nobreak');
 
-    if ($nextword eq '-acceptversionzero' || $nextword eq '-avz') {
+# loading (missing) reads from input file
+
+    if ($nextword eq '-avz' || $nextword eq '-acceptversionzero') {
 	$acceptversionzero = 1; # use with Phusion assembly
     }
 
-    if ($nextword eq '-noloadreads' || $nextword eq '-nlr') {
+    if ($nextword eq '-nlr' || $nextword eq '-noloadreads') {
 	$readload       = 0; # switch off autoload of missing reads
     }
 
-    if ($nextword eq '-consensusreadname' || $nextword eq '-crn') {
+    if ($nextword eq '-crn' || $nextword eq '-consensusreadname') {
 	$consensusread  = shift @ARGV;
     }
 
-    if ($nextword eq '-noaspedcheck' || $nextword eq '-nac') {
+    if ($nextword eq '-nac' || $nextword eq '-noaspedcheck') {
 	$noaspedcheck   = shift @ARGV;
     }
 
-    if ($nextword eq '-padded') {
-	$acceptpadded   = 1;
-        $consensus      = 1;
-    }    
-
 # contig tags
 
-    if ($nextword eq '-contigtagtype'     || $nextword eq '-ctt') {
+    if ($nextword eq '-ctt' || $nextword eq '-contigtagtype') {
         $ctagtypeaccept = shift @ARGV;
     }
-    elsif ($nextword eq '-noloadcontigtags' || $nextword eq '-nlct') {
+    elsif ($nextword eq '-nlct' || $nextword eq '-noloadcontigtags') {
         $loadcontigtags = 0;            
     }
-    elsif ($nextword eq '-loadcontigtags' || $nextword eq '-lct') {
+    elsif ($nextword eq '-lct'  || $nextword eq '-loadcontigtags') {
         $loadcontigtags = 1;            
     }
-    elsif ($nextword eq '-testcontigtags' || $nextword eq '-tct') {
+    elsif ($nextword eq '-tct'  || $nextword eq '-testcontigtags') {
         $loadcontigtags = 0;
         $testcontigtags = 1;            
     }
-    elsif ($nextword eq '-showcontigtags' || $nextword eq '-sct') {
+    elsif ($nextword eq '-sct'  || $nextword eq '-showcontigtags') {
         $loadcontigtags = 0;
         $echocontigtags = 1;            
     }
 
-
 # read tags
 
-    if ($nextword eq '-readtagtype'       || $nextword eq '-rtt') {
+    if ($nextword eq '-rtt' || $nextword eq  '-readtagtype') {
         $rtagtypeaccept = shift @ARGV;
     }
-    elsif ($nextword eq '-noloadreadtags' || $nextword eq '-nlrt') {
+    elsif ($nextword eq '-nlrt' || $nextword eq '-noloadreadtags') {
         $loadreadtags = 0;            
     }
-    elsif ($nextword eq '-loadreadtags'   || $nextword eq '-lrt') {
+    elsif ($nextword eq '-lrt'  || $nextword eq '-loadreadtags') {
 #        $loadreadtags = 1 unless defined $loadreadtags; # ? why          
         $loadreadtags = 1;            
     }
-    elsif ($nextword eq '-showreadtags'   || $nextword eq '-srt') {
+    elsif ($nextword eq '-srt'  || $nextword eq '-showreadtags') {
         $loadreadtags = 0;
         $echoreadtags = 1;            
     }
@@ -287,35 +288,36 @@ while (my $nextword = shift @ARGV) {
 
 # project ('assignproject' forces its use, by-passing inheritance)
 
-    if ($nextword eq '-assembly'          || $nextword eq '-a') {
+    if ($nextword eq '-a' || $nextword eq '-assembly') {
         $assembly     = shift @ARGV;
     }
-    elsif ($nextword eq '-assignproject'  || $nextword eq '-ap' || $nextword eq '-project') {
+    elsif ($nextword eq '-ap' || $nextword eq '-project' || $nextword eq '-assignproject') {
         $pidentifier  = shift @ARGV;
         $pinherit     = 'project';
     }
-    elsif ($nextword eq '-defaultproject' || $nextword eq '-dp') {
-        $pidentifier      = shift @ARGV;
+    elsif ($nextword eq '-dp' || $nextword eq '-defaultproject') {
+        $pidentifier  = shift @ARGV;
     }
-    elsif ($nextword eq '-setprojectby'   || $nextword eq '-spb') {
-        $pinherit         = shift @ARGV;
-    }
-    elsif ($nextword eq '-projectlock'    || $nextword eq '-pl') {
+    elsif ($nextword eq '-pl' || $nextword eq '-projectlock') {
         $projectlock  = 1;
     }
+    elsif ($nextword eq '-spb' || $nextword eq'-setprojectby') {
+        $pinherit     = shift @ARGV;
+    }
 
-    $autolockmode     = 0            if ($nextword eq '-dounlock');
+    $autolockmode     = 0  if ($nextword eq '-dounlock'); # default 1
+
 # reporting
 
-    $loglevel         = 0            if ($nextword eq '-verbose'); # info, fine, finest
-    $loglevel         = 2            if ($nextword eq '-info');    # info
-    $debug            = 1            if ($nextword eq '-debug');   # info, fine
-    $usage            = 1            if ($nextword eq '-memory');  # info, fine
-    $logfile          = shift @ARGV  if ($nextword eq '-log');
+    $loglevel         = 0  if ($nextword eq '-verbose'); # info, fine, finest
+    $loglevel         = 2  if ($nextword eq '-info');    # info
+    $debug            = 1  if ($nextword eq '-debug');   # info, fine
+    $usage            = 1  if ($nextword eq '-memory');  # info, fine
 
+    $logfile          = shift @ARGV  if ($nextword eq '-log');
     $outfile          = shift @ARGV  if ($nextword eq '-out');
 
-    &showUsage(0) if ($nextword eq '-help' || $nextword eq '-h');
+    &showUsage(0) if ($nextword eq '-h' || $nextword eq '-help');
 }
 
 #----------------------------------------------------------------
@@ -577,7 +579,7 @@ $poptions{readversionhash} = $readversionhash;
 
 my $uservhashlocal = 1; 
 
-if ($frugal) {
+if ($frugal) { # thios whole block should go to a contig "factory"
 # scan the file and make an inventory of objects
     my %options = (progress=>1,linelimit=>$linelimit);
 
@@ -595,7 +597,7 @@ if ($frugal) {
     my @contignames;
     
     @inventory = sort keys %$inventory;
-    foreach my $objectname (@inventory) {
+    foreach my $objectname (@inventory) { 
 # ignore non-objects
         my $objectdata = $inventory->{$objectname};
 # Read and Contig objects have data store as a hash; if no hash, ignore 
@@ -820,8 +822,9 @@ print STDOUT " end no frugal scan\n";
             push @remove,$contig->getName();
             my $reads = $contig->getReads();
             foreach my $read (@$reads) {
-$logger->warning("read ".$read->getReadName()." has sequence!") if $read->hasSequence();
                 push @remove,$read->getReadName();
+                next unless  $read->hasSequence();
+                $logger->info("read ".$read->getReadName()." has sequence!");
 	    }
 	    ContigFactory->removeObjectFromInventory(\@remove);
         }
@@ -885,8 +888,9 @@ $logger->warning("read ".$read->getReadName()." has sequence!") if $read->hasSeq
 # present the contig to the database; load, including contig tags
 
             my %loptions = (setprojectby => $pinherit,
-                           dotags  => $ctagtypeaccept);
-            $loptions{prohibitparent} = 1 if $withoutparents;
+                            dotags  => $ctagtypeaccept);
+# inherittag options ( default .. not: REPT RP20 )
+            $loptions{prohibitparent} = 1    if $withoutparents;
 	    $loptions{acceptversionzero} = 1 if $acceptversionzero;
 
             my ($added,$msg) = $adb->putContig($contig, $project,%loptions);
@@ -916,6 +920,7 @@ $logger->warning("read ".$read->getReadName()." has sequence!") if $read->hasSeq
                     $logger->warning("Splitting contig with discontinuity");
                     my $contigs = $contig->break();
                     push @$objects,@$contigs if ($contigs && @$contigs > 1);
+		    $contig->erase(); # enable garbage collection
                     next;
    	        }
 # $adb->clearLastContig(); ?
@@ -942,6 +947,14 @@ $logger->warning("read ".$read->getReadName()." has sequence!") if $read->hasSeq
                 $msg = "is a new contig" unless $msg;         
                 $logger->warning("Status of contig $identifier with $nr reads:"
                                 . $msg);
+	        if ($contig->hasContigToContigMappings()) {
+                    $logger->warning($contig->getContigName()
+				     ." has contig-to-parent links");
+                    my $mappings = $contig->getContigToContigMappings();
+	            foreach my $mapping (@$mappings) {
+	                $logger->warning($mapping->assembledFromToString || "empty link\n");
+	            }
+                }
             }
 	    else {
                 my $diagnosis = $contig->getStatus();
@@ -972,9 +985,15 @@ $logger->warning("read ".$read->getReadName()." has sequence!") if $read->hasSeq
             undef @$reads;
         }
 
-# destroy the contig
-#$logger->monitor("after processing contig ".$contig->getContigName(),memory=>1) if $usage;
+# destroy the contig and possible related contigs to enable garbage collection
 
+#$logger->monitor("after processing contig ".$contig->getContigName(),memory=>1) if $usage;
+        if (my $parents = $contig->getParentContigs()) {
+            foreach my $parent (@$parents) {
+                $parent->erase();
+            }
+            undef @$parents;
+        }
         $contig->erase();
         undef $contig;
     }
@@ -1028,7 +1047,8 @@ if ($lastinsertedcontig && $safemode) {
 # $adb->updateMetaData;
 
 unless ($lockstatusfound && $autolockmode) {
-# the project was not locked before; return project to this state
+# in autolock: the project was not locked before; return to this state
+# not in autolock: always unlock to project after input is finished
     $project->releaseLock() || $logger->severe("could not release lock");
 }
 
@@ -1137,24 +1157,37 @@ sub testreadsindatabase {
 #                next; # ignore here, or override ?
  	    }
 
-# move most of this to ReadFactory
+# move most of this to ReadFactory ? 
             unless ($read->getStrand()) {
 		$read->setStrand('Forward');
 		$logger->info("Strand set as 'Forward' for read $readname");
 	    }
+
+            unless ($read->getPrimer()) {
+                $read->setPrimer("Custom_primer");
+	    }
+
+            unless ($read->getChemistry()) {
+                $read->setChemistry("Dye_primer");
+	    }
+
+            unless ($read->getProcessStatus()) {
+                $read->setProcessStatus("PASS"); # implicit in being on the gap4 export
+	    }
+
             my %loadoptions;
-            my $isr = 0; # consensus read flag
+            my $iscr = 0; # consensus read flag
             if (my $readtags = $read->getTags()) {
 # check if the read is marked as consensus read
 		foreach my $tag (@$readtags) {
-                    $isr = 1 if ($tag->getType() eq 'CONS');
+                    $iscr = 1 if ($tag->getType() eq 'CONS');
 		}
 	    }
             
-            if ($crn && ($crn eq 'all' || $readname =~ /$crn/) || $isr) {
+            if ($crn && ($crn eq 'all' || $readname =~ /$crn/) || $iscr) {
                 $loadoptions{skipaspedcheck} = 1;
                 $loadoptions{skipligationcheck} = 1;
-                $loadoptions{skipchemistrycheck} = 1;
+#                $loadoptions{skipchemistrycheck} = 1;
                 $loadoptions{skipqualityclipcheck} = 1;
             }
             if ($nac && ($nac eq 'all' || $readname =~ /$nac/)) {
@@ -1228,7 +1261,7 @@ sub processreadtags {
     my $reads = shift; # array ref to a list of reads
     my %options = @_;
 
-    $logger->warning("Processing readtags for ".scalar(@$reads)." reads");
+    $logger->info("Processing readtags for ".scalar(@$reads)." reads");
 
     if ($options{load}) { # load (new) read tags
         my $success = $adb->putTagsForReads($reads,autoload=>1);
