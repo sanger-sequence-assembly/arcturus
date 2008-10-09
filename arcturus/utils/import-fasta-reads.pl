@@ -279,6 +279,20 @@ foreach my $fasta (@reads) {
         $read->setPrimer("Custom_Primer") unless $read->getPrimer();
         $read->setChemistry("Dye_primer") unless $read->getChemistry();
 
+# test/generate quality clipping; test the note field for 
+
+        if (my $extrainfo = $contig->getContigNote()) {
+# cleanup the info to prepare split on blanks
+            $extrainfo =~ s/^\s+|\s+$//g;
+            $extrainfo =~ s/\s*\=\s*/=/g;
+            my @extrainfo = split /\s+/,$extrainfo;
+            foreach my $info (@extrainfo) {
+                my @info = split /\=/,$info;
+                $read->setLowQualityLeft ($info[1]) if ($info[0] eq 'QL');
+                $read->setLowQualityRight($info[1]) if ($info[0] eq 'QR');
+	    }
+	}
+        
         unless ($read->getLowQualityLeft() || $read->getLowQualityRight()) {
             $read->qualityClip();
 	}
