@@ -157,10 +157,12 @@ sub verifyTagContent {
         $report .= $msg if (defined($status) && $status != 1);
 	$returnstatus = 0 unless $status;
     }
-# for other types, check if a tag descriptor is available
-#    elsif ($tagtype !~ /^(POLY|WARN|COMM)$/) {
-    elsif ($tagtype ne 'POLY' && $tagtype ne 'WARN' && $tagtype ne 'COMM') {
-        $returnstatus = 0 unless $tag->getTagComment();
+# testing of a description is disabled
+    elsif (my $nonemptytags = $options{nonempty}) {
+# for selected types, check if a tag descriptor is available
+        if ($tagtype =~ /$nonemptytags/) {
+            $returnstatus = 0 unless $tag->getTagComment();
+	}
     }
 
 # return status to signal a valid tag or not
@@ -988,7 +990,7 @@ $logger->debug($newmapping->toString()) unless $isequal;
         return undef;
     }
 
-$logger->info("cross mapping $crossmapping");
+$logger->fine("cross mapping $crossmapping");
 $logger->fine($crossmapping->toString());
 
 # count number of segments of cross comparison: is one more than frameshift(s)
@@ -1001,14 +1003,14 @@ $logger->fine($crossmapping->toString());
     my @orange = $oldmapping->getObjectRange();
     my @nrange = $newmapping->getObjectRange();
     my $ltruncate = $nrange[0] - $orange[0];
-    $tag->setTruncationStatus(l => $ltruncate) if $ltruncate;
+    $tag->setTruncationStatus('l',$ltruncate) if $ltruncate;
     my $rtruncate = $orange[1] - $nrange[1];
-    $tag->setTruncationStatus(r => $rtruncate) if $rtruncate;
+    $tag->setTruncationStatus('r',$rtruncate) if $rtruncate;
 
 # if there are no truncations or frameshifts, the (possible) DNA is unchanged
 
     return 1 unless ($frameshift || $ltruncate || $rtruncate);
-$logger->info("remapper: there are truncations or frameshifts $frameshift | $ltruncate | $rtruncate");
+$logger->fine("remapper: there are truncations or frameshifts $frameshift | $ltruncate | $rtruncate");
 
     if (my $olddna = $tag->getDNA()) {
 # DNA sequence remapping (use oldmapping newmapping)
@@ -1124,7 +1126,8 @@ my $logger = &verifyLogger("split"); $logger->debug("ENTER split");
     foreach my $segment (@$segments) {
         my $flength = $segment->getSegmentLength();
         next if ($flength < $minimumsegmentsize);
-        my $newtag = $tag->copy(%options);
+#        my $newtag = $tag->copy(%options);
+        my $newtag = $tag->copy();
         $newtag->setPosition($segment->getYstart(),$segment->getYfinis());
 # add sequence fragment, if any
         if ($sequence) {
