@@ -210,7 +210,10 @@ sub emblFileParser {
 
     undef my $contig;
     undef my @contigtag;
+
     my $parsetag = 0;
+    my $tagdescriptors = "Tag|CDS|CDS_motif|repeat_region";
+    my %translation = (CDS_motif => 'CDSM' , repeat_region => 'REPT' , CDS => 'CDS' , Tag => 'TAG');  
 
     my $sequence = '';
     my $length = 0;
@@ -218,6 +221,7 @@ sub emblFileParser {
 
     my $line = 0;
     my $report = $options{report};
+
     while (defined (my $record = <$EMBL>)) {
 
         $line++;
@@ -232,16 +236,17 @@ sub emblFileParser {
         elsif ($record =~ /^ID\s*(.*)$/) {
 # new identifier found; add existing contig to output stack
             my $identifier = $1;
+            $logger->fine("contig opened $identifier");
             if ($contig && $sequence) {
                 unless ($length == $checksum) {
 		    $logger->error("Checksum error ($checksum - $length) on embl file "
                                   .$contig->getContigName());
 		}
                 $contig->setSequence($sequence);
-                if (@contigtag) {
-                    $contig->addTag(@contigtag);
-                    undef @contigtag;
+                foreach my $tag (@contigtag) {
+                    $contig->addTag($tag);
 		}
+                undef @contigtag;
                 push @$emblcontigs, $contig;
 	    }
 # and open a new one
@@ -260,16 +265,19 @@ sub emblFileParser {
 
         elsif ($record =~ /^FT\s+(.*)$/) {
             my $info = $1;
-            if ($info =~ /(CDS|Tag)\s+(\d+)[\.\>\<]+(\d+)/) {
+            if ($info =~ /($tagdescriptors)\s+(\d+)[\.\>\<]+(\d+)/) {
 # new tag with one position started
                 my ($type,$ts,$tf) = ($1,$2,$3);
-                $type = 'FCDS' if ($type eq 'CDS'); # FCDS recognised by Gap4
+		$type = $translation{$type} || $type;
+#                $type = 'FCDS' if ($type eq 'CDS'); # FCDS recognised by Gap4
                 my $contigtag = TagFactory->makeContigTag($type,$ts,$tf);
+                $contigtag->setStrand('Forward');
                 push @contigtag,$contigtag;
                 $parsetag = 1;
             }
-            elsif ($info =~ /(CDS|Tag)\s+join\(([^\)]+)\)/) {
+            elsif ($info =~ /($tagdescriptors)\s+join\(([^\)]+)\)/) {
                 my ($type,$joinstring) = ($1,$2);
+		$type = $translation{$type} || $type;
                 my $contigtag = TagFactory->makeContigTag($type);
                 $contigtag->setStrand('Forward');
                 my @positions = split ',',$joinstring;
@@ -280,10 +288,12 @@ sub emblFileParser {
                 push @contigtag,$contigtag;
                 $parsetag = 1;
  	    }
-            elsif ($info =~ /(CDS|Tag)\s+complement\(join\(([^\)]+)\)/) {
+            elsif ($info =~ /($tagdescriptors)\s+complement\(join\(([^\)]+)\)/) {
                 my ($type,$joinstring) = ($1,$2);
+		$type = $translation{$type} || $type;
                 my $contigtag = TagFactory->makeContigTag($type);
                 $contigtag->setStrand('Reverse');
+                $contigtag->setTagComment('(Reverse Strand)');
                 my @positions = split ',',$joinstring;
                 foreach my $position (@positions) {
                     my ($ts,$tf) = split /\.+/,$position;
@@ -292,10 +302,12 @@ sub emblFileParser {
                 push @contigtag,$contigtag;
                 $parsetag = 1;
  	    }
-            elsif ($info =~ /(CDS|Tag)\s+complement\(([^\)]+)\)/) {
+            elsif ($info =~ /($tagdescriptors)\s+complement\(([^\)]+)\)/) {
                 my ($type,$joinstring) = ($1,$2);
+		$type = $translation{$type} || $type;
                 my $contigtag = TagFactory->makeContigTag($type);
                 $contigtag->setStrand('Reverse');
+                $contigtag->setTagComment('(Reverse Strand)');
                 my @positions = split ',',$joinstring;
                 foreach my $position (@positions) {
                     my ($ts,$tf) = split /\.+/,$position;
@@ -308,20 +320,26 @@ sub emblFileParser {
             if ($parsetag && @contigtag) {
                 my $contigtag = $contigtag[$#contigtag]; # most recent addition
                 my $tagcomment = $contigtag->getTagComment() || '';
-                if ($info =~ /note|ortholog|systematic/) {
-#  cleanup the current info line
-                    $info =~ s/(^\s*|\s*$|\/)//g;
-                    $tagcomment .= '\\n\\' if $tagcomment;
-	   	    $tagcomment .= $info;
-		    $contigtag->setTagComment($tagcomment);
-                    if ($info =~ /\bsystematic_id\b\=\"(.+)\"/) {
-                        $contigtag->setSystematicID($1);
+                if ($info =~ /(note|ortholog|systematic)/) {
+                    my $kind = $1;
+                    unless ($tagcomment =~ /$kind/) { 
+                        $info =~ s/(^\s*|\s*$|\/)//g;
+                        $tagcomment .= '\\n\\' if $tagcomment;
+	       	        $tagcomment .= $info;
+   		        $contigtag->setTagComment($tagcomment);
+                        if ($info =~ /\bsystematic_id\b\=\"(.+)\"/) {
+                            $contigtag->setSystematicID($1);
+		        }
+                        if ($info =~ /\bnote\b\=\"(.+)\"/) {
+                            $contigtag->setComment($1);
+		        }
 		    }
                 }  
             }
 # else other info is to be parsed
             else {
-# to be developed                
+# to be developed
+		$logger->warning("not parsed: $info");
 	    }
         }
 
@@ -352,19 +370,25 @@ sub emblFileParser {
 	}
     }
 
-# add the last one to the stack 
+# add the last one to the stack
 
-    if ($contig && $sequence) {
+    if (!$contig && ($sequence || @contigtag)) {
+# create a default contig (the ID line was missing, Artemis output!)
+        my $contigname = $emblfile;
+	$contigname =~ s/\.embl//;
+        $contig = new Contig($contigname);      
+    }
+
+    if ($contig && ($sequence || @contigtag)) {
+        $logger->info("contig & sequence assembled : $length ($checksum)");
         unless ($length == $checksum) {
 	    $logger->error("Checksum error ($checksum - $length) on embl file "
                            .$contig->getContigName());
      	}
         $contig->setSequence($sequence);
 
-        if (@contigtag) {
-            $contig->addTag(@contigtag);
-            undef @contigtag;
-     	}
+        $contig->addTag(\@contigtag) if @contigtag;
+
         push @$emblcontigs, $contig;
     }
 
@@ -1811,7 +1835,7 @@ $logger->error("Extending Tag record ($line)  .. SHOULD NOT OCCUR!!");
                 $contig->addTag($tag);
 	    }
 	    else {
-                $logger->warning("($line) invalid or empty tag: ".($msg || ''));
+                $logger->warning("($line) invalid or empty (contig) tag: ".($msg || ''));
 	    }
         }
         elsif ($ignoretags && $record =~ /Tag\s+($ignoretags)\s+(\d+)\s+(\d+)(.*)$/i) {
