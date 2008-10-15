@@ -2990,11 +2990,11 @@ sub sortContigTags {
 #-----------------------------------------------------------------------------
 
 sub inheritProject {
-# inherit a project from a contig's parents, if any
-# returns a Project instance and comment, or 0 and comment for a fail
+# inherit a project from a contig's parents, if any ; puts project_id and returns either
+# a Project instance, or undef for not possible (no parents), or 0 and comment for a fail
     my $class = shift;
     my $contig = shift;
-    my %options = @_; # delayed , measure, 
+    my %options = @_; # delayed , measure or score
 
     &verifyParameter($contig,'inheritProject');
 
@@ -3002,7 +3002,7 @@ sub inheritProject {
 
     my $delayedload = $options{delayed} || 0;
     unless ($contig->hasParentContigs($delayedload)) {
-        return 0,"Contig has no parents"; # act upon in calling model
+        return undef; # act upon in calling model
     }
 
 # test the input inheritance model
