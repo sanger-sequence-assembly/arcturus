@@ -86,9 +86,9 @@ sub makeTag {
 
     my $newtag = new Tag();
 
-    $newtag->setPosition($start,$final);
+    $newtag->setPosition($start,$final) if (defined($start) && defined($final));
 
-    $newtag->setType($tagtype) if $tagtype;
+    $newtag->setType($tagtype) if defined($tagtype);
 
     $options{Strand} = 'Forward' unless defined($options{Strand});
 
