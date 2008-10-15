@@ -63,7 +63,9 @@ public class ProjectImporterExporter extends Thread {
 			return;
 		}
 
-		String shellcommand = "/software/arcturus/utils/" + (importing ?
+		String utilsDir = System.getProperty("arcturus.home", "/software/arcturus") + "/utils/";
+		
+		String shellcommand = utilsDir + (importing ?
 				"importintoarcturus" : "exportfromarcturus") + ".lsf";		
 		
 		final String command = shellcommand + " -instance " +
