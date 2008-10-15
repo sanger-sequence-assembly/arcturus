@@ -16,7 +16,7 @@ else
 endif
 
 if ( -x ${PERL_SCRIPT_NAME} ) then
-    lsrun -l -v -R 'mem>8000' ${PERL_SCRIPT_NAME} $*
+    lsrun -v -R 'mem>8000' ${PERL_SCRIPT_NAME} $*
 else
     echo Error: ${PERL_SCRIPT_NAME} is not a valid command
 endif
