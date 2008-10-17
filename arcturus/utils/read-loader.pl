@@ -8,6 +8,7 @@ use ReadFactory::CAFReadFactory;
 use ReadFactory::OracleReadFactory;
 use ReadFactory::ExpFileReadFactory;
 use ReadFactory::TraceServerReadFactory;
+use ReadFactory::FASTAFileReadFactory;
 
 use FileHandle;
 use Logging;
@@ -47,7 +48,7 @@ my $validKeys = "organism|instance|caf|cafdefault|fofn|forn|read|out|"
               . "minreadid|maxreadid|skipaspedcheck|isconsensusread|icr|"
               . "noload|noexclude|acceptlikeyeast|aly|onlyloadtags|olt|test|"
               . "group|skipqualityclipcheck|"
-              . "repair|update";
+              . "repair|update|ligation|fastafile|defaultquality";
 
 my %PARS;
 
@@ -145,6 +146,10 @@ while (my $nextword = shift @ARGV) {
 
     $PARS{group}        = shift @ARGV  if ($nextword eq '-group');
 
+    $PARS{fastafile}    = shift @ARGV  if ($nextword eq '-fastafile');
+    $PARS{ligation}     = shift @ARGV  if ($nextword eq '-ligation');
+    $PARS{defaultquality} = shift @ARGV  if ($nextword eq '-defaultquality');
+
     &showUsage(0) if ($nextword eq '-help');
 }
 
@@ -162,7 +167,8 @@ $logger->setStandardFilter($logLevel) if defined $logLevel; # reporting level
 
 &showUsage("Undefined data source") unless $source;
 
-if ($source ne 'caf' && $source ne 'oracle' && $source ne 'expfiles' && $source ne 'traceserver') {
+if ($source ne 'caf' && $source ne 'oracle' && $source ne 'expfiles' && $source ne 'traceserver'
+    && $source ne 'fastafile') {
     &showUsage("Invalid data source '$source'");
 }
 
@@ -344,6 +350,12 @@ elsif ($source eq 'traceserver') {
     $factory = new TraceServerReadFactory(%PARS);
 }
 
+elsif ($source eq 'fastafile') {
+    &showUsage("Missing FASTA file name") unless defined($PARS{fastafile});
+
+    $factory = new FASTAFileReadFactory(%PARS);
+}
+
 &showUsage("Unable to build a ReadFactory instance") unless $factory;
 
 $factory->setLogging($logger);
@@ -353,6 +365,8 @@ $factory->setLogging($logger);
 #----------------------------------------------------------------
 
 my $processed = 0;
+
+$consensus_read = 1 if $source eq 'fastafile';
 
 my %loadoptions;
 $loadoptions{skipaspedcheck}     = 1 if $skipaspedcheck;
@@ -554,7 +568,8 @@ sub showUsage {
         print STDERR "\n";
         print STDERR "-organism\tArcturus database name\n" unless $organism;
         print STDERR "-instance\teither 'prod', 'dev' or 'test'\n" unless $instance;
-        print STDERR "-source\t\tEither 'CAF',' Oracle', 'Expfiles' or 'TraceServer'\n" unless $source;
+        print STDERR "-source\t\tEither 'caf',' oracle', 'expfiles', 'traceserver' or 'fastafile'\n"
+	    unless $source;
     }
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
@@ -612,6 +627,14 @@ sub showUsage {
 	print STDERR "\n";
 	print STDERR "-group\t\tMANDATORY: name of trace server group to load\n";
 	print STDERR "-minreadid\tminimum trace server read ID (use 'auto' to auto-detect)\n";
+	print STDERR "\n";
+    }
+    if (!$source || $source eq 'fastafile') {
+	print STDERR "Parameters for FASTAFile input:\n";
+	print STDERR "\n";
+	print STDERR "-fastafile\tMANDATORY: name of FASTA file to load\n";
+	print STDERR "-ligation\tname of ligation for reads in this file [default: consensus]\n";
+	print STDERR "-defaultquality\tdefault base quality [default: 2]\n";
 	print STDERR "\n";
     }
 
