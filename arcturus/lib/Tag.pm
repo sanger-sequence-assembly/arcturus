@@ -699,16 +699,19 @@ sub writeToEMBL {
     my $tagcomment = $this->getTagComment();
 
 # get the key to be used for export
+
+    my %translate  = (CDSM=>'CDS_motif',REPT=>'repeat_region'); 
         
-    my $key = $options{tagkey};
-    $key = 'CDS' if (!$key && $tagtype eq 'ANNO'); # default for annotation
+    my $key = $options{tagkey} || $tagtype;
+    $key = 'CDS' if ($tagtype eq 'ANNO'); # default for annotation
+    $key = $translate{$key} if $translate{$key};
     $key = 'Tag' unless $key; # default for all else
     
     my $sp17 = "                 "; # format spacer
 
 # composite tags have more than one position interval specified
 
-    my $string  = "FT   ".sprintf("%3s",$key)."             ";
+    my $string  = "FT   ".sprintf("%-14s",$key)."  ";
     if ($this->isComposite()) {
 # generate the join construct for composite tags
         my @joinlist;
@@ -740,22 +743,52 @@ sub writeToEMBL {
         $string .= "\n";
     }
 
+# remap mode ?
+
+# unless ($options{remap}) {
     $tagtype =~ s/ANNO/annotation/ if $tagtype;
     $string .= "FT $sp17 /type=\"$tagtype\"\n" if $tagtype;
     $string .= "FT $sp17 /arcturus_feature_id=\"$sysID\"\n" if $sysID;
+# }
+# if ($options{remap}) {
+#    $string .= "FT $sp17 /systematic_id=\"$sysID\"\n" if $sysID;
+# }
+
     if ($strand eq 'U') {
         $string .= "FT $sp17 /strand=\"no strand information\"\n";
     }
     else {
         $string .= "FT $sp17 /strand=\"$strand\"\n";
     }
-    $string .= "FT $sp17 /arcturus_comment=\"$comment\"\n" if $comment;
+    if ($comment) {
+# adhoc removal of split/fragment info from comment
+        if ($comment =~ /^(.+)((split|fragment).*)$/) {
+            $comment = $1;
+            $string .= "FT $sp17 /arcturus_remap_info=\"$2\"\n";     
+	}
+        $string .= "FT $sp17 /arcturus_comment=\"$comment\"\n";
+    }
 # process tag comment; insert new line if it is too long
     if ($tagcomment) {
-        my @tcparts = split /,/,$tagcomment;
+# split on \n\ , rep by / ?
+        my @tcparts = split /\,|\\n\\|\n/,$tagcomment;
+# scan for note or systematic id
+	foreach my $part (@tcparts) {
+# the next bit is an ad hoc construction to remove split and fraction info
+#            if ($part =~ /^(.+)((split|fragment).*)$/) {
+#                push @tcparts,$2; # add at end
+#		$part = $1;
+#            }
+            next unless ($part =~ /note|systematic_id/);
+            $string .= "FT $sp17 /$part\n";
+            $part = 0;
+	}
+# the remainder (if any)        
+        my $description;
         my $cstring = "FT $sp17 /arcturus_description=\"";
         my $positionoffset = length($cstring);
         foreach my $part (@tcparts) {
+            next unless $part;
             my $substring = "$part,";
             if ($positionoffset + length($substring) >= 80) {
 	        $cstring .= "\nFT $sp17 "; # start a new line
@@ -763,9 +796,10 @@ sub writeToEMBL {
             }
 	    $cstring .= $substring;
             $positionoffset += length($substring);
+            $description++;
         }
         chop $cstring; # remove trailing comma
-        $string .= $cstring . "\"\n";
+        $string .= $cstring . "\"\n" if $description;
     }
 
     print $FILE $string if $FILE;
