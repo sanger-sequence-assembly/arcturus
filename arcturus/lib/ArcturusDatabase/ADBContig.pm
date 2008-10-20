@@ -364,12 +364,13 @@ sub getParentContigsForContig {
         @parentids = @$parentids if $parentids;
     }
 # else use the reads in the contig to find the parents from read comparison
-    elsif ($nocache && $usereads) {
+    elsif ($nocache) {
 #  find the parents from read comparison using age tree anywhere in tree
         my $parentids = $this->getParentIDsForContig($contig);
         @parentids = @$parentids if $parentids;
     }
-    elsif ($usereads) {
+#    elsif ($usereads) {
+    else { # default 
 #  find the parents in generation 0 from read comparison using cache
         my $parentids = $this->getParentIDsForReadsInContig($contig);
 	unless (defined($parentids)) {
@@ -581,22 +582,17 @@ sub putContig {
 
     if ($contig->hasParentContigs()) {
 
-#$log->warning("testing allocateContigToProject");
-#$message .= "; ".$this->allocateContigToProject($contig,$project); # testing
-
         if (!$contig->hasContigToContigMappings()) {
 # normally there should be at least one contig-contig mapping
 	    $message .= "; contig ". $contig->getContigName. " has parents"
 	              . " but no valid contig-to-contig mappings";
 	}
 	else {
-# inherit (selected) tags
-
+# inherit (selected) tags (either specified or use defaults)
             my %tagscreenoptions;
-	    $options{inherittagscreen} = 'REPT|RP20' unless defined $options{inherittagscreen}; # ?
-            $tagscreenoptions{tagfilter} = $options{inherittagscreen};
-            $tagscreenoptions{tagscreen} = 0;
-
+            foreach my $key ('annotation','finishing','markftags') {
+                $tagscreenoptions{$key} = $options{$key} if defined $options{$key};
+	    }
             $contig->inheritTags(%tagscreenoptions);
 	}
     }
@@ -747,29 +743,39 @@ sub allocateContigToProject {
 #    (! in case of failure: fall back on case 3)
 #    note: this situation should not occur in standard finishing or asssembly mode
 # 3) several p-o-o:(try to) assign to input project & message to project owners
-#    & (optional!) sub mit request to return to inherited project?
+#    & (optionally ?) sub mit request to return to inherited project
 #    note: this situation should not occur in finishing mode, but may occur in 
 #          assembly mode
 
     my $projectname = $project->getProjectName();
 
     my $inheritedproject = $contig->getProject(instance=>1);
+
     $inheritedproject = $contig->inheritProject() unless $inheritedproject;
 
+# if still no inherited project, look at projects of origin
+
+    unless ($inheritedproject || scalar(@projectsoforigin) != 1) {
+        $inheritedproject = $projectsoforigin[0];
+    }
+
     my $logger = $this->verifyLogger('allocateContigToProject');
-    $logger->warning("Allocating (trying to) contig $cid to project $projectname; "
-		  ."inherited project : " . $inheritedproject->getProjectName());
+    $logger->fine("Allocating (trying to) contig $cid to project $projectname; ");
+    if ($inheritedproject) {
+        $logger->fine("inherited project : " . $inheritedproject->getProjectName());
+    }
 
-# if there's only one p-o-o, that's also the inherited project
+# if there's only one p-o-o, compare with the inherited project
 
-    if (scalar(@projectsoforigin) == 1 &&  $inheritedproject->getOwner()
-        && $project->getOwner() && !$inheritedproject->isEqual($project)) {
+    if (scalar(@projectsoforigin) == 1 && $inheritedproject
+        && $project->getOwner()        && $inheritedproject->getOwner() 
+        && !$inheritedproject->isEqual($project)) {
 # case 2
         my $inheritedname = $inheritedproject->getProjectName();
         my ($success,$msg) = $this->assignContigToProject($contig,$inheritedproject,
-                                                          unassigned=>1);
+                                                          unassigned=>1,force=>1);
         if ($success) {
-            $report .= "has been assigned to project $inheritedname";
+            $report .= "has been put in project $inheritedname";
             my $message = "contig $cid in project $inheritedname has been identified "
                         . "as belonging in project $projectname\na transfer request "
 	                . "has been submitted and is awaiting approval"; 
@@ -788,10 +794,10 @@ sub allocateContigToProject {
 
 # case 1 & case 3 : assign the contig to $project
 
-    my ($success,$msg) = $this->assignContigToProject($contig,$project,unassigned=>1);
+    my ($success,$msg) = $this->assignContigToProject($contig,$project,unassigned=>1,force=>1);
 
     if ($success) {
-        $report .= "has been assigned to project $projectname";
+        $report .= "has been put in project $projectname";
         foreach my $projectoforigin (@projectsoforigin) {
             next unless $projectoforigin->getOwner();
             next if $projectoforigin->isEqual($project);
@@ -1062,6 +1068,8 @@ sub getContigMappingsForContig {
     &verifyParameter($contig,"getContigMappingsForContig");
                 
     return if $contig->hasContigToContigMappings(); # already done
+
+    return unless $contig->getContigID(); # must have contig ID defined and > 0
 
     my $log = $this->verifyLogger("getContigMappingsForContig");
 
@@ -1940,8 +1948,8 @@ sub getParentIDsForReadsInContig {
 
     &verifyParameter($contig,"getParentIDsForReadNames");
 
-my $log = $this->verifyLogger('getParentIDsForReadNames');
-$log->debug("searching parents from scratch in generation zero");
+#my $log = $this->verifyLogger('getParentIDsForReadNames');
+#$log->debug("searching parents from scratch in generation zero");
 
     my $dbh = $this->getConnection();
 
@@ -2284,72 +2292,6 @@ sub getSingleReadParentIDs {
     }
 
     return [@pids];
-}
-
-sub oldbuildHistoryTreeForContig { # TO BE DEPRECATED
-# update contig age (generation) from zero age upwards
-    my $this = shift;
-    my @contigids = @_; # initialise with one contig_id or array
-
-# scan the C2CMAPPING table starting at the input contig IDs and
-# collect the contig IDs in previous generation which have to be
-# updated, i.e. increased by 1. We keep track of the target age
-# in each generation and collect only those contig IDs which have
-# an age less than that target. After each generation, the collected
-# contig IDs (of that generation) are the starting point for locating 
-# the next (previous) generation until no more IDs are found.
-
-# this method updates the age by 1, which is all that's needed for
-# an incremental update for a newly loaded contig. For building the
-# tree from scractch, use rebuildHistoryTree repeatedly until no more
-# updates occur.
-
-    my $dbh = $this->getConnection();
-
-# accumulate IDs of contigs to be updated by recursively querying
-
-    my @updateids;
-    my $targetAge = 0;
-# the loop starts with contig_ids assumed to be at age 0, top of the tree
-    while (@contigids) {
-
-        $targetAge++;
-        my $query = "select distinct(CHILD.parent_id)" .
-                    "  from C2CMAPPING as CHILD join C2CMAPPING as PARENT" .
-                    "    on CHILD.parent_id = PARENT.contig_id" .
-	            " where CHILD.contig_id in (".join(',',@contigids).")".
-                    "   and PARENT.age < $targetAge".
-                    " order by parent_id";
-
-        my $sth = $dbh->prepare($query);
-
-        $sth->execute() || &queryFailed($query);
-
-        undef @contigids;
-        while (my ($parent_id) = $sth->fetchrow_array()) {
-            push @contigids, $parent_id;
-	}
-# add the contigs of the current generation to the update list
-        push @updateids,@contigids;
-
-        $sth->finish();
-    }
-
-    return 0 unless @updateids;
-
-# here we have accumulated all IDs of contigs linked to input contig_id
-# increase the age for these entries by 1
-
-    my $query = "update C2CMAPPING set age=age+1".
-	        " where contig_id in (".join(',',@updateids).")";
-    
-    my $sth = $dbh->prepare($query);
-
-    my $update = $sth->execute() || &queryFailed($query);
-    
-    $sth->finish();
-
-    return $update + 0;
 }
 
 sub buildHistoryTreeForContig {
@@ -2949,8 +2891,8 @@ sub fetchTagsForContigIDs {
 # compose query (note, this query uses the UNION construct to cater
 # for the case tag_id > 0 & tag_seq_id = 0)
 
-    my $tagitems = "contig_id,TAG2CONTIG.tag_id,cstart,cfinal,strand,comment,"
-	         . "tagtype,systematic_id,tagcomment,CONTIGTAG.tag_seq_id";
+    my $tagitems = "parent_id,contig_id,TAG2CONTIG.tag_id,cstart,cfinal,strand,"
+	         . "comment,tagtype,systematic_id,tagcomment,CONTIGTAG.tag_seq_id";
     my $seqitems = "tagseqname,sequence";
 
     my $query = "select $tagitems,$seqitems"
@@ -2980,6 +2922,7 @@ sub fetchTagsForContigIDs {
 # create a new Tag instance
         my $tag = new Tag('Contig');
 
+        $tag->setParentTagID     (shift @ary); # parent tag id, if any
         $tag->setSequenceID      (shift @ary); # contig_id
         $tag->setTagID           (shift @ary); # tag ID ?
         $tag->setPosition        (shift @ary, shift @ary); # pstart, pfinal
@@ -3304,8 +3247,8 @@ sub putContigTags {
     return undef unless ($tags && @$tags);
 
     my $query = "insert into TAG2CONTIG " # insert ignore ?
-              . "(contig_id,tag_id,cstart,cfinal,strand,comment) "
-              . "values (?,?,?,?,?,?)";
+              . "(parent_id,contig_id,tag_id,cstart,cfinal,strand,comment) "
+              . "values (?,?,?,?,?,?,?)";
 
     my $sth = $dbh->prepare_cached($query);        
 
@@ -3314,6 +3257,7 @@ sub putContigTags {
 
     foreach my $tag (@$tags) {
 
+        my $parent_id        = $tag->getParentTagID() || 0;
         my $contig_id        = $tag->getSequenceID();
         my $tag_id           = $tag->getTagID();
         unless ($contig_id && $tag_id) {
@@ -3325,7 +3269,8 @@ sub putContigTags {
         $strand =~ s/(\w)\w*/$1/;
         my $comment          = $tag->getComment();
 
-        my @data = ($contig_id,$tag_id,$cstart,$cfinal,$strand,$comment || undef);
+        my @data = ($parent_id,$contig_id,$tag_id,$cstart,$cfinal,$strand,$comment || undef);
+#        my @data = ($contig_id,$tag_id,$cstart,$cfinal,$strand,$comment || undef);
 
         my $rc = $sth->execute(@data) || &queryFailed($query,@data);
 
@@ -3351,6 +3296,7 @@ sub verifyParameter {
     return if (!$object && $options{null});
     return if ($object && ref($object) eq $class);
     print STDERR "method 'ADBContig->$method' expects a $class instance as parameter\n";
+    print STDERR "instead of $object\n";
     exit 1; 
 }
 
