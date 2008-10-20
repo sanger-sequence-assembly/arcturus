@@ -18,10 +18,15 @@ my $bigbrother = 0;
 my $minlen;
 my $filename;
 my $caption;
+my $cutoff;
+
+my $minreads = 2;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
+
+    $cutoff = shift @ARGV if ($nextword eq '-cutoff');
 
     $bigbrother = 1 if ($nextword eq '-bigbrother');
 
@@ -34,6 +39,12 @@ while (my $nextword = shift @ARGV) {
 unless (defined($organism) &&
 	defined($instance)) {
     print STDERR "One or more mandatory parameters are missing.\n\n";
+    &showUsage();
+    exit(1);
+}
+
+if (defined($cutoff) && $cutoff !~ /^\d\d\d\d\-\d\d\-\d\d$/) {
+    print STDERR "Cutoff must be in the format YYYY-MM-DD e.g. 2007-11-27.\n\n";
     &showUsage();
     exit(1);
 }
@@ -67,7 +78,7 @@ print $fhSection "<h3>PROJECTS</h3>\n";
 
 print $fhSection "Statistics for each project, from the current contig set.\n";
 
-print $fhSection "<h3>Select contigs by length</h3>\n" if ($minlen == 0);
+print $fhSection "<h3>Select contigs by length</h3>\n<em>(Contigs with $minreads or more reads.)</em>\n<p>\n";
 
 foreach $minlen (0, 1, 2, 5, 10, 100) {
     $filename = $prefix . "-project-" . ($minlen == 0 ? "all" : "${minlen}kb") . ".html";
@@ -79,7 +90,7 @@ foreach $minlen (0, 1, 2, 5, 10, 100) {
 
     my $fhProject = new FileHandle($filename, "w");
 
-    &makeProjectStats($dbh, $minlen, 0, $fhProject, $dateline, $description);
+    &makeProjectStats($dbh, $minlen, $minreads, $cutoff, $fhProject, $dateline, $description);
 
     $fhProject->close();
 }
@@ -93,7 +104,7 @@ print $fhSection "<a href=\"$filename\" target=\"pageFrame\">$caption</a><br>\n"
 
 my $fhProject = new FileHandle($filename, "w");
 
-&makeProjectStats($dbh, 0, 3, $fhProject, $dateline, $description);
+&makeProjectStats($dbh, 0, 3, $cutoff, $fhProject, $dateline, $description);
 
 $fhProject->close();
 
@@ -266,28 +277,46 @@ sub makeProjectStats {
     my $dbh = shift;
     my $minlen = shift;
     my $minreads = shift;
+    my $cutoff = shift;
     my $fh = shift;
     my $dateline = shift;
     my $description = shift;
 
     my $fields = "PROJECT.name,count(*) as contigs," .
-	"sum(nreads) as `reads`," .
-	"sum(length) as length," .
-	"round(avg(length)) as avglen," .
-	"round(std(length)) as stdlen," .
-	"max(length) as maxlen";
+	"sum(C.nreads) as `reads`," .
+	"sum(C.length) as length," .
+	"round(avg(C.length)) as avglen," .
+	"round(std(C.length)) as stdlen," .
+	"max(C.length) as maxlen";
 
-    my $query = "select $fields from CURRENTCONTIGS left join PROJECT using(project_id)" .
+    my $query;
+
+    if (defined($cutoff)) {
+	my $subquery = "select distinct CA.contig_id" .
+	    " from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)" .
+	    " on (CA.contig_id = C2CMAPPING.parent_id and C2CMAPPING.contig_id = CB.contig_id)" .
+	    " where CA.created < \'$cutoff\'" .
+	    " and (C2CMAPPING.parent_id is null or CB.created > \'$cutoff\')";
+
+	$query = "select $fields from CONTIG as C left join PROJECT using(project_id)" .
 	" where length >= ? and nreads >= ? and PROJECT.name is not null" .
-	" group by CURRENTCONTIGS.project_id order by name asc";
+	" and C.contig_id in ($subquery)" .
+	" group by C.project_id order by name asc";
+    } else {
+	$query = "select $fields from CURRENTCONTIGS as C left join PROJECT using(project_id)" .
+	" where length >= ? and nreads >= ? and PROJECT.name is not null" .
+	" group by C.project_id order by name asc";
+    }
 
     my $sth = $dbh->prepare($query);
     &db_die("prepare($query) failed");
 
     my $headers = ['PROJECT','CONTIGS','READS','LENGTH','AVERAGE','STD DEV','MAXIMUM'];
 
-    my $caption = ($minreads == 0) ? (($minlen == 0) ? "ALL CONTIGS" : "CONTIGS $minlen kb OR LONGER")
+    my $caption = ($minreads == 2) ? (($minlen == 0) ? "ALL CONTIGS" : "CONTIGS $minlen kb OR LONGER")
 	: "CONTIGS WITH $minreads OR MORE READS";
+
+    $caption .= " AT $cutoff" if defined($cutoff);
 
     print $fh "<html><head><title>$caption</title></head><body bgcolor=\"#ffffee\">\n";
 
@@ -317,7 +346,17 @@ sub makeProjectStats {
 
     my $ar = "ALIGN=\"RIGHT\"";
 
+    my $sum_contigs = 0;
+    my $sum_nreads = 0;
+    my $sum_totlen = 0;
+    my $all_maxlen = 0;
+
     while (my ($project,$contigs,$nreads,$totlen,$avglen,$stdlen,$maxlen) = $sth->fetchrow_array()) {
+	$sum_contigs += $contigs;
+	$sum_nreads += $nreads;
+	$sum_totlen += $totlen;
+	$all_maxlen = $maxlen if ($maxlen > $all_maxlen);
+
 	print $fh "<TR>\n";
 
 	print $fh "<TD>$project</TD>\n";
@@ -331,7 +370,21 @@ sub makeProjectStats {
 	print $fh "</TR>\n";
     }
 
+    print $fh "<TR>\n";
+
+    print $fh "<TD><strong>TOTAL</strong></TD>\n";
+    print $fh "<TD $ar><strong>$sum_contigs</strong></TD>\n";
+    print $fh "<TD $ar><strong>$sum_nreads</strong></TD>\n";
+    print $fh "<TD $ar><strong>$sum_totlen</strong></TD>\n";
+    print $fh "<TD $ar>&nbsp;</TD>\n";
+    print $fh "<TD $ar>&nbsp;</TD>\n";
+    print $fh "<TD $ar><strong>$all_maxlen</strong></TD>\n";
+    
+    print $fh "</TR>\n";
+
     print $fh "</TABLE>\n";
+
+    print $fh "<p>(Only contigs with $minreads or more reads are included.)\n" if ($minreads > 1);
 
     print $fh "<p><em>$dateline</em>\n" if $dateline;
 
@@ -371,12 +424,13 @@ sub makeContigStats {
 
     $sth->finish();
 
-    $sql = "select count(*) as contigs,sum(CA.nreads),sum(CA.length),round(avg(CA.length)),round(std(CA.length)),max(CA.length)" .
-	" from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)" .
+    $sql = "select count(*) as contigs,sum(C.nreads),sum(C.length),round(avg(C.length)),round(std(C.length)),max(C.length)" .
+	" from CONTIG as C where C.contig_id in " .
+	" (select distinct CA.contig_id from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)" .
 	" on (CA.contig_id = C2CMAPPING.parent_id and C2CMAPPING.contig_id = CB.contig_id)" .
-	" where CA.created < ?  and CA.nreads > 1 and CA.length >= ? and (C2CMAPPING.parent_id is null or CB.created > ?)";
+	" where CA.created < ?  and CA.nreads > 1 and CA.length >= ? and (C2CMAPPING.parent_id is null or CB.created > ?))";
 
-    $sql .= " and CA.project_id = $projid" if defined($projid);
+    $sql .= " and C.project_id = $projid" if defined($projid);
 
     $sth = $dbh->prepare($sql);
 
@@ -565,4 +619,7 @@ sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "    -instance\t\tName of instance\n";
     print STDERR "    -organism\t\tName of organism\n";
+    print STDERR "\n\n";
+    print STDERR "OPTIONAL PARAMTERS:\n";
+    print STDERR "    -cutoff\t\tDate for which report is required e.g. 2007-11-27\n";
 }
