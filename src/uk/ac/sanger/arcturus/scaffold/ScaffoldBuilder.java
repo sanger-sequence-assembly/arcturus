@@ -20,8 +20,6 @@ public class ScaffoldBuilder {
 	protected int minlen = 0;
 	protected int puclimit = 8000;
 	protected int minbridges = 2;
-	
-	ScaffoldEvent event = new ScaffoldEvent(this);
 
 	protected int flags = ArcturusDatabase.CONTIG_BASIC_DATA
 			| ArcturusDatabase.CONTIG_TAGS;
@@ -115,25 +113,30 @@ public class ScaffoldBuilder {
 		return found;
 	}
 
+	private void fireEvent(ScaffoldBuilderListener listener, int mode, String message) {
+		fireEvent(listener, mode, message, -1);
+	}
+	
+	private void fireEvent(ScaffoldBuilderListener listener, int mode, String message, int value) {
+		if (listener == null)
+			return;
+		
+		ScaffoldEvent event = new ScaffoldEvent(this, mode, message, value);
+		
+		listener.scaffoldUpdate(event);
+	}
+	
 	public Set createScaffold(int seedcontigid, ScaffoldBuilderListener listener)
 			throws SQLException, DataFormatException {
 		if (!adb.isCurrentContig(seedcontigid)) {
-			if (listener != null) {
-				event.setState(ScaffoldEvent.FINISH, "Not a current contig");
-				
-				listener.scaffoldUpdate(event);
-			}
+			fireEvent(listener, ScaffoldEvent.FINISH, "Not a current contig");
 
 			return null;
 		}
 
 		SortedSet contigset = new TreeSet(new ContigLengthComparator());
 
-		if (listener != null) {
-			event.setState(ScaffoldEvent.START, "Initialising scaffold");
-			
-			listener.scaffoldUpdate(event);
-		}
+		fireEvent(listener, ScaffoldEvent.START, "Initialising scaffold");
 
 		Contig seedcontig = adb.getContigByID(seedcontigid, flags);
 
@@ -147,11 +150,7 @@ public class ScaffoldBuilder {
 			subgraph = bs.getSubgraph(seedcontig, minbridges);
 		}
 
-		if (listener != null) {
-			event.setState(ScaffoldEvent.FINISH, "Scaffold is complete");
-			
-			listener.scaffoldUpdate(event);
-		}
+		fireEvent(listener, ScaffoldEvent.FINISH, "Scaffold is complete");
 
 		return subgraph;
 	}
@@ -162,15 +161,13 @@ public class ScaffoldBuilder {
 		BridgeSet bridgeset = new BridgeSet();
 
 		Set processed = new HashSet();
+		
+		int linksExamined = 0;
+		int contigsExamined = 0;
 
 		while (!contigset.isEmpty()) {
-			if (listener != null) {
-				event.setState(ScaffoldEvent.CONTIG_SET_INFO,
-						"Contig set size",
-						new Integer(contigset.size()));
-				
-				listener.scaffoldUpdate(event);
-			}
+			fireEvent(listener, ScaffoldEvent.CONTIG_SET_INFO, "Contig set size",
+					contigset.size());
 			
 			Contig contig = null;
 			
@@ -194,15 +191,10 @@ public class ScaffoldBuilder {
 				continue;
 			}
 			
-			if (listener != null) {
-				int contigid = contig.getID();
+			int contigid = contig.getID();
 				
-				event.setState(ScaffoldEvent.BEGIN_CONTIG,
-						"Processing contig " + contigid,
-						new Integer(contigid));
-				
-				listener.scaffoldUpdate(event);
-			}
+			fireEvent(listener, ScaffoldEvent.BEGIN_CONTIG,
+					"Processing contig", contigid);
 
 			int contiglength = contig.getLength();
 
@@ -310,8 +302,15 @@ public class ScaffoldBuilder {
 										myendcode, template, mappinga,
 										link_mapping, new GapSize(gapsize));
 
-								linkedContigs.add(link_contig);
+								if (!linkedContigs.contains(link_contig)) {
+									linkedContigs.add(link_contig);
+									contigsExamined++;
+									fireEvent(listener, ScaffoldEvent.CONTIGS_EXAMINED, null, contigsExamined);
+								}
 							}
+							
+							linksExamined++;
+							fireEvent(listener, ScaffoldEvent.LINKS_EXAMINED, null, linksExamined);
 						}
 
 						rs3.close();
