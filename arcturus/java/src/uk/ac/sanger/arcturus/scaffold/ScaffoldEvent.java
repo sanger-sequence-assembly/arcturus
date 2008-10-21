@@ -9,20 +9,22 @@ public class ScaffoldEvent extends EventObject {
 	public static final int BEGIN_CONTIG = 1;
 	public static final int CONTIG_SET_INFO = 2;
 	public static final int FINDING_SUBGRAPHS = 3;
+	public static final int LINKS_EXAMINED = 4;
+	public static final int CONTIGS_EXAMINED = 5;
 
 	protected int mode;
 	protected String description;
-	protected Object value;
+	protected int value;
 
 	public ScaffoldEvent(Object source) {
-		this(source, UNKNOWN, null, null);
+		this(source, UNKNOWN, null, -1);
 	}
 	
 	public ScaffoldEvent(Object source, int mode, String description) {
-		this(source, mode, description, null);
+		this(source, mode, description, -1);
 	}
 	
-	public ScaffoldEvent(Object source, int mode, String description, Object value) {
+	public ScaffoldEvent(Object source, int mode, String description, int value) {
 		super(source);
 		this.mode = mode;
 		this.description = description;
@@ -53,6 +55,12 @@ public class ScaffoldEvent extends EventObject {
 			case FINDING_SUBGRAPHS:
 				return "FINDING SUBGRAPHS";
 				
+			case LINKS_EXAMINED:
+				return "LINKS_EXAMINED";
+				
+			case CONTIGS_EXAMINED:
+				return "CONTIGS_EXAMINED";
+				
 			default:
 				return "UNKNOWN MODE (" + mode + ")";				
 		}
@@ -62,22 +70,22 @@ public class ScaffoldEvent extends EventObject {
 		return description;
 	}
 	
-	public Object getValue() {
+	public int getValue() {
 		return value;
 	}
 	
-	public void setState(int mode, String description, Object value) {
+	public void setState(int mode, String description, int value) {
 		this.mode = mode;
 		this.description = description;
 		this.value = value;	
 	}
 	
 	public void setState(int mode, String description) {
-		setState(mode, description, null);
+		setState(mode, description, -1);
 	}
 	
 	public String toString() {
 		return "ScaffoldEvent[mode=" + getModeAsString() + ", description=\"" + description +
-			"\", value=" + (value == null ? "null" : value) + "]";
+			"\", value=" + value + "]";
 	} 
 }
