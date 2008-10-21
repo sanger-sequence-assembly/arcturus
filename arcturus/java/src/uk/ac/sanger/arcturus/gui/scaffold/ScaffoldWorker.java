@@ -2,50 +2,147 @@ package uk.ac.sanger.arcturus.gui.scaffold;
 
 import java.util.*;
 
+import javax.swing.JDialog;
 import javax.swing.JOptionPane;
+import javax.swing.JLabel;
+import javax.swing.JButton;
+import javax.swing.JPanel;
+import javax.swing.JFrame;
+import javax.swing.SwingUtilities;
 
 import javax.swing.SwingWorker;
+
+import java.awt.BorderLayout;
+import java.awt.FlowLayout;
+import java.awt.GridLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.gui.MinervaTabbedPane;
 import uk.ac.sanger.arcturus.scaffold.Bridge;
 import uk.ac.sanger.arcturus.scaffold.ScaffoldBuilder;
+import uk.ac.sanger.arcturus.scaffold.ScaffoldBuilderListener;
+import uk.ac.sanger.arcturus.scaffold.ScaffoldEvent;
 
-public class ScaffoldWorker extends SwingWorker<Void, Void> {
+public class ScaffoldWorker extends SwingWorker<Void, ScaffoldEvent> implements
+		ScaffoldBuilderListener {
 	protected final ArcturusDatabase adb;
 	protected final MinervaTabbedPane mtp;
 	protected final Contig seedcontig;
 	protected Set bridgeset;
 	protected ContigBox[] contigBoxes;
-	
-	public ScaffoldWorker(Contig seedcontig, MinervaTabbedPane mtp, ArcturusDatabase adb) {
+	protected WorkerDialog dialog;
+
+	public ScaffoldWorker(Contig seedcontig, MinervaTabbedPane mtp,
+			ArcturusDatabase adb) {
 		this.adb = adb;
 		this.mtp = mtp;
 		this.seedcontig = seedcontig;
 	}
-	
+
 	protected Void doInBackground() throws Exception {
 		boolean cacheing = adb.getSequenceManager().isCacheing();
-		
+
 		adb.getSequenceManager().setCacheing(false);
 
 		ScaffoldBuilder sb = new ScaffoldBuilder(adb);
 
-		bridgeset = sb.createScaffold(seedcontig.getID(), null);
-		
+		bridgeset = sb.createScaffold(seedcontig.getID(), this);
+
 		adb.getSequenceManager().setCacheing(cacheing);
-		
+
 		if (bridgeset != null && !bridgeset.isEmpty()) {
 			Map layout = createLayout(bridgeset);
 
-			contigBoxes = (ContigBox[]) layout.values().toArray(new ContigBox[0]);
+			contigBoxes = (ContigBox[]) layout.values().toArray(
+					new ContigBox[0]);
 
 			Arrays.sort(contigBoxes, new ContigBoxComparator());
-
-		}		
+		}
 
 		return null;
+	}
+
+	protected void process(List<ScaffoldEvent> chunks) {
+		if (dialog == null && !isDone()) {
+			dialog = new WorkerDialog((JFrame) SwingUtilities.getRoot(mtp),
+					"Calculating scaffolds from contig " + seedcontig.getID());
+			dialog.setVisible(true);
+		}
+
+		for (ScaffoldEvent event : chunks) {
+			switch (event.getMode()) {
+				case ScaffoldEvent.CONTIGS_EXAMINED:	
+					dialog.setContigs(event.getValue());
+					break;
+					
+				case ScaffoldEvent.LINKS_EXAMINED:
+					dialog.setLinks(event.getValue());
+					break;				
+			}
+		}
+	}
+
+	@Override
+	public void scaffoldUpdate(ScaffoldEvent event) {
+		publish(event);
+	}
+
+	class WorkerDialog extends JDialog {
+		private JLabel lblLinks = new JLabel("0");
+		private JLabel lblContigs = new JLabel("0");
+
+		public WorkerDialog(JFrame frame, String caption) {
+			super(frame, caption, false);
+
+			JPanel mainpanel = new JPanel(new BorderLayout());
+
+			JPanel buttonpanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+
+			JButton btnCancel = new JButton("Cancel");
+			btnCancel.addActionListener(new ActionListener() {
+				public void actionPerformed(ActionEvent e) {
+					cancelTask();
+				}
+			});
+
+			buttonpanel.add(btnCancel);
+
+			mainpanel.add(buttonpanel, BorderLayout.SOUTH);
+
+			JPanel panel = new JPanel(new GridLayout(2, 2, 5, 0));
+
+			panel.add(new JLabel("Bridges examined:"));
+			panel.add(lblLinks);
+
+			panel.add(new JLabel("Contigs examined:"));
+			panel.add(lblContigs);
+
+			mainpanel.add(panel, BorderLayout.CENTER);
+
+			setContentPane(mainpanel);
+
+			setResizable(false);
+
+			setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+
+			pack();
+		}
+
+		public void setContigs(int value) {
+			lblContigs.setText("" + value);
+		}
+
+		public void setLinks(int value) {
+			lblLinks.setText("" + value);
+		}
+
+		private void cancelTask() {
+			System.err.println("Cancel button pressed");
+			ScaffoldWorker.this.cancel(true);
+		}
 	}
 
 	protected Map createLayout(Set bridges) {
@@ -185,8 +282,17 @@ public class ScaffoldWorker extends SwingWorker<Void, Void> {
 	}
 
 	protected void done() {
+		if (dialog != null && dialog.isVisible()) {
+			dialog.setVisible(false);
+			dialog.dispose();
+		}
+		
+		if (isCancelled())
+			return;
+		
 		if (bridgeset != null && !bridgeset.isEmpty()) {
-			ScaffoldPanel sp = new ScaffoldPanel(contigBoxes, bridgeset, seedcontig, mtp, adb);
+			ScaffoldPanel sp = new ScaffoldPanel(contigBoxes, bridgeset,
+					seedcontig, mtp, adb);
 			mtp.addTab("Scaffold", sp);
 			mtp.setSelectedComponent(sp);
 		} else {
