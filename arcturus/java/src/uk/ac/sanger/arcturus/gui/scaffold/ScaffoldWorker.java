@@ -13,6 +13,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
@@ -68,7 +69,7 @@ public class ScaffoldWorker extends SwingWorker<Void, ScaffoldEvent> implements
 	protected void process(List<ScaffoldEvent> chunks) {
 		if (dialog == null && !isDone()) {
 			dialog = new WorkerDialog((JFrame) SwingUtilities.getRoot(mtp),
-					"Calculating scaffolds from contig " + seedcontig.getID());
+					"Building scaffold...", "Scaffolding contig " + seedcontig.getID());
 			dialog.setVisible(true);
 		}
 
@@ -94,10 +95,15 @@ public class ScaffoldWorker extends SwingWorker<Void, ScaffoldEvent> implements
 		private JLabel lblLinks = new JLabel("0");
 		private JLabel lblContigs = new JLabel("0");
 
-		public WorkerDialog(JFrame frame, String caption) {
+		public WorkerDialog(JFrame frame, String caption, String text) {
 			super(frame, caption, false);
 
 			JPanel mainpanel = new JPanel(new BorderLayout());
+			
+			JLabel label = new JLabel(text);
+			label.setForeground(Color.red);
+			
+			mainpanel.add(label, BorderLayout.NORTH);
 
 			JPanel buttonpanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
 
@@ -123,8 +129,6 @@ public class ScaffoldWorker extends SwingWorker<Void, ScaffoldEvent> implements
 			mainpanel.add(panel, BorderLayout.CENTER);
 
 			setContentPane(mainpanel);
-
-			setResizable(false);
 
 			setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
 
