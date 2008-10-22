@@ -1107,7 +1107,7 @@ sub split {
 
     return $tag unless $tag->isComposite();
 
-my $logger = &verifyLogger("split"); $logger->debug("ENTER split");
+    my $logger = &verifyLogger("split");
 
     my $minimumsegmentsize = $options{minimumsegmentsize} || 1;
 
@@ -1126,14 +1126,19 @@ my $logger = &verifyLogger("split"); $logger->debug("ENTER split");
     foreach my $segment (@$segments) {
         my $flength = $segment->getSegmentLength();
         next if ($flength < $minimumsegmentsize);
-#        my $newtag = $tag->copy(%options);
         my $newtag = $tag->copy();
         $newtag->setPosition($segment->getYstart(),$segment->getYfinis());
 # add sequence fragment, if any
         if ($sequence) {
             my $fxstart = $segment->getXstart();
-            my $fsequence = substr $sequence, $fxstart-1, $flength;
-            $newtag->setDNA($fsequence);
+            my $length = length($sequence);
+            if ($fxstart+$flength-1 > $length) {
+		$logger->error("substring outside of string ($fxstart, $flength, $length)");
+            } 
+	    else {
+                my $fsequence = substr $sequence, $fxstart-1, $flength;
+                $newtag->setDNA($fsequence);
+	    }
         }        
 # add to comments
         my $tagcomment = $newtag->getTagComment() || '';
