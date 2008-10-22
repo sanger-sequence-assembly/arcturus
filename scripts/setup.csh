@@ -46,7 +46,7 @@ if (! -d ${HOME}/.arcturus/logging ) then
     mkdir ${HOME}/.arcturus/logging
 endif
 
-set EXTRA_OPTS="${EXTRA_OPTS} -Darcturus.home=${ARCTURUS_HOME} -Darcturus.jar=${ARCTURUS_JAR}"
+set EXTRA_OPTS="${EXTRA_OPTS} -Darcturus.jar=${ARCTURUS_JAR}"
 
 # Add the JDBC and JNDI options to the run-time options
 if ( $?JAVA_OPTS ) then
