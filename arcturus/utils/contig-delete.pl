@@ -233,6 +233,7 @@ if ($offspring) {
     my %offspring;
     $logger->info("Getting descendents for @contigs");
     foreach my $cid (@contigs) {
+#        my $connected = $adb->getFamilyIDsForContigID($cid,descendants=>1);
         my $connected = $adb->getAncestorIDsForContigID($cid,descendants=>1);
         foreach my $contig_id (@$connected) {
             next if ($contig_id <= $cid);
@@ -245,7 +246,7 @@ if ($offspring) {
     
 $options{confirm} = 1 if $confirm;
 
-foreach my $contig_id (@contigs) {
+foreach my $contig_id (sort {$b <=> $a} @contigs) {
     next unless ($contig_id > 0);
     $logger->warning("Contig $contig_id is to be deleted");
     my ($success,$msg) = $adb->deleteContig($contig_id,%options);
