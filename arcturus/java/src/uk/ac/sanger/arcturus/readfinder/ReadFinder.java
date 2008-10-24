@@ -103,7 +103,7 @@ public class ReadFinder {
 			
 			ResultSet rs2 = pstmtReadToContig.executeQuery();
 			
-			if (rs2.next()) {
+			while (rs2.next()) {
 				if (onlyFreeReads)
 					continue;
 				
@@ -116,15 +116,15 @@ public class ReadFinder {
 				try {
 					contig = adb.getContigByID(contigid, ArcturusDatabase.CONTIG_BASIC_DATA);	
 					event.setContigAndMapping(read, contig, cstart, cfinish, forward);
+					
+					if (listener != null)
+						listener.readFinderUpdate(event);
 				} catch (DataFormatException dfe) {
 					Arcturus.logWarning("Error fetching contig data", dfe);
 				}
 			}
 			
 			rs2.close();
-			
-			if (listener != null)
-				listener.readFinderUpdate(event);
 		}
 		
 		rs.close();
