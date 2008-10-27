@@ -103,18 +103,21 @@ public class ReadFinder {
 			
 			ResultSet rs2 = pstmtReadToContig.executeQuery();
 			
+			boolean readIsFree = true;
+			
 			while (rs2.next()) {
+				readIsFree = false;
+				
 				if (onlyFreeReads)
-					continue;
+					break;
 				
 				int contigid = rs2.getInt(1);
 				int cstart = rs2.getInt(2);
 				int cfinish = rs2.getInt(3);
 				boolean forward = rs2.getString(4).equalsIgnoreCase("forward");
 				
-				Contig contig;
 				try {
-					contig = adb.getContigByID(contigid, ArcturusDatabase.CONTIG_BASIC_DATA);	
+					Contig contig = adb.getContigByID(contigid, ArcturusDatabase.CONTIG_BASIC_DATA);	
 					event.setContigAndMapping(read, contig, cstart, cfinish, forward);
 					
 					if (listener != null)
@@ -125,6 +128,9 @@ public class ReadFinder {
 			}
 			
 			rs2.close();
+			
+			if (readIsFree && listener != null)
+				listener.readFinderUpdate(event);
 		}
 		
 		rs.close();
