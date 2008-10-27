@@ -26,3 +26,5 @@ jmxdb.password=***REMOVED***
 jobplacer.prefix=ssh
 jobplacer.host=seq1
 jobplacer.command=/software/arcturus/utils/find_a_host.csh
+
+scaffoldbuilder.puclimit=15000
