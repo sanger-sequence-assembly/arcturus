@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.scaffold;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.Arcturus;
 
 import java.util.*;
 import java.sql.*;
@@ -26,6 +27,16 @@ public class ScaffoldBuilder {
 
 	public ScaffoldBuilder(ArcturusDatabase adb) {
 		this.adb = adb;
+		
+		String str = Arcturus.getProperty("scaffoldbuilder.puclimit");
+		if (str != null) {
+			try {
+				puclimit = Integer.parseInt(str);
+			}
+			catch (NumberFormatException nfe) {
+				Arcturus.logWarning("Error parsing value of scaffoldbuilder.puclimit", nfe);
+			}
+		}
 
 		try {
 			Connection conn = adb.getConnection();
