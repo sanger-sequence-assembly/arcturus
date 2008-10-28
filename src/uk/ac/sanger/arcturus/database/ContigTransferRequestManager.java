@@ -619,63 +619,30 @@ public class ContigTransferRequestManager {
 	protected void checkCanUserAlterRequestStatus(
 			ContigTransferRequest request, Person reviewer, int newStatus)
 			throws ContigTransferRequestException, SQLException {
-		/*
-		 * The requester is allowed to cancel her own request.
-		 */
-
-		if (newStatus == ContigTransferRequest.CANCELLED
-				&& reviewer.equals(request.getRequester()))
-			return;
-
-		/*
-		 * The owner of the contig can refuse or approve a request.
-		 */
-
-		if ((newStatus == ContigTransferRequest.REFUSED || newStatus == ContigTransferRequest.APPROVED)
-				&& reviewer.equals(request.getContigOwner()))
-			return;
-
-		/*
-		 * The owner of the destination project can refuse or approve a transfer
-		 * from a bin project or an unowned project made by another user.
-		 */
-
-		if ((newStatus == ContigTransferRequest.REFUSED || newStatus == ContigTransferRequest.APPROVED)
-				&& !reviewer.equals(request.getRequester())
-				&& reviewer.equals(request.getNewProject().getOwner())
-				&& (request.getOldProject().isBin() || request.getOldProject()
-						.isUnowned()))
-			return;
-
-		/*
-		 * The requester is allowed to approve a transfer from a bin project or
-		 * an unowned project.
-		 */
-
-		if (newStatus == ContigTransferRequest.APPROVED
-				&& reviewer.equals(request.getRequester())
-				&& (request.getOldProject().isBin() || request.getOldProject()
-						.isUnowned()))
-			return;
-
-		/*
-		 * The request can be executed by the owner of the contig, the requester
-		 * or the owner of the destination project.
-		 */
-
-		if ((newStatus == ContigTransferRequest.DONE)
-				&& (reviewer.equals(request.getContigOwner())
-						|| reviewer.equals(request.getRequester()) || reviewer
-						.equals(request.getNewProject().getOwner())))
-			return;
-
-		/*
-		 * A reviewer who has the "team leader", "administrator" or "superuser"
-		 * role can make any change at all.
-		 */
-
 		if (adb.hasFullPrivileges(reviewer))
 			return;
+		
+		switch (newStatus) {
+			case ContigTransferRequest.CANCELLED:
+				if (canCancelRequest(request, reviewer))
+					return;
+				break;
+				
+			case ContigTransferRequest.REFUSED:
+				if (canRefuseRequest(request, reviewer))
+					return;				
+				break;
+				
+			case ContigTransferRequest.APPROVED:
+				if (canApproveRequest(request, reviewer))
+					return;
+				break;
+				
+			case ContigTransferRequest.DONE:
+				if (canExecuteRequest(request, reviewer))
+					return;
+				break;
+		}
 
 		throw new ContigTransferRequestException(request,
 				ContigTransferRequestException.USER_NOT_AUTHORISED);
