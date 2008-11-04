@@ -4,11 +4,6 @@ use strict;
 
 use DBI;
 
-my $master = { 'host' => 'mcs3a',
-	       'port' => 15001,
-	       'username' => 'monitor',
-	       'password' => 'WhoWatchesTheWatchers' };
-
 my $slaves = [
 	      { 'host' => 'mcs1a',
 		'port' => 15002,
@@ -21,10 +16,7 @@ my $slaves = [
 		'password' => 'WhoWatchesTheWatchers' }
 	      ];
 
-&checkMaster($master);
-
 foreach my $slave (@{$slaves}) {
-    print "\n";
     &checkSlave($slave);
 }
 
@@ -42,7 +34,7 @@ sub getConnection {
 
     my $options = {RaiseError => 1, PrintError => 1};
 
-     my $dbh = DBI->connect($url, $username, $password, $options);
+    my $dbh = DBI->connect($url, $username, $password, $options);
 
     return $dbh;
 }
@@ -70,10 +62,9 @@ sub checkMaster {
     my $row = $sth->fetchrow_hashref();
 
     if (defined($row)) {
-	print "MASTER STATUS FOR $name\n";
-	print "\tMaster log file ", $row->{'File'}, " at position ", $row->{'Position'},"\n";
+	print "\tLog file on master is ", $row->{'File'}, " at position ", $row->{'Position'},"\n";
     } else {
-	&db_die("Failed to get master status from $name");
+	print "\t***** Failed to get master status from $name: $DBI::errstr *****\n"
     }
 
     $sth->finish();
@@ -99,9 +90,17 @@ sub checkSlave {
     if (defined($row)) {
 	print "SLAVE STATUS FOR $name\n";
 
-	print "\tMaster: ",$row->{'Master_Host'},":",$row->{'Master_Port'},"\n";
+	print "\tMaster is ",$row->{'Master_Host'},":",$row->{'Master_Port'},"\n";
 
-	print "\tMaster log file ", $row->{'Master_Log_File'},
+	my $master = { 'host' => $row->{'Master_Host'},
+		       'port' => $row->{'Master_Port'},
+		       'username' => $slave->{'username'},
+		       'password' => $slave->{'password'}
+		   };
+
+	&checkMaster($master);
+
+	print "\tLog file on slave is ", $row->{'Master_Log_File'},
 	" read to ",$row->{'Read_Master_Log_Pos'},
 	", executed to ", $row->{'Exec_Master_Log_Pos'}, "\n";
 
@@ -134,6 +133,8 @@ sub checkSlave {
 	} else {
 	    print "\tSlave is $lag seconds behind master\n";
 	}
+
+	print "\n";
     } else {
 	&db_die("Failed to get slave status from $name");
     }
