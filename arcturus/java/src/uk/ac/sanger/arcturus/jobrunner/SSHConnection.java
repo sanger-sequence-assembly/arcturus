@@ -20,17 +20,27 @@ public class SSHConnection {
 		
 		String[] pkfiles = { "id_dsa", "id_rsa" };
 		
+		int foundFiles = 0;
+		
 		for (int i = 0; i < pkfiles.length && !isAuthenticated; i++) {
 			File keyfile = new File(sshdir, pkfiles[i]);
 			
-			if (keyfile.exists())
-				isAuthenticated = conn.authenticateWithPublicKey(username, keyfile,
-						keyfilePass);
+			if (keyfile.exists()) {
+				foundFiles++;
+			
+				if (conn.authenticateWithPublicKey(username, keyfile, keyfilePass))
+						return conn;
+			}
 		}
+		
+		if (foundFiles == 0)
+			throw new IOException("Could not find any key files to to authenticate an SSH connection.");
 
 		if (isAuthenticated == false)
-			throw new IOException("Authentication failed.");
+			throw new IOException("Found a key file, but failed to authenticate an SSH connection.");
 		
-		return conn;
+		conn.close();
+		
+		return null;
 	}
 }
