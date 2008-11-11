@@ -227,7 +227,7 @@ sub hasNewContigs {
 
     my $l = scalar(@$previouscontigids) - 1; # last element
 
-    return 0 unless $currentcontigids->[$l]; # empty current contigs
+    return 0 unless ($l >= 0 && $currentcontigids->[$l]); # empty current contigs
 
     return 1 if ($previouscontigids->[$l] != $currentcontigids->[$l]);
 
