@@ -465,7 +465,7 @@ while (defined($record = <$CAF>)) {
             elsif ($contig = $contigs{$objectName}) {
                 $contig->setSequence($DNASequence);
             }
-            elsif ($objectName =~ /Contig/) {
+            elsif ($objectName =~ /^Contig/) {
                 $contig = new Contig($objectName);
                 $contigs{$objectName} = $contig;
                 $contig->setSequence($DNASequence);
@@ -487,7 +487,7 @@ while (defined($record = <$CAF>)) {
             elsif ($contig = $contigs{$objectName}) {
                 $contig->setBaseQuality ([@BaseQuality]);
             }
-            elsif ($objectName =~ /Contig/) {
+            elsif ($objectName =~ /^Contig/) {
                 $contig = new Contig($objectName);
                 $contigs{$objectName} = $contig;
                 $contig->setBaseQuality ([@BaseQuality]);
@@ -510,7 +510,7 @@ while (defined($record = <$CAF>)) {
 # now test if we really want the sequence data
         if ($objectType) {
 # for contig, we need consensus option on
-            if ($contigs{$objectName} || $objectName =~ /Contig/) {
+            if ($contigs{$objectName} || $objectName =~ /^Contig/) {
                 $objectType = 0 if !$consensus;
                 $objectType = 0 if $cnBlocker->{$objectName};
             }
@@ -533,7 +533,7 @@ while (defined($record = <$CAF>)) {
        
 # the next block handles a special case where 'Is_contig' is defined after 'assembled'
 
-    if ($objectName =~ /Contig/ && $record =~ /assemble/i && abs($objectType) != 2) {
+    if ($objectName =~ /^Contig/ && $record =~ /assemble/i && abs($objectType) != 2) {
 # decide if this contig is to be included
         if (!$cnBlocker->{$objectName} && 
            ($cnFilter !~ /\S/ || $objectName =~ /$cnFilter/)) {
