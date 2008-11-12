@@ -63,6 +63,8 @@ my $testcontigtags;         # active when no contig loading; implies test only
 my $echocontigtags;         # list the contig tags found; implies no loading
 my $listcontigs;
 #my $inherittags;
+my $annotationtags;         # default CDS,FCDS
+my $finishingtags;          # default REPT,RP20
 
 # reads
 
@@ -82,6 +84,7 @@ my $syncreadtags;           # retired readtags which are NOT in the current lis
 my $pidentifier = 'BIN';    # projectname for which the data are to be loaded
 my $assembly;               # may be required in case of ambiguity
 my $pinherit = 'readcount'; # project inheritance method, default on number of reads
+
 my $projectlock;            # if set acquire lock on project first ? shoulb always
 my $autolockmode = 1;
 
@@ -117,17 +120,19 @@ my $validkeys  = "organism|o|instance|i|"
                . "padded|safemode|maximum|minimum|filter|withoutparents|wp|"
                . "testcontig|tc|noload|notest|nobreak|consensus|"
 
-               . "noloadreads|nlr|consensusreadname|crn|naspedcheck|nac|"
+               . "noloadreads|nlr|consensusreadname|crn|noaspedcheck|nac|"
                . "acceptversionzero|avz|"
 
                . "contigtagtype|ctt|noloadcontigtags|nlct|showcontigtags|sct|"
                . "loadcontigtags|lct|testcontigtags|tct|listcontig|list|"
+               . "annotationtags|ats|finishingtags|fts|"
 
                . "readtagtype|rtt|noloadreadtags|nlrt|showreadtags|srt|"
                . "loadreadtags|lrt|synchronisereadtags|syncrt|"
 
                . "assignproject|ap|defaultproject|dp|setprojectby|spb|"
-               . "assembly|a|projectlock|pl|dounlock|project|"
+               . "projectlock|pl|dounlock|project|noprojectlock|npl|"
+               . "assembly|a|"
 
                . "outputfile|out|log|minerva|verbose|info|debug|memory|help";
 
@@ -266,6 +271,13 @@ while (my $nextword = shift @ARGV) {
         $echocontigtags = 1;            
     }
 
+    if ($nextword eq '-ats' || $nextword eq '-annotationtags') {
+        $annotationtags = shift @ARGV;
+    }
+    if ($nextword eq '-fts' || $nextword eq '-finishingtags') {
+        $finishingtags = shift @ARGV;
+    }
+
 # read tags
 
     if ($nextword eq '-rtt' || $nextword eq  '-readtagtype') {
@@ -291,15 +303,18 @@ while (my $nextword = shift @ARGV) {
     if ($nextword eq '-a' || $nextword eq '-assembly') {
         $assembly     = shift @ARGV;
     }
-    elsif ($nextword eq '-ap' || $nextword eq '-project' || $nextword eq '-assignproject') {
+    elsif ($nextword eq '-ap'  || $nextword eq '-project' || $nextword eq '-assignproject') {
         $pidentifier  = shift @ARGV;
         $pinherit     = 'project';
     }
-    elsif ($nextword eq '-dp' || $nextword eq '-defaultproject') {
+    elsif ($nextword eq '-dp'  || $nextword eq '-defaultproject') {
         $pidentifier  = shift @ARGV;
     }
-    elsif ($nextword eq '-pl' || $nextword eq '-projectlock') {
+    elsif ($nextword eq '-pl'  || $nextword eq '-projectlock') {
         $projectlock  = 1;
+    }
+    elsif ($nextword eq '-npl' || $nextword eq '-noprojectlock') {
+        $projectlock  = 0;
     }
     elsif ($nextword eq '-spb' || $nextword eq'-setprojectby') {
         $pinherit     = shift @ARGV;
@@ -589,14 +604,15 @@ if ($frugal) { # thios whole block should go to a contig "factory"
         exit 0;
     }
     my $nrofobjects = scalar(keys %$inventory) - 1;
-    $logger->warning("$nrofobjects objects found on file $caffilename");
+    $logger->warning("$nrofobjects objects found on file $caffilename ");
 
 # get contig names, count reads 
 
     my @readnames;
     my @contignames;
     
-    @inventory = sort keys %$inventory;
+    @inventory = sort keys %$inventory; # better: sort on position in file
+
     foreach my $objectname (@inventory) { 
 # ignore non-objects
         my $objectdata = $inventory->{$objectname};
@@ -609,6 +625,7 @@ if ($frugal) { # thios whole block should go to a contig "factory"
 # test for a valid contig name (as extra check)
             if ($objectname =~ /(\s|^)Contig/ || $objectname =~ /\_contig\_/) {
                 push @contignames,$objectname;
+# and register the position in the file ...
 	    }
 	    else {
 		$logger->error("Invalid contig name $objectname");
@@ -644,8 +661,14 @@ if ($frugal) { # thios whole block should go to a contig "factory"
         $toptions{consensusread} = $consensusread if $consensusread;
         $toptions{noaspedcheck}  = $noaspedcheck  if $noaspedcheck;
         my $missing = &testreadsindatabase(\@readnames,%toptions);
-	$logger->warning("$missing reads still missing") if $missing;
-	$logger->warning("All reads identified in database") unless $missing;
+        if ($missing) {
+   	    $logger->warning("$missing reads still missing");
+# abort in this case
+	    $adb->disconnect();
+	    exit 1;
+	}
+
+	$logger->warning("All reads identified in database");
 
 # here build the read/version hashes for reads in the list, or defer to later
 
@@ -892,6 +915,8 @@ print STDOUT " end no frugal scan\n";
 # inherittag options ( default .. not: REPT RP20 )
             $loptions{prohibitparent} = 1    if $withoutparents;
 	    $loptions{acceptversionzero} = 1 if $acceptversionzero;
+	    $loptions{annotation} = $annotationtags if $annotationtags;
+	    $loptions{finishing} = $finishingtags if $finishingtags;
 
             my ($added,$msg) = $adb->putContig($contig, $project,%loptions);
 
@@ -941,12 +966,18 @@ print STDOUT " end no frugal scan\n";
                 $toptions{prohibitparent} = 1 if $withoutparents;
                 $toptions{nokeep} = 1 if $testcontigtags; # ??
 #                           dotags  => $ctagtypeaccept);
+    	        $toptions{annotation} = $annotationtags if $annotationtags;
+	        $toptions{finishing} = $finishingtags if $finishingtags;
 
                 my ($added,$msg) = $adb->putContig($contig,$project,%toptions);
 
-                $msg = "is a new contig" unless $msg;         
-                $logger->warning("Status of contig $identifier with $nr reads:"
-                                . $msg);
+                $msg = "is a new contig" unless $msg;
+                my @msg = split ';',$msg;        
+                $logger->warning("Status of contig $identifier with $nr reads:",preskip=>1);
+                foreach my $line (@msg) {
+                    $logger->warning($line);
+		}
+                $contig->setContigID($added) if $added;
 	        if ($contig->hasContigToContigMappings()) {
                     $logger->warning($contig->getContigName()
 				     ." has contig-to-parent links");
@@ -955,6 +986,11 @@ print STDOUT " end no frugal scan\n";
 	                $logger->warning($mapping->assembledFromToString || "empty link\n");
 	            }
                 }
+		my $parents = $contig->getParentContigs();
+		$logger->warning("parents:",ss=>1);
+		foreach my $parent (@$parents) {
+                    $parent->isValid(diagnose=>2);
+		}
             }
 	    else {
                 my $diagnosis = $contig->getStatus();
@@ -1446,6 +1482,7 @@ sub showUsage {
         print STDERR "-caf\t\tcaf file name\n" unless $caffilename;
         print STDERR "\n";
     }
+ 
     print STDERR "OPTIONAL PARAMETERS for project inheritance:\n";
     print STDERR "\n";
     print STDERR "-setprojectby\t(spb) assign project to contigs based on "
@@ -1474,6 +1511,18 @@ sub showUsage {
     print STDERR "-out\t\toutput file, default STDOUT\n";
 
     print STDERR "-test\t\tnumber of lines parsed of the CAF file\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS for read loading:\n";
+    print STDERR "\n";
+    print STDERR "the loader will check for missing reads and if not found in the\n";
+    print STDERR "database will (try to) load them from the CAF file. The reads \n";
+    print STDERR "concerned are usually consenses reads, but not necessarilly. \n";
+    print STDERR "Therefore the reads are tested for completeness. This test can be\n";
+    print STDERR "overridden by using these flags:\n";
+    print STDERR "\n";
+    print STDERR "-crn\t\t(consensusreadname) explictly specifying astring matching the\n";
+    print STDERR "\t\tthe readname; alternatively, use \"all\"\n";
+    print STDERR "-nac\t\t(no asped date check) to suppress only this test\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS for testing:\n";
     print STDERR "\n";
