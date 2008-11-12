@@ -1061,6 +1061,8 @@ my %loadoptions;
     }
     else {
 #        $adb->clearLastContig();
+        last unless $loaded; # abort loading if it happens on the first contig
+# but continue when other contigs have been loaded
     }
     
 }
@@ -1165,7 +1167,8 @@ unless ($lockedonentry && $autolockmode) {
 
 $adb->disconnect();
 
-exit 0;  # no errors
+exit 0 unless $nc;  # no errors
+exit 1; # (some) contigs not loaded
 
 #------------------------------------------------------------------------
 # subroutines
@@ -1189,7 +1192,7 @@ sub tagList {
     my @STAGS = ('ADDI','AFOL','AMBG','CVEC','SVEC','FEAT','REPT',
                  'MALX','MALI','XMAT','OLIG','COMP','STOP','PCOP',
                  'LOW' ,'MOSC','STOL','TEST','CLIP','IGNS','IGNC',
-                 'ASIT');
+                 'ASIT','RETR');
 
 # edit tags
 
