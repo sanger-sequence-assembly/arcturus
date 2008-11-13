@@ -157,7 +157,13 @@ sub getAverageCover {
 
 sub setCheckSum {
     my $this = shift;
-    $this->{data}->{checksum} = shift;
+    my $csum = shift;
+    my %options = @_; # attribute=>0,1,2,3,4
+
+    my $attribute = $options{attribute} || 0; # default md5 of seq IDs
+    
+    $this->{data}->{checksums} = {} unless defined $this->{data}->{checksums};
+    $this->{data}->{checksums}->{$attribute} = $csum;
 }
 
 #-------------------------------------------------------------------   
@@ -434,7 +440,7 @@ sub getSequence {
     return &replaceNbyX($this->{Sequence},$options{minNX});
 }
 
-sub replaceNbyX {
+sub replaceNbyX { # SHOULD GO TO ContigHelper.pm
 # private helper method with getSequence for MAF export: substitute
 # sequences of 'N's in the consensus sequence by 'X's and a few 'N's 
     my $sequence = shift;
@@ -814,8 +820,8 @@ sub isValid {
     my $this = shift;
     my %options = @_;
 
-    &verifyKeys('isValid',\%options,'forimport','metadata',
-                                   ,'noreadsequencetest');
+    &verifyKeys('isValid',\%options,'forimport','metadata'
+                         ,'noreadsequencetest','diagnose');
     return ContigHelper->testContig($this,%options); # returns 1 or 0
 # possible diagnostics stored in $this->{status};
 }
@@ -850,20 +856,49 @@ sub getStatistics {
 
 sub getCheckSum {
     my $this = shift;
-    my %options = @_;
+    my %options = @_; # refresh=>0,1 ; attribute=> 0,1,2,3,4 ; asis=>0,1 ; load=>0,1
+
+# attribute 0 for seq IDs ; 1,3 for DNA ->,<- ; 2,4 for base quality ->,<-
+
+    my $attribute = $options{attribute} || 0; # default seqID checksum
+
+    $this->{data}->{checksums} = {} unless defined $this->{data}->{checksums}; # vivify
 
     unless ($options{refresh}) {
-        return $this->{data}->{checksum} if $this->{data}->{checksum};
+        my $checksum = $this->{data}->{checksums}->{$attribute};
+        return $checksum if $options{asis}; # force return
+        return $checksum if $checksum; # return if available
+#     else continue to calculate from scratch
     }
-# build the readseqhash based on seq IDs
-    my $reads = $this->getReads() || return 0;
 
-    my @seqids;
-    foreach my $read (@$reads) {
-	push @seqids,$read->getSequenceID(); # no check on existence here
+# case 0 : return md5 hash on sorted seq IDs 
+
+    unless ($attribute) {
+        my $reads = $this->getReads($options{load}) || return 0;
+        my @seqids;
+        foreach my $read (@$reads) {
+            push @seqids,$read->getSequenceID(); # no check on existence here
+        }
+        $this->setCheckSum(md5(sort @seqids));
+        return $this->getCheckSum();
     }
-    $this->setCheckSum(md5(sort @seqids));
-    return $this->getCheckSum();
+
+# cases 1 - 4 : odd for md5 hash of sequence DNA, even for md5 hash of base quality
+
+    if ($attribute%2) { # case 1, 3 dna
+        my $sequence = $this->getSequence() || return 0;;
+        $this->setCheckSum(md5($sequence),@_)      unless ($attribute == 3);
+        $sequence =~ tr/acgtACGT/tgcaTGCA/             if ($attribute == 3);  
+        $this->setCheckSum(md5(reverse($sequence)),@_) if ($attribute == 3);
+    }
+    else { # case 2, 4 base quality
+        my $quality = $this->getBaseQuality() || return 0;
+        $this->setCheckSum(md5(@$quality),@_)      unless ($attribute == 4);
+        $this->setCheckSum(md5(reverse(@$quality)),@_) if ($attribute == 4);
+    }
+
+    return $this->getCheckSum(attribute=>$attribute,asis=>1);
+#    return $this->{data}->{checksums}->{$attribute};
 }
 
 #-------------------------------------------------------------------    
@@ -876,8 +911,9 @@ sub isEqual {
     my %options = @_;
 
     &verifyKeys('isEqual',\%options,'sequenceonly');
-    return ContigHelper->isEqual($this,$compare,%options);
-
+#    return ContigHelper->isEqual($this,$compare,%options);
+    my $equal = ContigHelper->isEqual($this,$compare,%options);
+    $equal = 0 unless ($equal == 1); # temporary fix
 }
 
 sub linkToContig {
@@ -1327,7 +1363,7 @@ sub writeToEMBL {
 
     &verifyKeys('writeToEMBL',\%options,'gap4name',
                                         'includetag',
-                                        'excludetag',
+                                        'excludetag', # default 'ANNO'
                                         'tagkey');
 
 # compose identifier
