@@ -700,7 +700,8 @@ sub writeToEMBL {
 
 # get the key to be used for export
 
-    my %translate  = (CDSM=>'CDS_motif',REPT=>'repeat_region'); 
+    my %translate  = (CDSM=>'CDS_motif',REPT=>'repeat_region',
+                      ANNO=>'annotation'); 
         
     my $key = $options{tagkey} || $tagtype;
     $key = 'CDS' if ($tagtype eq 'ANNO'); # default for annotation
@@ -743,16 +744,10 @@ sub writeToEMBL {
         $string .= "\n";
     }
 
-# remap mode ?
+# the annotation info
 
-# unless ($options{remap}) {
-    $tagtype =~ s/ANNO/annotation/ if $tagtype;
-    $string .= "FT $sp17 /type=\"$tagtype\"\n" if $tagtype;
+    $string .= "FT $sp17 /arcturus_type=\"$tagtype\"\n" if ($tagtype && $tagtype ne $key);
     $string .= "FT $sp17 /arcturus_feature_id=\"$sysID\"\n" if $sysID;
-# }
-# if ($options{remap}) {
-#    $string .= "FT $sp17 /systematic_id=\"$sysID\"\n" if $sysID;
-# }
 
     if ($strand eq 'U') {
         $string .= "FT $sp17 /strand=\"no strand information\"\n";
@@ -768,19 +763,21 @@ sub writeToEMBL {
 	}
         $string .= "FT $sp17 /arcturus_comment=\"$comment\"\n";
     }
+# process tag comment as list of lines
+    if ($tagcomment && ref($tagcomment) eq 'ARRAY') {
+        foreach my $comment (@$tagcomment) {
+            $string .= "FT $sp17 $comment\n"; # output as is
+	}
+    }
 # process tag comment; insert new line if it is too long
-    if ($tagcomment) {
+# this part is redundent for HERE
+    elsif ($tagcomment) {
 # split on \n\ , rep by / ?
         my @tcparts = split /\,|\\n\\|\n/,$tagcomment;
 # scan for note or systematic id
 	foreach my $part (@tcparts) {
-# the next bit is an ad hoc construction to remove split and fraction info
-#            if ($part =~ /^(.+)((split|fragment).*)$/) {
-#                push @tcparts,$2; # add at end
-#		$part = $1;
-#            }
             next unless ($part =~ /note|systematic_id/);
-            $string .= "FT $sp17 /$part\n";
+            $string .= "FT $sp17 /$part\"\n";
             $part = 0;
 	}
 # the remainder (if any)        
@@ -789,18 +786,22 @@ sub writeToEMBL {
         my $positionoffset = length($cstring);
         foreach my $part (@tcparts) {
             next unless $part;
-            my $substring = "$part,";
-            if ($positionoffset + length($substring) >= 80) {
-	        $cstring .= "\nFT $sp17 "; # start a new line
+            next if ($part =~ /Reverse\s+Strand/i); # ad hoc ignore
+            my $substring = "$part ";
+            if ($positionoffset + length($substring) >= 80 && $description) {
+	        $cstring .= "\"\nFT $sp17 /"; # start a new line
                 $positionoffset = 21;
             }
 	    $cstring .= $substring;
             $positionoffset += length($substring);
-            $description++;
+            $description++ if ($substring =~ /[^\s\"]/);
         }
         chop $cstring; # remove trailing comma
+        $cstring =~ s/arcturus_description\=\"ortholog/ortholog/; # ad hoc correction
         $string .= $cstring . "\"\n" if $description;
+        $string =~ s/\"\s*\"/\"/g; # remove double quotes
     }
+# to HERE
 
     print $FILE $string if $FILE;
 
