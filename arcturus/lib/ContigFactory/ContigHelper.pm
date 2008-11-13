@@ -2398,7 +2398,6 @@ sub linkToContig { # will be REDUNDENT to be DEPRECATED
 # if any, mapping from $compare to $this contig
 # returns the number of mapped segments (usually 1); returns undef if 
 # incomplete Contig instances or missing sequence IDs in mappings
-    my $class = shift;
     my $this = shift;
     my $compare = shift; # Contig instance to be compared to $this
     my %options = @_;
