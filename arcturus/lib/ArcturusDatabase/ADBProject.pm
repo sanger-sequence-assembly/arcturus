@@ -549,17 +549,21 @@ sub linkContigIDsToProjectID {
               . "   set CONTIG.project_id = $project_id" # the new pid
               . " where CONTIG.project_id = PROJECT.project_id" # the current pid
               . "   and CONTIG.contig_id in (".join(',',@$contig_ids).")"
+#              . " where CONTIG.contig_id in (".join(',',@$contig_ids).")"
+#              . "   and CONTIG.project_id = PROJECT.project_id" # the current pid
               . "   and CONTIG.project_id != $project_id"
 # the fluid lock status is tested earlier, here prevent change to frozen
 	      . "   and PROJECT.status not in ('finished','quality checked')"
-	      . "   and (PROJECT.lockdate is null or PROJECT.owner = '$user')";
-    $query   .= "   and CONTIG.project_id = 0" if $unassigned; # ? what, when?
+	      . "   and (PROJECT.lockdate is null or PROJECT.lockowner = '$user')"; # if locked, only lockowner
+#	      . "   and (PROJECT.lockdate is null or PROJECT.owner = '$user')";
+    $query   .= "   and CONTIG.project_id = 0" if $unassigned; # new contig
 
     my $nrow = $dbh->do($query) || &queryFailed($query) || return undef;
+#print STDERR "nrow = $nrow : query $query\n"; # this query doesn't work properly !;
 
 # compare the number of lines changed with input contigIDs
 
-    $message .= ($nrow+0)." Contigs were (re-)assigned to project $project_id\n" if ($nrow+0);
+    $message .= ($nrow+0)." Contigs were (re-)assigned to project $project_id" if ($nrow+0);
 
 # return if all expected entries have been updated
 
@@ -579,7 +583,7 @@ sub linkContigIDsToProjectID {
     my $mrow = $dbh->do($query) || &queryFailed($query) || return undef;
 
     $message .= ($mrow+0). " Contigs were assigned to project $project_id"
-              . " which had invalid original project IDs\n" if ($mrow+0);
+              . " which had invalid original project IDs" if ($mrow+0);
 
 # return if all expected entries have been updated
 
