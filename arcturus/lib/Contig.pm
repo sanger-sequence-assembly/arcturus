@@ -910,11 +910,12 @@ sub isEqual {
     my $compare = shift;
     my %options = @_;
 
-    &verifyKeys('isEqual',\%options,'sequenceonly');
-#    return ContigHelper->isEqual($this,$compare,%options);
+    &verifyKeys('isEqual',\%options,'sequenceonly','bidirectional');
     my $equal = ContigHelper->isEqual($this,$compare,%options);
-    $equal = 0 unless ($equal == 1); # temporary fix
+    $equal = 0 unless ($equal == 1 || $options{bidirectional});
+    return $equal;
 }
+
 
 sub linkToContig {
 # compare two contigs using sequence IDs in their read-to-contig mappings
@@ -927,8 +928,9 @@ sub linkToContig {
     my %options = @_;
 
     &verifyKeys('linkToContig',\%options,'sequenceonly','banded',
-#                                         'forcelink',
-                                         'strong','readclipping');
+#     'readclipping','noquillotine',
+#     'offsetwindow','correlation','defects','segmentsize',
+                                         'forcelink','strong',);
     return ContigHelper->crossmatch($this,$compare,%options);
 }
 
