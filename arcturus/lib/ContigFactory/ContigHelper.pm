@@ -45,6 +45,42 @@ sub testContig {
         return 1;
     }
 
+# write out the current status of mapping and reads
+
+    if ($options{diagnose}) {
+        my $load = $options{diagnose} > 1 ? 1 : 0; 
+        my $reads = $contig->getReads($load);
+        my (@readids,@rseqids);
+        my $readnamehash = {};
+        foreach my $read (@$reads) {
+            my $read_id = $read->getReadID();
+            my $rseq_id = $read->getSequenceID();
+	    my $version = $read->getVersion();
+            push @readids,$read_id;
+            push @rseqids,$rseq_id;
+            my $readname = $read->getReadName();
+            $readnamehash->{$readname} = $rseq_id;
+            $logger->warning("$readname i:$read_id  s:$rseq_id  v:$version");
+        }
+        my $mappings = $contig->getMappings();
+        my @mseqids;
+        foreach my $mapping (@$mappings) {
+            my $readname = $mapping->getMappingName() || 'undef';
+            my $mseq_id = $mapping->getSequenceID()   || 'undef';
+            $logger->warning("mapping:$readname  s:$mseq_id");
+            push @mseqids,$mseq_id;
+            next unless $readnamehash->{$readname};
+            next if ($readnamehash->{$readname} eq $mseq_id);
+            $logger->severe("sequence ID missmatch for read $readname");            
+        }
+	return 1 unless ($options{diagnose} > 1);
+        @rseqids = sort {$a <=> $b} @rseqids;
+        $logger->warning("sequences in reads:\n@rseqids");
+        @mseqids = sort {$a <=> $b} @mseqids;
+        $logger->warning("sequences in mappings:\n@mseqids");
+        return 1;
+    }
+
 # test the components
 
 # level 0 for export, test number of reads against mappings and metadata    
@@ -101,10 +137,11 @@ $logger->severe("ex/import-level=$level  isEdited=".$read->isEdited());
         foreach my $mapping (@$mappings) {
 # get the identifier: for export sequence ID; for import readname
             if ($mapping->hasSegments) {
-                $ID = $mapping->getMappingName()    if $level;
-	        $ID = $mapping->getSequenceID() if !$level;
+                $ID = $mapping->getMappingName() if $level;
+	        $ID = $mapping->getSequenceID() unless $level;
 # is ID among the identifiers? if so delete the key from the has
-                if (!$identifier{$ID}) {
+                if (!defined($ID) || !$identifier{$ID}) {
+		    $ID = 'undefined' unless defined($ID);
                     $logger->severe("Missing Read for Mapping ".
                                  $mapping->getMappingName." ($ID)");
                     $success = 0;
@@ -156,7 +193,7 @@ $logger->severe("ex/import-level=$level  isEdited=".$read->isEdited());
 # test the number of Reads against the contig meta data (info only; non-fatal)
 
     if (my $numberOfReads = $contig->getNumberOfReads()) {
-        my $reads = $contig->getReads();
+        my $reads = $contig->getReads() || [];
         my $nreads =  scalar(@$reads);
         if ($nreads != $numberOfReads) {
             $logger->warning("Read count error for contig ".$contig->getContigName
@@ -398,6 +435,9 @@ sub reverseComplement {
         my $newsensus = reverse($consensus);
         $newsensus =~ tr/ACGTacgt/TGCAtgca/;
 	$contig->setSequence($newsensus);
+    }
+    else {
+        $logger->info("missing consensus sequence in contig ".$contig->getContigName());
     }
 
     if (my $quality = $contig->getBaseQuality()) {
@@ -2960,7 +3000,7 @@ sub getMappingFromParentToContig {
 	$logger->warning("ambiguous contig-to-parent mapping: several matches");
     }
     else {
-	$logger->warning("no (valid) parent-to-contig mapping provided");
+	$logger->warning("no (valid) parent-to-contig mapping found (p:$parent_id c:$target_id)");
     }
 
     return @mapping;
