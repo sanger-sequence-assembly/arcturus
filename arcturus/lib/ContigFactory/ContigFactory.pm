@@ -293,7 +293,7 @@ sub emblFileParser {
 		$type = $translation{$type} || $type;
                 my $contigtag = TagFactory->makeContigTag($type);
                 $contigtag->setStrand('Reverse');
-                $contigtag->setTagComment('(Reverse Strand)');
+#                $contigtag->setTagComment('(Reverse Strand)');
                 my @positions = split ',',$joinstring;
                 foreach my $position (@positions) {
                     my ($ts,$tf) = split /\.+/,$position;
@@ -307,7 +307,7 @@ sub emblFileParser {
 		$type = $translation{$type} || $type;
                 my $contigtag = TagFactory->makeContigTag($type);
                 $contigtag->setStrand('Reverse');
-                $contigtag->setTagComment('(Reverse Strand)');
+#                $contigtag->setTagComment('(Reverse Strand)');
                 my @positions = split ',',$joinstring;
                 foreach my $position (@positions) {
                     my ($ts,$tf) = split /\.+/,$position;
@@ -319,6 +319,21 @@ sub emblFileParser {
 # if parsetag flag not on, we are outside a tag
             if ($parsetag && @contigtag) {
                 my $contigtag = $contigtag[$#contigtag]; # most recent addition
+# replace this by a simple adding to an array; only pick up systematic ID
+	      if (0) {
+
+                if ($info =~ /\bsystematic_id\b\=\"(.+)\"/) {
+                    $contigtag->setSystematicID($1);
+		}
+		my $tagcomment = $contigtag->getTagComment();
+                $tagcomment = [] unless defined $tagcomment;
+                if (ref($tagcomment) eq 'ARRAY') {
+                    push @$tagcomment,$info; # as is
+                    $contigtag->setTagComment($tagcomment);
+                } # else ignore                
+
+	      }
+	      else {
                 my $tagcomment = $contigtag->getTagComment() || '';
                 if ($info =~ /(note|ortholog|systematic)/) {
                     my $kind = $1;
@@ -331,10 +346,11 @@ sub emblFileParser {
                             $contigtag->setSystematicID($1);
 		        }
                         if ($info =~ /\bnote\b\=\"(.+)\"/) {
-                            $contigtag->setComment($1);
+#                            $contigtag->setComment($1);
 		        }
 		    }
-                }  
+                }
+              }  
             }
 # else other info is to be parsed
             else {
@@ -831,6 +847,7 @@ sub readExtractor {
                 $read->setReadID($versionhash->{read_id});
                 $read->setSequenceID($versionhash->{seq_id});
                 $read->setVersion($version);
+$logger->fine("version $version identified for read $readname");
 # remove sequence data
                 $read->setSequence(undef);    
                 $read->setBaseQuality(undef);
@@ -1762,7 +1779,7 @@ sub parseContig {
         elsif ($record =~ /Unpadded/) {
 	    next;
 	}
-        elsif ($record =~ /Is_padded/) {
+        elsif ($record =~ /Padded/) {
             unless ($usepadded) {
                 $logger->severe("l:$line padded data not allowed");
                 return 0,$line;
@@ -1951,7 +1968,7 @@ sub parseRead {
         elsif ($record =~ /Unpadded/) {
 	    next;
 	}
-        elsif ($record =~ /Is_padded/) {
+        elsif ($record =~ /Padded/) {
             unless ($usepadded) {
                 $logger->severe("l:$line padded data not allowed");
                 return 0,$line;
@@ -2004,7 +2021,6 @@ sub parseRead {
 # elsif ($readtaglist && $record =~ /Tag\s+($readtaglist)\s+(\d+)\s+(\d+)(.*)$/i) {
             my $type = $1; my $trps = $2; my $trpf = $3;
             my $info = $4; $info =~ s/\s+\"([^\"]+)\".*$/$1/ if $info;
-$logger->fine("Read Tag $type detected");
 # test for a continuation mark (\n\); if so, read until no continuation mark
             while ($info =~ /\\n\\\s*$/) {
 $logger->error("This line extention block should NOT be activated : $fline $record");
