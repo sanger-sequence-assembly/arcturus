@@ -35,7 +35,7 @@ my $frugal = 1 ;            # (default) build object instances using minimal mem
 my $linelimit;              # specifying a line limit implies test mode 
 my $readlimit;              # scan until this number of reads is found
 my $parseonly;              # only parse the file (test mode)
-my $blocksize = 50;
+my $blocksize = 20;
 
 # contig specification
 
@@ -594,7 +594,9 @@ $poptions{readversionhash} = $readversionhash;
 
 my $uservhashlocal = 1; 
 
-if ($frugal) { # thios whole block should go to a contig "factory"
+my @contiginventory;
+
+if ($frugal) { # this whole block should go to a contig "factory"
 # scan the file and make an inventory of objects
     my %options = (progress=>1,linelimit=>$linelimit);
 
@@ -609,10 +611,10 @@ if ($frugal) { # thios whole block should go to a contig "factory"
 # get contig names, count reads 
 
     my @readnames;
-    my @contignames;
     
     @inventory = sort keys %$inventory; # better: sort on position in file
 
+    my @contignames;
     foreach my $objectname (@inventory) { 
 # ignore non-objects
         my $objectdata = $inventory->{$objectname};
@@ -678,6 +680,8 @@ if ($frugal) { # thios whole block should go to a contig "factory"
         $logger->warning("CAF file $caffilename has no reads");
     }
 
+    @contiginventory = @contignames;
+
     $logger->monitor("current",memory=>1) if $usage;
 }
 
@@ -703,8 +707,8 @@ while (!$fullscan) {
     if ($frugal) {
 # get the next block of contig names to process
         my @contignames;
-        while (my $objectname = shift @inventory) {
-#            next unless ($objectname =~ /((\s|^)Contig|\_contig\_)/); # case sensitive
+        while (my $objectname = shift @contiginventory) {
+# this line should be 
             next if ($contignamefilter && $objectname !~ /$contignamefilter/);
 	    $logger->info("contig name $objectname");
             push @contignames,$objectname;
@@ -715,7 +719,8 @@ while (!$fullscan) {
         if (@contignames) {
 # extract a list of minimal Contig with corresponding Read instances
             my $nctbe = scalar(@contignames);
-            $logger->warning("block of $nctbe contigs to be extracted");
+            $logger->warning("block of $nctbe contigs to be extracted") unless ($nctbe == 1);
+            $logger->warning("next contig ($contignames[0]) to be extracted") if ($nctbe == 1);
             $poptions{noreads} = 1 if $uservhashlocal;
             $objects = ContigFactory->contigExtractor(\@contignames,$readversionhash,
                                                                     %poptions);
