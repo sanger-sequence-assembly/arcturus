@@ -620,17 +620,9 @@ if ($frugal) { # thios whole block should go to a contig "factory"
         next unless (ref($objectdata) eq 'HASH');
 
         my $objecttype = $objectdata->{Is};
-# if it's not a contig it is a read
+
         if ($objecttype =~ /contig/) {
-# test for a valid contig name (as extra check)
-            if ($objectname =~ /(\s|^)Contig/ || $objectname =~ /\_contig\_/) {
-                push @contignames,$objectname;
-# and register the position in the file ...
-	    }
-	    else {
-		$logger->error("Invalid contig name $objectname");
-                next; # ignore the entry
-	    }
+            push @contignames,$objectname;
 	}
         elsif ($objecttype =~ /read/) {
 	    push @readnames,$objectname;
