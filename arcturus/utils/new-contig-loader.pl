@@ -704,7 +704,7 @@ while (!$fullscan) {
 # get the next block of contig names to process
         my @contignames;
         while (my $objectname = shift @inventory) {
-            next unless ($objectname =~ /((\s|^)Contig|\_contig\_)/); # case sensitive
+#            next unless ($objectname =~ /((\s|^)Contig|\_contig\_)/); # case sensitive
             next if ($contignamefilter && $objectname !~ /$contignamefilter/);
 	    $logger->info("contig name $objectname");
             push @contignames,$objectname;
