@@ -1094,6 +1094,9 @@ if ($loadreadtags) {
         next unless $read->hasTags();
         push @reads, $read;
     }
+#    foreach my $read (@reads) {
+#	$read->writeToCaf(*STDOUT);
+#    }
 
     my $success = $adb->putTagsForReads(\@reads,autoload=>1);
     $logger->info("putTagsForReads success = $success");
@@ -1288,6 +1291,7 @@ print STDOUT "DECODED\n\n" if ($DEBUG && $name && !$change);
 
     foreach my $part (@info) {
         if ($part =~ /serial\#?\=?(.*)/) {
+            $part = qw($part);
             my $number = $1;
 print STDOUT "number $number \n" if $DEBUG;
             if (defined($number) && $number =~ /\w/) {
