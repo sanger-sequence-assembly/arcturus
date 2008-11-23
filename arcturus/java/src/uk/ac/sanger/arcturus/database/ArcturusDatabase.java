@@ -537,6 +537,14 @@ public class ArcturusDatabase {
 		templateManager.clearCache();
 	}
 
+	public synchronized void setTemplateCacheing(boolean cacheing) {
+		templateManager.setCacheing(cacheing);
+	}
+
+	public synchronized boolean isTemplateCacheing() {
+		return templateManager.isCacheing();
+	}
+
 	/**
 	 * Returns the ReadManager belonging to this ArcturusDatabase.
 	 * 
