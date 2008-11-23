@@ -13,6 +13,16 @@ my $slaves = [
 	      { 'host' => 'mcs2a',
 		'port' => 15002,
 		'username' => 'monitor',
+		'password' => 'WhoWatchesTheWatchers' },
+
+	      { 'host' => 'mcs3a',
+		'port' => 15002,
+		'username' => 'monitor',
+		'password' => 'WhoWatchesTheWatchers' },
+
+	      { 'host' => 'mcs4a',
+		'port' => 15002,
+		'username' => 'monitor',
 		'password' => 'WhoWatchesTheWatchers' }
 	      ];
 
