@@ -164,8 +164,10 @@ public class TemplateManager extends AbstractManager {
 	}
 
 	void registerNewTemplate(Template template) {
+	    if (cacheing) {
 		hashByName.put(template.getName(), template);
 		hashByID.put(new Integer(template.getID()), template);
+	    }
 	}
 
 	/**
