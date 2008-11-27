@@ -50,9 +50,9 @@ my $test;
 
 my $validKeys  = "organism|o|instance|i|"
                . "assembly|a|ligation|l|ligationname|ln|ligationcomplement|lc|"
-               . "caf|aspedbefore|ab|aspedafter|aa|"
+               . "caf|fasta|fastq|aspedbefore|ab|aspedafter|aa|"
                . "nosingleton|ns|blocksize|bs|selectmethod|sm|namelike|nl|"
-               . "namenotlike|nnl|excludelist|el|mask|tags|all|fasta|nofile|"
+               . "namenotlike|nnl|excludelist|el|mask|tags|all|nofile|count|"
                . "clipmethod|cm|threshold|th|minimumqualityrange|mqr|"
                . "status|nostatus|limit|"
                . "test|info|verbose|debug|log|help|h";
@@ -115,15 +115,21 @@ while (my $nextword = shift @ARGV) {
         $complement     = 1;
     }
 
-    if (defined($fasta) && ($nextword eq '-caf' || $nextword eq '-fasta')) {
+    if (defined($fasta) && ($nextword eq '-caf' || $nextword eq '-fasta' || $nextword eq '-fastq')) {
         die "-caf and -fasta specification are mutually exclusive";
     }
 
     $outputFileName   = shift @ARGV  if ($nextword eq '-caf');
     $fasta            = 0            if ($nextword eq '-caf');
+
     $outputFileName   = shift @ARGV  if ($nextword eq '-fasta');
     $fasta            = 1            if ($nextword eq '-fasta');
+
+    $outputFileName   = shift @ARGV  if ($nextword eq '-fastq');
+    $fasta            = 2            if ($nextword eq '-fastq');
+
     $test             = 1            if ($nextword eq '-nofile');
+    $test             = 1            if ($nextword eq '-count');
 
     $blocksize        = shift @ARGV  if ($nextword eq '-blocksize');
     $blocksize        = shift @ARGV  if ($nextword eq '-bs');
@@ -210,9 +216,9 @@ $adb->setLogger($logger);
 # MAIN
 #----------------------------------------------------------------
 
-my ($CAF,$FAS,$QLT,$QMASK);
+my ($CAF,$FAS,$QLT,$QMASK,$FAQ);
 
-if ($fasta) {
+if ($fasta == 1) {
 # fasta output
     if ($outputFileName) {
         $outputFileName .= '.fas' unless ($outputFileName =~ /\.fas/);
@@ -228,6 +234,17 @@ if ($fasta) {
     }
     $QLT = *STDOUT unless $QLT;
 }
+
+elsif ($fasta == 2) {
+# fastq output
+    if ($outputFileName) {
+        $outputFileName .= '.faq' unless ($outputFileName =~ /\.faq/);
+        $logger->info("Opening fasta file $outputFileName for DNA output");
+        $FAQ = new FileHandle($outputFileName,"w");
+    }
+    $FAQ = *STDOUT unless $FAQ;
+}
+ 
 elsif (defined($outputFileName)) {
 # caf output
     if ($outputFileName) {
@@ -301,12 +318,13 @@ else {
     $logger->monitor('getIDsForUnassembledReads',timing=>1)   if $test;
     $readids = $adb->getIDsForUnassembledReads(%options);
     $logger->monitor('getIDsForUnassembledReads',timing=>1)   if $test;
-    $logger->info("found ".scalar(@$readids)." reads");
 
-    if ($test && $test == 2) {
-        $logger->info("testing individual reads");
-
-        &testsection($readids);
+    if ($test) {
+        $logger->warning("found ".scalar(@$readids)." reads");
+        if ($test == 2) {
+            $logger->warning("testing ".scalar(@$readids)." individual reads");
+            &testsection($readids);
+	}
         $adb->disconnect();
 	exit 0;
     }
@@ -314,9 +332,9 @@ else {
 
 $logger->info("Retrieving ".scalar(@$readids)." Reads");
 
-unless ($CAF || $FAS) {
+unless ($CAF || $FAS  || $FAQ) {
     $logger->warning("to export ".scalar(@$readids)." reads, specify output file");
-    undef @$readids unless ($CAF || $FAS);
+    undef @$readids;
 }
 
 my $discarded = 0;
@@ -378,6 +396,7 @@ while (my $remainder = scalar(@$readids)) {
 
         $read->writeToCaf($CAF,qualitymask=>$mask)        if $CAF;
         $read->writeToFasta($FAS,$QLT,qualitymask=>$mask) if $FAS;
+        $read->writeToFastq($FAQ,qualitymask=>$mask)      if $FAQ;
 
         next unless ($mask && $QMASK);
 # export the quality range for the read if masking is used
@@ -394,7 +413,7 @@ print STDERR "$excluded reads excluded\n" if $excluded;
 
 $adb->disconnect();
 
-foreach my $FILE ($CAF,$FAS,$QLT,$QMASK) {
+foreach my $FILE ($CAF,$FAS,$QLT,$QMASK,$FAQ) {
     close ($FILE) if $FILE;
 }
 
@@ -525,7 +544,8 @@ sub showUsage {
         print STDOUT "MANDATORY EXCLUSIVE PARAMETER:\n";
         print STDOUT "\n";
         print STDOUT "-caf\t\tcaf file name for output (0 for STDOUT)\n";
-        print STDOUT "-fasta\t\tfile name for output in fasta format\n";
+        print STDOUT "-fasta\t\tfile name for output in fasta format (DNA & quality files)\n";
+        print STDOUT "-fastq\t\tfile name for output in fastq format\n";
         print STDOUT "\n";
     }
     print STDOUT "OPTIONAL PARAMETERS:\n";
@@ -569,6 +589,8 @@ sub showUsage {
     print STDOUT "\t\tis shorter than minimum specified\n";
     print STDOUT "\n";
     print STDOUT "-info\t\t(no value) for some progress info\n";
+    print STDERR "\n";
+    print STDERR "HINT : if query does not return all the reads expected, try '-nostatus'\n";
     print STDERR "\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDOUT "\n";
