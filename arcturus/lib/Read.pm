@@ -490,7 +490,6 @@ sub setSequence {
     $this->{data}->{slength} = 0;
 
     if (defined($sequence)) {
-	$this->{Sequence} =~ s/n/N/g; # hack to undo gap2caf conversion 
 	$this->{data}->{slength} = length($sequence);
 	$this->getSequenceHash(); # put sequence hash if undefined
     }
@@ -502,6 +501,8 @@ sub getSequence {
     my %options = @_;
 
     $this->importSequence() unless defined($this->{Sequence});
+
+# ? option $this->{Sequence} =~ s/n/N/g; # hack to undo gap2caf conversion 
 
     my $symbol = $options{qualitymask};
 
@@ -940,6 +941,23 @@ sub writeToFasta {
     $this->writeBaseQuality($QFILE,">") if defined $QFILE;
 }
 
+sub writeToFastq {
+# write DNA of this read in FASTA format to FILE handle
+    my $this  = shift;
+    my $FILE = shift; # obligatory, filehandle for DNA output
+    my %options = @_;  # qualitymask=>x, nonewline=>
+
+# optionally takes e.g. 'qualitymask=>'x' to mask out low quality data
+
+    $options{nonewline} = 1 unless defined $options{nonewline};
+
+    if (my $dna = $this->getSequence(@_)) {
+	print $FILE "@"."$this->{readname}\n$dna\n";
+    }
+
+    $this->writeBaseQuality($FILE,"+",fastq=>1,nonewline=>1);
+}
+
 # private methods
 
 sub writeDNA {
@@ -960,7 +978,7 @@ sub writeDNA {
 	my $offset = 0;
 	my $length = length($dna);
 	while ($offset < $length) {    
-	    print $FILE substr($dna,$offset,60)."\n";
+            print $FILE substr($dna,$offset,60)."\n";
 	    $offset += 60;
 	}
     }
@@ -971,20 +989,38 @@ sub writeBaseQuality {
     my $this   = shift;
     my $FILE   = shift; # obligatory
     my $marker = shift;
+    my %options = @_; # fastq
 
     $marker = '>' unless defined($marker); # default FASTA format
 
 # the quality data go into a separt
 
+    my $fastq = $options{fastq} || 0;
+
     if (my $quality = $this->getBaseQuality()) {
-# output in lines of 25 numbers
-	print $FILE "\n$marker$this->{readname}\n";
+# output in lines of 25 numbers (caf/fasta) or 60 (fastq)
+        my $increment = $fastq ? 60 : 25;
+        my $joinspace = $fastq ? '' : ' ';
+# add space unless 
+        print $FILE "\n" unless $options{nonewline};
+	print $FILE "$marker$this->{readname}\n";
 	my $n = scalar(@$quality) - 1;
-        for (my $i = 0; $i <= $n; $i += 25) {
-            my $m = $i + 24;
+        for (my $i = 0; $i <= $n; $i += $increment) {
+            my $m = $i + $increment - 1;
             $m = $n if ($m > $n);
-	    print $FILE join(' ',@$quality[$i..$m]),"\n";
+            my @qslice = @$quality[$i..$m];
+	    &encodePhredScore(@qslice) if $fastq;
+	    print $FILE join($joinspace,@qslice);
+	    print $FILE "\n" unless $fastq;
 	}
+        print $FILE "\n" if $fastq;
+    }
+}
+
+sub encodePhredScore {
+# private helper method: translate phred score into ASCII character
+    foreach my $q (@_) {   
+        $q = chr( ($q <= 93 ? $q : 93) + 33); # truncates quality at 93
     }
 }
 
