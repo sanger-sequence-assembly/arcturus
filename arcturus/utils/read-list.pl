@@ -24,6 +24,7 @@ my $unassembled;
 my $SCFchem;
 my $caf;
 my $fasta;
+my $fastq;
 my $quality;
 my $mask;
 my $clip;
@@ -36,7 +37,7 @@ my $full;
 my $all;
 
 my $validKeys  = "organism|o|instance|i|readname|read_id|seq_id|version|".
-                 "unassembled|fofn|chemistry|caf|fasta|quality|full|all|".
+                 "unassembled|fofn|chemistry|caf|fasta|quality|fastq|full|all|".
                  "clip|mask|screen|notags|verbose|debug|help|h";
 
 while (defined(my $nextword = shift @ARGV)) {
@@ -79,6 +80,8 @@ while (defined(my $nextword = shift @ARGV)) {
 
     $fasta       = 1            if ($nextword eq '-fasta');
 
+    $fastq       = 1            if ($nextword eq '-fastq');
+
     $caf         = 1            if ($nextword eq '-caf');
 
     $full        = 1            if ($nextword eq '-full');
@@ -96,7 +99,7 @@ while (defined(my $nextword = shift @ARGV)) {
     &showUsage(0) if ($nextword eq '-help' || $nextword eq '-h');
 }
 
-$SCFchem = 0 if ($fasta || $caf);
+$SCFchem = 0 if ($fasta || $caf || $fastq);
  
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
@@ -214,11 +217,13 @@ foreach my $read (@reads) {
 
     $read->writeToCaf(*STDOUT,%option) if $caf;
 
+    $read->writeToFastq(*STDOUT,%option) if $fastq;
+
     $read->writeToFasta(*STDOUT,*STDOUT,%option) if ($fasta && $quality);
 
     $read->writeToFasta(*STDOUT,undef,%option)  if ($fasta && !$quality);
 
-    next if ($caf || $fasta);
+    next if ($caf || $fasta || $fastq);
 
     if ($full || $SCFchem && !defined($rdir)) {
         my $PR = new PathogenRepository();
@@ -599,6 +604,8 @@ sub showUsage {
     print STDERR "-caf\t\t(no value) Output in caf format\n";
     print STDERR "-fasta\t\t(no value) Output in fasta format\n";
     print STDERR "-quality\t(no value, with '-fasta') include quality values\n";
+    print STDERR "-fastq\t\t(no value) Output in fasta format\n";
+    print STDERR "\t\t(ALL output on STDOUT only)\n";
     print STDERR "\n";
     print STDERR "-verbose\t(no value) \n";
     print STDERR "\n";
