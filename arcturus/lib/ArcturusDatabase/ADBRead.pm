@@ -2001,14 +2001,24 @@ sub getListOfReadNames {
 
     if ($options{onlySanger}) {
         $query .= "where " unless ($query =~ /where/);
-       $query .= "and " if ($query =~ /where\s+\w+/);
-         $query .= "readname like \"%.%\"";
+        $query .= "and " if ($query =~ /where\s+\w+/);
+        $query .= "readname like \"%.%\" ";
     }
 
     if ($options{readNameLike}) {
         $query .= "where " unless ($query =~ /where/);
         $query .= "and " if ($query =~ /where\s+\w+/);
-        $query .= "readname like '$options{readNameLike}'";
+        $query .= "readname like '$options{readNameLike}' ";
+    }
+
+    if ($options{readNameNotLike}) {
+        $query .= "where " unless ($query =~ /where/);
+        $query .= "and " if ($query =~ /where\s+\w+/);
+        $query .= "readname not like '$options{readNameNotLike}' ";
+    }
+
+    if ($options{order}) {
+	$query .= "order by $options{order} ";
     }
 
     if ($options{limit}) {
@@ -2398,8 +2408,9 @@ sub updateRead {
         next if (!$replace && !$options{override}); # no reset to undef or 0
         $current = 'undef' unless defined($current);
         $replace = 'undef' unless defined($replace);
-#print STDOUT "cur: $current\nrep: $replace\n";
+#print STDOUT "cur: $current\nrep: $replace\n" if ($attribute eq 'Sequence');
         next if ($current eq $replace);
+#print STDOUT "cur: $current\nrep: $replace\n";
         $updatehash = {} unless $updatehash; # define on first reference
         $attribute =~ tr/[A-Z]/[a-z]/;        
         $attribute =~ s/date|process//;
