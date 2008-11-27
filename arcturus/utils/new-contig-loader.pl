@@ -114,13 +114,15 @@ $rtagtypeaccept = 'default';
 
 my $validkeys  = "organism|o|instance|i|"
 
-               . "caf|stdin|batch|gap4name|"
-               . "nofrugal|nf|linelimit|ll|readlimit|rl|parseonly|blocksize|bs|"
+               . "caf|stdin|gap4name|"
+               . "nofrugal|nf|linelimit|ll|readlimit|rl|"
+               . "blocksize|bs|"
 
                . "padded|safemode|maximum|minimum|filter|withoutparents|wp|"
-               . "testcontig|tc|noload|notest|nobreak|consensus|"
+               . "testcontig|tc|noload|notest|parseonly|nobreak|consensus|"
 
-               . "noloadreads|nlr|consensusreadname|crn|noaspedcheck|nac|"
+               . "noloadreads|nlr|doloadreads|dlr|"
+               . "consensusreadname|crn|noaspedcheck|nac|"
                . "acceptversionzero|avz|"
 
                . "contigtagtype|ctt|noloadcontigtags|nlct|showcontigtags|sct|"
@@ -131,10 +133,10 @@ my $validkeys  = "organism|o|instance|i|"
                . "loadreadtags|lrt|synchronisereadtags|syncrt|"
 
                . "assignproject|ap|defaultproject|dp|setprojectby|spb|"
-               . "projectlock|pl|dounlock|project|noprojectlock|npl|"
+               . "projectlock|pl|dounlock|project|p|noprojectlock|npl|"
                . "assembly|a|"
 
-               . "outputfile|out|log|minerva|verbose|info|debug|memory|help";
+               . "outputfile|out|log|minerva|verbose|info|debug|memory|help|h";
 
 #------------------------------------------------------------------------------
 # parse the command line input; options overwrite eachother; order is important
@@ -165,8 +167,8 @@ while (my $nextword = shift @ARGV) {
     if ($nextword eq '-caf') {
         $caffilename  = shift @ARGV; # specify input file
     }
-    elsif ($nextword eq '-stdin' || $nextword eq '-batch') {
-        $caffilename  = 0;           # input with "<" operator
+    elsif ($nextword eq '-stdin') {
+        $caffilename  = 0;           # input with "<" operator or from pipe
     }
 
     $gap4dbname       = shift @ARGV  if ($nextword eq '-gap4name');
@@ -176,14 +178,14 @@ while (my $nextword = shift @ARGV) {
     if ($nextword eq '-nf' || $nextword eq '-nofrugal') {
         $frugal       = 0;
     }            
-
-    if ($nextword eq '-ll'    || $nextword eq '-linelimit' ) {
+    elsif ($nextword eq '-ll'    || $nextword eq '-linelimit' ) {
         $linelimit    = shift @ARGV; 
     } 
     elsif ($nextword eq '-rl' || $nextword eq '-readlimit') {
         $readlimit    = shift @ARGV; 
-    } 
-    elsif ($nextword eq '-po' || $nextword eq '-parseonly') {
+    }
+ 
+    if ($nextword eq '-po' || $nextword eq '-parseonly') {
         $parseonly    = 1;
 #	$readload     = 0;
     }
@@ -208,7 +210,7 @@ while (my $nextword = shift @ARGV) {
         $withoutparents = 1;
     } 
 
-    $consensus        = 1            if ($nextword eq '-consensus');
+    $consensus        = 1  if ($nextword eq '-consensus');
 
     if ($nextword eq '-nl' || $nextword eq '-noload') {
         $contigload     = 0;
@@ -220,7 +222,7 @@ while (my $nextword = shift @ARGV) {
         $contigtest     = 0;            
     }
     elsif ($nextword eq '-tc' || $nextword eq '-testcontig') {
-        $contigtest     = 1;
+        $contigtest     += 1;
         $contigload     = 0;
         $loadcontigtags = 0;
         $loadreadtags   = 0;
@@ -241,6 +243,10 @@ while (my $nextword = shift @ARGV) {
 
     if ($nextword eq '-nlr' || $nextword eq '-noloadreads') {
 	$readload       = 0; # switch off autoload of missing reads
+    }
+
+    if ($nextword eq '-dlr' || $nextword eq '-doloadreads') {
+	$readload       = 1; # switch on autoload of missing reads
     }
 
     if ($nextword eq '-crn' || $nextword eq '-consensusreadname') {
@@ -303,7 +309,8 @@ while (my $nextword = shift @ARGV) {
     if ($nextword eq '-a' || $nextword eq '-assembly') {
         $assembly     = shift @ARGV;
     }
-    elsif ($nextword eq '-ap'  || $nextword eq '-project' || $nextword eq '-assignproject') {
+    elsif ($nextword eq '-ap' || $nextword eq '-assignproject' ||
+           $nextword eq '-p'  || $nextword eq '-project') {
         $pidentifier  = shift @ARGV;
         $pinherit     = 'project';
     }
@@ -492,6 +499,7 @@ if ($projectlock) {
         $adb->disconnect();
         exit 1;
     }
+# ?? $lockstatusfound = 1;
 }
 
 #----------------------------------------------------------------
@@ -577,7 +585,7 @@ if ($minnrofreads > 1) {
     $logger->info("Contigs with fewer than $minnrofreads reads are ignored");
 }
 
-$logger->monitor("Initial",memory=>1) if $usage;
+$logger->monitor("Initial",memory=>1,timing=>1) if $usage;
 
 #------------------------------------------------------------------------------
 # in frugal mode: parse the input file and build an inventory of the caf file
@@ -599,6 +607,8 @@ my @contiginventory;
 if ($frugal) { # this whole block should go to a contig "factory"
 # scan the file and make an inventory of objects
     my %options = (progress=>1,linelimit=>$linelimit);
+
+    $logger->monitor("before inventory",memory=>1,timing=>1) if $usage;
 
     $inventory = ContigFactory->cafFileInventory($caffilename,%options);
     unless ($inventory) {
@@ -682,7 +692,7 @@ if ($frugal) { # this whole block should go to a contig "factory"
 
     @contiginventory = @contignames;
 
-    $logger->monitor("current",memory=>1) if $usage;
+    $logger->monitor("after inventory",memory=>1,timing=>1) if $usage;
 }
 
 $logger->flush();
@@ -722,6 +732,7 @@ while (!$fullscan) {
             $logger->warning("block of $nctbe contigs to be extracted") unless ($nctbe == 1);
             $logger->warning("next contig ($contignames[0]) to be extracted") if ($nctbe == 1);
             $poptions{noreads} = 1 if $uservhashlocal;
+            $logger->monitor("before extract ",memory=>1,timing=>1) if $usage;
             $objects = ContigFactory->contigExtractor(\@contignames,$readversionhash,
                                                                     %poptions);
 # count number of contigs retrieved
@@ -761,12 +772,13 @@ while (!$fullscan) {
                 undef @reads;
                 undef $ereads;
 	    }
+            $logger->monitor("after extract",memory=>1,timing=>1) if $usage;
         }
         else {
             $fullscan = 1;
 #            ContigFactory->closeFile();            
 	}
-        $logger->monitor("frugal (next $nc contigs)",memory=>1) if $usage;
+        $logger->monitor("frugal (next $nc contigs)",memory=>1,timing=>1) if $usage;
     }
 
 #--------------------- full scan ----------------------------
@@ -796,7 +808,7 @@ print STDOUT "full scan $fullscan $truncated   @$objects \n";
                 }
 	    }
         }
-        $logger->monitor("fullscan memory usage",memory=>1) if $usage;
+        $logger->monitor("fullscan memory usage",memory=>1,timing=>1) if $usage;
 print STDOUT " end no frugal scan\n";
     }
 
@@ -975,6 +987,8 @@ print STDOUT " end no frugal scan\n";
                     $logger->warning($line);
 		}
                 $contig->setContigID($added) if $added;
+                my $diagnose =($contigtest > 1) ? 2 : 0;
+		$contig->isValid(diagnose=>$diagnose);
 	        if ($contig->hasContigToContigMappings()) {
                     $logger->warning($contig->getContigName()
 				     ." has contig-to-parent links");
@@ -983,10 +997,12 @@ print STDOUT " end no frugal scan\n";
 	                $logger->warning($mapping->assembledFromToString || "empty link\n");
 	            }
                 }
-		my $parents = $contig->getParentContigs();
-		$logger->warning("parents:",ss=>1);
-		foreach my $parent (@$parents) {
-                    $parent->isValid(diagnose=>2);
+                if ($diagnose) {
+   		    my $parents = $contig->getParentContigs();
+		    $logger->warning("parents:",ss=>1);
+		    foreach my $parent (@$parents) {
+                        $parent->isValid(diagnose=>$diagnose);
+		    }
 		}
             }
 	    else {
@@ -1469,8 +1485,8 @@ sub showUsage {
     my $code = shift || 0;
 
     print STDERR "\n";
-    print STDERR "Parameter input ERROR: $code \n" if $code;
-    print STDERR "\n";
+    print STDERR "Parameter input ERROR: $code \n\n" if $code;
+
     unless ($organism && $instance && $caffilename) {
         print STDERR "MANDATORY PARAMETERS:\n";
         print STDERR "\n";
@@ -1482,56 +1498,101 @@ sub showUsage {
  
     print STDERR "OPTIONAL PARAMETERS for project inheritance:\n";
     print STDERR "\n";
-    print STDERR "-setprojectby\t(spb) assign project to contigs based on "
+    print STDERR "-spb\t\t(setprojectby) assign project to contigs based on "
                 ."properties of parent\n\t\t      contigs: "
                 ."readcount, contigcount, contiglength or none\n";
-    print STDERR "-defaultproject\t(dp) ID or name of project to be used if ";
+    print STDERR "-dp\t\t(defaultproject) ID or name of project to be used if ";
     print STDERR "the inheritance\n\t\t     mechanism does not find a project\n";
-    print STDERR "-assignproject\t(ap) ID or name of project to which "
+    print STDERR "-ap\t\t(assignproject) ID or name of project to which "
                 ."contigs are assigned\n\t\t     (overrides setprojectby)\n";
-    print STDERR "-project\talias of assignproject\n";
-    print STDERR "-assembly\tassembly ID or name; required in case of "
+    print STDERR "-p\t\t(project) alias of assignproject\n";
+    print STDERR "-a\t\t(assembly) ID or name; required in case of "
                . "ambiguous project name\n";
     print STDERR "\n";
+#    print STDERR "OPTIONAL PARAMETERS for project locking:\n";
+#    print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS for tag processing:\n";
     print STDERR "\n";
-#
-#    print STDERR "-ctp\t\tcontigtagprocessing (depth of inheritance, def 1)\n";
-#    print STDERR "-noreadtags\tdo not process read tags\n";
-#    print STDERR "-rtl\t\t(readtaglist) process specified read tags only\n";
+    print STDERR "-lct\t\t(loadcontigtags) default; re-activate contig tag loading when using -noload\n";
+    print STDERR "-nlct\t\t(noloadcontigtags) as it says; also active when using -noload option\n";
     print STDERR "\n";
-    print STDERR "OPTIONAL PARAMETERS:\n";
-# min max rtt readtagtype synchronise reads, contigtagtype 
+    print STDERR "-ctt\t\t(contigtagtype)  comma-separated list of explicitly defined tags (default all)\n";
+    print STDERR "-ats\t\t(annotationtags) comma-separated list of explicitly defined tags\n";
+    print STDERR "-fts\t\t(finishingtags)  comma-separated list of explicitly defined tags\n";
     print STDERR "\n";
-    print STDERR "-minimum\tnumber of reads per contig (default 2)\n";
-    print STDERR "-filter\t\tcontig name substring or regular expression\n";
-    print STDERR "-out\t\toutput file, default STDOUT\n";
-
-    print STDERR "-test\t\tnumber of lines parsed of the CAF file\n";
+    print STDERR "-lrt\t\t(loadreadtags) default; re-activate read tag loading when using -noload\n";
+    print STDERR "-nlrt\t\t(noloadreadtags) as it says; also active when using -noload option\n";
     print STDERR "\n";
-    print STDERR "OPTIONAL PARAMETERS for read loading:\n";
+    print STDERR "-rtt\t\t(readtagtype) comma-separated list of explicitly defined tags (def: all)\n";
+    print STDERR "-syncrt\t\t(synchronisereadtags) load tags; retire tags which are NOT on caf file\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS for tag testing:\n";
+    print STDERR "\n";
+    print STDERR "-tct\t\t(testcontigtags) against the database\n";
+    print STDERR "-sct\t\t(showcontigtags) list contigtags found on caf file\n";
+    print STDERR "\n";
+    print STDERR "-srt\t\t(showreadtags) default; re-activate read tag loading when using -noload\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS for read auto-loading:\n";
     print STDERR "\n";
     print STDERR "the loader will check for missing reads and if not found in the\n";
     print STDERR "database will (try to) load them from the CAF file. The reads \n";
-    print STDERR "concerned are usually consenses reads, but not necessarilly. \n";
+    print STDERR "concerned are usually consensus reads, but not necessarilly. \n";
     print STDERR "Therefore the reads are tested for completeness. This test can be\n";
-    print STDERR "overridden by using these flags:\n";
+    print STDERR "overridden by using the -crn or -nac switches:\n";
     print STDERR "\n";
+    print STDERR "-nlr\t\t(noloadreads) as it says; if reads are missing the loader terminates\n";
+    print STDERR "-dlr\t\t(doloadreads) re-activate readloading from caf file (after e.g. -noload)\n";
     print STDERR "-crn\t\t(consensusreadname) explictly specifying astring matching the\n";
     print STDERR "\t\tthe readname; alternatively, use \"all\"\n";
     print STDERR "-nac\t\t(no asped date check) to suppress only this test\n";
     print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS for contig selection:\n";
+    print STDERR "\n";
+    print STDERR "-minimum\tminimum number of reads per contig\n";
+    print STDERR "-maximum\tmaximum number of reads per contig\n";
+    print STDERR "-filter\t\tcontig name substring or regular expression\n";
+    print STDERR "\n";
+    print STDERR "-wp\t\t(withoutparents) only accept contigs without parents\n";
+    print STDERR "\n";
+    print STDERR "-nb\t\t(nobreak) accept only contigs with continuous coverage\n";
+    print STDERR "\n";
+    print STDERR "-bs\t\t(blocksize) process the contigs in blocks of size specified\n";
+    print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS for testing:\n";
     print STDERR "\n";
-    print STDERR "-tc\t\t(test contig) \n";
+    print STDERR "-tc\t\t(testcontig) against the database without loading\n";
     print STDERR "-noload\t\tskip loading into database (test mode)\n";
-#    print STDERR "-notest\t\t(in combination with noload: "
-#                 . "skip contig processing altogether\n";
-#    print STDERR "-irnl\t\tignorereadnamelike (name filter) pattern\n";
-#    print STDERR "-ignore\t\t(no value) contigs already processed\n";
-#    print STDERR "-frugal\t\t(no value) minimise memory usage\n";
-# blocksize
-    print STDERR "-verbose\t(no value) for some progress info\n";
+    print STDERR "-notest\t\t(in combination with noload: "
+                 . "skip contig processing altogether\n";
+    print STDERR "-parseonly\ta shortcut to do just that\n";
+    print STDERR "-list\t\tlist the contig(s) read from the file in caf format\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS for input/output:\n";
+    print STDERR "\n";
+    print STDERR "-stdin\t\tread input from STDIN instead of caf file\n";
+    print STDERR "\n";
+    print STDERR "-log\t\tfile name for standard output (default STDOUT)\n";
+    print STDERR "-out\t\t(outputfile) name for special output (e.g. listing missing reads);\n"
+               . "\t\tdefault none\n";
+    print STDERR "\n";
+    print STDERR "-minerva\tadd a prefix to output to be recognised by Minerva\n";
+    print STDERR "\n";
+    print STDERR "-info\t\t(no value) for some progress info\n";
+    print STDERR "-verbose\t(no value) for more progress info\n";
+    print STDERR "-debug\t\t(no value) you don't want to do this\n";
+    print STDERR "\n";
+    print STDERR "-gap4name\tname entered in database import log for origin of data\n";
+    print STDERR "\n";
+#    print STDERR "-safemode\tread the last contig back from the database to confirm storage\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS to be deprecated:\n";
+    print STDERR "\n";
+    print STDERR "-ll\t\t(linelimit) number of lines parsed of the CAF file\n";
+#    print STDERR "-rl\t\t(readlimit) number of reads parsed on the CAF file\n";
+    print STDERR "-test\t\tnumber of lines parsed of the CAF file\n";
+    print STDERR "-consensus\talso load consenmsus sequence\n";
+    print STDERR "-nf\t\t(nofrugal, no value)\n";
     print STDERR "\n";
     print STDERR "Parameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
