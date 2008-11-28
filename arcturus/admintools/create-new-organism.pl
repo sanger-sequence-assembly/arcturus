@@ -31,6 +31,13 @@ my $directory;
 my $nocreatedatabase = 0;
 my $skipdbsteps = 0;
 
+my $mysql_admin_username = "arcturus_dba";
+
+my $mysql_normal_username = "arcturus";
+my $mysql_normal_password = "***REMOVED***";
+
+my $mysql_master_URL = "DBI:mysql:database=arcturus;host=mcs3a;port=15001";
+
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
@@ -80,19 +87,21 @@ unless (defined($dbname)) {
 }
 
 unless ($skipdbsteps) {
+    my $users_and_roles = &getUsersAndRoles($mysql_master_URL, $mysql_normal_username, $mysql_normal_password);
+
     my $dsn = "DBI:mysql:database=arcturus;host=$dbhost;port=$dbport";
 
-    my $dbpw = &getPassword("Enter password for root MySQL user", "MYSQL_ROOT_PW");
+    my $dbpw = &getPassword("Enter password for MySQL user $mysql_admin_username", "ARCTURUS_DBA_PW");
     
     if (!defined($dbpw) || length($dbpw) == 0) {
 	print STDERR "No password was entered\n";
 	exit(2);
     }
     
-    my $dbh = DBI->connect($dsn, "root", $dbpw);
+    my $dbh = DBI->connect($dsn, $mysql_admin_username, $dbpw);
     
     unless (defined($dbh)) {
-	print STDERR "Failed to connect to $dsn as root\n";
+	print STDERR "Failed to connect to $dsn as $mysql_admin_username\n";
 	print STDERR "DBI error is $DBI::errstr\n";
 	exit(3);
     }
@@ -169,20 +178,6 @@ unless ($skipdbsteps) {
     
     print STDERR "OK\n\n";
     
-    print STDERR "### Granting privileges to user arcturus_dba ... ";
-    
-    $query = "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER," .
-	" CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, CREATE VIEW, SHOW VIEW," .
-	" CREATE ROUTINE, ALTER ROUTINE ON \`$dbname\`.* TO 'arcturus_dba'\@'\%'";
-    
-    $sth = $dbh->prepare($query);
-    &db_die("Failed to prepare query \"$query\"");
-    
-    $sth->execute();
-    &db_die("Failed to execute query \"$query\"");
-    
-    print STDERR "OK\n\n";
-    
     print STDERR "### Granting privileges to user readonly ... ";
     
     $query = "GRANT SELECT, EXECUTE ON \`$dbname\`.* TO 'readonly'\@'\%'";
@@ -197,8 +192,6 @@ unless ($skipdbsteps) {
     
     $dbh->disconnect();
     
-    $dbpw = &getPassword("Enter password for MySQL user arcturus_dba", "ARCTURUS_DBA_PW");
-    
     if (!defined($dbpw) || length($dbpw) == 0) {
 	print STDERR "No password was entered\n";
 	exit(2);
@@ -207,7 +200,7 @@ unless ($skipdbsteps) {
     print STDERR "### Creating views ... ";
     
     my $command = "cat /software/arcturus/sql/views/*.sql | " .
-	" mysql -h $dbhost -P $dbport -u arcturus_dba --password=$dbpw $dbname";
+	" mysql -h $dbhost -P $dbport -u $mysql_admin_username --password=$dbpw $dbname";
     
     my $rc = system($command);
     
@@ -310,14 +303,18 @@ unless ($skipdbsteps) {
     
     print STDERR "### Populating the USER table ... ";
     
-    $query = "insert into USER(username,role) select username,role from arcturus.USER";
+    $query = "insert into USER(username,role) values(?,?)";
     
     $sth = $dbh->prepare($query);
     &db_die("Failed to prepare query \"$query\"");
-    
-    $sth->execute();
-    &db_die("Failed to execute query \"$query\"");
-    
+
+    foreach my $user_and_role (@{$users_and_roles}) {
+	my ($user, $role) = @{$user_and_role};
+
+	$sth->execute($user, $role);
+	&db_die("Failed to execute query \"$query\" with user=\"$user\", role=\"$role\"");
+    }
+
     $sth->finish();
     
     print STDERR "OK\n\n";
@@ -409,8 +406,8 @@ my $result = $ldap->add($dn,
 		     attr => ['cn' => $organism,
 			      'javaClassName' => 'com.mysql.jdbc.jdbc2.optional.MysqlDataSource',
 			      'javaFactory' => 'com.mysql.jdbc.jdbc2.optional.MysqlDataSourceFactory',
-			      'javaReferenceAddress' => ["#0#user#arcturus",
-							 "#1#password#***REMOVED***",
+			      'javaReferenceAddress' => ["#0#user#" . $mysql_normal_username,
+							 "#1#password#" . $mysql_normal_password,
 							 "#2#serverName#$dbhost",
 							 "#3#port#$dbport",
 							 "#4#databaseName#$dbname",
@@ -511,6 +508,38 @@ sub getPassword {
     chop($password);
 
     return $password;
+}
+
+sub getUsersAndRoles {
+    my ($url, $username, $password, $junk) = @_;
+
+    my $dbh = DBI->connect($url, $username, $password);
+
+    unless (defined($dbh)) {
+	print STDERR "Unable to connect to master Arcturus instance $url", 
+	" to fetch list of users and roles\n";
+	die "DBI->connect failed";
+    }
+
+    my $query = "select username,role from USER";
+
+    my $sth = $dbh->prepare($query);
+    &db_die("prepare($query) failed");
+
+    $sth->execute();
+    &db_die("execute($query) failed");
+
+    my $list = [];
+
+    while (my ($user, $role) =  $sth->fetchrow_array()) {
+	push @{$list}, [$user, $role];
+    }
+ 
+    $sth->finish();
+
+    $dbh->disconnect();
+
+    return $list;
 }
 
 sub db_die {
