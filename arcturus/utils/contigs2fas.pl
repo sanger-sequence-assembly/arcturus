@@ -198,7 +198,15 @@ while(my @ary = $sth->fetchrow_array()) {
 
     $sth_sequence->finish();
 
-    next unless defined($compressedsequence);
+    unless (defined($compressedsequence)) {
+	print STDERR "WARNING: Some contigs have no consensus sequence.\n";
+	print STDERR "Please run the calculateconsensus script first, then re-run this command\n";
+
+	$sth->finish();
+	$dbh->disconnect();
+
+	exit(2);
+    }
 
     my $sequence = uncompress($compressedsequence);
 
@@ -301,7 +309,7 @@ sub db_die {
     my $msg = shift;
     return unless $DBI::err;
     print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
-    exit(0);
+    exit(1);
 }
 
 sub padMap {
