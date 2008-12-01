@@ -28,8 +28,7 @@ my ($instance,$organism,$projectname,$assembly,$gap4name,$version);
 
 my $problemproject = 'PROBLEMS'; # default
 
-my $import_script = "${arcturus_home}/utils/contig-loader";
-$import_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
+my $import_script = "${arcturus_home}/utils/new-contig-loader";
 
 my $repair = "-movetoproblems";
 
@@ -331,7 +330,7 @@ print STDOUT "Importing into Arcturus\n";
 $command  = "$import_script -instance $instance -organism $organism "
           . "-caf $depadded -defaultproject $projectname "
           . "-gap4name ${pwd}/$gap4name.$version "
-          . "-minimum 1 -dounlock";
+          . "-minimum 1 -dounlock -consensusreadname all";
 $command .= " @ARGV" if @ARGV; # pass on any remaining input
 
 print STDERR "$command\n" if @ARGV; # list command if parms transfer (temporary)
@@ -383,7 +382,7 @@ elsif ($project->hasNewContigs()) {
 
     &mySystem ("$allocation_script -instance $instance -organism $organism "
            ."-nr -problemproject $problemproject -workproject $projectname "
-           ."-between -log $allocation_b_log -mail ejz");
+           ."-between -log $allocation_b_log -mail arcturus-help");
 
 
     print STDOUT "Testing read allocation for possible duplicates inside projects\n";
@@ -394,7 +393,7 @@ elsif ($project->hasNewContigs()) {
 
     &mySystem ("$allocation_script -instance $instance -organism $organism "
            ."$repair -problemproject $problemproject -workproject $projectname "
-           ."-inside -log $allocation_i_log -mail ejz");
+           ."-inside -log $allocation_i_log -mail arcturus-help");
 
     print STDOUT "New data from database $gap4name.$version successfully processed\n";
 }

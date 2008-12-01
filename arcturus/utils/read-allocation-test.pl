@@ -447,11 +447,8 @@ exit 0;
 sub sendMessage {
     my ($user,$message) = @_;
 
-#    print STDOUT "message to be emailed to user $user:\n$message\n\n";
-    $user="ejz+$user" unless ($user =~ /\bejz\b/); # temporary redirect
-
     my $mail = new Mail::Send;
-    $mail->to($user,"adh\@sanger.ac.uk");
+    $mail->to($user);
     $mail->subject("Arcturus multiple read allocations warning");
     $mail->add("X-Arcturus", "read-allocation-test");
     my $handle = $mail->open;
