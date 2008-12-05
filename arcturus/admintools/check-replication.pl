@@ -42,7 +42,7 @@ sub getConnection {
 
     my $url = "DBI:mysql::$host:$port";
 
-    my $options = {RaiseError => 1, PrintError => 1};
+    my $options = {RaiseError => 0, PrintError => 1};
 
     my $dbh = DBI->connect($url, $username, $password, $options);
 
@@ -62,6 +62,11 @@ sub checkMaster {
     my $name = $master->{'host'} . ":" . $master->{'port'};
 
     my $dbh = &getConnection($master);
+
+    unless (defined($dbh)) {
+	print "\t ***** Failed to connect to master: $DBI::errstr *****\n";
+	return;
+    }
 
     my $query = "SHOW MASTER STATUS";
 
@@ -87,7 +92,14 @@ sub checkSlave {
 
     my $name = $slave->{'host'} . ":" . $slave->{'port'};
 
+    print "SLAVE STATUS FOR $name\n";
+
     my $dbh = &getConnection($slave);
+
+    unless (defined($dbh)) {
+	print "\t ***** Failed to connect to slave: $DBI::errstr *****\n";
+	return;
+    }
  
     my $query = "SHOW SLAVE STATUS";
 
@@ -98,8 +110,6 @@ sub checkSlave {
     my $row = $sth->fetchrow_hashref();
 
     if (defined($row)) {
-	print "SLAVE STATUS FOR $name\n";
-
 	print "\tMaster is ",$row->{'Master_Host'},":",$row->{'Master_Port'},"\n";
 
 	my $master = { 'host' => $row->{'Master_Host'},
@@ -146,7 +156,7 @@ sub checkSlave {
 
 	print "\n";
     } else {
-	&db_die("Failed to get slave status from $name");
+	print "\t ***** Failed to get slave status from $name *****\n";
     }
 
     $sth->finish();
