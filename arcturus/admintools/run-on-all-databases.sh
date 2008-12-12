@@ -3,8 +3,17 @@
 set MYDIR=`dirname $0`
 set SQLDIR=${MYDIR}/../sql
 
-set MYSQL_HOST=mcs3a
-set MYSQL_PORT=15001
+if ( $# > 0 ) then
+  set MYSQL_HOST=$1
+else
+  set MYSQL_HOST=mcs3a
+endif
+
+if ( $# > 1 ) then
+  set MYSQL_PORT=$2
+else
+  set MYSQL_PORT=15001
+endif
 
 echo MySQL username:
 set MYSQL_USER=$<
