@@ -1877,6 +1877,7 @@ sub crossmatch {
 # option strong       : set True for comparison at read mapping level
 # option noguillotine : if NOT set, require a minumum number of reads in C2C segment
       
+$options{new} = 1;
         return &linkToContig($cthis,$cthat,%options) unless $options{new};
  
         return &linkcontigs($cthis,$cthat,%options); 
@@ -1931,8 +1932,8 @@ sub linkcontigs {
 
     my $logger = &verifyLogger('linkcontigs');
 
-$logger->debug("ENTER");
-$logger->info("using new linkcontigs");
+#$logger->debug("ENTER");
+#$logger->info("using new linkcontigs");
 
 # test completeness
 
@@ -2005,21 +2006,23 @@ $logger->info("using new linkcontigs");
             my $omapping = $reads->{$oseq_id}->getAlignToTraceMapping(); # original
             my $emapping = $reads->{$eseq_id}->getAlignToTraceMapping(); # edited
 # find the proper chain of multiplication to get the new mapping 
+
 #**** under development begin
-#$logger->debug("Missing match for sequence ID $oseq_id"); 
-#$logger->debug("But the readnames do match : $readname");
-#$logger->debug("sequences: parent $oseq_id   child (edited) $eseq_id");
-#$logger->debug("original Align-to-SCF:".$omapping->toString());
-#$logger->debug("edited   Align-to-SCF:".$emapping->toString());
-#$logger->debug("Recovering link for read $readname (seqs:$oseq_id, $eseq_id)");
-#$logger->debug("complement:".$complement->toString(),ss=>2);
+$logger->info("Missing match for sequence ID $oseq_id"); 
+$logger->info("But the readnames do match : $readname");
+$logger->info("sequences: parent $oseq_id   child (edited) $eseq_id");
+$logger->info("original Align-to-SCF:".$omapping->toString());
+$logger->info("edited   Align-to-SCF:".$emapping->toString());
+$logger->info("Recovering link for read $readname (seqs:$oseq_id, $eseq_id)");
+$logger->info("complement:".$complement->toString(),ss=>2);
             $complement = $complement->multiply($emapping);
-#$logger->debug("remapped Mro I:".$complement->toString());
+$logger->info("remapped Mro I:".$complement->toString());
             my $oinverse = $omapping->inverse();
-#$logger->debug("o inverse:".$oinverse->toString());
+$logger->info("o inverse:".$oinverse->toString());
             $complement = $complement->multiply($oinverse,repair=>3);
-$logger->debug("remapped Mro II:".$complement->toString());
+$logger->info("remapped Mro II:".$complement->toString());
 #**** under development end
+
         }
 # count the number of reads in the overlapping area
         $overlapreads++;
@@ -2052,20 +2055,33 @@ $logger->debug("remapped Mro II:".$complement->toString());
 
         else {
 # return the ** local ** contig-to-parent mapping as a Mapping object
-            my $cpmapping = $complement->compare($mapping);
-            my $cpaligned = $cpmapping->getAlignment();
+	    my ($cpmapping,$cpaligned);
+            $cpmapping = $complement->compare($mapping);
+            $cpaligned = $cpmapping->getAlignment() if $cpmapping;
+#  my $cpmapping = $complement->compare($mapping);
+#  my $cpaligned = $cpmapping->getAlignment();
 
             unless ($cpaligned || $thatcontig->getNumberOfReads() > 1) {
                 $logger->error("Non-overlapping read segments for single-read "
                               ."parent contig ".$thatcontig->getContigID());
-                $logger->debug( "parent mapping:".$mapping->toString());
-                $logger->debug( "contig mapping:".$complement->toString());
-                $logger->debug( "c-to-p mapping:".$cpmapping->toString());
-            }    
+                $logger->debug("parent mapping:".$mapping->toString());
+                $logger->debug("contig mapping:".$complement->toString());
+                $logger->debug("c-to-p mapping:".$cpmapping->toString());
+            }
+
+unless ($cpaligned) {
+    $logger->error("Non-overlapping read segments");
+    $logger->info("parent mapping:".$mapping->toString());
+    $logger->info("contig mapping:".$complement->toString());
+    $logger->info("c-to-p mapping:".$cpmapping->toString());
+    next;
+}  
 
             next unless defined $cpaligned; # empty cross mapping
 
 # keep the first encountered (contig-to-contig) alignment value != 0
+
+$logger->warning("alignment $cpaligned");
 
             $alignment = $cpaligned unless $alignment;
 
@@ -2183,12 +2199,15 @@ $logger->debug("median: $offset ($lower $upper)");
 # determine guillotine; accept only alignments with a minimum number of reads 
 
     my $guillotine = 0;
-    unless ($options{noguillotine}) {
-#    if ($options{readclipping}) {
-        $guillotine = 1 + log(scalar(@$cmappings)); 
+    if ($options{readclipping}) { # perhaps drop altogether ??
+        my $thiscount = scalar(@$lmappings);
+        my $thatcount = scalar(@$cmappings);
+        my $readcount = ($thiscount <= $thatcount ? $thiscount : $thatcount);
+        $guillotine = 1 + int(log($readcount));
 # adjust for small numbers (2 and 3)
-        $guillotine -= 1 if ($guillotine > scalar(@$cmappings) - 1);
-        $guillotine  = 2 if ($guillotine < 2); # minimum required
+        $guillotine -= 1 if ($guillotine > $readcount - 1);
+        $guillotine =  1 if ($guillotine < 1); # minimum required
+        $guillotine = $readcount if ($guillotine > $readcount);
     }
 
 # go through all offset values and collate the mapping segments;
@@ -2201,24 +2220,28 @@ $logger->debug("median: $offset ($lower $upper)");
     my @c2csegments; # for the regular segments
     my $poormapping = new Mapping("Bad Mapping"); # for bad mapping range
 #    my $goodmapping = new Mapping("Good Mapping");
-$logger->debug("Testing offsets");
+$logger->info("Testing offsets");
+$logger->fine(" @offsets");
     foreach my $offset (@offsets) {
 # apply filter if boundaries are defined
         my $outofrange = 0;
         if (($lower != $upper) && ($offset < $lower || $offset > $upper)) {
             $outofrange = 1; # outsize offset range, probably dodgy mapping
-$logger->debug("offset $offset out of range $lower $upper");
+$logger->info("offset $offset out of range $lower $upper");
         }
 # sort mappings according to increasing contig start position
         my @mappings = sort { $a->[0] <=> $b->[0] } @{$inventory->{$offset}};
+$logger->info("intervals ".scalar(@mappings));
         my $nreads = 0; # counter of reads in current segment
         my $segmentstart = $mappings[0]->[0];
         my $segmentfinis = $mappings[0]->[1];
+$logger->info("segmentstart $segmentstart  segmentfinis $segmentfinis");
         foreach my $interval (@mappings) {
             my $intervalstart = $interval->[0];
             my $intervalfinis = $interval->[1];
             next unless defined($intervalstart);
             next unless defined($segmentfinis);
+$logger->info("intervalstart $intervalstart  intervalfinis $intervalfinis");
 # break of coverage is indicated by begin of interval beyond end of previous
             if ($intervalstart > $segmentfinis) {
 # add segmentstart - segmentfinis as mapping segment
@@ -2279,7 +2302,7 @@ $logger->debug("bad contig range: @badmap");
 
     @c2csegments = sort {$a->[0] <=> $b->[0]} @c2csegments;
 
-$logger->debug(scalar(@c2csegments)." segments; before pruning");
+$logger->info(scalar(@c2csegments)." segments; before pruning");
 
     my $j =1;
     while ($j < @c2csegments) {
@@ -2320,7 +2343,7 @@ $logger->debug(scalar(@c2csegments)." segments; before pruning");
 	}
     }
 
-$logger->debug(scalar(@c2csegments)." segments after pruning");
+$logger->info(scalar(@c2csegments)." segments after pruning");
 
 # create an output Mapping enter the segments
 
@@ -2328,8 +2351,8 @@ $logger->debug(scalar(@c2csegments)." segments after pruning");
     $mapping->setSequenceID($thatcontig->getContigID());
 
     foreach my $segment (@c2csegments) {
-$logger->debug("segment after filter @$segment");
         next if ($segment->[1] < $segment->[0]); # segment pruned out of existence
+$logger->info("segment after filter @$segment");
         $mapping->putSegment(@$segment);
     }
 
@@ -2340,7 +2363,7 @@ $logger->debug("segment after filter @$segment");
     if ($mapping->hasSegments()) {
 # here, test if the mapping is valid, using the overall maping range
         my ($isValid,$msg) = &isValidMapping($thiscontig,$thatcontig,$mapping,$overlapreads);
-$logger->debug("\n isVALIDmapping $isValid\n$msg");
+$logger->info("isVALIDmapping $isValid\n$msg",ss=>1);
 # here possible recovery based on analysis of continuity of mapping segments
 
 # if still not valid, 
@@ -3211,7 +3234,7 @@ sub remapFinishingTags {
 
         foreach my $tptag (@newtags) {
             my $tagtype = $tptag->getType();
-            $tptag->setParentTagID($ptag->getTagID());
+            $tptag->setParentTagID($ptag->getID());
             unless ($markftags && $tagtype =~ /$markftags/) {
                 push @rtags,$tptag;
    	        $remapped++;
@@ -3286,7 +3309,7 @@ sub remapAnnotationTags {
             next unless $tptags;
             $remapped++;
             foreach my $tag (@$tptags) {
-                $tag->setParentTagID($ptag->getTagID());
+                $tag->setParentTagID($ptag->getID());
                 $logger->fine($tag->writeToCaf()); # test
                 push @rtags, $tag;
 	    }
