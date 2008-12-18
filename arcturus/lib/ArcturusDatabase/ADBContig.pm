@@ -369,7 +369,7 @@ sub getParentContigsForContig {
         my $parentids = $this->getParentIDsForContig($contig);
         @parentids = @$parentids if $parentids;
     }
-#    elsif ($usereads) {
+#    elsif ($usereads) { # has to be defined explicitly ?
     else { # default 
 #  find the parents in generation 0 from read comparison using cache
         my $parentids = $this->getParentIDsForReadsInContig($contig);
@@ -486,6 +486,7 @@ sub putContig {
 # test if the contig has been loaded before using the sequence checksum
 
     my $checksum = $contig->getCheckSum(refresh=>1);
+
 # try the sequence ID hash (returns the last entered matching contig, if any)
 
     if (my $previous = $this->getContig(withChecksum=>$checksum,metaDataOnly=>1)) {
@@ -529,14 +530,22 @@ sub putContig {
 
 # import tags for this contig 
 
+            $contig->setContigID($previous->getContigID());
+
             if ($doload && $contig->hasTags()) {
-                $contig->setContigID($previous->getContigID());
                 my $newtags = $this->putTagsForContig($contig,synchronize=>1); # synchronize option not yet active
                 $message .= "; $newtags new contig tags loaded" if $newtags;
             }
+
+# input ordering info to be processed outside; for this we register previous as parent
+
+            $contig->addParentContig($previous);
+
             return $previous->getContigID(),$message;
         }
-        $message .= "but is not identical; ";
+        elsif ($previous) {
+            $message .= "but is not identical; ";
+	}
     }
 
 # okay, the contig is new; find out if it is connected to existing contigs
@@ -2881,17 +2890,19 @@ sub getTagsForContigIDs {
 sub fetchTagsForContigIDs {
 # private method
     my $dbh = shift;
-    my $cids = shift; # reference to array of contig IDs
+    my $ids = shift; # reference to array of contig IDs
     my %options = @_;
 
     &verifyPrivate($dbh,"fetchTagsForContigIDs");
 
-    &verifyParameter($cids,"fetchTagsForContigIDs","ARRAY");
+    &verifyParameter($ids,"fetchTagsForContigIDs","ARRAY");
+
+    my $contig_or_tag_id = $options{tag} ? $options{tag} : 'contig_id';
 
 # compose query (note, this query uses the UNION construct to cater
 # for the case tag_id > 0 & tag_seq_id = 0)
 
-    my $tagitems = "parent_id,contig_id,TAG2CONTIG.tag_id,cstart,cfinal,strand,"
+    my $tagitems = "id,parent_id,contig_id,TAG2CONTIG.tag_id,cstart,cfinal,strand,"
 	         . "comment,tagtype,systematic_id,tagcomment,CONTIGTAG.tag_seq_id";
     my $seqitems = "tagseqname,sequence";
 
@@ -2899,14 +2910,14 @@ sub fetchTagsForContigIDs {
               . "  from TAG2CONTIG, CONTIGTAG, TAGSEQUENCE"
               . " where TAG2CONTIG.tag_id = CONTIGTAG.tag_id"
               . "   and CONTIGTAG.tag_seq_id = TAGSEQUENCE.tag_seq_id"
-	      . "   and contig_id in (".join (',',@$cids) .")"
+	      . "   and $contig_or_tag_id in (".join (',',@$ids) .")"
 #              . "   and deprecated != 'Y'" # no table column now
               . " union "       # union weeds out duplicates
               . "select $tagitems,'',''"
               . "  from TAG2CONTIG, CONTIGTAG"
               . " where TAG2CONTIG.tag_id = CONTIGTAG.tag_id"
               . "   and CONTIGTAG.tag_seq_id = 0" # explicitly undefined sequence
-	      . "   and contig_id in (".join (',',@$cids) .")"
+	      . "   and $contig_or_tag_id in (".join (',',@$ids) .")"
 #              . "   and deprecated != 'Y'" # no table column now
               . " order by contig_id,cstart,tagtype,tagcomment,cfinal";
 
@@ -2922,7 +2933,8 @@ sub fetchTagsForContigIDs {
 # create a new Tag instance
         my $tag = new Tag('Contig');
 
-        $tag->setParentTagID     (shift @ary); # parent tag id, if any
+        $tag->setID              (shift @ary); # auto-incremented id
+        $tag->setParentTagID     (shift @ary); # parent tag id (0 for new tags)
         $tag->setSequenceID      (shift @ary); # contig_id
         $tag->setTagID           (shift @ary); # tag ID ?
         $tag->setPosition        (shift @ary, shift @ary); # pstart, pfinal
@@ -2943,16 +2955,90 @@ sub fetchTagsForContigIDs {
     return [@tag];
 }
 
+# --------------- individual contigtags ---------------
+
+sub getContigTagForID {
+    my $this = shift;
+    my $ids  = shift; # id or parent_id
+    my $parent = shift; # parent flag
+
+    my $dbh = $this->getConnection();
+
+    my $id = $parent ? 'parent_id' : 'id';
+    
+    return &fetchTagsForContigIDs ($dbh,[($ids)],tag=>$id);
+}
+
+sub getPrecursorsOfContigTag {
+    my $this = shift;
+    my $tag  = shift;
+
+    &verifyParameter($tag,"fetchTagsForContigIDs","Tag");
+
+    my $logger = $this->verifyLogger('getPrecursorsOfContigTag');
+
+    my @taglist;
+    my $id = $tag->getParentTagID();
+    while (my $tags = $this->getContigTagForID($id)) {
+$logger->info("tags for id $id : ".scalar(@$tags));
+        my $tag = $tags->[0] || last;
+        push @taglist,$tag;
+        my $pid = $tag->getParentTagID();
+$logger->info("tag id $id   parenttagid $pid");
+        last unless $pid;
+        last if ($id <= $pid); # protection against ordering errors in db
+        $id = $pid;
+    }
+
+    return [@taglist];
+}
+
+sub getDescendantsOfContigTag {
+    my $this = shift;
+    my $tag  = shift;
+
+    &verifyParameter($tag,"fetchTagsForContigIDs","Tag");
+
+    my $logger = $this->verifyLogger('getDescendantsOfContigTag');
+
+    my @taglist;
+    my $parent_id = $tag->getID();
+    while (my $tags = $this->getContigTagForID($parent_id,tag=>'parent_id')) {
+	$logger->info("tags for parent_id $parent_id : ".scalar(@$tags));
+        last unless @$tags;
+        push @taglist,@$tags;
+        if(scalar(@$tags) == 1) {
+            my $id = $tag->getID();
+            last if ($parent_id >= $id); # protection against ordering errors in db
+            $parent_id = $id;
+	}
+        else {
+$logger->info("branching",ss=>1);
+            foreach my $tag (@$tags) {
+                my $dtags = $this->getDescendantsOfContigTag($tag);
+$logger->info("output branch : ".scalar(@$dtags));
+                push @taglist,@$dtags;
+	    }
+$logger->info("end branching",ss=>1);
+            last;
+        }
+    }
+
+    return [@taglist];
+}
+
 # ---------------
 
 sub enterTagsForContig { # TEST purposes, to be DEPRECTATED
-# public method for test purposes
+# public method for test purposes; returns number of new tags
     my $this = shift;
     my $contig = shift;
     my %options = @_;
 
     $options{noload}   = 1 unless defined $options{noload};
-    $options{testmode} = 1 unless defined $options{testmode}; # not used anymore
+#    $options{testmode} = 1 unless defined $options{testmode}; # not used anymore
+
+    return 0 unless $contig->hasTags();
 
     return &putTagsForContig($this,$contig,%options);
 }
@@ -2999,8 +3085,8 @@ sub putTagsForContig {
 # copy the ordered $ctag array to keep all tags in $contig; nokeep option erases existing tags
 
     unless ($options{nokeep}) {
-        @$otags = @$ctags; # copy
-        $ctags  =  $otags; # point to copy array
+        my @otags = @$ctags; # copy
+        $ctags   =  \@otags; # point to copy array
     }
 
 # test tag type and remove any tag without
@@ -3158,8 +3244,6 @@ sub getTagIDsForContigTags {
 
         my $rc = $qsth->execute(@binddata) || &queryFailed($query,@binddata);
 
-#$logger->warning("rc=$rc"); next;
-
         if ($rc > 0) {
             my ($tag_id,$systematic_id,$tag_seq_id) = $qsth->fetchrow_array();
 # test consistency of tag ID and tag seq ID
@@ -3270,7 +3354,6 @@ sub putContigTags {
         my $comment          = $tag->getComment();
 
         my @data = ($parent_id,$contig_id,$tag_id,$cstart,$cfinal,$strand,$comment || undef);
-#        my @data = ($contig_id,$tag_id,$cstart,$cfinal,$strand,$comment || undef);
 
         my $rc = $sth->execute(@data) || &queryFailed($query,@data);
 
