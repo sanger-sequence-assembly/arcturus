@@ -467,6 +467,7 @@ sub cafFileInventory {
     my $linecount = 0;
     my $location = tell($CAF);
 
+    my $contigcounter = 0;
     while (defined(my $record = <$CAF>)) {
         $linecount++;
         if ($progress && !($linecount%$progress)) {
@@ -502,6 +503,9 @@ sub cafFileInventory {
 # check if this is inside a valid block on the file
             if ($identifier && $datatype && $datatype eq 'Sequence') {
                 $inventory->{$identifier}->{Is} = $objecttype;
+                if ($objecttype eq 'contig') {
+                    $inventory->{$identifier}->{Rank} = ++$contigcounter;
+                }
 	    }
 	    elsif ($identifier) {
 		$logger->error("l:$linecount Unexpected $objecttype specification");
