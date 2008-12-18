@@ -204,10 +204,10 @@ $logger->info("Analysing distribution (TO BE REFINED)");
 # NOTE: it is not clear if a threshold preselection is usefull, perhaps the actual
 # determination of the alignment segments provides a better test for significance
            ($foffsets,$fcount) = &findpeak($forwardhash,$threshold,$peakdrift,$repeat);
-$logger->fine("offset $foffsets count $fcount");
+$logger->info("offset $foffsets count $fcount");
             foreach my $offset (@$foffsets) {
                 $offset->[3] = 0; # forward
-$logger->fine("foffset: @$offset");
+$logger->info("foffset: @$offset");
             } 
         }
 
@@ -218,18 +218,18 @@ $logger->fine("foffset: @$offset");
         if ($coaligned <= 0) {
 # counter-aligned (reverse compliment alignment) case
             $soptions{reverse} = 1;
-$logger->debug("Building reverse correlation hash");
+$logger->info("Building reverse correlation hash");
 &printoptions('soptions',%soptions);
             my $reversehash = &buildCorrelationHash($tkmerhash,$skmerhash,%soptions);
 #            my $reversehash = &sampleCorrelationHash($tkmerhash,$skmerhash,undef,
 #                                                     reverse=>1,%soptions);
 # analyse the distribution of reverse counts
-$logger->debug("Analysing distribution");
+$logger->info("Analysing distribution");
            ($roffsets,$rcount) = &findpeak($reversehash,$threshold,$peakdrift,$repeat);
-$logger->debug("offset $roffsets count $rcount"); 
+$logger->info("offset $roffsets count $rcount"); 
             foreach my $offset (@$roffsets) {
                 $offset->[3] = 1; # reverse
-$logger->fine("roffset: @$offset");
+$logger->info("roffset: @$offset");
             } 
         }
 
@@ -260,7 +260,8 @@ $logger->fine("roffset: @$offset");
 # here an offset value, or list of offset values is determined, now build 
 
         foreach my $offset (@offsets) {
- $logger->fine("testing offset: @$offset");
+            next if ($offset->[2] <= $count/10);
+ $logger->info("testing offset: @$offset");
             my %coptions = (reverse => $offset->[3]);
             $coptions{offsetlowerbound} = $offset->[0];
             $coptions{offsetupperbound} = $offset->[1];
@@ -490,6 +491,8 @@ $logger->fine(scalar(@$gaps)." gaps found");
     }
 
     $mapping->normalise();
+
+    $logger->info($mapping->toString());
 
     return $mapping;
 }
