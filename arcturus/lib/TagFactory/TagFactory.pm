@@ -972,8 +972,6 @@ my $logger = &verifyLogger('remapper');
 $logger->debug("e:$isequal  a:$align  o:$shift") if $isequal;
 $logger->debug($oldmapping->toString()) unless $isequal;
 $logger->debug($newmapping->toString()) unless $isequal;
-#$logger->debug($oldmapping->toString()) if $isequal;
-#$logger->debug($newmapping->toString()) if $isequal;
 
     $tag->setStrand('C') if ($isequal && $align == -1); # signal other strand
 
@@ -1182,6 +1180,7 @@ my $logger = &verifyLogger("collapse"); $logger->debug("ENTER collapse");
 # build a new sequence to store with the new single position range
         my $newdna = '';
         my ($xs,$xf,$ys,$yf,$yl);
+        my $length = length($olddna);
         my $segments = $mapping->getSegments();
         foreach my $segment (@$segments) {
             $xs = $segment->getXstart();
@@ -1195,7 +1194,7 @@ my $logger = &verifyLogger("collapse"); $logger->debug("ENTER collapse");
 		    $newdna .= 'X';
 		}
 	    }
-            $newdna .= substr $olddna, $xs-1, $xf-$xs+1;
+            $newdna .= substr $olddna, $xs-1, $xf-$xs+1 unless ($xs > $length);
             $yl = $yf;
 	}
 
@@ -1222,7 +1221,7 @@ sub sortTags {
 
 # sort the tags with increasing tag position
 
-    my $merge;
+    my ($merge,$nonew);
 
     if ($options{sort} && $options{sort} eq 'position') {
 # do a basic sort on start position
@@ -1233,6 +1232,7 @@ sub sortTags {
         $merge = $options{merge};
         @$tags = sort mergesort @$tags     if $merge;
         @$tags = sort fullsort  @$tags unless $merge;
+        $nonew = $options{nonew} || 0;
     }
     elsif ($options{sort}) {
         $logger->error("invalid sorting option '$options{sort}' ignored");
@@ -1257,13 +1257,17 @@ sub sortTags {
 	elsif ($merge && $leadtag->isEqual($nexttag,overlaps=>1)) {
 # overlapping tags found; add next tag range to leadtag and collapse; then remove next
             $leadtag->setPosition($nexttag->getPositionRange(),join=>1);
-            $leadtag->collapse(nonew=>1);
+            $tags->[$n-1] = $leadtag->collapse(nonew=>$nonew); # default replace the tag instance
+#            $tags->[$n-1] = $leadtag->collapse() unless $nonew; 
+#            $leadtag->collapse(nonew=>1) if $nonew;
 	    splice @$tags, $n, 1; # lead tag is extended and now contains next tag
 	}
 	elsif ($merge && $leadtag->isEqual($nexttag,adjoins=>1)) {
 # budding tags found; add next tag range to leadtag and collapse; then remove next
             $leadtag->setPosition($nexttag->getPositionRange(),join=>1);
-            $leadtag->collapse(nonew=>1);
+            $tags->[$n-1] = $leadtag->collapse(nonew=>$nonew); # default replace the tag instance
+#            $tags->[$n-1] = $leadtag->collapse() unless $nonew;
+#            $leadtag->collapse(nonew=>1) if $nonew;
 	    splice @$tags, $n, 1;
 	}
         else {
