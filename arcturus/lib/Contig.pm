@@ -562,11 +562,11 @@ sub getTags {
     my $load = shift; # option for loading by delayed instantiation
     my %options = @_;
 
-    &verifyKeys('getTags',\%options,'sort','merge');
+    &verifyKeys('getTags',\%options,'sort','merge','all');
 
     if (!$this->{Tag} && $load && (my $ADB = $this->{SOURCE})) {
         return undef unless (ref($ADB) eq 'ArcturusDatabase');
-        $ADB->getTagsForContig($this);
+        $ADB->getTagsForContig($this,all=>$options{all}); # re: union select ...
     }
 
 # sort tags and remove duplicates / merge coinciding tags
@@ -908,7 +908,7 @@ sub getCheckSum {
 sub isEqual {
     my $this = shift;
     my $compare = shift;
-    my %options = @_;
+    my %options = @_; # bidirectional=>1 for recognition of counter-alignment
 
     &verifyKeys('isEqual',\%options,'sequenceonly','bidirectional');
     my $equal = ContigHelper->isEqual($this,$compare,%options);
@@ -920,7 +920,7 @@ sub isEqual {
 sub linkToContig {
 # compare two contigs using sequence IDs in their read-to-contig mappings
 # adds a contig-to-contig Mapping instance with a list of mapping segments,
-# if any, mapping from $compare to $this contig
+# if any, for mapping from $compare to $this contig
 # returns the number of mapped segments (usually 1); returns undef if 
 # incomplete Contig instances or missing sequence IDs in mappings
     my $this = shift;
