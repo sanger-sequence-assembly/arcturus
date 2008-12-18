@@ -49,6 +49,8 @@ sub copy {
         $copy->setTruncationStatus($ts,$this->getTruncationStatus($ts));
     }
 
+    $copy->setParentTagID($this->getID()); # assign the original as parent
+
     return $copy;
 }
 
@@ -62,6 +64,17 @@ sub verify {
 }
 
 #----------------------------------------------------------------------
+
+sub setID {
+# for the auto-incremented id counter
+    my $this = shift;
+    $this->{ID} = shift;
+}
+
+sub getID {
+    my $this = shift;
+    return $this->{ID};
+}
 
 sub setComment {
     my $this = shift;
