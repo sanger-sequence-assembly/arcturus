@@ -110,7 +110,7 @@ sub markImport {
 
     my $ADB = $this->{ADB} || return undef;
 
-    return $ADB->putImportMarkForProject($this); # 0 or 1
+    return $ADB->putImportMarkForProject($this,@_); # insert ID
 }
 
 sub markExport {
@@ -119,7 +119,7 @@ sub markExport {
 
     my $ADB = $this->{ADB} || return undef;
 
-    return $ADB->putExportMarkForProject($this); # 0 or 1  
+    return $ADB->putExportMarkForProject($this); # insert ID
 }
 
 #-------------------------------------------------------------------
