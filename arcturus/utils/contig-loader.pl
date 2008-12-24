@@ -1009,8 +1009,8 @@ foreach my $identifier (keys %contigs) {
 # if a version 0 already exists, compare
         if (my $dbread = $adb->getRead(readname=>$readname)) {
 # if the lengths are equal, remove the align to trace data 
-$logger->warning("version 0 already exists");
             if ($dbread->getSequenceLength == $readlgth) {
+$logger->warning("version 0 already exists");
                 undef $read->{alignToTrace};
             }
 # otherwise the new read is treated as an edited read
@@ -1045,6 +1045,7 @@ my %loadoptions;
                                        noload  => $noload,
                                        setprojectby => $pinherit,
                                        dotags  => $contigtag);
+    $msg =~ s/\;/\n/g;
 
     $logger->info("Contig $identifier with ".$contig->getNumberOfReads.
                   " reads : status $added, $msg") if $added;
@@ -1061,7 +1062,7 @@ my %loadoptions;
     }
     else {
 #        $adb->clearLastContig();
-        last unless $loaded; # abort loading if it happens on the first contig
+        last unless ($noload || $loaded); # abort loading if it happens on the first contig
 # but continue when other contigs have been loaded
     }
     
@@ -1188,7 +1189,7 @@ sub tagList {
                  'WARN','DRPT','LEFT','RGHT','TLCM','ALUS','VARI',
                  'CpGI','NNNN','SIL' ,'IRPT','LINE','REPA','REPY',
                  'REPZ','FICM','VARD','VARS','CSED','CONS','EXON',
-                 'SILR','DIFF','FWGS','FCDS');
+                 'SILR','DIFF','FWGS','FCDS','CHCM');
 
 # software TAGS
 
