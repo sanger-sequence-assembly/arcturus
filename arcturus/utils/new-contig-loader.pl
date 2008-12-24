@@ -595,6 +595,8 @@ my $inventory = {};
 
 my @inventory;
 
+my %rankhash;
+
 $adb->populateLoadingDictionaries(); # for edited or missing reads (should be in ADBREAD)
 
 my $readversionhash = {};
@@ -635,6 +637,14 @@ if ($frugal) { # this whole block should go to a contig "factory"
 
         if ($objecttype =~ /contig/) {
             push @contignames,$objectname;
+# check ordering info
+            my $rank = $objectdata->{Rank};
+            if ($rankhash{$rank}) {
+   	        $logger->severe("multiple rank count for contig $objectname : "
+                               ."prev:$rankhash{$rank}  new:$objectname");
+# abort ??
+	    }
+            $rankhash{$rank} = $objectname;
 	}
         elsif ($objecttype =~ /read/) {
 	    push @readnames,$objectname;
@@ -706,6 +716,8 @@ my $blockobject = $poptions{blockobject};
 my $loaded = 0;
 my $missed = 0;
 my $lastinsertedcontig = 0;
+
+my @scaffoldlist;
 
 while (!$fullscan) {
 
@@ -935,6 +947,21 @@ print STDOUT " end no frugal scan\n";
                 $logger->info("Contig $identifier with $nr reads :"
                              ." status $added, $msg");
 #                $loaded++ unless ...;
+                my $rank = $inventory->{$contigname}->{Rank};
+                push @scaffoldlist,[($added,$rank,'forward')];
+# here : putScaffoldInfo; if 
+# does this require an extra state method? Or just add to Scaffold instance?
+# normal operation with import of project, just puckup rank and load the lot as new scaffold
+
+# non-standard operation may require some extra stuff to slot a new contig into an existing s
+# other operation, e.g working on selected contigs, will cause mismatch between the rank of
+# a new version of the contig (i.e. 1) and the version in existing scaffold; a) how to
+# recognize this and what to do about it (here : inherit from parent(s)) 
+
+# best strategy? : just add contigs to Scaffold instance; then load scaffold as new or into existing
+# where which option to use is determined by the scaffold loading method; Scaffold then has to keep
+# track of current contig IDs and their parent ids: 
+# add contig_id, rank in current scaffold, parent ids (if any);    
             }
             else {
                 $logger->warning("Contig $identifier with $nr reads was not added:"
@@ -1070,6 +1097,10 @@ if ($loaded && $project) {
     }
     $project->setGap4Name($gap4dbname); # 
     $project->markImport();
+    my $Scaffold = \@scaffoldlist; # to replaced by a new Class ?
+    $project->markImport($Scaffold,type=>'finisher project'
+                                  ,source=>"Arcturus contig-loader"
+                                  ,comment=>"test data");
 }
 
 # read-back lastly inserted contig (meta data) to check on OS cache dump
@@ -1142,8 +1173,11 @@ sub testreadsindatabase {
 
 # either fire off the traceserver loader script
 
+    my $probetraceserver = $options{probetraceserver};
+
     my $updatereads = 1;
-    if ($updatereads) {
+
+    if ($updatereads && $probetraceserver) {
         my $arcturus_home = "/software/arcturus";
         my $import_script = "${arcturus_home}/utils/read-loader";
         my $command = "$import_script "
@@ -1155,7 +1189,7 @@ sub testreadsindatabase {
 
 # or use the TraceServer module to pull out individual reads
 
-    else {
+    elsif ($probetraceserver) {
         my $readfactory = new TraceServerReadFactory(group=>$organism);
         my %loadoptions;
 # possibly add load options ...
