@@ -2095,14 +2095,21 @@ sub setLockedStatus {
 sub putImportMarkForProject {
     my $this = shift;
     my $project = shift;
+    my $scaffold = shift;
 
     &verifyParameter($project,'putImportForProject');
 
-    return &addImportExport ($this->getConnection(),
-                             $project->getProjectID(),
-                             'import',
-                             $this->getArcturusUser(),
-                             $project->getGap4Name() || 'not specified');
+    my $id = &addImportExport ($this->getConnection(),
+                               $project->getProjectID(),
+                               'import',
+                               $this->getArcturusUser(),
+                               $project->getGap4Name() || 'not specified');
+
+    return $id unless $scaffold;
+
+    return 0 unless (ref($scaffold) eq 'ARRAY'); # replace by Scaffold instance ?
+
+    return $this->putScaffoldForImportID($id,$scaffold,@_);    
 }
 
 sub putExportMarkForProject {
@@ -2130,11 +2137,13 @@ sub addImportExport {
 
     my $sth = $dbh->prepare_cached($query);
 
-    my $nr = ($sth->execute(@_) || &queryFailed($query,@_));
+    my $rc = ($sth->execute(@_) || &queryFailed($query,@_));
 
     $sth->finish();
 
-    return $nr+0; # true for entry inserted; false for failure
+    $rc = $dbh->{'mysql_insertid'} if ($rc+0);
+
+    return $rc+0; # true for entry inserted; false for failure
 }
 
 #--------------------------------------------------------------------
