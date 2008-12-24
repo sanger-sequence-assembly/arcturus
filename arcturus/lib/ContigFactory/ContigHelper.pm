@@ -1962,9 +1962,10 @@ sub linkcontigs {
     my $overlapreads = 0;
     my $cmappings = $thatcontig->getMappings();
     foreach my $mapping (@$cmappings) {
+        my $readname = $mapping->getMappingName();
         my $oseq_id = $mapping->getSequenceID();
         unless (defined($oseq_id)) {
-            $logger->error("Incomplete Mapping ".$mapping->getMappingName());
+            $logger->error("Incomplete Mapping for $readname");
             return undef; # abort: incomplete Mapping; should never occur!
         }
         my $complement = $sequencehash->{$oseq_id};
@@ -1974,7 +1975,6 @@ sub linkcontigs {
 # from the previous assembly, or 2) the read sequence was edited and hence
 # its seq_id has been changed and thus is not recognized in the parent; 
 # we can decide between these cases by looking at the readnamehash
-            my $readname = $mapping->getMappingName();
             $complement  = $readnamehash->{$readname};
             unless (defined($complement)) {
 # it's a de-allocated read, except possibly in the case of a split parent
@@ -2032,8 +2032,7 @@ $logger->info("remapped Mro II:".$complement->toString());
         if ($options{strong}) {
 # strong comparison: test for identical mappings (apart from shift)
             my ($identical,$aligned,$offset) = $complement->isEqual($mapping);
-            $logger->info("not identical ".$mapping->getMappingName()
-                   ." $identical,$aligned,$offset") unless $identical;
+            $logger->info("not identical $readname $identical,$aligned,$offset") unless $identical;
 
 # keep the first encountered (contig-to-contig) alignment value != 0 
 
@@ -2055,33 +2054,29 @@ $logger->info("remapped Mro II:".$complement->toString());
 
         else {
 # return the ** local ** contig-to-parent mapping as a Mapping object
-	    my ($cpmapping,$cpaligned);
-            $cpmapping = $complement->compare($mapping);
-            $cpaligned = $cpmapping->getAlignment() if $cpmapping;
-#  my $cpmapping = $complement->compare($mapping);
-#  my $cpaligned = $cpmapping->getAlignment();
+            my $cpmapping = $complement->compare($mapping,silent=>1);
+            unless ($cpmapping && $cpmapping->hasSegments()) {
+# empty cross mapping
 
-            unless ($cpaligned || $thatcontig->getNumberOfReads() > 1) {
-                $logger->error("Non-overlapping read segments for single-read "
-                              ."parent contig ".$thatcontig->getContigID());
-                $logger->debug("parent mapping:".$mapping->toString());
-                $logger->debug("contig mapping:".$complement->toString());
-                $logger->debug("c-to-p mapping:".$cpmapping->toString());
+                if ($thatcontig->getNumberOfReads() > 1) {
+                    $logger->special("Non-overlapping read segments for read $readname");
+		}
+		else {
+                    $logger->special("Non-overlapping read segments for single-read "
+                                    ."parent contig ".$thatcontig->getContigID());
+		}
+                $logger->special("parent mapping:".$mapping->toString());
+                $logger->special("contig mapping:".$complement->toString());
+                $logger->special("c-to-p mapping:".$cpmapping->toString()) if $cpmapping;
+#		$complement->compare($mapping,list=>1); exit;
+
+		next; 
             }
-
-unless ($cpaligned) {
-    $logger->error("Non-overlapping read segments");
-    $logger->info("parent mapping:".$mapping->toString());
-    $logger->info("contig mapping:".$complement->toString());
-    $logger->info("c-to-p mapping:".$cpmapping->toString());
-    next;
-}  
-
-            next unless defined $cpaligned; # empty cross mapping
 
 # keep the first encountered (contig-to-contig) alignment value != 0
 
-$logger->warning("alignment $cpaligned");
+            my $cpaligned = $cpmapping->getAlignment();
+$logger->fine($mapping->getMappingName()." : alignment $cpaligned");
 
             $alignment = $cpaligned unless $alignment;
 
@@ -2173,8 +2168,9 @@ $logger->debug("Correlation coefficient = $R  penalty $penalty");
 # if CC too small, apply lower and upper boundary to offset
         unless (abs($R) >= $threshold) {
 # relation offset-position looks messy
-            $logger->error("Suspect correlation coefficient = $R : target "
-                          .$thatcontig->getContigName()." (penalty = $penalty)");
+            $logger->special("Suspect correlation coefficient = $R : target "
+                            .$thatcontig->getContigName()
+                            ." (inversion penalty = $penalty)");
 # accept the alignment if no penalties are incurred (monotonous alignment)
             if ($penalty > $defects) {
 # set up for offset masking
