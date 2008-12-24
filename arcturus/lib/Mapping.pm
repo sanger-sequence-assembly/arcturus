@@ -237,7 +237,7 @@ sub compare {
 # compare this Mapping instance with input Mapping at the segment level
     my $mapping = shift;
     my $compare = shift;
-    my %options = @_; # domain=>'Y' (default) or 'X'
+    my %options = @_; # domain=>'Y' (default) or 'X' silent=> 0 or 1
 
     $options{domain} = uc($options{domain}) if $options{domain};
 
@@ -307,7 +307,12 @@ print STDOUT "of $of  os $os\n" if $list;
 
 	    $align = $aligned unless defined($align);
 # break on alignment inconsistency
-            return 0,undef unless ($align == $aligned);
+unless ($align == $aligned) { 
+   print STDOUT "aligned $aligned  align $align  o:$offset\n" if $list;
+   print STDOUT $mapping->writeToString('mapping',extended=>1) if $list;
+   print STDOUT $compare->writeToString('compare',extended=>1) if $list;
+}
+            return 0,undef unless ($align == $aligned); # and segment > 1!
 
 # initialise or update the contig alignment segment information on $csegment
 # we have to ensure that the contig range increases in the output segments
@@ -376,7 +381,7 @@ print STDOUT "after segment test loop\n" if $list;
 	$newmapping->putSegment(@cpos);
     }
 
-    $newmapping->normalise();
+    $newmapping->normalise(silent=>$options{silent});
 
     return $newmapping unless $options{useold};
 
@@ -537,15 +542,16 @@ sub diagnose {
     my $report;
     my $localalignment = 0; # inside  segments
     my $lastsegment;
-    my $revisit = 0; # if first investigated is single base segment
-    foreach my $segment (@$segments,$revisit) {
+    my @revisit; # if initial segment(s) are unit length
+    foreach my $segment (@$segments) {
         next unless $segment;
 # counter align unit-length alignments if (local) mapping is counter-aligned
         if ($segment->getYstart() == $segment->getYfinis()) {
-            next if ($localalignment > 0);
-            $revisit = $segment unless $localalignment; # only if == 0
-            next unless $localalignment;
-            $segment->counterAlignUnitLengthInterval($mapping);
+            next if ($localalignment > 0); # no need to change anything
+            $segment->counterAlignUnitLengthInterval($mapping) if $localalignment; # i.e. la < 0
+            next if $localalignment;
+# here localalignment is not yet determined, i.e. it's the first segment
+            push @revisit,$segment;
 	    next;
 	}
 # register alignment of first segment longer than one base
@@ -569,6 +575,11 @@ sub diagnose {
 	}
 
         $lastsegment = $segment;
+    }
+
+    foreach my $segment (@revisit) {
+        last unless ($localalignment < 0);
+        $segment->counterAlignUnitLengthInterval($mapping);
     }
 
 # if alignment == 0, all segments are unit length: adopt globalalignment
