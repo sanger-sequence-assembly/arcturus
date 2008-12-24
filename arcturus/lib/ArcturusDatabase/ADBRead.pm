@@ -3785,8 +3785,8 @@ $logger->debug("tagseqnames: @tagseqnames to be identified");
 		}
 # if the sequence was not found, then generate a new entry with a related name
                 unless ($sequence && $sequence eq $tagSQhash->{$tagseqname}) {
-                    $logger->error("Tag sequence mismatch for tag $tagseqname : (tag) ".
-                                   "$sequence  (taglist) $tagSQhash->{$tagseqname}");
+                    $logger->special("Tag sequence mismatch for tag $tagseqname : (tag) ".
+                                     "$sequence  (taglist) $tagSQhash->{$tagseqname}");
 # generate a new tag sequence name by appending a random string
                     my $randomnumber = int(rand(100)); # from 0 to 99
                     $tagseqname .= sprintf ('n%02d',$randomnumber);
