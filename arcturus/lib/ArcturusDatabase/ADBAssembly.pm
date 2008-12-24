@@ -200,5 +200,103 @@ sub getAssemblyDataforReadName {
 }
 
 #------------------------------------------------------------------------------
+# scaffolds
+#------------------------------------------------------------------------------
+
+sub putScaffoldForImportID {
+    my $this = shift;
+    my $import_id = shift;
+# NOTE : these parameters could be replaced by passing a Scaffold instance instead 
+    my $scaffold = shift;
+    my %options = @_; # type,source,comment
+
+    print STDERR "invalid scaffold $scaffold"  unless (ref($scaffold) eq 'ARRAY');
+    return unless (ref($scaffold) eq 'ARRAY');
+
+    return unless @$scaffold;
+
+    my $dbh = $this->getConnection();
+
+# tables SCAFFOLD & SCAFFOLDTYPE & CONTIGORDER
+
+    my $type_id = 0;
+
+    my $type  = $options{type} || "undefined";    
+
+    my $query = "select type_id from SCAFFOLDTYPE where type = ?";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $irc = $sth->execute($type) || &queryFailed($query,$type);
+
+    $type_id = $sth->fetchrow_array() if ($irc && $irc+0);
+
+    $sth->finish();
+
+    unless ($type_id) {
+# insert a new entry into the table and return the last insert id
+        $type = $dbh->quote($type);
+	my $rc = $dbh->do("insert into SCAFFOLDTYPE (type) values ($type)") || 0;
+        $type_id = $dbh->{'mysql_insertid'} if ($rc+0);
+    }
+
+# now enter a SCAFFOLD entry
+
+    my $scaffold_id = 0;
+
+    my @binddata = ($this->getArcturusUser(),
+                    $import_id,
+                    $type_id,
+                    $options{source}  || "unknown",
+		    $options{comment} || '');
+
+    my $sinsert = "insert into SCAFFOLD (creator,created,import_id,type_id,source,comment) "
+	        . "values (?,now(),?,?,?,?)";
+    
+    my $isth = $dbh->prepare_cached($sinsert);
+
+    my $rc = $isth->execute(@binddata) || &queryFailed($sinsert,@binddata);
+
+    $scaffold_id = $dbh->{'mysql_insertid'} if ($rc+0);
+
+    $isth->finish();
+    
+# insert the CONTIGORDER data
+
+    my $cinsert = "insert into CONTIGORDER (scaffold_id,contig_id,position,direction,following_gap_size) "
+                . "values (?,?,?,?,?)";
+
+    my $csth = $dbh->prepare_cached($cinsert);
+
+    my $status = 0;
+    foreach my $member (@$scaffold) {
+        my @idata = @$member; # length 3
+        push @idata,'forward' unless (scalar(@idata) >= 3); # should be caught by Scaffold class
+        push @idata,undef unless (scalar(@idata) >= 4); # should be caught by Scaffold class
+        my $crc = $csth->execute($scaffold_id,@idata) || &queryFailed($cinsert,$scaffold_id,@idata);
+	$status++ if ($crc+0);
+    }
+
+    $csth->finish();
+
+    return $status;
+}
+
+sub getScaffoldForProject {
+# returns an ordered list of contigs last imported for the project
+    my $this = shift;
+    my $project = shift;
+
+    my $subquery = "select import_id from IMPORTEXPORT where project_id = ? "
+	         . " order by import_id desc limit 1"; # get the last one
+
+    my $query = "select contig_id,position,direction"
+              . "  from CONTIGORDER join SCAFFOLD using (scaffold_id)"
+              . " where SCAFFOLD.import_id in ($subquery)"
+              . " order by position";
+# either build a scaffold object or return an ordered list of contig_ids
+}
+
+#------------------------------------------------------------------------------
 
 1;
