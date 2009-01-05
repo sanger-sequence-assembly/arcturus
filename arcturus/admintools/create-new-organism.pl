@@ -569,7 +569,7 @@ sub showUsage {
     print STDERR "    -description\tDescription for LDAP entry\n";
     print STDERR "\n";
     print STDERR "    -template\t\tMySQL database to use as template\n";
-    print STDERR "\t\t\t[Unless -nocreatedatabase or -skipdbstepshas been specified]";
+    print STDERR "\t\t\t[Unless -nocreatedatabase or -skipdbsteps has been specified]";
     print STDERR "\n\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -db\t\t\tMySQL database to create (default: organism name)\n";
