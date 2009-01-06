@@ -490,6 +490,7 @@ sub setSequence {
     $this->{data}->{slength} = 0;
 
     if (defined($sequence)) {
+        $this->{Sequence} =~ s/n/N/g; # hack to undo (unwanted) gap2caf conversion 
 	$this->{data}->{slength} = length($sequence);
 	$this->getSequenceHash(); # put sequence hash if undefined
     }
@@ -501,8 +502,6 @@ sub getSequence {
     my %options = @_;
 
     $this->importSequence() unless defined($this->{Sequence});
-
-# ? option $this->{Sequence} =~ s/n/N/g; # hack to undo gap2caf conversion 
 
     my $symbol = $options{qualitymask};
 
