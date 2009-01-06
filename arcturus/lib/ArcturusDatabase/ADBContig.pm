@@ -505,7 +505,6 @@ sub putContig {
 
 # test the generation
 
-# unless ($this->isCurrentContigID($previous->getContigID()))
         unless ($previous->isCurrent()) {
             $message .= "in an older generation; ";
             $previous = 0; # reject the match
@@ -551,10 +550,10 @@ sub putContig {
 # okay, the contig is new; find out if it is connected to existing contigs
 # search based on the read_ids (not seq_id) in (initial) current contigs  
 
-    $message = "$contigname " unless $message;
+    $message .= "$contigname is new ";
     if ($this->getParentContigsForContig($contig,usereads=>1)) {
         my @parentids = $contig->getParentContigIDs();
-        $message .= "has parent(s) : @parentids ";
+        $message .= "and has parent(s) : @parentids ";
         if ($options{prohibitparent}) {
             return 0,"$message  ('prohibitparent' option active)";
         }
@@ -563,7 +562,7 @@ sub putContig {
         $message .= "; ".$msg if $msg;
     }
     else {
-        $message .= "has no parents";
+        $message .= "and has no parents";
     }
 
 # determine the project to which the contig is to be assigned project is 
@@ -610,7 +609,7 @@ sub putContig {
         $message .= "; assigned to project 0 " unless $project;
     }
 
-    return 0, "(NO-LOAD option active) ".$message unless $doload;
+    return 0, $message unless $doload; # (NO-LOAD option active)
 
 # now load the contig into the database
 
