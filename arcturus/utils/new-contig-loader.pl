@@ -857,6 +857,9 @@ print STDOUT " end no frugal scan\n";
 	}
 
         $logger->info("Processing contig $contigname");
+            
+        my $rank = $inventory->{$contigname}->{Rank};
+        $logger->info("RANK $rank for $contigname");
 
 # here remove the references to the Contig and its Reads from the inventory
 
@@ -947,7 +950,10 @@ print STDOUT " end no frugal scan\n";
                 $logger->info("Contig $identifier with $nr reads :"
                              ." status $added, $msg");
 #                $loaded++ unless ...;
-                my $rank = $inventory->{$contigname}->{Rank};
+                unless ($rank) {
+                    $logger->error("RANK UNDEFINED for $contigname");
+		    $rank = 0; # to still have the entry
+		}
                 push @scaffoldlist,[($added,$rank,'forward')];
 # here : putScaffoldInfo; if 
 # does this require an extra state method? Or just add to Scaffold instance?
@@ -980,7 +986,14 @@ print STDOUT " end no frugal scan\n";
 	# or try recovery
                     $logger->warning("Splitting contig with discontinuity");
                     my $contigs = $contig->break();
-                    push @$objects,@$contigs if ($contigs && @$contigs > 1);
+                    if ($contigs && @$contigs > 1) {
+# add the new contigs at the end of the queue and assign rank to each of them
+                        push @$objects,@$contigs;
+                        foreach my $contig (@$contigs) {
+                            my $contigname = $contig->getContigName();
+                            $inventory->{$contigname}->{Rank} = $rank;
+                        }
+                    }
 		    $contig->erase(); # enable garbage collection
                     next;
    	        }
@@ -1007,9 +1020,10 @@ print STDOUT " end no frugal scan\n";
 
                 my ($added,$msg) = $adb->putContig($contig,$project,%toptions);
 
-                $msg = "is a new contig" unless $msg;
+#                $msg = "is a new contig" unless $msg;
                 my @msg = split ';',$msg;        
-                $logger->warning("Status of contig $identifier with $nr reads:",preskip=>1);
+                $logger->warning("Status of contig $identifier with $nr reads "
+                                ." (no-load active) :",preskip=>1);
                 foreach my $line (@msg) {
                     $logger->warning($line);
 		}
@@ -1095,12 +1109,11 @@ if ($loaded && $project) {
         $gap4dbname = `pwd`;
         chomp $gap4dbname;
     }
-    $project->setGap4Name($gap4dbname); # 
-    $project->markImport();
-    my $Scaffold = \@scaffoldlist; # to replaced by a new Class ?
+    $project->setGap4Name($gap4dbname);
+    my $Scaffold = \@scaffoldlist; # to be replaced by a new Class ?
     $project->markImport($Scaffold,type=>'finisher project'
-                                  ,source=>"Arcturus contig-loader"
-                                  ,comment=>"test data");
+		        	  ,source=>"Arcturus contig-loader");
+#                                   ,comment=>"test data");
 }
 
 # read-back lastly inserted contig (meta data) to check on OS cache dump
