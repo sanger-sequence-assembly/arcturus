@@ -6,7 +6,8 @@ then
     exit 1
 fi
 
-FILE=$1
+DIR=`dirname $1`
+FILE=`basename $1`
 
 VERSION=0
 
@@ -15,11 +16,19 @@ then
     VERSION=$2
 fi
 
+if [ ! -d $DIR ]
+then
+    echo Directory $DIR does not exist
+    exit 1
+fi
+
+cd $DIR
+
 DBFILE=${FILE}.${VERSION}
 
 if [ ! -e ${DBFILE} ]
 then
-    echo File $DBFILE does not exist
+    echo File $DBFILE does not exist in $DIR
     exit 2
 fi
 
@@ -34,7 +43,6 @@ export TCL_LIBRARY=$STADLIB/tcl
 export TK_LIBRARY=$STADLIB/tk
 
 STASH=${STADENROOT}/linux-x86_64-bin/stash
-#STASH=cat
 
 ###
 ### Now run the script
