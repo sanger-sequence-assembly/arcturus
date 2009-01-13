@@ -210,8 +210,11 @@ sub putScaffoldForImportID {
     my $scaffold = shift;
     my %options = @_; # type,source,comment
 
-    print STDERR "invalid scaffold $scaffold"  unless (ref($scaffold) eq 'ARRAY');
-    return unless (ref($scaffold) eq 'ARRAY');
+    unless (ref($scaffold) eq 'ARRAY') { # or later Scaffold ?
+	my $logger = $this->verifyLogger('putScaffoldForImportID');
+        $logger->error("invalid parameter scaffold $scaffold");  
+	return undef;
+    }
 
     return unless @$scaffold;
 
@@ -283,18 +286,35 @@ sub putScaffoldForImportID {
 }
 
 sub getScaffoldForProject {
-# returns an ordered list of contigs last imported for the project
+# returns an ordered list of contig IDs last imported for the project
     my $this = shift;
-    my $project = shift;
+    my $project = shift; # project instance
 
-    my $subquery = "select import_id from IMPORTEXPORT where project_id = ? "
-	         . " order by import_id desc limit 1"; # get the last one
+    my $project_id = $project->getProjectID();
+
+    my $subquery = "select max(id) from IMPORTEXPORT where project_id = ? "; # get the last one
 
     my $query = "select contig_id,position,direction"
               . "  from CONTIGORDER join SCAFFOLD using (scaffold_id)"
               . " where SCAFFOLD.import_id in ($subquery)"
+#             . "   and SCAFFOLD.source = 'Arcturus contig-loader'"
               . " order by position";
-# either build a scaffold object or return an ordered list of contig_ids
+
+# either build a scaffold object or put an ordered list of contig_ids in Project
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $rc = $sth->execute($project_id) || &queryFailed($query,$project_id);
+
+    $project->addContigID(undef,scaffold=>1); # clear any
+    while (my @ary = $sth->fetchrow_array()) {
+        $ary[0] = -$ary[0] if ($ary[2] eq 'reverse');
+        $project->addContigID($ary[0],scaffold=>1);
+    }
+# on exit the project instance contains the list of ordered contig_ids
+    return $rc;
 }
 
 #------------------------------------------------------------------------------
