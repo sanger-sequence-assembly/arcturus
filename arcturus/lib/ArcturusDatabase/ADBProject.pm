@@ -1107,8 +1107,9 @@ sub getContigIDsForProject {
 
 # return reference to array of contig IDs and locked status
 
-    return &getContigIDsForProjectID($this->getConnection(),
-                                    $project->getProjectID());
+    my $report = &fetchContigIDsForProject($this->getConnection(),$project);
+
+    return $project->getContigIDs(),$report;
 }
 
 sub checkOutContigIDsForProject {
@@ -1126,21 +1127,26 @@ sub checkOutContigIDsForProject {
  
 # return reference to array of contig IDs and locked status
     
-    return &getContigIDsForProjectID($this->getConnection(),
-                                    $project->getProjectID());
+    my $report = &fetchContigIDsForProject($this->getConnection(),$project);
+
+    return $project->getContigIDs(),$report;
 }
 
-sub getContigIDsForProjectID {
+sub fetchContigIDsForProject {
 # private function: return contig IDs of contigs allocated to project with
 # given project ID (age zero only) used in delayed loading mode from Project
     my $dbh = shift;
-    my $project_id = shift;
+    my $project = shift;
 
-    &verifyPrivate($dbh,"getContigIDsForProjectID");
+    &verifyPrivate($dbh,"fetchContigIDsForProjectID");
 
-    return (undef,"Undefined project ID") unless defined($project_id);
+    my $project_id = $project->getProjectID();
 
-    my $query = "select CONTIG.contig_id"
+    return "Undefined project ID" unless defined($project_id);
+
+    $project->addContigID(); # clear buffer projectContigIDs
+
+    my $query = "select distinct CONTIG.contig_id"
               . "  from CONTIG left join C2CMAPPING"
               . "    on CONTIG.contig_id = C2CMAPPING.parent_id"
 	      . " where CONTIG.project_id = ?"
@@ -1149,20 +1155,18 @@ sub getContigIDsForProjectID {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($project_id) || &queryFailed($query,$project_id);
+    my $rc = $sth->execute($project_id) || &queryFailed($query,$project_id);
 
-    my @contigids;
     while (my ($contig_id) = $sth->fetchrow_array()) {
-        push @contigids, $contig_id;
+        $project->addContigID($contig_id); # clear buffer projectContigIDs
     }
 
     $sth->finish();
 
-    my $report = "Project $project_id has ";
-    $report .= scalar(@contigids)." contigs" if @contigids;
-    $report .= "no contigs" unless @contigids;
+    $rc = "no" unless $rc;
+    my $report = "Project $project_id has $rc contigs";
 
-    return \@contigids,$report;
+    return $report;
 }
 
 #------------------------------------------------------------------------------
