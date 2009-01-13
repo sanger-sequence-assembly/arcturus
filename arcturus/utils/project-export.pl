@@ -41,10 +41,8 @@ my $gap4name;
 my $preview;
 my $append = 0;
 
-my $METHOD = 1; # test construction
-
-my $validKeys  = "organism|instance|project|assembly|fopn|ignore|caf|maf|"
-               . "readsonly|fasta|quality|lock|minNX|minerva|"
+my $validKeys  = "organism|instance|project|assembly|fopn|ignore|"
+               . "caf|maf|readsonly|fasta|quality|lock|minNX|minerva|"
                . "mask|symbol|shrink|qualityclip|qc|qclipthreshold|qct|"
                . "qclipsymbol|qcs|endregiontrim|ert|gap4name|g4n|padded|"
                . "preview|confirm|batch|verbose|debug|help|test|append";
@@ -132,8 +130,6 @@ while (my $nextword = shift @ARGV) {
     $lock        = 1            if ($nextword eq '-lock');
 
     $batch       = 1            if ($nextword eq '-batch');
-
-    $METHOD      = 0            if ($nextword eq '-test');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -339,7 +335,7 @@ elsif (defined($maffile)) {
     $exportoptions{'minNX'} = $minNX;
 }
 
-$exportoptions{'notacquirelock'} = 1 - $lock; # TO BE TESTED
+$exportoptions{'notacquirelock'} = 1 - $lock; # TO BE TESTED ? should be $lock
 
 my $errorcount = 0;
 
@@ -359,6 +355,7 @@ foreach my $project (@projects) {
     my $numberofcontigs = $project->getNumberOfContigs();
 
     $logger->info("processing project $projectname with $numberofcontigs contigs");
+    next unless $numberofcontigs;
 
     if ($preview) {
         $logger->warning("Project $projectname with $numberofcontigs "
@@ -368,40 +365,14 @@ foreach my $project (@projects) {
 
     my @emr;
 
-    if ($METHOD) {
-
-      if (defined($caffile)) {
+    if (defined($caffile)) {
         @emr = $project->writeContigsToCaf($fhDNA,%exportoptions);
-      }
-      elsif (defined($fastafile)) {
-        @emr = $project->writeContigsToFasta($fhDNA,$fhQTY,%exportoptions);
-      }
-      elsif (defined($maffile)) {
-        @emr = $project->writeContigsToMaf($fhDNA,$fhQTY,$fhRDS,%exportoptions);
-      }
-# end METHOD 1
     }
-    else {
-# to be tested
-      my $contigs = $project->fetchContigIDs(1-$lock) || [];
-
-      foreach my $contig (@$contigs) {
-    
-        my $err = 0;
-        if (defined($caffile)) {
-#            $err = $project->writeContigsToCaf($fhDNA,%exportoptions);
-        }
-        elsif (defined($fastafile)) {
-#            $err = $project->writeContigsToFasta($fhDNA,$fhQTY,%exportoptions);
-        }
-        elsif (defined($maffile)) {
-#            $err = $project->writeContigsToMaf($fhDNA,$fhQTY,$fhRDS,%exportoptions);
-        }
-        $emr[0]++ unless $err;
-        $emr[1]++ if $err;
-        undef $contig;
-      }
-# end METHOD 0
+    elsif (defined($fastafile)) {
+        @emr = $project->writeContigsToFasta($fhDNA,$fhQTY,%exportoptions);
+    }
+    elsif (defined($maffile)) {
+        @emr = $project->writeContigsToMaf($fhDNA,$fhQTY,$fhRDS,%exportoptions);
     }
 
 # error reporting section
@@ -412,8 +383,8 @@ foreach my $project (@projects) {
     }
     elsif ($emr[1]) {
 # there were errors on some contigs
-        $logger->warning("$emr[1] errors detected while processing project "
-                        ."$projectname; $emr[0] contigs exported");
+        $logger->warning("$emr[1] error(s) detected while processing project "
+                        ."$projectname\n$emr[2]\n$emr[0] contigs exported");
         $errorcount += $emr[1];
         $logger->info($emr[2]); # report (or to be written to a log file?)
     }
@@ -439,7 +410,7 @@ $fhQTY->close() if $fhQTY;
 
 $fhRDS->close() if $fhRDS;
 
-exit;
+exit 0;
 
 #------------------------------------------------------------------------
 # HELP
@@ -455,8 +426,8 @@ sub showUsage {
     unless ($organism && $instance) {
         print STDERR "MANDATORY PARAMETERS:\n";
         print STDERR "\n";
-        print STDERR "-organism\tArcturus database name\n" unless $organism;
-        print STDERR "-instance\t'prod','dev','test'\n"    unless $instance;
+        print STDERR "-organism\tArcturus organism database\n" unless $organism;
+        print STDERR "-instance\tArcturus database instance\n" unless $instance;
         print STDERR "\n";
     }
     print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n\n";
