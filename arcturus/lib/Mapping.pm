@@ -1224,7 +1224,6 @@ sub writeToString {
     foreach my $position (@$xrange,@$yrange     ) {
         $maximum = abs($position) if (abs($position) > $maximum);
     }
-    my $nd = int(log($maximum)/log(10)) + 2;
 
     my $string = '';
     foreach my $segment (@$segments) {
@@ -1236,7 +1235,7 @@ sub writeToString {
         }
         $string .= $text;
         foreach my $position (@segment) {
-            $string .= sprintf "%${nd}d",$position;
+            $string .= sprintf " %d",$position;
 	}
         if ($options{extended}) {
             $string .= "   a:".($segment->getAlignment() || 'undef');
