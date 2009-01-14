@@ -317,6 +317,32 @@ sub getScaffoldForProject {
     return $rc;
 }
 
+sub getScaffoldByIDforProject {
+# returns an ordered list of contig IDs last imported for the project
+    my $this = shift;
+    my $project = shift; # project instance
+    my $identifier = shift;
+
+    my $query = "select contig_id,position,direction"
+              . "  from CONTIGORDER join SCAFFOLD using (scaffold_id)"
+              . " where SCAFFOLD.scaffold_id = ?"
+#             . "   and SCAFFOLD.source = 'Arcturus contig-loader'"
+              . " order by position";
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $rc = $sth->execute($identifier) || &queryFailed($query,$identifier);
+
+    while (my @ary = $sth->fetchrow_array()) {
+        $ary[0] = -$ary[0] if ($ary[2] eq 'reverse');
+        $project->addContigID($ary[0],scaffold=>1);
+    }
+# on exit the project instance contains the list of ordered contig_ids
+    return $rc;
+}
+
 #------------------------------------------------------------------------------
 
 1;
