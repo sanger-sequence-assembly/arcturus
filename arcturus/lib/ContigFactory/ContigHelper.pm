@@ -396,11 +396,17 @@ sub reverseComplement {
 
     $contig = $contig->copy(%coptions) unless $options{nonew};
 
+    my $newcontigname = $contig->getContigName()."-reversecomplemented";
+
+    $contig->setContigName($newcontigname);
+
     my $length = $contig->getConsensusLength();
+
+    my $complete = $options{nocomplete} ? 0 : 1;
 
 # the read mappings
 
-    if ($contig->getMappings($options{complete})) {
+    if ($contig->getMappings($complete)) {
         $logger->debug("inverting read-to-contig mappings");
         my $mappings = $contig->getMappings();
         foreach my $mapping (@$mappings) {
@@ -412,7 +418,7 @@ sub reverseComplement {
 
 # possible parent contig mappings
 
-    if ($contig->getContigToContigMappings($options{complete})) {
+    if ($contig->getContigToContigMappings($complete)) {
         $logger->debug("inverting contig-to-contig mappings");
         my $mappings = $contig->getContigToContigMappings();
         foreach my $mapping (@$mappings) {
@@ -422,7 +428,7 @@ sub reverseComplement {
 
 # tags
 
-    my $tags = $contig->getTags($options{complete});
+    my $tags = $contig->getTags($complete);
     $logger->debug("inverting tags") if $tags;
     foreach my $tag (@$tags) {
         $tag->mirror($length+1,nonew=>1); # don't create a new tag
@@ -443,13 +449,14 @@ sub reverseComplement {
     if (my $quality = $contig->getBaseQuality()) {
 # invert the base quality array
         $logger->info("inverting base quality array");
-        for (my $i = 0 ; $i < $length ; $i++) {
-            my $j = $length - $i - 1;
-            last unless ($i < $j);
-            my $swap = $quality->[$i];
-            $quality->[$i] = $quality->[$j];
-            $quality->[$j] = $swap;
-        }
+        @$quality = reverse(@$quality);
+#        for (my $i = 0 ; $i < $length ; $i++) {
+#            my $j = $length - $i - 1;
+#            last unless ($i < $j);
+#            my $swap = $quality->[$i];
+#            $quality->[$i] = $quality->[$j];
+#            $quality->[$j] = $swap;
+#        }
     }
 
     $contig->getStatistics(1) if $contig->hasMappings();
