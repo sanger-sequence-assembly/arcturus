@@ -18,6 +18,7 @@ my $verbose;
 my $identifier;
 my $ignorename;
 my $assembly;
+my $scaffold;
 my $batch;
 my $lock = 0;
 my $padded;
@@ -41,7 +42,7 @@ my $gap4name;
 my $preview;
 my $append = 0;
 
-my $validKeys  = "organism|instance|project|assembly|fopn|ignore|"
+my $validKeys  = "organism|instance|project|assembly|fopn|ignore|scaffold|"
                . "caf|maf|readsonly|fasta|quality|lock|minNX|minerva|"
                . "mask|symbol|shrink|qualityclip|qc|qclipthreshold|qct|"
                . "qclipsymbol|qcs|endregiontrim|ert|gap4name|g4n|padded|"
@@ -68,6 +69,8 @@ while (my $nextword = shift @ARGV) {
     $assembly    = shift @ARGV  if ($nextword eq '-assembly');
 
     $identifier  = shift @ARGV  if ($nextword eq '-project');
+
+    $scaffold    = shift @ARGV  if ($nextword eq '-scaffold');
 
     $fopn        = shift @ARGV  if ($nextword eq '-fopn');
 
@@ -308,6 +311,8 @@ my %exportoptions;
 
 $exportoptions{logger} = $logger if $minerva;
 
+$exportoptions{scaffoldids} = $scaffold if $scaffold;
+
 $exportoptions{endregiontrim} = $endregiontrim if $endregiontrim;
 
 if (defined($caffile)) {
@@ -448,6 +453,8 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
+    print STDERR "-assembly\tAssembly ID or name, required if ambiguous project name\n";
+    print STDERR "\n";
     if ($preview) {
         print STDERR "-confirm\t(no value) go ahead\n";
     }
@@ -461,11 +468,15 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-gap4name\tadd the gap4name (lefthand read) to the identifier\n";
     print STDERR "\n";
-    print STDERR "Default setting exports all contigs in project\n";
+    print STDERR "Default setting exports all contigs in project scaffolded to\n";
+    print STDERR "reproduce the order of the last import; override with -scaffold\n";
+    print STDERR "\n";
     print STDERR "When using a lock check, only those projects are exported ";
     print STDERR "which either\n are unlocked or are owned by the user running "
                . "this script, while those\nproject(s) will have their lock "
                . "status switched to 'locked'\n";
+    print STDERR "\n";
+    print STDERR "-scaffold\t(comma-separated list of) scaffold identifier(s)\n";
     print STDERR "\n";
     print STDERR "-lock\t\t(no value) acquire a lock on the project and , if "
                 . "successful,\n\t\t\t   export its contigs\n";
