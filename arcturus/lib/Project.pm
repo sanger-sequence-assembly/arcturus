@@ -182,15 +182,17 @@ sub getContigIDs {
 sub fetchContigIDs {
 # get and export IDs of all current contigs of this project; get possible scaffold
     my $this = shift;
-    my $nolockcheck = shift; # set true to return all, else only unlocked data
+    my %options = @_;
 
-# get the contig IDs for this project always by reference to the database
+# get the contig IDs for this project
 
     my $ADB = $this->{ADB} || return (0,"Missing database connection");
 
     my ($cids, $status);
 
-    if ($nolockcheck) {
+# get all current contigs with or without lock check
+
+    if ($options{nolockcheck} || $options{notacquirelock}) {
 # get all contig IDs belonging to this project without locking
        ($cids, $status) = $ADB->getContigIDsForProject($this);
     }
@@ -200,7 +202,19 @@ sub fetchContigIDs {
         $status = "No accessible contigs: $status" unless ($cids && @$cids);
     }
 
-    unless ($ADB->getScaffoldForProject($this)) { # puts scaffold, if any
+    return $this->getContigIDs(),$status if $options{noscaffold};    
+
+# get contigs in scaffold, either from the last import, or by scaffold number 
+
+    if (my $identifiers = $options{scaffoldids}) {
+        $identifiers =~ s/^\s+|\s+$//g; # remove leading/trailing blanks
+        my @identifiers = split /\W+/,$identifiers;
+        foreach my $identifier (@identifiers) {
+            my $result = $ADB->getScaffoldByIDforProject($this,$identifier);
+            $status .= "; no scaffold like $identifier" unless $result;
+        }
+    }
+    elsif (!$ADB->getScaffoldForProject($this)) { # adds last scaffold from import if any
         $status .= "; no scaffolded contigs found";
     }
 
@@ -210,19 +224,27 @@ sub fetchContigIDs {
 sub getContigIDsForExport {
 # returns an ordered list of contigs for export
     my $this = shift;
-    my %options = @_; # nolockcheck, ignorescaffold,noabortoninterlopers
+    my %options = @_; # nolockcheck, ignorescaffold, noabortoninterlopers
+
+# nolockcheck (notacquirelock) - unless set project lock has to be acquired
+# noscaffold                   - ignore scaffold info, use current contigs for project
+# scaffoldids                  - comma separated list of scaffold identifier to use
+#                                > if not defined, use scaffold info from last import 
+#                                > if not defined, append un-scaffolded contigs from
+#                                  project after the scaffolded ones. 
+#                                > with scaffoldids you get only the contigs in them
+# noabortoninterlopers         - unless set, abort if any scaffold contig not current 
+#                                and in project.
 
     my ($dbcids,$sfcids,$status);
 
 # get all current contigs for this project
 
-    my $nolockcheck = $options{nolockcheck} || $options{notacquirelock};
-
-   ($dbcids,$status) = $this->fetchContigIDs($nolockcheck);
+   ($dbcids,$status) = $this->fetchContigIDs(@_); # pass on options
 
     return 0,$status unless @$dbcids; # empty project
 
-    return $dbcids,$status if $options{ignorescaffold};
+    return $dbcids,$status if $options{noscaffold};
 
     $sfcids = $this->getContigIDs(scaffold=>1);
 
@@ -236,13 +258,16 @@ sub getContigIDsForExport {
     my @rejectedcontigs;
     my $strangeidhash = {}; # for scaffold cids not in the project
     foreach my $sfcid (@$sfcids) {
-        if ($contigidhash->{$sfcid}) {
+        if ($contigidhash->{abs($sfcid)}) {
             push @acceptedcontigs,$sfcid;
             delete $contigidhash->{$sfcid};
 	}
 	elsif (my $ADB = $this->{ADB}) {
-            my $offspring = $ADB->getCurrentContigIDsForAncestorIDs([($sfcid)]);
-            $offspring = $sfcid unless ($offspring && @$offspring);
+            my $offspring = $ADB->getCurrentContigIDsForAncestorIDs([(abs($sfcid))]);
+            unless ($offspring && @$offspring) {
+                push @rejectedcontigs,$sfcid;
+		next;
+	    }
             foreach my $pair (@$offspring) {
                 my $contig = $pair->[0];
                 if ($contigidhash->{$contig}) {
@@ -260,13 +285,13 @@ sub getContigIDsForExport {
 
     if (my @remainder = sort {$a <=> $b} keys %$contigidhash) {
 	$status = "Project contains contigs not in scaffold (@remainder)" if @$sfcids;
-        push @acceptedcontigs,@remainder;
+        push @acceptedcontigs,@remainder unless $options{scaffoldids};
     }
 
 # rejected contigs  are in scaffold, but not in project (will normally not occur)
 
     if (@rejectedcontigs) {
-        $status = "Scaffold contains contigs not belonging to project (@rejectedcontigs)";
+        $status = "Scaffold has contigs not belonging to project (@rejectedcontigs)";
         return 0, $status unless ($options{noabortoninterlopers});
         push @acceptedcontigs,@rejectedcontigs;
     }
@@ -472,7 +497,7 @@ sub writeContigsToCaf {
 # write all contigs in this project to CAF; standard project export
     my $this = shift;
     my $FILE = shift; # obligatory file handle
-    my %options = @_; # frugal=> , logger=>, endregiontrim=>
+    my %options = @_; # frugal=> , logger=>, endregiontrim=> & options for getContigIDsForExport
 
     my ($contigids,$status) = $this->getContigIDsForExport(%options);
     return (0,1,$status) unless ($contigids && @$contigids);
@@ -496,11 +521,16 @@ sub writeContigsToCaf {
 
     foreach my $contig_id (@$contigids) {
 
+        next unless $contig_id; # just in case
+
 # use frugal mode if number of reads >= $frugal 
 
-        my $contig = $ADB->getContig(contig_id=>$contig_id,metadataonly=>1,
-                                                           frugal=>$frugal);
- 
+        my $contig = $ADB->getContig(contig_id=>abs($contig_id),
+                                     metadataonly=>1,
+                                     frugal=>$frugal);
+
+        $contig->reverse(nonew=>1) if ($contig_id < 0); 
+
         unless ($contig) {
             my $message = "FAILED to retrieve contig $contig_id";
             $logger->error($message) if $logger;
