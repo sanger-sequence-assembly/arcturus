@@ -256,11 +256,10 @@ sub getContigIDsForExport {
     }
     my @acceptedcontigs;
     my @rejectedcontigs;
-    my $strangeidhash = {}; # for scaffold cids not in the project
     foreach my $sfcid (@$sfcids) {
         if ($contigidhash->{abs($sfcid)}) {
             push @acceptedcontigs,$sfcid;
-            delete $contigidhash->{$sfcid};
+            delete $contigidhash->{abs($sfcid)};
 	}
 	elsif (my $ADB = $this->{ADB}) {
             my $offspring = $ADB->getCurrentContigIDsForAncestorIDs([(abs($sfcid))]);
@@ -288,10 +287,11 @@ sub getContigIDsForExport {
         push @acceptedcontigs,@remainder unless $options{scaffoldids};
     }
 
-# rejected contigs  are in scaffold, but not in project (will normally not occur)
+# rejected contigs are in scaffold, but not in project (will normally not occur)
 
     if (@rejectedcontigs) {
-        $status = "Scaffold has contigs not belonging to project (@rejectedcontigs)";
+        $status = "Scaffold has duplicated contigs or contigs not in "
+                . "current contigs for project (@rejectedcontigs)";
         return 0, $status unless ($options{noabortoninterlopers});
         push @acceptedcontigs,@rejectedcontigs;
     }
