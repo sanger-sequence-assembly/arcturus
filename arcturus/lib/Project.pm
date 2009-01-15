@@ -288,12 +288,13 @@ sub getContigIDsForExport {
     }
 
 # rejected contigs are in scaffold, but not in project (will normally not occur)
+# actually woccurs after moving a contig out of the project
 
     if (@rejectedcontigs) {
         $status = "Scaffold has duplicated contigs or contigs not in "
                 . "current contigs for project (@rejectedcontigs)";
-        return 0, $status unless ($options{noabortoninterlopers});
-        push @acceptedcontigs,@rejectedcontigs;
+#        return 0, $status unless ($options{noabortoninterlopers}); 
+#        push @acceptedcontigs,@rejectedcontigs;
     }
 
     return [@acceptedcontigs],$status;
