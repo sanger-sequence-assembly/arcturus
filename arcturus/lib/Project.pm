@@ -233,8 +233,8 @@ sub getContigIDsForExport {
 #                                > if not defined, append un-scaffolded contigs from
 #                                  project after the scaffolded ones. 
 #                                > with scaffoldids you get only the contigs in them
-# noabortoninterlopers         - unless set, abort if any scaffold contig not current 
-#                                and in project.
+# abortoninterlopers           - if set, abort if any scaffold contig not in current 
+#                                contigs for project; else ignore the contig
 
     my ($dbcids,$sfcids,$status);
 
@@ -293,8 +293,8 @@ sub getContigIDsForExport {
     if (@rejectedcontigs) {
         $status = "Scaffold has duplicated contigs or contigs not in "
                 . "current contigs for project (@rejectedcontigs)";
-#        return 0, $status unless ($options{noabortoninterlopers}); 
-#        push @acceptedcontigs,@rejectedcontigs;
+        return 0, $status                      if $options{abortoninterlopers}; 
+        push @acceptedcontigs,@rejectedcontigs if $options{acceptinterlopers};
     }
 
     return [@acceptedcontigs],$status;
