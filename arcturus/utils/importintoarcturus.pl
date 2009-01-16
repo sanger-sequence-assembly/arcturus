@@ -30,6 +30,8 @@ my $problemproject = 'PROBLEMS'; # default
 
 my $import_script = "${arcturus_home}/utils/new-contig-loader";
 
+my $scaffold_script = "${arcturus_home}/utils/contigorder.sh";
+
 my $repair = "-movetoproblems";
 
 my ($forcegetlock,$keep,$abortonwarning,$noagetest,$rundir,$debug);
@@ -318,22 +320,30 @@ unless ($version eq "B" || $nonstandard) {
         }
     }       
 }
+#------------------------------------------------------------------------------
+# extract contig order from the Gap4 database
+#------------------------------------------------------------------------------
+
+my $scaffoldfile = "/tmp/".lc($gap4name.".".$version.".sff");
+&mySystem ("$scaffold_script $gap4name $version > $scaffoldfile");
 
 #------------------------------------------------------------------------------
 # change the data in Arcturus
 #------------------------------------------------------------------------------
 
 $project->fetchContigIDs(); # load the current contig IDs before import
+#$project->fetchContigIDs(noscaffold=>1); # load the current contig IDs before import
 
 print STDOUT "Importing into Arcturus\n";
 
 $command  = "$import_script -instance $instance -organism $organism "
           . "-caf $depadded -defaultproject $projectname "
-          . "-gap4name ${pwd}/$gap4name.$version "
+#          . "-gap4name ${pwd}/$gap4name.$version "
+          . "-gap4name ${pwd}/$gap4name.$version -scaffoldfile $scaffoldfile "
           . "-minimum 1 -dounlock -consensusreadname all";
 $command .= " @ARGV" if @ARGV; # pass on any remaining input
 
-print STDERR "$command\n" if @ARGV; # list command if parms transfer (temporary)
+#print STDERR "$command\n" if @ARGV; # list command if parms transfer (temporary)
 
 my $rc = &mySystem ($command);
 
@@ -411,7 +421,7 @@ unless ($keep) {
 
     print STDOUT "Cleaning up\n";
 
-    &mySystem ("rm -f $padded $depadded");
+    &mySystem ("rm -f $padded $depadded $scaffoldfile");
 
 # purge readallocation logs older than a given date  TO BE COMPLETED
 # "find . -mtime +30 -type f -exec rm -f {} \;"
