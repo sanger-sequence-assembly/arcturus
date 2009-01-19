@@ -149,13 +149,13 @@ sub verifyTagContent {
     elsif ($tagtype eq 'REPT') {
         my $status = &processRepeatTag  ($class,$tag);
         $report .= "No repeat sequence name detected" unless $status;
-# reject falied tag info for read, accept for contig 
+# reject failed tag info for read, accept for contig 
         $returnstatus = 0 unless ($status || $hostclass ne 'Read');
     }
     elsif ($tagtype eq 'ADDI') {
         my ($status,$msg) = &processAdditiveTag($class,$tag); 
         $report .= $msg if (defined($status) && $status != 1);
-	$returnstatus = 0 unless $status;
+        $returnstatus = 0 unless ($status || $hostclass eq 'Read');
     }
 # testing of a description is disabled
     elsif (my $nonemptytags = $options{nonempty}) {
@@ -325,6 +325,9 @@ sub processAdditiveTag {
     if (my $tagcomment = $tag->getTagComment()) {
 # test if comment contains the "written" key; if not it's useless
         $tag->setTagComment(undef) unless ($tagcomment =~ /Written/);
+        if ($tagcomment =~ s/(\d)Written/$1\\n\\Written/) {
+            $tag->setTagComment($tagcomment);
+	}
     }
 
     return 0,"Missing tag description" unless $tag->getTagComment();
@@ -705,13 +708,11 @@ sub isEqual {
     my $class = shift;
     my $atag = shift;
     my $otag  = shift;
-    my %options = @_;
+    my %options = @_; # leftjoin, synchronise, contains, addjoins, overlaps
     
     return undef unless &verifyParameter($atag,'isEqual (1-st parameter)');
 
     return undef unless &verifyParameter($otag,'isEqual (2-nd parameter)');
-
-#    my $logger = &verifyLogger('isEqual');
 
 # compare tag type and host type
 
@@ -762,20 +763,18 @@ sub isEqual {
 	}
     }
     elsif ($atag->getTagComment() =~ /\S/) {
-# one of the comments is blank and the other is not
-        return 0 unless $options{ignoreblankcomment};
+# the comment on otag is blank and the one on atag is not; consider unequal unless leftjoin or
+        return 0 unless ($options{leftjoin} || $options{synchronise});
 # fill in the blank comment where it is missing
-        if ($options{copycom}) {
+        if ($options{synchronise}) {
             $otag->setTagComment($atag->getTagComment());
 	}
     }
     elsif  ($otag->getTagComment() =~ /\S/) {
-# one of the comments is blank and the other is not
-        return 0 unless $options{ignoreblankcomment};
-# fill in the blank comment where it is missing
-        if ($options{copycom}) {
-            $atag->setTagComment($otag->getTagComment());
-	}
+# the comment on atag is blank and the one on otag is not; consider unequal unless synchronize
+        return 0 unless $options{synchronise};
+# fill in the blank comment on atag
+        $atag->setTagComment($otag->getTagComment());
     }
 
 # compare the tag sequence & name or (if no tag sequence name) systematic ID.
@@ -783,10 +782,25 @@ sub isEqual {
 # in e.g. the case of repeat tags, a systematic ID could have been generated 
 # by the tag loading software
 
-    if ($atag->getDNA() || $otag->getDNA()) {
+    if ($atag->getDNA() && $otag->getDNA()) {
 # at least one of the tag DNA sequences is defined; then they must be equal 
-        return 0 unless ($atag->getDNA() eq $otag->getDNA());
+        return 0 unless (uc($atag->getDNA()) eq uc($otag->getDNA()));
     }
+    elsif ($atag->getDNA()) {
+# the DNA sequence is defined on atag but not on otag
+        return 0 unless ($options{leftjoin} || $options{synchronise});
+# fill in the dna comment where it is missing
+        if ($options{synchronise}) {
+            $otag->setDNA($atag->getDNA());
+	}
+    }
+    elsif ($otag->getDNA()) {
+# the DNA sequence is defined on otag but not on atag
+        return 0 unless ($options{synchronise});
+# fill in the blank comment where it is missing
+        $atag->setDNA($atag->getDNA());
+    }
+
     elsif ($atag->getTagSequenceName() =~ /\S/ || 
            $otag->getTagSequenceName() =~ /\S/) {
 # at least one of the tag sequence names is defined; they must be equal unless '0'
@@ -838,7 +852,8 @@ sub cleancompare {
 
     $comment =~ s/^\s*([\"\'])\s*(.*)\1\s*$/$2/; # remove quotes
     $comment =~ s/^\s+|\s+$//g; # remove leading & trailing blank
-    $comment =~ s/\\n\\/ /g; # replace by blank space
+    $comment =~ s/\\n\\/ /g; # replace '\n\' by blank space
+    $comment =~ s/\\n/ /g;   # replace '\n'  by blank space
     $comment =~ s/\s+/ /g; # shrink blank space
 
     $comment =~ s/^$inop// if $inop; # remove if present at begin
