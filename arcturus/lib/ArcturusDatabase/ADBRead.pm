@@ -3486,7 +3486,7 @@ sub getReadTagsForSequenceIDs {
 
         my @sids = splice @$seqIDs, 0, $block;
 
-        my $tags = &getTagsForSequenceIDs ($dbh,\@sids);
+        my $tags = &getTagsForSequenceIDs ($dbh,\@sids,@_); # pass on options
 
         push @tags, @$tags;
     }
@@ -3515,7 +3515,9 @@ sub getTagsForSequenceIDs {
 	      . " where seq_id in (".join (',',@$sequenceIDs) .")"
               . "   and deprecated != 'Y'"
 #?             . "   and tagtype not in ($excludetags) " if $excludetags;
-		  . " order by seq_id";
+      	      . " order by seq_id";
+
+    $query =~ s/select/select distinct/ if $options{distinct};
 
     my @tag;
 
@@ -3544,8 +3546,7 @@ sub getTagsForSequenceIDs {
     return [@tag];
 }
 
-
-sub putTagsForReads {
+sub oldputTagsForReads {
 # bulk insertion of tag data
     my $this = shift;
     my $reads = shift; # array of Read instances
@@ -3600,7 +3601,7 @@ $logger->debug("AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtag
 
     @sids = sort {$a <=> $b} keys(%$readlist);
 
-    my %isequaloptions = (ignoreblankcomment=>1);
+    my %isequaloptions = (leftjoin=>1);
     $isequaloptions{ignorenameofpattern} = "oligo\\w+";
 
 $isequaloptions{logger} = $logger; # test purposes   
@@ -3628,7 +3629,7 @@ $logger->debug("processing tag $rtag");
                 next if $ignore->{$rtag};
 $logger->debug("testing tag $rtag");
 # and compare the tag with the current existing tag (including host class)
-                if ($rtag->isEqual($etag,%isequaloptions)) {
+                if ($etag->isEqual($rtag,%isequaloptions)) {
                     $ignore->{$rtag}++; # skip this input tag afterwards
                     $ignore->{$etag}++; # this existing tags is in input list
 		}
@@ -3666,6 +3667,186 @@ $logger->setPrefix("putTagsForReads");
 
 $logger->setPrefix("putTagsForReads");
 $logger->debug("new tags to be loaded : ".scalar(@tags));
+$logger->warning("new tags to be loaded : ".scalar(@tags));
+
+    return '0.0' unless @tags; # returns True for success but empty
+
+    my $autoload = $options{autoload} || 0;
+    $this->getTagSequenceIDsForTags(\@tags, autoload => $autoload);
+
+    return [@tags] if $options{noload}; # test option
+
+    return &putReadTags($dbh,\@tags);
+}
+
+use TagFactory::TagFactory;
+
+sub putTagsForReads {
+# bulk insertion of tag data
+    my $this = shift;
+    my $reads = shift; # array of Read instances
+    my %options = @_; # autoload=> , synchronise=>
+
+#return $this->oldputTagsForReads($reads,@_);
+
+    &verifyParameter($reads,'putTagsForReads','ARRAY');
+
+    return '0.0' unless @$reads; # empty array
+
+    &verifyParameter($reads->[0],'putTagsForReads');
+
+    my $logger = $this->verifyLogger("putTagsForReads");
+
+# get read sequence IDs; load a new read version not here, but as part of contig loading
+
+    my $success = $this->getSequenceIDsForReads($reads,noload=>1); 
+
+# build a list of sequence IDs in tags (all sequence IDs must be defined)
+
+    my $readseqidhash = {};
+    foreach my $read (@$reads) {
+        next unless $read->hasTags();
+        if (my $seq_id = $read->getSequenceID()) {
+            $readseqidhash->{$seq_id} = $read;
+        }         
+        else {
+            $logger->error("putTagsForReads: missing sequence identifier ".
+                           "in read ".$read->getReadName());
+        }
+    }
+
+# get all tags for these reads already in the database
+
+    my @sids = sort {$a <=> $b} keys(%$readseqidhash);
+
+    return '0.0' unless @sids; # no tags to be stored
+
+# test against tags which have already been stored previously
+
+    my $dbh = $this->getConnection();
+
+    my $existingtags = &getReadTagsForSequenceIDs($dbh,\@sids,1000,distinct=>1); # empties @sids
+
+# build existing tag hash
+
+    my $tagseqidhash = {};
+    foreach my $etag (@$existingtags) {
+        my $seqid = $etag->getSequenceID();
+        $tagseqidhash->{$seqid} = [] unless $tagseqidhash->{$seqid};
+        my $taglist = $tagseqidhash->{$seqid};
+        push @$taglist,$etag;
+    }
+
+# run through both reads and existing tags to weed out tags to be ignored
+
+    my %isequaloptions = (synchronise => 0);
+    $isequaloptions{ignorenameofpattern} = "oligo\\w+";
+
+    my $ignore = {};
+    foreach my $seq_id (keys %$readseqidhash) {
+	my $read = $readseqidhash->{$seq_id};
+	my $rtags = $read->getTags();
+        my $etags = $tagseqidhash->{$seq_id};
+        next unless ($rtags && @$rtags && $etags && @$etags);
+# sort the tags (and remove possible duplicates)
+        TagFactory->sortTags($rtags,sort=>'full');
+        TagFactory->sortTags($etags,sort=>'full');
+# compare the tags; this loop will find most (but not necessarily all!) matching tags
+        my ($rrank,$erank) = (0,0);
+        my $rcount = scalar(@$rtags);
+        my $ecount = scalar(@$etags);
+        while ($rrank < @$rtags && $erank < @$etags) {
+            my $rtag = $rtags->[$rrank];
+            my $etag = $etags->[$erank];
+            if ($rtag->getPositionLeft() < $etag->getPositionLeft()) {
+                $rrank++;
+            }
+            elsif ($rtag->getPositionLeft() > $etag->getPositionLeft()) {
+		$erank++;
+	    }
+# when comparing we allow tagcomment or dna in rtag to be blank 
+            elsif ($etag->isEqual($rtag,%isequaloptions,leftjoin=>1)) {
+# count the number of input and existing tags in matches
+                $rcount-- unless $ignore->{$rtag};
+                $ecount-- unless $ignore->{$etag};
+# mark the tags involved
+                $ignore->{$rtag}++;
+                $ignore->{$etag}++;
+# and go to the next tag
+                $rrank++;
+                $erank++;
+	    }
+            else {
+                $erank++;
+	    }
+        }
+
+# do a final scan, if we still have unmatched tags
+
+        next unless ($rcount || $ecount);
+	    
+$logger->info("there are unmatched tags, r:$rcount  e:$ecount (".scalar(@$etags).") seq_id $seq_id");
+
+        foreach my $rtag (@$rtags) {
+            last unless $rcount;
+            next if $ignore->{$rtag};
+            foreach my $etag (@$etags) {
+                if ($etag->isEqual($rtag,%isequaloptions)) {
+# count the number of input and existing tags in matches
+                    $rcount-- unless $ignore->{$rtag}++;
+                    $ecount-- unless $ignore->{$etag}++;
+$logger->info("rtag $rtag filtered out");
+		}
+	    }
+	}
+
+        foreach my $etag (@$etags) {
+            last unless $ecount;
+            next if $ignore->{$etag};
+            foreach my $rtag (@$rtags) {
+                if ($etag->isEqual($rtag,%isequaloptions)) {
+# count the number of input and existing tags in matches
+                    $rcount-- unless $ignore->{$rtag}++;
+                    $ecount-- unless $ignore->{$etag}++;
+$logger->info("etag $etag filtered out");
+		}
+	    }
+	}
+
+        next unless ($rcount || $ecount);
+
+	$logger->info("there are unmatched tags, r:$rcount (".scalar(@$rtags)
+                        .") e:$ecount (".scalar(@$etags).") remaining");
+    }
+
+# if tags have to be retired, run through the existing tags
+
+    if ($options{synchronise}) {
+# existing tags also in the input list are marked as to be ignored
+$logger->warning("synchronise active");
+        foreach my $etag (@$existingtags) {
+            next if $ignore->{$etag};
+# this existing tags was not found amongst the input tags: retire it
+            &retireReadTag($dbh,$etag);
+	}
+    }
+
+# finally collect all tags in the reads not marked as to be ignored, load them
+
+    my @tags;
+    foreach my $read (@$reads) {
+        next unless $read->hasTags();
+        my $rtags = $read->getTags();
+        foreach my $rtag (@$rtags) {
+            next if $ignore->{$rtag};
+            push @tags,$rtag;
+$logger->info("tag to be added:\n".$rtag->writeToCaf());
+	}
+    }
+
+# here we have a list of new tags which have to be loaded
+
+$logger->info("new tags to be loaded : ".scalar(@tags));
 
     return '0.0' unless @tags; # returns True for success but empty
 
@@ -3875,6 +4056,8 @@ sub retireReadTag {
     my $dbh = shift;
     my $tag = shift;
 
+print STDOUT "retireReadTag: tag to be retired:\n".$tag->writeToCaf(); return; # test
+
     &verifyPrivate($dbh,"putReadTags");
 
     &verifyParameter($tag,"putReadTags",'Tag');
@@ -3894,7 +4077,6 @@ sub retireReadTag {
               . "   and pfinal = "     .  $pfinal
               . "   and strand = '"    .  $strand . "'";
     $query   .= "   and comment like $comment" if $comment;
-#    print STDOUT "deprecate: $query\n\n"; # TO BE TESTED
 
     return $dbh->do($query); # true for success
 }
