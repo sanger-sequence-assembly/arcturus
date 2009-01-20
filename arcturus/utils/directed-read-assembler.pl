@@ -31,8 +31,10 @@ my $debug;
 my $swprog;
 my $caffile;
 
+my $logfile;
+
 my $validKeys  = "organism|o|instance|i|filename|fn|swprog|caf|breakmode|bm|"
-               . "clip|cleanup|contig|read|confirm|verbose|debug|help";
+               . "clip|cleanup|contig|read|confirm|logfile|lf|verbose|debug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -52,8 +54,13 @@ while (my $nextword = shift @ARGV) {
         $organism     = shift @ARGV;
     }
 
-    $datafile   = shift @ARGV  if ($nextword eq '-filename');
-    $datafile   = shift @ARGV  if ($nextword eq '-fn');
+    if ($nextword eq '-fn' || $nextword eq '-filename') {
+        $datafile   = shift @ARGV;
+    }
+
+    if ($nextword eq '-lf' || $nextword eq '-logfile') {
+        $logfile   = shift @ARGV;
+    }
 
     $verbose    = 2            if ($nextword eq '-verbose');
 
@@ -122,6 +129,7 @@ my $logger = new Logging('STDOUT');
  
 $logger->setStandardFilter($verbose) if $verbose; # set fine reporting level
 $logger->setBlock('debug',unblock=>1) if $debug;
+$logger->setSpecialStream($logfile,append=>1) if $logfile;
 
 #----------------------------------------------------------------
 # get the database connection
@@ -317,10 +325,13 @@ foreach my $contigname (sort keys %$contigreadhash) {
     unless ($projects->[0] && $status eq 'OK') {
        ($projects,$status) = $adb->getProject(projectname=>'BIN');
     }
+    my $workproject;
     if ($projects->[0] && $status eq 'OK') {
         my $projectname = $projects->[0]->getProjectName();
         $logger->warning("Project $projectname found for ID $project_id");
+        $workproject = $projects->[0];
     }
+    
 
 # ------------- process sequence data, if specified
 
@@ -548,6 +559,7 @@ $logger->warning( "read sequence $rsubstring")             if $DEBUG;
     my $nr = scalar(@$maps);
 
     $logger->warning("Put contig $contigname with $nr reads: status $added, $msg");
+    $logger->special("Put contig $contigname with $nr reads: status $added, $msg");
 }
 
 if (!$confirm && !$CAF) {

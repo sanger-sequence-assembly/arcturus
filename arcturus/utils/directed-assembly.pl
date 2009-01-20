@@ -306,6 +306,9 @@ my $swprog = "$arcturus_root/test/smithwaterman.x";
 
 if (-f $xmatchfilter) {
 
+    my $logfile = "contigloader.log";
+
+#    my $command = "/nfs/team81/ejz/arcturus/development/utils/directed-read-assembler.pl "
     my $command = "$arcturus_root/utils/directed-read-assembler "
                 . "-o $organism -i $instance "
                 . "-filename $xmatchfilter -swprog $swprog "
@@ -316,6 +319,7 @@ if (-f $xmatchfilter) {
 #    $command   .= "-multiple "         if $nosingle; # to be developed
     $command   .= "-confirm "          if $confirm;
     $command   .= "-verbose "          if $verbose;
+    $command   .= "-lf $logfile"       if $logfile;
 
     $logger->warning("assembling reads into contigs",ss=>1);
     $logger->info($command,skip=>1);
