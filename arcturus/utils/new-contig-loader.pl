@@ -84,6 +84,8 @@ my $syncreadtags;           # retired readtags which are NOT in the current lis
 my $pidentifier = 'BIN';    # projectname for which the data are to be loaded
 my $assembly;               # may be required in case of ambiguity
 my $pinherit = 'readcount'; # project inheritance method, default on number of reads
+my $noscaffold;             # if set, no scaffolding info (contig order) is recorded
+my $scaffoldfile;
 
 my $projectlock;            # if set acquire lock on project first ? shoulb always
 my $autolockmode = 1;
@@ -134,9 +136,10 @@ my $validkeys  = "organism|o|instance|i|"
 
                . "assignproject|ap|defaultproject|dp|setprojectby|spb|"
                . "projectlock|pl|dounlock|project|p|noprojectlock|npl|"
-               . "assembly|a|"
+               . "assembly|a|noscaffold|ns|scaffoldfile|sf|"
 
-               . "outputfile|out|log|minerva|verbose|info|debug|memory|help|h";
+               . "outputfile|out|log|minerva|verbose|info|debug|"
+               . "memory|timing|benchmark|help|h";
 
 #------------------------------------------------------------------------------
 # parse the command line input; options overwrite eachother; order is important
@@ -300,7 +303,7 @@ while (my $nextword = shift @ARGV) {
         $loadreadtags = 0;
         $echoreadtags = 1;            
     }
-    if ($nextword eq 'synchronisereadtags' || $nextword eq 'syncrt') {
+    if ($nextword eq '-synchronisereadtags' || $nextword eq '-syncrt') {
         $syncreadtags = 1;
     } 
 
@@ -326,6 +329,13 @@ while (my $nextword = shift @ARGV) {
     elsif ($nextword eq '-spb' || $nextword eq'-setprojectby') {
         $pinherit     = shift @ARGV;
     }
+    elsif ($nextword eq '-ns' || $nextword eq'-noscaffold') {
+        $noscaffold   = 1;
+        undef $scaffoldfile;
+    }
+    elsif ($nextword eq '-sf' || $nextword eq'-scaffoldfile') {
+        $scaffoldfile = shift @ARGV;
+    }
 
     $autolockmode     = 0  if ($nextword eq '-dounlock'); # default 1
 
@@ -335,6 +345,8 @@ while (my $nextword = shift @ARGV) {
     $loglevel         = 2  if ($nextword eq '-info');    # info
     $debug            = 1  if ($nextword eq '-debug');   # info, fine
     $usage            = 1  if ($nextword eq '-memory');  # info, fine
+    $usage            = 1  if ($nextword eq '-timing');  # info, fine
+    $usage            = 1  if ($nextword eq '-benchmark');  # info, fine
 
     $logfile          = shift @ARGV  if ($nextword eq '-log');
     $outfile          = shift @ARGV  if ($nextword eq '-out');
@@ -503,6 +515,14 @@ if ($projectlock) {
 }
 
 #----------------------------------------------------------------
+# scaffold information
+#----------------------------------------------------------------
+
+my $scaffold;
+
+$scaffold = &scaffoldfileparser($scaffoldfile) if $scaffoldfile;
+
+#----------------------------------------------------------------
 # MAIN
 #----------------------------------------------------------------
 
@@ -597,6 +617,8 @@ my @inventory;
 
 my %rankhash;
 
+my $nextrank = 0;
+
 $adb->populateLoadingDictionaries(); # for edited or missing reads (should be in ADBREAD)
 
 my $readversionhash = {};
@@ -666,6 +688,8 @@ if ($frugal) { # this whole block should go to a contig "factory"
 
     $logger->warning(scalar(@contignames)." contigs, "
                      .scalar(@readnames)." reads");
+
+    $nextrank = scalar(@contignames) + 1;
 
 # test the readnames against reads in the database
 
@@ -741,8 +765,8 @@ while (!$fullscan) {
         if (@contignames) {
 # extract a list of minimal Contig with corresponding Read instances
             my $nctbe = scalar(@contignames);
-            $logger->warning("block of $nctbe contigs to be extracted") unless ($nctbe == 1);
-            $logger->warning("next contig ($contignames[0]) to be extracted") if ($nctbe == 1);
+            $logger->warning("block of $nctbe contigs to be extracted",ss=>1)   unless ($nctbe == 1);
+            $logger->warning("next contig ($contignames[0]) to be extracted",ss=>1) if ($nctbe == 1);
             $poptions{noreads} = 1 if $uservhashlocal;
             $logger->monitor("before extract ",memory=>1,timing=>1) if $usage;
             $objects = ContigFactory->contigExtractor(\@contignames,$readversionhash,
@@ -790,7 +814,7 @@ while (!$fullscan) {
             $fullscan = 1;
 #            ContigFactory->closeFile();            
 	}
-        $logger->monitor("frugal (next $nc contigs)",memory=>1,timing=>1) if $usage;
+        $logger->monitor("frugal (next $nc contigs)",memory=>1,timing=>1,skip=>1) if $usage;
     }
 
 #--------------------- full scan ----------------------------
@@ -856,9 +880,13 @@ print STDOUT " end no frugal scan\n";
              next;
 	}
 
-        $logger->info("Processing contig $contigname");
+        $logger->info("Processing contig $contigname") unless $usage;
             
         my $rank = $inventory->{$contigname}->{Rank};
+        unless (defined($rank)) {
+            $logger->warning("rank undefined for $contigname");          
+	    $rank = 0;
+	}
         $logger->info("RANK $rank for $contigname");
 
 # here remove the references to the Contig and its Reads from the inventory
@@ -875,25 +903,6 @@ print STDOUT " end no frugal scan\n";
 	    }
 	    ContigFactory->removeObjectFromInventory(\@remove);
         }
-
-#------------------------------------------------------------------------------
-# collect reads for tag processing
-#------------------------------------------------------------------------------
-
-	if (keys %readtagoptions) {    
-            my $creads = $contig->getReads();    
-            $logger->info("contig has ".scalar(@$creads)." reads");
-            foreach my $read (@$creads) {
-                my $readname = $read->getName();
-                $logger->fine("read $readname");
-                undef $inventory->{$readname} if $frugal; # remove from inventory
-                next unless $read->hasTags();
-                $logger->info("read $readname has tags");
-                push @$reads,$read;
-	    }
-	}
-
-# register the 
  
         $contig->setOrigin($origin);
 
@@ -902,6 +911,8 @@ print STDOUT " end no frugal scan\n";
         my $identifier = $contig->getContigName();
 
         my $nr = $contig->getNumberOfReads();
+
+        $logger->warning("Processing contig $contigname ($nr) ",ss=>1) if $usage;
 
         if ($nr < $minnrofreads) {
             $logger->warning("$identifier has less than $minnrofreads reads");
@@ -913,7 +924,22 @@ print STDOUT " end no frugal scan\n";
 	    next;
         }
 
-# process tags to weed out possible duplicates on input caf file
+# collect reads for tag processing
+
+	if (keys %readtagoptions) {    
+            my $creads = $contig->getReads();    
+            $logger->info("contig has ".scalar(@$creads)." reads");
+            foreach my $read (@$creads) {
+                my $readname = $read->getName();
+                $logger->fine("read $readname");
+                undef $inventory->{$readname} if $frugal; # remove from inventory
+                next unless $read->hasTags();
+                $logger->fine("read $readname has tags");
+                push @$reads,$read;
+	    }
+	}
+
+# process contig tags to weed out possible duplicates on input caf file
 
         $contig->getTags(0,sort=>'full',merge=>1);
 
@@ -942,7 +968,9 @@ print STDOUT " end no frugal scan\n";
 	    $loptions{annotation} = $annotationtags if $annotationtags;
 	    $loptions{finishing} = $finishingtags if $finishingtags;
 
+            $logger->monitor("before loading ($nr) ",memory=>1,timing=>1) if $usage;
             my ($added,$msg) = $adb->putContig($contig, $project,%loptions);
+            $logger->monitor("after loading ($nr) ",memory=>1,timing=>1) if $usage;
 
             if ($added) {
                 $loaded++;
@@ -950,11 +978,11 @@ print STDOUT " end no frugal scan\n";
                 $logger->info("Contig $identifier with $nr reads :"
                              ." status $added, $msg");
 #                $loaded++ unless ...;
-                unless ($rank) {
-                    $logger->error("RANK UNDEFINED for $contigname");
-		    $rank = 0; # to still have the entry
+# replace the input rank by the scaffold ranking, or, if absent by the nextrank count
+                if ($scaffold) {
+                    $rank = $scaffold->{$rank} || $nextrank++;
 		}
-                push @scaffoldlist,[($added,$rank,'forward')];
+                push @scaffoldlist,[($added,$rank,'forward')] unless $noscaffold;
 # here : putScaffoldInfo; if 
 # does this require an extra state method? Or just add to Scaffold instance?
 # normal operation with import of project, just puckup rank and load the lot as new scaffold
@@ -1054,6 +1082,8 @@ print STDOUT " end no frugal scan\n";
 
 # dump/test/echo the contig tags
 
+#$logger->monitor("tag processing contig $contigname",memory=>1,timing=>1) if $usage;
+
         if (keys %contigtagoptions) {
 
            my ($status,$msg) = &processcontigtags($contig,$identifier,
@@ -1077,7 +1107,6 @@ print STDOUT " end no frugal scan\n";
 
 # destroy the contig and possible related contigs to enable garbage collection
 
-#$logger->monitor("after processing contig ".$contig->getContigName(),memory=>1) if $usage;
         if (my $parents = $contig->getParentContigs()) {
             foreach my $parent (@$parents) {
                 $parent->erase();
@@ -1086,6 +1115,7 @@ print STDOUT " end no frugal scan\n";
         }
         $contig->erase();
         undef $contig;
+#$logger->monitor("after processing contig $contigname: contig cleared",memory=>1,timing=>1) if $usage;
     }
 } 
 
@@ -1357,7 +1387,10 @@ sub processreadtags {
     my $reads = shift; # array ref to a list of reads
     my %options = @_;
 
-    $logger->info("Processing readtags for ".scalar(@$reads)." reads");
+my $monitor = 0;
+$logger->monitor("ENTER processing : readtags for ".scalar(@$reads)." reads",memory=>1,timing=>1) if $monitor;
+
+    $logger->info("Processing readtags for ".scalar(@$reads)." reads (@_)");
 
     if ($options{load}) { # load (new) read tags
         my $success = $adb->putTagsForReads($reads,autoload=>1);
@@ -1368,6 +1401,7 @@ sub processreadtags {
         my $success = $adb->putTagsForReads($reads,autoload=>1,synchronise=>1);
         $logger->debug("synchronise read tags : success = $success");
     }
+$logger->monitor("AFTER processing readtags",memory=>1,timing=>1) if $monitor;
 
     if ($options{echo}) {
 # echoreadtags
@@ -1447,6 +1481,34 @@ sub processcontigtags { # per contig
 	}
         return 1,"OK";
     }
+}
+
+sub scaffoldfileparser { # TO BE TESTED
+# parse scaffold file produced by shell script accessing Gap4 database directly
+    my $file = shift;
+
+    my $scaffoldhash = {};
+
+    return 0 unless $file;
+
+    my $SCAFFOLD = new FileHandle($file);
+
+    return 0 unless $SCAFFOLD;
+
+    my $inputrank = 0;
+    while (my $record = <$SCAFFOLD>) {
+        $record =~ s/^\s+//; # remove leading blanks
+        my @part = split /\s+/,$record;
+        next unless $part[0];
+	$inputrank++;
+        $scaffoldhash->{$part[0]} = $inputrank;
+    }
+
+    close $SCAFFOLD;
+
+    return 0 unless $inputrank; # empty file protection
+
+    return $scaffoldhash;
 }
 
 #------------------------------------------------------------------------
@@ -1555,6 +1617,8 @@ sub showUsage {
     print STDERR "-p\t\t(project) alias of assignproject\n";
     print STDERR "-a\t\t(assembly) ID or name; required in case of "
                . "ambiguous project name\n";
+    print STDERR "-sf\t\t(scaffoldfile) file with scaffolding info (re: contigorder.sh)\n";
+    print STDERR "-ns\t\t(noscaffold) unless set, the contig order on import is stored\n";
     print STDERR "\n";
 #    print STDERR "OPTIONAL PARAMETERS for project locking:\n";
 #    print STDERR "\n";
@@ -1640,6 +1704,7 @@ sub showUsage {
     print STDERR "-test\t\tnumber of lines parsed of the CAF file\n";
     print STDERR "-consensus\talso load consenmsus sequence\n";
     print STDERR "-nf\t\t(nofrugal, no value)\n";
+    print STDERR "-memory\t\t(benchmark,timing) performance testing\n";
     print STDERR "\n";
     print STDERR "Parameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
