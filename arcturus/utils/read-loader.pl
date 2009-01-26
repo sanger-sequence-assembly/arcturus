@@ -226,7 +226,7 @@ elsif ($readstoload) {
 
 if (!$noexclude && !$update) {
 
-    $logger->info("Collecting existing readnames");
+    $logger->warning("Collecting existing readnames");
 
     my $readsloaded = $adb->getListOfReadNames; # array reference
 
@@ -238,7 +238,9 @@ if (!$noexclude && !$update) {
 	$readstoskip->{$readname} = 1;
     }
 
-    $logger->info("$nr readnames found in database $organism");
+    $PARS{exclude} = $readstoskip;
+
+    $logger->warning("$nr readnames found in database $organism");
 }
 
 #----------------------------------------------------------------
@@ -272,7 +274,7 @@ if ($source eq 'caf') {
 
 # test for excess baggage; abort if present (force correct input)
 
-    my @valid = ('caf','include','log','readnamelike','filter');
+    my @valid = ('caf','exclude','log','readnamelike'); # ,'limit'
     &showUsage("Invalid parameter(s)") if &testForExcessInput(\%PARS,\@valid);
 
     $factory = new CAFReadFactory(%PARS);
@@ -408,6 +410,7 @@ foreach my $readname (@{$readloadlist}) {
         my $existingread = $adb->getRead(readname=>$readname);
         unless ($existingread) {
             $logger->warning("read $readname is not found in database $organism");
+            undef $read;
             next;
 	}
 #        foreach my $tag (@$rtags) {
@@ -416,6 +419,7 @@ foreach my $readname (@{$readloadlist}) {
         next if $noloading; # test mode
         $adb->putTagsForReads([($read)]);
 	$processed++;
+        $read->erase();
         next;
     }
 
@@ -461,6 +465,8 @@ foreach my $readname (@{$readloadlist}) {
         }
 
         $adb->putTagsForReads([($read)]) if $read->hasTags();
+ 
+        $read->erase();
 
         next;
     }
@@ -472,6 +478,8 @@ foreach my $readname (@{$readloadlist}) {
         $logger->warning("$readname: $report",ss=>1);
 
 	$read->writeToCaf(*STDOUT) if ($noloading > 1);
+
+        $read->erase();
 
         next;
     }
@@ -487,6 +495,8 @@ foreach my $readname (@{$readloadlist}) {
     $adb->putTraceArchiveIdentifierForRead($read) if $success;
 
     $adb->putTagsForReads([($read)]) if $read->hasTags();
+
+    $read->erase();
 }
 
 $adb->disconnect();
