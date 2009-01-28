@@ -532,7 +532,7 @@ sub putContig {
             $contig->setContigID($previous->getContigID());
 
             if ($doload && $contig->hasTags()) {
-                my $newtags = $this->putTagsForContig($contig,synchronize=>1); # synchronize option not yet active
+                my $newtags = $this->putTagsForContig($contig,synchronise=>0); # synchronise option not yet active
                 $message .= "; $newtags new contig tags loaded" if $newtags;
             }
 
@@ -3035,7 +3035,6 @@ sub enterTagsForContig { # TEST purposes, to be DEPRECTATED
     my %options = @_;
 
     $options{noload}   = 1 unless defined $options{noload};
-#    $options{testmode} = 1 unless defined $options{testmode}; # not used anymore
 
     return 0 unless $contig->hasTags();
 
@@ -3046,7 +3045,7 @@ sub putTagsForContig {
 # public method
     my $this = shift;
     my $contig = shift;
-    my %options = @_; # noload; noexistencetest; nokeep; nomerge ? synchronize
+    my %options = @_; # noload; noexistencetest; nokeep; nomerge; synchronise
 
     &verifyParameter($contig,"putTagsForContig");
 
@@ -3118,7 +3117,9 @@ sub putTagsForContig {
 
         TagFactory->sortTags($etags,sort=>'full'); # MySQL sort is case insensitive
     
-# delete the (possibly) existing tags from the ctags list 
+# delete the (possibly) existing tags from the ctags list; keep track of matches with e tags
+
+        my $etaghash = {};
 
         my ($i,$j) = (0,0);
         while ($i < scalar(@$ctags) && $j < scalar(@$etags)) {
@@ -3130,10 +3131,12 @@ sub putTagsForContig {
                 $j++;
             }
 # test for equality or overlap 
-            elsif ($ctags->[$i]->isEqual($etags->[$j])) {
+            elsif ($etags->[$j]->isEqual($ctags->[$i],leftjoin=>1)) {
+                $etaghash->{$etags->[$j]}++;
                 splice @$ctags,$i,1;
             }
-            elsif ($etags->[$j]->isEqual($ctags->[$i],contains=>1)) {
+            elsif ($etags->[$j]->isEqual($ctags->[$i],leftjoin=>1,contains=>1)) {
+                $etaghash->{$etags->[$j]}++;
                 splice @$ctags,$i,1;
             }
 # tags are not equal
@@ -3141,6 +3144,15 @@ sub putTagsForContig {
                 $j++; # next existing tag only
             }
         }
+
+        if ($options{synchronise}) {
+# remove existing tags which are not among input tags
+            foreach my $etag (@$etags) {
+                next if $etaghash->{$etag};
+# the tag is not accounted for
+                &retireContigTag($dbh,$etag); # to be developed
+            }
+	}
     }
 
     $logger->info("new tags $contigname ".scalar(@$ctags),ss=>1);
@@ -3363,6 +3375,13 @@ sub putContigTags {
     $sth->finish();
 
     return $success; 
+}
+
+sub retireContigTag {
+    my $dbh = shift;
+    my $tag = shift;
+
+    print STDOUT "TO BE COMPLETED tag to be retired :\n".$tag->writeToCaf();
 }
 
 #------------------------------------------------------------------------------
