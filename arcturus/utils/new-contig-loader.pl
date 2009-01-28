@@ -77,7 +77,8 @@ my $noaspedcheck;           # (re: read load mode)
 my $rtagtypeaccept = 'default'; 
 my $loadreadtags = 1;       # (default) load new read tags found on caf file
 my $echoreadtags;           # list the read tags found; implies no loading
-my $syncreadtags;           # retired readtags which are NOT in the current lis
+my $syncreadtags = 0;       # retire readtags which are NOT in the current lis
+#my $syncreadtags = 1;       # retire readtags which are NOT in the current lis
 
 # project
 
@@ -94,7 +95,8 @@ my $autolockmode = 1;
 
 my $loglevel;             
 my $logfile;
-my $outfile;
+#my $outfile;
+my $outfile = "contigloader";
 my $minerva;
 my $mail;
 
@@ -132,6 +134,7 @@ my $validkeys  = "organism|o|instance|i|"
                . "annotationtags|ats|finishingtags|fts|"
 
                . "readtagtype|rtt|noloadreadtags|nlrt|showreadtags|srt|"
+#               . "loadreadtags|lrt|nosynchronisereadtags|nsrt|"
                . "loadreadtags|lrt|synchronisereadtags|syncrt|"
 
                . "assignproject|ap|defaultproject|dp|setprojectby|spb|"
@@ -303,6 +306,8 @@ while (my $nextword = shift @ARGV) {
         $loadreadtags = 0;
         $echoreadtags = 1;            
     }
+#    if ($nextword eq '-nosynchronisereadtags' || $nextword eq '-nsrt') {
+#        $syncreadtags = 0;
     if ($nextword eq '-synchronisereadtags' || $nextword eq '-syncrt') {
         $syncreadtags = 1;
     } 
@@ -374,7 +379,11 @@ $logger->setStandardStream($logfile,append=>1) if $logfile; # default STDOUT
 
 $logger->setStandardFilter($loglevel) if defined $loglevel; # reporting level
 
-$logger->setSpecialStream($outfile,list=>1,timestamp=>1) if $outfile;
+if ($outfile) {
+    $outfile .= ".log" unless ($outfile =~ /\.log$/);
+    $outfile =~ s/\.log/-$$.log/; # append process id
+    $logger->setSpecialStream($outfile,list=>1,timestamp=>1);
+}
 
 $logger->setPrefix("#MINERVA") if $minerva;
 
@@ -879,8 +888,6 @@ print STDOUT " end no frugal scan\n";
              $contig->writeToCaf(*STDOUT);
              next;
 	}
-
-        $logger->info("Processing contig $contigname") unless $usage;
             
         my $rank = $inventory->{$contigname}->{Rank};
         unless (defined($rank)) {
@@ -912,7 +919,7 @@ print STDOUT " end no frugal scan\n";
 
         my $nr = $contig->getNumberOfReads();
 
-        $logger->warning("Processing contig $contigname ($nr) ",ss=>1) if $usage;
+        $logger->warning("Processing contig $identifier with $nr reads ... ") if ($nr > 1);
 
         if ($nr < $minnrofreads) {
             $logger->warning("$identifier has less than $minnrofreads reads");
