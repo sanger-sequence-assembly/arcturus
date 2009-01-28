@@ -18,8 +18,12 @@ my $confirm;
 
 my $noexport;
 
+my $nomatch;
+
+my $report;
+
 my $validKeys  = "organism|o|instance|i|project|p|vector|v|minscore|m|tag|t|"
-               . "confirm|noexport|ne|help|h";
+               . "confirm|noexport|ne|nomatch|nm|report|help|h";
 
 while (my $nextword = shift @ARGV) {
 
@@ -59,6 +63,12 @@ while (my $nextword = shift @ARGV) {
     if ($nextword eq '-noexport' || $nextword eq '-ne') {
         $noexport     = 1;
     }
+
+    if ($nextword eq '-nomatch'  || $nextword eq '-nm') {
+        $nomatch      = 1;
+    }
+
+    $report  = 1 if ($nextword eq '-report'); 
 
     $confirm = 1 if ($nextword eq '-confirm'); 
 
@@ -118,10 +128,10 @@ my $caftag = "caftagfeature -tagid $tagid -vector $vectordb "
            . "-minscore $minscore < $expfile  > $impfile";
 
 print STDOUT "tagging caf file:\n$caftag\n\n";
-print STDOUT "Using previously tagged file $impfile\n\n" if $noexport;
+print STDOUT "Using previously tagged file $impfile\n\n" if $nomatch;
 
-system($caftag) unless $noexport;
-system("grep REPT $impfile");
+system($caftag) unless $nomatch;
+system("grep REPT $impfile") if $report;
 system("grep REPT $impfile | wc");
 
 my $import = "/software/arcturus/utils/new-contig-loader "
@@ -143,6 +153,7 @@ sub showUsage {
 
     print STDERR "\nUsage:\n\n$0 -o [organism] -i [instance] -p [project:ALL]"
                 ."-v [vectors:repeats.dbs] -t [tagid:REPT] -m [minscore:100] "
-                ."[-noexport:use existing export] [-confirm:import result]";
+                ."[-noexport:use existing export] [-nomatch:skip tagging] "
+                ."[-report] [-confirm:import result]";
     exit 0;
 }
