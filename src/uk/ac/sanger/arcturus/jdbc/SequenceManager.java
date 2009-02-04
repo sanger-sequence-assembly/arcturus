@@ -1,9 +1,10 @@
-package uk.ac.sanger.arcturus.database;
+package uk.ac.sanger.arcturus.jdbc;
 
 import uk.ac.sanger.arcturus.data.Read;
 import uk.ac.sanger.arcturus.data.Sequence;
 import uk.ac.sanger.arcturus.data.Clipping;
 import uk.ac.sanger.arcturus.data.Tag;
+import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
 import java.sql.*;
 import java.util.*;

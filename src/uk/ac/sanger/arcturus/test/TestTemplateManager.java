@@ -3,6 +3,9 @@ package uk.ac.sanger.arcturus.test;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.jdbc.CloneManager;
+import uk.ac.sanger.arcturus.jdbc.LigationManager;
+import uk.ac.sanger.arcturus.jdbc.TemplateManager;
 
 public class TestTemplateManager {
 	public static void main(String args[]) {
@@ -46,41 +49,26 @@ public class TestTemplateManager {
 
 			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 
-			System.out.println("FInding a CloneManager");
-			System.out.println();
-
-			CloneManager cmgr = adb.getCloneManager();
-
 			System.out.println("Pre-loading all clones");
 			System.out.println();
 
-			cmgr.preloadAllClones();
-
-			System.out.println("Finding a LigationManager");
-			System.out.println();
-
-			LigationManager lmgr = adb.getLigationManager();
+			adb.preloadAllClones();
 
 			System.out.println("Pre-loading all ligations");
 			System.out.println();
 
-			lmgr.preloadAllLigations();
-
-			System.out.println("Finding a TemplateManager");
-			System.out.println();
-
-			TemplateManager tmgr = adb.getTemplateManager();
+			adb.preloadAllLigations();
 
 			System.out.println("Pre-loading all templates");
 			System.out.println();
 
-			tmgr.preloadAllTemplates();
+			adb.preloadAllTemplates();
 
 			System.out
 					.println("Looking up template " + objectname + " by name");
 			System.out.println();
 
-			Template template = tmgr.getTemplateByName(objectname);
+			Template template = adb.getTemplateByName(objectname);
 
 			if (template == null)
 				System.out.println("*** FAILED ***");
@@ -96,7 +84,7 @@ public class TestTemplateManager {
 			System.out.println("Looking up template 6 by ID");
 			System.out.println();
 
-			template = tmgr.getTemplateByID(6);
+			template = adb.getTemplateByID(6);
 
 			if (template == null)
 				System.out.println("*** FAILED ***");

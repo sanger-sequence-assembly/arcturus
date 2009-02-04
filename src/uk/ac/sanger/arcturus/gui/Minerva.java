@@ -17,6 +17,7 @@ import uk.ac.sanger.arcturus.data.Organism;
 import uk.ac.sanger.arcturus.database.*;
 
 import uk.ac.sanger.arcturus.gui.organismtree.OrganismTreePanel;
+import uk.ac.sanger.arcturus.jdbc.ArcturusDatabaseImpl;
 import uk.ac.sanger.arcturus.people.PeopleManager;
 
 import uk.ac.sanger.arcturus.utils.CheckVersion;
@@ -224,10 +225,10 @@ public class Minerva {
 
 	public MinervaTabbedPane createOrganismDisplay(Organism organism)
 			throws SQLException {
-		ArcturusDatabase adb = new ArcturusDatabase(organism);
+		ArcturusDatabase adb = new ArcturusDatabaseImpl(organism);
 
-		adb.setReadCacheing(false);
-		adb.setSequenceCacheing(false);
+		adb.setCacheing(ArcturusDatabase.READ, false);
+		adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
 
 		MinervaTabbedPane panel = new MinervaTabbedPane(adb);
 

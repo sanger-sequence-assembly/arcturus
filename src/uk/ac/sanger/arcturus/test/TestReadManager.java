@@ -3,6 +3,10 @@ package uk.ac.sanger.arcturus.test;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.jdbc.CloneManager;
+import uk.ac.sanger.arcturus.jdbc.LigationManager;
+import uk.ac.sanger.arcturus.jdbc.ReadManager;
+import uk.ac.sanger.arcturus.jdbc.TemplateManager;
 
 public class TestReadManager {
 	private static long lasttime;
@@ -52,58 +56,38 @@ public class TestReadManager {
 
 			report();
 
-			System.out.println("Finding a CloneManager");
-			System.out.println();
-
-			CloneManager cmgr = adb.getCloneManager();
-
 			System.out.println("Pre-loading all clones");
 			System.out.println();
 
-			cmgr.preloadAllClones();
+			adb.preloadAllClones();
 
 			report();
-
-			System.out.println("Finding a LigationManager");
-			System.out.println();
-
-			LigationManager lmgr = adb.getLigationManager();
 
 			System.out.println("Pre-loading all ligations");
 			System.out.println();
 
-			lmgr.preloadAllLigations();
+			adb.preloadAllLigations();
 
 			report();
-
-			System.out.println("Finding a TemplateManager");
-			System.out.println();
-
-			TemplateManager tmgr = adb.getTemplateManager();
 
 			System.out.println("Pre-loading all templates");
 			System.out.println();
 
-			tmgr.preloadAllTemplates();
+			adb.preloadAllTemplates();
 
 			report();
-
-			System.out.println("Finding a ReadManager");
-			System.out.println();
-
-			ReadManager rmgr = adb.getReadManager();
 
 			System.out.println("Pre-loading all reads");
 			System.out.println();
 
-			rmgr.preloadAllReads();
+			adb.preloadAllReads();
 
 			report();
 
 			System.out.println("Looking up read " + objectname + " by name");
 			System.out.println();
 
-			Read read = rmgr.getReadByName(objectname);
+			Read read = adb.getReadByName(objectname);
 
 			if (read == null)
 				System.out.println("*** FAILED ***");
@@ -121,7 +105,7 @@ public class TestReadManager {
 			System.out.println("Looking up read 6 by ID");
 			System.out.println();
 
-			read = rmgr.getReadByID(6);
+			read = adb.getReadByID(6);
 
 			if (read == null)
 				System.out.println("*** FAILED ***");

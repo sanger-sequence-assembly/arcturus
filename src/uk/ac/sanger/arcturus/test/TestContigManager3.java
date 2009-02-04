@@ -3,6 +3,8 @@ package uk.ac.sanger.arcturus.test;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.jdbc.ManagerEvent;
+import uk.ac.sanger.arcturus.jdbc.ManagerEventListener;
 import uk.ac.sanger.arcturus.utils.*;
 
 import java.util.*;

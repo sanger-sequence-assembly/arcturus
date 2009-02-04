@@ -3,6 +3,8 @@ package uk.ac.sanger.arcturus.test;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.jdbc.ManagerEvent;
+import uk.ac.sanger.arcturus.jdbc.ManagerEventListener;
 import uk.ac.sanger.arcturus.utils.*;
 import uk.ac.sanger.arcturus.Arcturus;
 
@@ -35,7 +37,6 @@ public class CalculateConsensus {
 	private Connection conn = null;
 
 	private boolean debug = false;
-	private boolean verbose = false;
 	private boolean progress = false;
 	private boolean allcontigs = false;
 	private boolean nostore = false;
@@ -84,9 +85,6 @@ public class CalculateConsensus {
 
 			if (args[i].equalsIgnoreCase("-debug"))
 				debug = true;
-
-			if (args[i].equalsIgnoreCase("-verbose"))
-				verbose = true;
 
 			if (args[i].equalsIgnoreCase("-progress"))
 				progress = true;
@@ -155,9 +153,6 @@ public class CalculateConsensus {
 				printUsage(System.err);
 				System.exit(1);
 			}
-
-			if (verbose)
-				adb.addContigManagerEventListener(new MyListener());
 
 			Class algclass = Class.forName(algname);
 			algorithm = (ConsensusAlgorithm) algclass.newInstance();
@@ -295,7 +290,7 @@ public class CalculateConsensus {
 		ps.println("\t-contigs\tComma-separated list of contigs");
 		ps.println();
 		ps.println("OPTIONS");
-		String[] options = { "-debug", "-verbose", "-allcontigs", "-nostore" };
+		String[] options = { "-debug", "-allcontigs", "-nostore" };
 
 		for (int i = 0; i < options.length; i++)
 			ps.println("\t" + options[i]);

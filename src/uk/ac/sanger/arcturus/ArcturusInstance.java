@@ -8,6 +8,7 @@ import javax.sql.*;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.data.Organism;
+import uk.ac.sanger.arcturus.jdbc.ArcturusDatabaseImpl;
 
 /**
  * This class represents an Arcturus instance, which is a set of Arcturus
@@ -147,7 +148,7 @@ public class ArcturusInstance implements Iterator {
 				description = (String)value;
 		}
 
-		return new ArcturusDatabase(ds, description, name, this);
+		return new ArcturusDatabaseImpl(ds, description, name, this);
 	}
 	
 	private SearchResult lookup(String cn) throws NamingException {
@@ -330,7 +331,7 @@ public class ArcturusInstance implements Iterator {
 			if (object instanceof DataSource) {
 				String description = getDescription(name);
 
-				return new ArcturusDatabase((DataSource) object, description,
+				return new ArcturusDatabaseImpl((DataSource) object, description,
 						name, this);
 			}
 		}
