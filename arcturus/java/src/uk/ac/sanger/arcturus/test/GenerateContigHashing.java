@@ -97,7 +97,7 @@ public class GenerateContigHashing {
 
 			adb = ai.findArcturusDatabase(organism);
 
-			adb.getSequenceManager().setCacheing(false);
+			adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
 
 			conn = adb.getConnection();
 

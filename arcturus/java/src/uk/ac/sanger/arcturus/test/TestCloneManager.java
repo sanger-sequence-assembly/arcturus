@@ -3,6 +3,7 @@ package uk.ac.sanger.arcturus.test;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.jdbc.CloneManager;
 
 public class TestCloneManager {
 	public static void main(String args[]) {
@@ -46,20 +47,15 @@ public class TestCloneManager {
 
 			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 
-			System.out.println("Finding a CloneManager");
-			System.out.println();
-
-			CloneManager cmgr = adb.getCloneManager();
-
 			System.out.println("Pre-loading all clones");
 			System.out.println();
 
-			cmgr.preloadAllClones();
+			adb.preloadAllClones();
 
 			System.out.println("Looking up clone " + objectname + " by name");
 			System.out.println();
 
-			Clone clone = cmgr.getCloneByName(objectname);
+			Clone clone = adb.getCloneByName(objectname);
 
 			if (clone == null)
 				System.out.println("*** FAILED ***");
@@ -71,7 +67,7 @@ public class TestCloneManager {
 			System.out.println("Looking up clone 6 by ID");
 			System.out.println();
 
-			clone = cmgr.getCloneByID(6);
+			clone = adb.getCloneByID(6);
 
 			if (clone == null)
 				System.out.println("*** FAILED ***");

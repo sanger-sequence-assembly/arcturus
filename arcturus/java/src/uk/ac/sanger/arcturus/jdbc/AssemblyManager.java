@@ -1,6 +1,7 @@
-package uk.ac.sanger.arcturus.database;
+package uk.ac.sanger.arcturus.jdbc;
 
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
 import java.sql.*;
 import java.util.*;

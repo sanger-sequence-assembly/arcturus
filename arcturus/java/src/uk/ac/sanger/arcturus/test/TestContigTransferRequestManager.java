@@ -5,6 +5,7 @@ import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.contigtransfer.*;
 import uk.ac.sanger.arcturus.people.*;
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.jdbc.ContigTransferRequestManager;
 
 import java.io.*;
 import java.sql.*;
@@ -37,9 +38,6 @@ public class TestContigTransferRequestManager {
 			System.out.println();
 
 			adb = ai.findArcturusDatabase(organism);
-			ctrm = adb.getContigTransferRequestManager();
-
-			ctrm.setDebugging(true);
 		} catch (Exception e) {
 			e.printStackTrace();
 			System.exit(1);

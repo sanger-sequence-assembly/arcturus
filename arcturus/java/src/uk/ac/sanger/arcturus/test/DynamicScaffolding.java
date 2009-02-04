@@ -86,7 +86,7 @@ public class DynamicScaffolding {
 			adb = ai.findArcturusDatabase(organism);
 
 			if (lowmem)
-				adb.getSequenceManager().setCacheing(false);
+				adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
 
 			conn = adb.getConnection();
 

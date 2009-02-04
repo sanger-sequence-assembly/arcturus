@@ -122,7 +122,7 @@ public class FindSolexaSNP {
 					.getProjectByName(null, projectname);
 
 			if (lowmem)
-				adb.getSequenceManager().setCacheing(false);
+				adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
 
 			conn = adb.getConnection();
 

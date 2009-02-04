@@ -89,7 +89,7 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 			adb = ai.findArcturusDatabase(organism);
 
 			if (lowmem)
-				adb.getSequenceManager().setCacheing(false);
+				adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
 
 			ScaffoldBuilder sb = new ScaffoldBuilder(adb);
 

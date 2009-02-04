@@ -3,6 +3,8 @@ package uk.ac.sanger.arcturus.test;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.jdbc.ManagerEvent;
+import uk.ac.sanger.arcturus.jdbc.ManagerEventListener;
 import uk.ac.sanger.arcturus.utils.*;
 
 import java.util.*;
@@ -100,7 +102,7 @@ public class TestContigManager4 {
 			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 
 			if (lowmem)
-				adb.getSequenceManager().setCacheing(false);
+				adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
 
 			java.sql.Connection conn = adb.getConnection();
 
@@ -109,9 +111,6 @@ public class TestContigManager4 {
 				printUsage(System.err);
 				System.exit(1);
 			}
-
-			if (!quiet)
-				adb.addContigManagerEventListener(new MyListener());
 
 			BufferedReader stdin = new BufferedReader(new InputStreamReader(
 					System.in));

@@ -1,4 +1,4 @@
-package uk.ac.sanger.arcturus.database;
+package uk.ac.sanger.arcturus.jdbc;
 
 public abstract class AbstractManager {
 	protected boolean cacheing = true;

@@ -1,4 +1,4 @@
-package uk.ac.sanger.arcturus.database;
+package uk.ac.sanger.arcturus.jdbc;
 
 import java.util.EventObject;
 

@@ -44,15 +44,15 @@ public class ScaffoldWorker extends SwingWorker<Void, ScaffoldEvent> implements
 	}
 
 	protected Void doInBackground() throws Exception {
-		boolean cacheing = adb.getSequenceManager().isCacheing();
+		boolean cacheing = adb.isCacheing(ArcturusDatabase.SEQUENCE);
 
-		adb.getSequenceManager().setCacheing(false);
+		adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
 
 		ScaffoldBuilder sb = new ScaffoldBuilder(adb);
 
 		bridgeset = sb.createScaffold(seedcontig.getID(), this);
 
-		adb.getSequenceManager().setCacheing(cacheing);
+		adb.setCacheing(ArcturusDatabase.SEQUENCE, cacheing);
 
 		if (bridgeset != null && !bridgeset.isEmpty()) {
 			Map layout = createLayout(bridgeset);

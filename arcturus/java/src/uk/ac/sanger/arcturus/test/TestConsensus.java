@@ -3,6 +3,7 @@ package uk.ac.sanger.arcturus.test;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.jdbc.ReadManager;
 import uk.ac.sanger.arcturus.utils.*;
 import uk.ac.sanger.arcturus.Arcturus;
 
@@ -87,7 +88,7 @@ public class TestConsensus {
 
 			adb = ai.findArcturusDatabase(organism);
 
-			adb.getSequenceManager().setCacheing(false);
+			adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
 
 			conn = adb.getConnection();
 

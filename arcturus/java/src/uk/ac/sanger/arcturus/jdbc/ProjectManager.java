@@ -1,6 +1,8 @@
-package uk.ac.sanger.arcturus.database;
+package uk.ac.sanger.arcturus.jdbc;
 
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ProjectLockException;
 import uk.ac.sanger.arcturus.people.PeopleManager;
 import uk.ac.sanger.arcturus.people.Person;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;

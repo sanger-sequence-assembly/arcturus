@@ -5,9 +5,9 @@ import java.util.zip.*;
 import java.sql.*;
 
 import uk.ac.sanger.arcturus.data.*;
-import uk.ac.sanger.arcturus.database.ReadManager;
-import uk.ac.sanger.arcturus.database.ManagerEvent;
-import uk.ac.sanger.arcturus.database.ManagerEventListener;
+import uk.ac.sanger.arcturus.jdbc.ManagerEvent;
+import uk.ac.sanger.arcturus.jdbc.ManagerEventListener;
+import uk.ac.sanger.arcturus.jdbc.ReadManager;
 
 public class Manager {
 	protected Map cloneByID = new HashMap();

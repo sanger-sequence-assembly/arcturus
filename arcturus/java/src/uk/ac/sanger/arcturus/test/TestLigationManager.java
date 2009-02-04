@@ -3,6 +3,8 @@ package uk.ac.sanger.arcturus.test;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.jdbc.CloneManager;
+import uk.ac.sanger.arcturus.jdbc.LigationManager;
 
 public class TestLigationManager {
 	public static void main(String args[]) {
@@ -46,31 +48,21 @@ public class TestLigationManager {
 
 			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 
-			System.out.println("FInding a CloneManager");
-			System.out.println();
-
-			CloneManager cmgr = adb.getCloneManager();
-
 			System.out.println("Pre-loading all clones");
 			System.out.println();
 
-			cmgr.preloadAllClones();
-
-			System.out.println("Finding a LigationManager");
-			System.out.println();
-
-			LigationManager lmgr = adb.getLigationManager();
+			adb.preloadAllClones();
 
 			System.out.println("Pre-loading all ligations");
 			System.out.println();
 
-			lmgr.preloadAllLigations();
+			adb.preloadAllLigations();
 
 			System.out
 					.println("Looking up ligation " + objectname + " by name");
 			System.out.println();
 
-			Ligation ligation = lmgr.getLigationByName(objectname);
+			Ligation ligation = adb.getLigationByName(objectname);
 
 			if (ligation == null)
 				System.out.println("*** FAILED ***");
@@ -84,7 +76,7 @@ public class TestLigationManager {
 			System.out.println("Looking up ligation 6 by ID");
 			System.out.println();
 
-			ligation = lmgr.getLigationByID(6);
+			ligation = adb.getLigationByID(6);
 
 			if (ligation == null)
 				System.out.println("*** FAILED ***");

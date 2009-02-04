@@ -1,11 +1,11 @@
 package uk.ac.sanger.arcturus.gui.createcontigtransfers;
 
 import uk.ac.sanger.arcturus.gui.*;
+import uk.ac.sanger.arcturus.jdbc.ContigTransferRequestManager;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequest;
 import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequestException;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.database.ContigTransferRequestManager;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Project;
 
