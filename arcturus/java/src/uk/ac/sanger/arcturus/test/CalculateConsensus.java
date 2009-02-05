@@ -142,9 +142,9 @@ public class CalculateConsensus {
 			Project project = (projectname == null) ? null : adb
 					.getProjectByName(null, projectname);
 
-			adb.setReadCacheing(false);
-			adb.setTemplateCacheing(false);
-			adb.setSequenceCacheing(false);
+			adb.setCacheing(ArcturusDatabase.READ, false);
+			adb.setCacheing(ArcturusDatabase.TEMPLATE, false);
+			adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
 
 			conn = adb.getConnection();
 

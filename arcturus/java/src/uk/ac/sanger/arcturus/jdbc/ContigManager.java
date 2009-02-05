@@ -1285,4 +1285,8 @@ public class ContigManager extends AbstractManager {
 				return false;
 		}
 	}
+
+	public void preload() throws SQLException {
+		// This method does nothing, as we never want to preload all contigs.
+	}
 }

@@ -75,8 +75,8 @@ public class TestProjectManager {
 
 			report();
 
-			adb.preloadAllAssemblies();
-			adb.preloadAllProjects();
+			adb.preload(ArcturusDatabase.ASSEMBLY);
+			adb.preload(ArcturusDatabase.PROJECT);
 
 			displayAssemblies(adb, enumeratecontigs);
 

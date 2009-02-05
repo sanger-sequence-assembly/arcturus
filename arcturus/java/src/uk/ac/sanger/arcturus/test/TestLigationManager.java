@@ -51,12 +51,12 @@ public class TestLigationManager {
 			System.out.println("Pre-loading all clones");
 			System.out.println();
 
-			adb.preloadAllClones();
+			adb.preload(ArcturusDatabase.CLONE);
 
 			System.out.println("Pre-loading all ligations");
 			System.out.println();
 
-			adb.preloadAllLigations();
+			adb.preload(ArcturusDatabase.LIGATION);
 
 			System.out
 					.println("Looking up ligation " + objectname + " by name");

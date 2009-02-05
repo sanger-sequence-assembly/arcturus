@@ -88,6 +88,10 @@ public class SequenceManager extends AbstractManager {
 		hashByReadID.clear();
 		hashBySequenceID.clear();
 	}
+	
+	public void preload() throws SQLException {
+		// This method does nothing, as we never want to pre-load all sequences.
+	}
 
 	/**
 	 * Creates a Sequence object without DNA and base quality data, identified

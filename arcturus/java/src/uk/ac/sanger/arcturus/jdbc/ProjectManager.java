@@ -219,7 +219,7 @@ public class ProjectManager extends AbstractManager {
 		hashByID.put(new Integer(project.getID()), project);
 	}
 
-	public void preloadAllProjects() throws SQLException {
+	public void preload() throws SQLException {
 		String query = "select project_id,assembly_id,name,updated,owner,lockdate,lockowner,created,creator,directory,status from PROJECT";
 
 		Statement stmt = conn.createStatement();
@@ -264,12 +264,12 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public Set<Project> getAllProjects() throws SQLException {
-		preloadAllProjects();
+		preload();
 		return new HashSet<Project>(hashByID.values());
 	}
 
 	public Set<Project> getProjectsForOwner(Person owner) throws SQLException {
-		preloadAllProjects();
+		preload();
 
 		if (owner == null)
 			return null;
@@ -322,7 +322,7 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public void refreshAllProjects() throws SQLException {
-		preloadAllProjects();
+		preload();
 	}
 	
 	private int statusStringToCode(String status) {

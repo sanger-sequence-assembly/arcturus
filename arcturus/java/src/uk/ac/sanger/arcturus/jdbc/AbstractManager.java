@@ -1,5 +1,7 @@
 package uk.ac.sanger.arcturus.jdbc;
 
+import java.sql.SQLException;
+
 public abstract class AbstractManager {
 	protected boolean cacheing = true;
 
@@ -12,4 +14,6 @@ public abstract class AbstractManager {
 	}
 
 	public abstract void clearCache();
+	
+	public abstract void preload() throws SQLException;
 }

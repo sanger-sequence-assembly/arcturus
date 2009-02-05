@@ -52,17 +52,17 @@ public class TestTemplateManager {
 			System.out.println("Pre-loading all clones");
 			System.out.println();
 
-			adb.preloadAllClones();
+			adb.preload(ArcturusDatabase.CLONE);
 
 			System.out.println("Pre-loading all ligations");
 			System.out.println();
 
-			adb.preloadAllLigations();
+			adb.preload(ArcturusDatabase.LIGATION);
 
 			System.out.println("Pre-loading all templates");
 			System.out.println();
 
-			adb.preloadAllTemplates();
+			adb.preload(ArcturusDatabase.TEMPLATE);
 
 			System.out
 					.println("Looking up template " + objectname + " by name");

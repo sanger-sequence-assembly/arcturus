@@ -194,8 +194,8 @@ public class Minerva {
 			throws SQLException, NamingException {
 		ArcturusDatabase adb = ai[0].findArcturusDatabase(organism);
 
-		adb.setReadCacheing(false);
-		adb.setSequenceCacheing(false);
+		adb.setCacheing(ArcturusDatabase.READ, false);
+		adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
 
 		MinervaTabbedPane panel = new MinervaTabbedPane(adb);
 

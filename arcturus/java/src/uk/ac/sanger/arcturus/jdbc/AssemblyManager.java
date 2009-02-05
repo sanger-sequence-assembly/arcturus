@@ -115,7 +115,7 @@ public class AssemblyManager extends AbstractManager {
 		hashByID.put(new Integer(assembly.getID()), assembly);
 	}
 
-	public void preloadAllAssemblies() throws SQLException {
+	public void preload() throws SQLException {
 		String query = "select assembly_id,name,updated,created,creator from ASSEMBLY";
 
 		Statement stmt = conn.createStatement();
@@ -148,7 +148,7 @@ public class AssemblyManager extends AbstractManager {
 	}
 
 	public Assembly[] getAllAssemblies() throws SQLException {
-		preloadAllAssemblies();
+		preload();
 		Collection asms = hashByID.values();
 		Assembly[] assemblies = (Assembly[]) asms.toArray(new Assembly[0]);
 		Arrays.sort(assemblies);
@@ -177,6 +177,6 @@ public class AssemblyManager extends AbstractManager {
 	}
 
 	public void refreshAllAssemblies() throws SQLException {
-		preloadAllAssemblies();
+		preload();
 	}
 }

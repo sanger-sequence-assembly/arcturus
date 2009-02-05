@@ -99,28 +99,28 @@ public class TestContigManager {
 			if (Boolean.getBoolean("preloadClones")) {
 				System.out.println("Pre-loading all clones");
 				System.out.println();
-				adb.preloadAllClones();
+				adb.preload(ArcturusDatabase.CLONE);
 				report();
 			}
 
 			if (Boolean.getBoolean("preloadLigations")) {
 				System.out.println("Pre-loading all ligations");
 				System.out.println();
-				adb.preloadAllLigations();
+				adb.preload(ArcturusDatabase.LIGATION);
 				report();
 			}
 
 			if (Boolean.getBoolean("preloadTemplates")) {
 				System.out.println("Pre-loading all templates");
 				System.out.println();
-				adb.preloadAllTemplates();
+				adb.preload(ArcturusDatabase.TEMPLATE);
 				report();
 			}
 
 			if (Boolean.getBoolean("preloadReads")) {
 				System.out.println("Pre-loading all reads");
 				System.out.println();
-				adb.preloadAllReads();
+				adb.preload(ArcturusDatabase.READ);
 				report();
 			}
 

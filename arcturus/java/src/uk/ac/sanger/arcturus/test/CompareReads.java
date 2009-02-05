@@ -75,8 +75,8 @@ public class CompareReads {
 
 			adb1 = ai1.findArcturusDatabase(organism1);
 
-			adb1.setReadCacheing(cacheing);
-			adb1.setSequenceCacheing(cacheing);
+			adb1.setCacheing(ArcturusDatabase.READ, false);
+			adb1.setCacheing(ArcturusDatabase.SEQUENCE, false);
 
 			ArcturusInstance ai2;
 
@@ -95,8 +95,8 @@ public class CompareReads {
 
 			adb2 = ai2.findArcturusDatabase(organism2);
 
-			adb2.setReadCacheing(cacheing);
-			adb2.setSequenceCacheing(cacheing);
+			adb2.setCacheing(ArcturusDatabase.READ, false);
+			adb2.setCacheing(ArcturusDatabase.SEQUENCE, false);
 
 			conn1 = adb1.getConnection();
 
