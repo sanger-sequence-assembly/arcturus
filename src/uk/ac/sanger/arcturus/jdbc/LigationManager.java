@@ -100,7 +100,7 @@ public class LigationManager extends AbstractManager {
 		return ligation;
 	}
 
-	public void preloadAllLigations() throws SQLException {
+	public void preload() throws SQLException {
 		String query = "select ligation_id,name,clone_id,silow,sihigh from LIGATION";
 
 		Statement stmt = conn.createStatement();

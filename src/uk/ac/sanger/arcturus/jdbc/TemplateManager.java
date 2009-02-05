@@ -175,7 +175,7 @@ public class TemplateManager extends AbstractManager {
 	 * Pre-loads all available templates into the cache.
 	 */
 
-	public void preloadAllTemplates() throws SQLException {
+	public void preload() throws SQLException {
 		String query = "select template_id,name,ligation_id from TEMPLATE";
 
 		Statement stmt = conn.createStatement();

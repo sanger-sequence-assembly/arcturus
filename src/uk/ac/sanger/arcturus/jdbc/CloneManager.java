@@ -90,7 +90,7 @@ public class CloneManager extends AbstractManager {
 		return clone;
 	}
 
-	public void preloadAllClones() throws SQLException {
+	public void preload() throws SQLException {
 		String query = "select clone_id, name from CLONE";
 
 		Statement stmt = conn.createStatement();

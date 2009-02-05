@@ -50,7 +50,7 @@ public class TestCloneManager {
 			System.out.println("Pre-loading all clones");
 			System.out.println();
 
-			adb.preloadAllClones();
+			adb.preload(ArcturusDatabase.CLONE);
 
 			System.out.println("Looking up clone " + objectname + " by name");
 			System.out.println();

@@ -198,7 +198,7 @@ public class ReadManager extends AbstractManager {
 		}
 	}
 
-	public void preloadAllReads() throws SQLException {
+	public void preload() throws SQLException {
 		String query = "select read_id,readname,template_id,asped,strand,primer,chemistry from READINFO";
 
 		Statement stmt = conn.createStatement();

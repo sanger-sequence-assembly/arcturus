@@ -44,6 +44,10 @@ public class UserManager extends AbstractManager {
 
 	public void clearCache() {
 	}
+	
+	public void preload() throws SQLException {
+		getAllUsers(true);
+	}
 
 	protected Role getRoleForRolename(String rolename) {
 		return roleMap.get(rolename);

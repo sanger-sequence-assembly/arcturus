@@ -64,6 +64,8 @@ public interface ArcturusDatabase {
 	public static final int TEMPLATE = 4;
 	public static final int LIGATION = 5;
 	public static final int CLONE = 6;
+	public static final int PROJECT = 7;
+	public static final int ASSEMBLY = 8;
 
 	/**
 	 * Closes the connection pool belonging to this object.
@@ -159,22 +161,16 @@ public interface ArcturusDatabase {
 	public abstract boolean isCacheing(int type);
 	
 	public abstract void clearCache(int type);
+	
+	public abstract void preload(int type) throws SQLException;
 
 	public abstract Clone getCloneByName(String name) throws SQLException;
 
 	public abstract Clone getCloneByID(int id) throws SQLException;
 
-	public abstract void preloadAllClones() throws SQLException;
-
-	public abstract void clearCloneCache();
-
 	public abstract Ligation getLigationByName(String name) throws SQLException;
 
 	public abstract Ligation getLigationByID(int id) throws SQLException;
-
-	public abstract void preloadAllLigations() throws SQLException;
-
-	public abstract void clearLigationCache();
 
 	public abstract Template getTemplateByName(String name) throws SQLException;
 
@@ -186,16 +182,8 @@ public interface ArcturusDatabase {
 	public abstract Template getTemplateByID(int id, boolean autoload)
 			throws SQLException;
 
-	public abstract void preloadAllTemplates() throws SQLException;
-
 	public abstract Template findOrCreateTemplate(int id, String name,
 			Ligation ligation);
-
-	public abstract void clearTemplateCache();
-
-	public abstract void setTemplateCacheing(boolean cacheing);
-
-	public abstract boolean isTemplateCacheing();
 
 	public abstract Read getReadByName(String name) throws SQLException;
 
@@ -210,25 +198,11 @@ public interface ArcturusDatabase {
 	public abstract int loadReadsByTemplate(int template_id)
 			throws SQLException;
 
-	public abstract void preloadAllReads() throws SQLException;
-
-	public abstract int parseStrand(String text);
-
-	public abstract int parsePrimer(String text);
-
-	public abstract int parseChemistry(String text);
-
 	public abstract Read findOrCreateRead(int id, String name,
 			Template template, java.util.Date asped, String strand,
 			String primer, String chemistry);
 
 	public abstract int[] getUnassembledReadIDList() throws SQLException;
-
-	public abstract void clearReadCache();
-
-	public abstract void setReadCacheing(boolean cacheing);
-
-	public abstract boolean isReadCacheing();
 
 	public abstract Sequence getSequenceByReadID(int readid)
 			throws SQLException;
@@ -258,12 +232,6 @@ public interface ArcturusDatabase {
 			throws SQLException;
 
 	public abstract Sequence findOrCreateSequence(int seq_id, int length);
-
-	public abstract void clearSequenceCache();
-
-	public abstract void setSequenceCacheing(boolean cacheing);
-
-	public abstract boolean isSequenceCacheing();
 
 	public abstract Contig getContigByID(int id, int options)
 			throws SQLException, DataFormatException;
@@ -319,8 +287,6 @@ public interface ArcturusDatabase {
 	public abstract Set getContigsByProject(int project_id, int options)
 			throws SQLException, DataFormatException;
 
-	public abstract void clearContigCache();
-
 	public abstract Set<Contig> getChildContigs(Contig parent)
 			throws SQLException;
 
@@ -331,8 +297,6 @@ public interface ArcturusDatabase {
 
 	public abstract Project getProjectByName(Assembly assembly, String name)
 			throws SQLException;
-
-	public abstract void preloadAllProjects() throws SQLException;
 
 	public abstract Set<Project> getAllProjects() throws SQLException;
 
@@ -370,8 +334,6 @@ public interface ArcturusDatabase {
 	public abstract Map getProjectSummary(int minlen) throws SQLException;
 
 	public abstract Map getProjectSummary() throws SQLException;
-
-	public abstract void clearProjectCache();
 
 	public abstract boolean canUserUnlockProject(Project project, Person user)
 			throws SQLException;
@@ -430,15 +392,11 @@ public interface ArcturusDatabase {
 
 	public abstract Assembly getAssemblyByName(String name) throws SQLException;
 
-	public abstract void preloadAllAssemblies() throws SQLException;
-
 	public abstract Assembly[] getAllAssemblies() throws SQLException;
 
 	public abstract void refreshAssembly(Assembly assembly) throws SQLException;
 
 	public abstract void refreshAllAssemblies() throws SQLException;
-
-	public abstract void clearAssemblyCache();
 
 	public abstract boolean hasFullPrivileges(Person person);
 

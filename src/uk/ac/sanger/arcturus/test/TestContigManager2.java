@@ -88,16 +88,16 @@ public class TestContigManager2 {
 					} else {
 						for (int i = 1; i < words.length; i++) {
 							if (words[i].equalsIgnoreCase("clones")) {
-								adb.preloadAllClones();
+								adb.preload(ArcturusDatabase.CLONE);
 								report();
 							} else if (words[i].equalsIgnoreCase("ligations")) {
-								adb.preloadAllLigations();
+								adb.preload(ArcturusDatabase.LIGATION);
 								report();
 							} else if (words[i].equalsIgnoreCase("templates")) {
-								adb.preloadAllTemplates();
+								adb.preload(ArcturusDatabase.TEMPLATE);
 								report();
 							} else if (words[i].equalsIgnoreCase("reads")) {
-								adb.preloadAllReads();
+								adb.preload(ArcturusDatabase.READ);
 								report();
 							} else
 								System.out.println("Object \"" + words[i]

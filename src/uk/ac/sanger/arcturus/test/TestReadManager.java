@@ -59,28 +59,28 @@ public class TestReadManager {
 			System.out.println("Pre-loading all clones");
 			System.out.println();
 
-			adb.preloadAllClones();
+			adb.preload(ArcturusDatabase.CLONE);
 
 			report();
 
 			System.out.println("Pre-loading all ligations");
 			System.out.println();
 
-			adb.preloadAllLigations();
+			adb.preload(ArcturusDatabase.LIGATION);
 
 			report();
 
 			System.out.println("Pre-loading all templates");
 			System.out.println();
 
-			adb.preloadAllTemplates();
+			adb.preload(ArcturusDatabase.TEMPLATE);
 
 			report();
 
 			System.out.println("Pre-loading all reads");
 			System.out.println();
 
-			adb.preloadAllReads();
+			adb.preload(ArcturusDatabase.CLONE);
 
 			report();
 
