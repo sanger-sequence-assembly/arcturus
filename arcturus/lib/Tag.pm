@@ -595,11 +595,10 @@ sub isEqual {
     my %options = @_; # 'ignorenameofpattern, includestrand, inherit
   
     &verifyKeys('isEqual',\%options,'ignorenameofpattern',
-                                    'ignoreblankcomment',
+                                    'overlaps','contains','adjoins',  # position
+                                    'synchronise','leftjoin',         # comment and DNA matching
 		                    'includestrand',
-                                    'copy','copycom',
-                                    'overlaps','contains','adjoins',
-                                    'inherit');
+                                    'copy','inherit');
 
     return TagFactory->isEqual($this,$tag,%options);
 }
