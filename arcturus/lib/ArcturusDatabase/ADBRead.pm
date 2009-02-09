@@ -3552,9 +3552,7 @@ sub putTagsForReads {
 # bulk insertion of tag data
     my $this = shift;
     my $reads = shift; # array of Read instances
-    my %options = @_; # autoload=> , synchronise=>
-
-#return $this->oldputTagsForReads($reads,@_);
+    my %options = @_; # autoload=> , synchronise=> , ignorenameofpattern=>
 
     &verifyParameter($reads,'putTagsForReads','ARRAY');
 
@@ -3694,6 +3692,9 @@ $logger->warning("synchronise active");
         foreach my $etag (@$existingtags) {
             next if $ignore->{$etag};
 # this existing tags was not found amongst the input tags: retire it
+$logger->warning("retireReadTag: ".$etag->writeToCaf());
+	    next if $options{noload}; # testmode
+next;
             &retireReadTag($dbh,$etag);
 	}
     }
@@ -3923,11 +3924,9 @@ sub retireReadTag {
     my $dbh = shift;
     my $tag = shift;
 
-print STDOUT "retireReadTag: tag to be retired:\n".$tag->writeToCaf(); return; # test
+    &verifyPrivate($dbh,"retireReadTag");
 
-    &verifyPrivate($dbh,"putReadTags");
-
-    &verifyParameter($tag,"putReadTags",'Tag');
+    &verifyParameter($tag,"retireReadTag",'Tag');
 
     my ($pstart,$pfinal) = $tag->getPosition();
     my $strand           = $tag->getStrand();
