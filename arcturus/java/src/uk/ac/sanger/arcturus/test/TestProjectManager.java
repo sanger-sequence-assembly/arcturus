@@ -11,6 +11,8 @@ import java.util.*;
 import java.io.*;
 import java.sql.SQLException;
 
+import com.mysql.jdbc.MysqlErrorNumbers;
+
 public class TestProjectManager {
 	private long lasttime;
 	private Comparator byname = new ByName();
@@ -94,7 +96,7 @@ public class TestProjectManager {
 					try {
 						project1Array[i].setAssembly(assemblyArray[1], true);
 					} catch (java.sql.SQLException sqle) {
-						if (sqle.getErrorCode() == MySQLErrorCode.ER_DUP_ENTRY)
+						if (sqle.getErrorCode() == MysqlErrorNumbers.ER_DUP_ENTRY)
 							System.err
 									.println("Duplicate key violation when moving project "
 											+ project1Array[i].getName()
@@ -120,7 +122,7 @@ public class TestProjectManager {
 					try {
 						project2Array[i].setAssembly(assemblyArray[0], true);
 					} catch (java.sql.SQLException sqle) {
-						if (sqle.getErrorCode() == MySQLErrorCode.ER_DUP_ENTRY)
+						if (sqle.getErrorCode() == MysqlErrorNumbers.ER_DUP_ENTRY)
 							System.err
 									.println("Duplicate key violation when moving project "
 											+ project2Array[i].getName()
