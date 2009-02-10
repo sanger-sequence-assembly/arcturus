@@ -21,7 +21,8 @@ import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.people.*;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEventListener;
-import uk.ac.sanger.arcturus.utils.MySQLErrorCode;
+
+import com.mysql.jdbc.MysqlErrorNumbers;
 
 public class ProjectTablePanel extends MinervaPanel implements
 		ProjectChangeEventListener {
@@ -508,7 +509,7 @@ public class ProjectTablePanel extends MinervaPanel implements
 							JOptionPane.INFORMATION_MESSAGE);
 				}
 			} catch (SQLException e) {
-				if (e.getErrorCode() == MySQLErrorCode.ER_DUP_ENTRY)
+				if (e.getErrorCode() == MysqlErrorNumbers.ER_DUP_ENTRY)
 					JOptionPane.showMessageDialog(this, "Project " + name
 							+ " already exists in assembly " + assembly,
 							"Failed to create the project",
