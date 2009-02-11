@@ -78,6 +78,7 @@ sub showHelp {
     print STDERR "\t-verbose\tRun in verbose mode\n";
     print STDERR "\t-skipconvert\tDo not convert MyISAM tables to InnoDB\n";
     print STDERR "\t-skipfk\t\tDo not add foreign key constraints\n";
+    print STDERR "\t-deleteorphans\tDelete orphan rows where possible\n";
 }
 
 sub convertMyISAMTablesToInnoDB {
