@@ -171,6 +171,8 @@ sub addForeignKeyConstraints {
 	$delete_op = "RESTRICT" unless defined($delete_op);
 	$update_op = "RESTRICT" unless defined($update_op);
 
+	print STDERR "\n$table.$column --> $fk_table.$fk_column";
+
 	my $query = "select count(*) from $table left join $fk_table " .
 	    " on ($table.$column = $fk_table.$fk_column) where $fk_table.$fk_column is null";
 
@@ -183,14 +185,27 @@ sub addForeignKeyConstraints {
 	$sth->finish();
 
 	if ($orphanrows > 0) {
-	    print STDERR "\n$table.$column --> $fk_table.$fk_column has $orphanrows orphan rows\n";
-	    print STDERR "FIX:\n";
-	    print STDERR "delete $table from $table left join $fk_table " .
-		" on ($table.$column = $fk_table.$fk_column) where $fk_table.$fk_column is null";
-	    print STDERR "\n";
-	}
+	    print STDERR " has $orphanrows orphan rows",
+	    " [autofix ",($autofix ? "is" : "NOT"), " possible]\n";
 
-	$with_orphans++ if ($orphanrows > 0);
+	    if ($deleteorphans) {
+		if ($autofix) {
+		    $query = "delete $table from $table left join $fk_table " .
+			" on ($table.$column = $fk_table.$fk_column) where $fk_table.$fk_column is null";
+
+		    my $rc = $dbh->do($query);
+
+		    print STDERR "***** $rc orphan rows were deleted. *****\n";
+		} else {
+		    print STDERR "***** This problem CANNOT be fixed automatically. *****\n";
+		    $with_orphans++;
+		}
+	    } else {
+		$with_orphans++;
+	    }
+	} else {
+	    print STDERR " OK.\n";
+	}
     }
 
     if ($with_orphans > 0) {
@@ -200,5 +215,21 @@ sub addForeignKeyConstraints {
 	print STDERR "PLEASE FIX THESE PROBLEMS, THEN RE-RUN THIS SCRIPT.\n";
 	print STDERR "*******************************************************\n";
 	return;
+    }
+
+    foreach my $constraint (@{$constraints}) {
+	my ($autofix,$table,$column,$fk_table,$fk_column,$delete_op,$update_op) = @{$constraint};
+	
+	$delete_op = "RESTRICT" unless defined($delete_op);
+	$update_op = "RESTRICT" unless defined($update_op);
+
+	my $query = "alter table $table add constraint foreign key ($column)" .
+	    " references $fk_table ($fk_column)" .
+	    " on delete $delete_op" .
+	    " on update $update_op";
+
+	print STDERR "Executing: $query\n";
+
+	my $rc = $dbh->do($query);
     }
 }
