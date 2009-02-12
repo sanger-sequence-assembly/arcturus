@@ -2457,41 +2457,39 @@ sub putSequenceForRead {
 
     $this->populateLoadingDictionaries(); # autoload (ignored if already done)
 
-# Get a seq_id for this read
-
-    my $query = "insert into SEQ2READ(read_id,version) VALUES(?,?)";
-
-    my $sth = $dbh->prepare_cached($query);
-
-    my $rc = $sth->execute($readid,$version);
-
-    return (0, "failed to insert read_id into SEQ2READ table;DBI::errstr=$DBI::errstr")
-	unless (defined($rc) && $rc == 1);
-
-    my $seqid = $dbh->{'mysql_insertid'};
-
-    $sth->finish();
-
 # insert sequence and base quality
 
     my $sequence = compress($readsequence);
 
     my $basequality = compress(pack("c*", @$readbquality));
 
-    $query = "insert into SEQUENCE"
-           . "(seq_id,seqlen,seq_hash,qual_hash,sequence,quality) "
-           . "VALUES(?,?,?,?,?,?)";
+    my $query = "insert into SEQUENCE"
+	. "(seqlen,seq_hash,qual_hash,sequence,quality) "
+	. "VALUES(?,?,?,?,?)";
 
-    $sth = $dbh->prepare_cached($query);
+    my $sth = $dbh->prepare_cached($query);
 
-    $rc = $sth->execute($seqid, $read->getSequenceLength(),
-                                $readseqhash, $readbqlhash,
-                                $sequence, $basequality);
-
-# shouldn't we undo the insert in READINFO? if it fails
+    my $rc = $sth->execute($read->getSequenceLength(),
+			   $readseqhash, $readbqlhash,
+			   $sequence, $basequality);
 
     return (0, "failed to insert sequence and base-quality for $readname ($readid);" .
 	    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
+
+    $sth->finish();
+
+    my $seqid = $dbh->{'mysql_insertid'};
+
+# Create the sequence-to-read mapping
+
+    $query = "insert into SEQ2READ(read_id,seq_id,version) VALUES(?,?,?)";
+
+    $sth = $dbh->prepare_cached($query);
+
+    $rc = $sth->execute($readid,$seqid,$version);
+
+    return (0, "failed to insert read_id into SEQ2READ table;DBI::errstr=$DBI::errstr")
+	unless (defined($rc) && $rc == 1);
 
     $sth->finish();
 
