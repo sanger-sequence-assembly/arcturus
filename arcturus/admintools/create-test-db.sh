@@ -7,7 +7,15 @@ then
 fi
 
 DB=$1
-TESTDB=TEST${DB}
+
+if [ $# -lt 2 ]
+then
+  PREFIX=TEST
+else
+  PREFIX=TRAIN
+fi
+
+TESTDB=${PREFIX}${DB}
 
 MASTER_INSTANCE='-h mcs3a -P 15001'
 TEST_INSTANCE='-h mcs4a -P 3311'
