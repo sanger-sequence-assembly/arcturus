@@ -12,7 +12,7 @@ if [ $# -lt 2 ]
 then
   PREFIX=TEST
 else
-  PREFIX=TRAIN
+  PREFIX=$2
 fi
 
 TESTDB=${PREFIX}${DB}
