@@ -41,6 +41,9 @@ while (my $nextword = shift @ARGV) {
     }
 }
 
+$username = $ENV{'MYSQL_USERNAME'} unless defined($username);
+$password = $ENV{'MYSQL_PASSWORD'} unless defined($password);
+
 unless (defined($host) && defined($port) && defined($dbname) &&
 	defined($username) && defined($password)) {
     &showHelp("One or more mandatory options were missing");
