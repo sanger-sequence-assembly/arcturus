@@ -14,6 +14,6 @@ if ( ! $?LSF_ENVDIR ) then
   endif
 endif
 
-lsplace -R "mem>8000"
+lsplace -R "mem>4000"
 
 exit
