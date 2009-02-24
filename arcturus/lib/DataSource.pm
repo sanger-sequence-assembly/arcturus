@@ -110,18 +110,22 @@ sub new {
     return $found ? $this : undef;
 }
 
-# Private function for use in the constructor
+# Build a DBI URL from the parameters in the DataSource hash
 sub buildUrl {
     my ($dstype, $dshash, $junk) = @_;
 
-    return buildMySQLUrl($dshash) if ($dstype =~ /mysqldatasource/i);
-
-    return buildOracleUrl($dshash) if ($dstype =~ /oracledatasource/i);
-
-    return undef;
+     if ($dstype =~ /mysqldatasource/i) { 
+	 return buildMySQLUrl($dshash);
+     } elsif ($dstype =~ /oracledatasource/i) {
+	 return buildOracleUrl($dshash);
+     } elsif ($dstype =~ /pgsimpledatasource/i) {
+	 return buildPostgresUrl($dshash);
+     } else {
+	 return undef;
+     }
 }
 
-# Private function for use in the constructor
+# Build a MySQL URL
 sub buildMySQLUrl {
     my $dshash = shift;
 
@@ -136,7 +140,7 @@ sub buildMySQLUrl {
     return ("DBI:mysql:$database:$hostname:$portnumber", $username, $password);
 }
 
-# Private function for use in the constructor
+# Build an Oracle URL
 sub buildOracleUrl {
     my $dshash = shift;
 
@@ -149,6 +153,23 @@ sub buildOracleUrl {
     my $database = $dshash->{'databaseName'};
 
     my $url = "DBI:Oracle:host=$hostname;port=$portnumber;sid=$database";
+
+    return ($url, $username, $password);
+}
+
+# Build a PostgreSQL URL
+sub buildPostgresUrl {
+    my $dshash = shift;
+
+    my $username = $dshash->{'user'};
+    my $password = $dshash->{'password'};
+
+    my $hostname = $dshash->{'serverName'};
+    my $portnumber = $dshash->{'portNumber'};
+
+    my $database = $dshash->{'databaseName'};
+
+    my $url = "DBI:Pg:dbname=$database;host=$hostname;port=$portnumber";
 
     return ($url, $username, $password);
 }
