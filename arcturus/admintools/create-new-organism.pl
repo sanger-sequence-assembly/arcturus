@@ -83,6 +83,7 @@ unless (defined($template) || $nocreatedatabase  || $skipdbsteps) {
 
 unless (defined($dbname)) {
     $dbname = $organism;
+    $dbname =~ tr/\-/_/;
     print STDERR "WARNING: No database name specified, using $organism as the default.\n\n";
 }
 
