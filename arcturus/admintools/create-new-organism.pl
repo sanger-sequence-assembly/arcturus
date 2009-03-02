@@ -164,6 +164,24 @@ unless ($skipdbsteps) {
 	}
 
 	print STDERR "\nOK\n\n";
+
+	$sth->finish();
+
+	$query = "select count(*) from information_schema.tables" .
+	    " where table_schema = ? and table_type = ? and engine = ?";
+
+	$sth = $dbh->prepare($query);
+	&db_die("Failed to prepare query \"$query\"");
+	
+	$sth->execute($template, 'BASE TABLE', 'InnoDB');
+	&db_die("Failed to execute query \"$query\"");
+
+	my ($innodbcount) = $sth->fetchrow_array();
+
+	$sth->finish();
+	
+	&createForeignKeyConstraints($dbh)
+	    if ($innodbcount > 0);
     }
     
     print STDERR "### Granting privileges to user arcturus ... ";
@@ -541,6 +559,75 @@ sub getUsersAndRoles {
     $dbh->disconnect();
 
     return $list;
+}
+
+sub createForeignKeyConstraints {
+    my $dbh = shift;
+
+    my $constraints = 
+	[
+	 ["PROJECT","assembly_id","ASSEMBLY","assembly_id"],
+	 
+	 ["C2CMAPPING","contig_id","CONTIG","contig_id","CASCADE"],
+	 ["C2CMAPPING","parent_id","CONTIG","contig_id"],
+	 ["CONSENSUS","contig_id","CONTIG","contig_id","CASCADE"],
+	 ["CONTIGORDER","contig_id","CONTIG","contig_id","CASCADE"],
+	 ["CONTIGTRANSFERREQUEST","contig_id","CONTIG","contig_id","CASCADE"],
+	 ["MAPPING","contig_id","CONTIG","contig_id","CASCADE"],
+	 ["TAG2CONTIG","contig_id","CONTIG","contig_id","CASCADE"],
+
+	 ["SCAFFOLD","import_id","IMPORTEXPORT","id"],
+
+	 ["C2CSEGMENT","mapping_id","C2CMAPPING","mapping_id","CASCADE"],
+
+	 ["CLONEVEC","cvector_id","CLONINGVECTOR","cvector_id"],
+	 ["SEQVEC","svector_id","SEQUENCEVECTOR","svector_id"],
+
+	 ["CONTIGTRANSFERREQUEST","old_project_id","PROJECT","project_id","RESTRICT","CASCADE"],
+	 ["CONTIGTRANSFERREQUEST","new_project_id","PROJECT","project_id","RESTRICT","CASCADE"],
+	 ["CONTIG","project_id","PROJECT","project_id","RESTRICT","CASCADE"],
+
+	 ["READCOMMENT","read_id","READINFO","read_id","CASCADE"],
+	 ["SEQ2READ","read_id","READINFO","read_id","CASCADE"],
+	 ["TRACEARCHIVE","read_id","READINFO","read_id","CASCADE"],
+
+	 ["CONTIGORDER","scaffold_id","SCAFFOLD","scaffold_id","CASCADE"],
+
+	 ["ALIGN2SCF","seq_id","SEQUENCE","seq_id","CASCADE"],
+	 ["CLONEVEC","seq_id","SEQUENCE","seq_id","CASCADE"],
+	 ["MAPPING","seq_id","SEQUENCE","seq_id"],
+	 ["QUALITYCLIP","seq_id","SEQUENCE","seq_id","CASCADE"],
+	 ["READTAG","seq_id","SEQUENCE","seq_id","CASCADE"],
+	 ["SEQ2READ","seq_id","SEQUENCE","seq_id","CASCADE"],
+	 ["SEQVEC","seq_id","SEQUENCE","seq_id","CASCADE"],
+
+	 ["SEGMENT","mapping_id","MAPPING","mapping_id","CASCADE"],
+
+	 ["TAG2CONTIG","tag_id","CONTIGTAG","tag_id","CASCADE"],
+
+	 ["SCAFFOLD","type_id","SCAFFOLDTYPE","type_id"]
+	 ];
+
+    print STDERR "### Creating foreign key constraints for InnoDB tables ...\n";
+
+    foreach my $constraint (@{$constraints}) {
+	my ($table,$column,$fk_table,$fk_column,$delete_op,$update_op) = @{$constraint};
+	
+	$delete_op = "RESTRICT" unless defined($delete_op);
+	$update_op = "RESTRICT" unless defined($update_op);
+
+	my $query = "alter table $table add constraint foreign key ($column)" .
+	    " references $fk_table ($fk_column)" .
+	    " on delete $delete_op" .
+	    " on update $update_op";
+
+	print STDERR "Executing: $query\n";
+
+	$dbh->do($query);
+	&db_die("Failed to execute query \"$query\"");
+    }
+
+    print STDERR "OK.\n";
 }
 
 sub db_die {
