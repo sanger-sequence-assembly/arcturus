@@ -17,7 +17,7 @@ sub new {
 
     my $this = $type->SUPER::new();
 
-    my ($group, $minreadid, $maxreads);
+    my ($group, $minreadid, $maxreads, $status);
 
     while (my $nextword = shift) {
 	$nextword =~ s/^\-//;
@@ -27,6 +27,8 @@ sub new {
 	$minreadid = shift if ($nextword eq 'minreadid');
 
 	$maxreads = shift if ($nextword eq 'maxreads');
+
+	$status = shift if ($nextword eq 'status');
     }
 
     die "No group specified" unless defined($group);
@@ -47,6 +49,8 @@ sub new {
 
     $this->{maxreads} = $maxreads;
 
+    $this->{status} = defined($status) ? $status : "PASS";
+
     $this->{readcount} = 0;
 
     return $this;
@@ -59,7 +63,7 @@ sub getReadNamesToLoad {
 
     my $group = $this->{group};
 
-    my $tsgroup = $ts->get_group($group, 'PASS');
+    my $tsgroup = $ts->get_group($group, $this->{'status'});
 
     my $grit = $tsgroup->get_iterator(1);
 
@@ -148,7 +152,9 @@ sub getReadByName {
 
     # Process status
 
-    $read->setProcessStatus("PASS");
+    my $pstatus = $tsread->get_attribute(TSR_STATUS_DESCRIPTION);
+
+    $read->setProcessStatus($pstatus);
 
     # Trace archive identifier
 
