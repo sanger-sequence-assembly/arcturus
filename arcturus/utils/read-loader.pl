@@ -605,6 +605,9 @@ sub showUsage {
     print STDERR "-skipqualityclipcheck\t (for reads without quality clipping)\n";
     print STDERR "-isconsensusread (-icr; for artificial reads) \n";
     print STDERR "\n";
+    print STDERR "-is\t\t(ignorestatus) override default accept only 'PASS' status\n";
+    print STDERR "-aly\t\t(acceptlikeyeast) also accept 'Matches Yeast' status \n";
+    print STDERR "\n";
     print STDERR "-repair\t\n";
     print STDERR "\n";
     print STDERR "-out\t\toutput file, default STDOUT\n";
