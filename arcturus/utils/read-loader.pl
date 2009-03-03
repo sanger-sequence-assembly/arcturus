@@ -31,7 +31,6 @@ my $skipaspedcheck = 0;
 my $skipqualityclipcheck = 0;
 my $consensus_read = 0;
 my $acceptlikeyeast = 0;
-my $ignorestatus = 0; 
 
 my $onlyloadtags;          # Exp files only
 
@@ -48,7 +47,6 @@ my $validKeys = "organism|instance|caf|cafdefault|fofn|forn|read|out|"
               . "subdir|verbose|schema|projid|aspedafter|aspedbefore|"
               . "minreadid|maxreadid|skipaspedcheck|isconsensusread|icr|"
               . "noload|noexclude|onlyloadtags|olt|test|"
-              . "acceptlikeyeast|aly|ignorestatus|is|"
               . "group|skipqualityclipcheck|"
               . "repair|update|ligation|fastafile|defaultquality";
 
@@ -100,12 +98,6 @@ while (my $nextword = shift @ARGV) {
 
     $consensus_read   = 1            if ($nextword eq '-isconsensusread');
     $consensus_read   = 1            if ($nextword eq '-icr');
-
-    $acceptlikeyeast  = 1            if ($nextword eq '-acceptlikeyeast');
-    $acceptlikeyeast  = 1            if ($nextword eq '-aly');
-
-    $ignorestatus     = 1            if ($nextword eq '-ignorestatus');
-    $ignorestatus     = 1            if ($nextword eq '-is');
 
 # special mode for tagloading only
 
@@ -329,6 +321,10 @@ elsif ($source eq 'expfiles') {
 elsif ($source eq 'traceserver') {
     &showUsage("Missing group name for trace server") unless $PARS{group};
 
+    my @valid = ('group','minreadid','maxreads','status');
+
+    &showUsage("Invalid parameter(s)") if &testForExcessInput(\%PARS,\@valid);
+
     if (defined($PARS{'minreadid'}) && $PARS{'minreadid'} eq 'auto') {
 	print STDERR "Automatic minreadid invoked\n";
 	my $dbh = $adb->getConnection();
@@ -376,12 +372,13 @@ my $processed = 0;
 $consensus_read = 1 if $source eq 'fastafile';
 
 my %loadoptions;
-$loadoptions{skipaspedcheck}     = 1 if $skipaspedcheck;
-$loadoptions{skipaspedcheck}     = 1 if $consensus_read;
-$loadoptions{skipligationcheck}  = 1 if $consensus_read;
-$loadoptions{skipchemistrycheck} = 1 if $consensus_read;
-$loadoptions{acceptlikeyeast}    = 1 if $acceptlikeyeast;
+$loadoptions{skipaspedcheck}       = 1 if $skipaspedcheck;
+$loadoptions{skipaspedcheck}       = 1 if $consensus_read;
+$loadoptions{skipligationcheck}    = 1 if $consensus_read;
+$loadoptions{skipchemistrycheck}   = 1 if $consensus_read;
 $loadoptions{skipqualityclipcheck} = 1 if $skipqualityclipcheck;
+
+$loadoptions{ignorestatus} = 1 if $PARS{status};
 
 $readloadlist = $factory->getReadNamesToLoad() unless @$readloadlist;
 
@@ -437,8 +434,6 @@ foreach my $readname (@{$readloadlist}) {
 # "repair" missing process status data (is implied by presence in database)
 
         $read->setProcessStatus('PASS') unless $read->getProcessStatus();
-
-        $read->setProcessStatus('PASS') if $ignorestatus;
 
 # "repair" missing ligation data if an insert size is available
 
@@ -647,6 +642,7 @@ sub showUsage {
 	print STDERR "\n";
 	print STDERR "-group\t\tMANDATORY: name of trace server group to load\n";
 	print STDERR "-minreadid\tminimum trace server read ID (use 'auto' to auto-detect)\n";
+	print STDERR "-status\t\tAsp processing status (default is PASS)\n";
 	print STDERR "\n";
     }
     if (!$source || $source eq 'fastafile') {
