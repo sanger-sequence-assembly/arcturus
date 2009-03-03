@@ -55,6 +55,10 @@ sub seq_dump {
     }
     print "\n";
 
+    # Processing status
+    my $pstat = $read->get_status_description();
+    printf "%-30s = %s\n\n", "Processing status", $pstat;
+
     # DNA Source
     my $src = $read->get_dnasource();
     my $s = "";
