@@ -60,6 +60,10 @@ sub getContig {
     my $this = shift;
     my %options = @_;
 
+# if cached option used, contig ID must be defined
+
+    return $this->getCachedContig(%options) if $options{cached};
+
 # decode input parameters and compose the query
 
     my $query  = "select CONTIG.contig_id,gap4name,length,ncntgs,nreads,"
@@ -245,6 +249,21 @@ sub getContig {
     return undef;
 }
 
+sub getCachedContig {
+    my $this = shift;
+    my %options = @_;
+
+    $this->{ContigCache} = {} unless defined $this->{ContigCache};
+    my $cache = $this->{ContigCache};
+
+    delete $options{cached}; # to prevent looping
+
+    my $contig_id = $options{contig_id} || 0; # if undefined, returns undef
+
+print STDOUT "getting cached contig $contig_id\n";
+    return ( $cache->{$contig_id} ||= $this->getContig(%options) );
+}
+
 sub getSequenceAndBaseQualityForContig {
 # load DNA data given the contig ID
 # this method is called from the Contig class when using delayed data loading
@@ -415,7 +434,7 @@ sub getChildContigsForContig {
 # build the Contig instances (metadata only) and add to the input Contig object
 
     foreach my $child_id (@$childids) {
-        my $child = $this->getContig(ID=>$child_id, metaDataOnly=>1);
+        my $child = $this->getContig(ID=>$child_id, metaDataOnly=>1,@_); # pass on possible options
         $contig->addChildContig($child) if $child;
     }
 
@@ -489,7 +508,8 @@ sub putContig {
 
 # try the sequence ID hash (returns the last entered matching contig, if any)
 
-    if (my $previous = $this->getContig(withChecksum=>$checksum,metaDataOnly=>1)) {
+    if (my $previous = $this->getContig( withChecksum => $checksum,
+                                         metaDataOnly => 1 ) ) {
 
 # test if the previous contig is valid; if not, send a warning to the administrator
         
