@@ -14,7 +14,7 @@ use Logging;
 # ingest command line parameters
 #----------------------------------------------------------------
 
-my ($organism,$instance);
+my ($organism,$instance,$alias);
 
 my ($project,$fopn,$assembly,$problem,$gap4name,$version);
 
@@ -24,7 +24,7 @@ my ($delayed,$batch,$subdir,$superuser); my ($babel,$pcs3);
 
 my ($verbose,$confirm,$debug,$minerva);
 
-my $validKeys  = "organism|o|instance|i|"
+my $validKeys  = "organism|o|instance|i|alias|"
                . "project|p|assembly|a|fopn|fofn|gap4name|"
                . "import|export|script|noperl|problem|passon|po|"
                . "batch|nobatch|delayed|subdir|sd|r|superuser|su|"
@@ -51,6 +51,8 @@ while (my $nextword = shift @ARGV) {
         die "You can't re-define organism" if $organism;
         $organism     = shift @ARGV;
     }  
+
+    $alias        = shift @ARGV    if ($nextword eq '-alias');
 
     if ($nextword eq '-project'  || $nextword eq '-p') {
         $project      = shift @ARGV;
@@ -147,7 +149,9 @@ if (!$adb || $adb->errorStatus()) {
 
 $organism = $adb->getOrganism(); # taken from the actual connection
 $instance = $adb->getInstance(); # taken from the actual connection
- 
+
+$alias = $organism unless defined $alias;
+
 my $URL = $adb->getURL;
 
 $logger->info("Database $URL opened succesfully");
@@ -359,7 +363,7 @@ foreach my $project (@projects) {
  
     if ($batch) {
 # get the repository position
-        my $work_dir = `pfind -q -u $organism`;
+        my $work_dir = `pfind -q -u $alias`;
         if ($work_dir) {
             $work_dir .= "/arcturus/import-export"; # full work directory
 	}
