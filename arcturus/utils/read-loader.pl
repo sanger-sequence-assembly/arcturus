@@ -31,6 +31,7 @@ my $skipaspedcheck = 0;
 my $skipqualityclipcheck = 0;
 my $consensus_read = 0;
 my $acceptlikeyeast = 0;
+my $ignorestatus = 0; 
 
 my $onlyloadtags;          # Exp files only
 
@@ -46,7 +47,8 @@ my $validKeys = "organism|instance|caf|cafdefault|fofn|forn|read|out|"
               . "filter|readnamelike|rootdir|status|"
               . "subdir|verbose|schema|projid|aspedafter|aspedbefore|"
               . "minreadid|maxreadid|skipaspedcheck|isconsensusread|icr|"
-              . "noload|noexclude|acceptlikeyeast|aly|onlyloadtags|olt|test|"
+              . "noload|noexclude|onlyloadtags|olt|test|"
+              . "acceptlikeyeast|aly|ignorestatus|is|"
               . "group|skipqualityclipcheck|"
               . "repair|update|ligation|fastafile|defaultquality";
 
@@ -101,6 +103,9 @@ while (my $nextword = shift @ARGV) {
 
     $acceptlikeyeast  = 1            if ($nextword eq '-acceptlikeyeast');
     $acceptlikeyeast  = 1            if ($nextword eq '-aly');
+
+    $ignorestatus     = 1            if ($nextword eq '-ignorestatus');
+    $ignorestatus     = 1            if ($nextword eq '-is');
 
 # special mode for tagloading only
 
@@ -432,6 +437,8 @@ foreach my $readname (@{$readloadlist}) {
 # "repair" missing process status data (is implied by presence in database)
 
         $read->setProcessStatus('PASS') unless $read->getProcessStatus();
+
+        $read->setProcessStatus('PASS') if $ignorestatus;
 
 # "repair" missing ligation data if an insert size is available
 
