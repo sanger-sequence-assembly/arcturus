@@ -24,7 +24,7 @@ my $outputFileName;
 my $selectmethod;
 my $aspedbefore;
 my $aspedafter;
-my $nosingleton;
+my $nosingleton = 1;
 my $blocksize = 10000;
 my $limit;
 my $mask;
@@ -51,7 +51,7 @@ my $test;
 my $validKeys  = "organism|o|instance|i|"
                . "assembly|a|ligation|l|ligationname|ln|ligationcomplement|lc|"
                . "caf|fasta|fastq|aspedbefore|ab|aspedafter|aa|"
-               . "nosingleton|ns|blocksize|bs|selectmethod|sm|namelike|nl|"
+               . "includesingleton|is|blocksize|bs|selectmethod|sm|namelike|nl|"
                . "namenotlike|nnl|excludelist|el|mask|tags|all|nofile|count|"
                . "clipmethod|cm|threshold|th|minimumqualityrange|mqr|"
                . "status|nostatus|limit|"
@@ -145,8 +145,8 @@ while (my $nextword = shift @ARGV) {
     $minimumrange     = shift @ARGV  if ($nextword eq '-minimumqualityrange');
     $minimumrange     = shift @ARGV  if ($nextword eq '-mqr');
 
-    $nosingleton      = 1            if ($nextword eq '-nosingleton');
-    $nosingleton      = 1            if ($nextword eq '-ns');
+    $nosingleton      = 0            if ($nextword eq '-includesingleton');
+    $nosingleton      = 0            if ($nextword eq '-is');
 
     $status           = 0            if ($nextword eq '-nostatus');
     $status           = shift @ARGV  if ($nextword eq '-status');
@@ -383,6 +383,7 @@ while (my $remainder = scalar(@$readids)) {
                 $discarded++;
                 next;
 	    }
+            $read->vectorScreen();
         }
         my $s = $read->getSequence();
         my $q = $read->getBaseQuality();
@@ -554,8 +555,8 @@ sub showUsage {
                . "\t\t\t\t2: for using temporary tables\n"
                . "\t\t\t\t0: for a blocked search (default)\n";
 #               . "\t\tdefault selection of either method 1 or 2\n";
-    print STDOUT "-ns\t\t(nosingleton) don't include reads from single-read".
-                 " contigs\n\t\t> default include\n";
+    print STDOUT "-is\t\t(includesingleton) include reads from single-read".
+                 " contigs\n\t\t> default exclude\n";
     print STDOUT "\n";
     print STDOUT "-aa\t\t(aspedafter) date lower bound (inclusive)\n";
     print STDOUT "-ab\t\t(aspedbefore) date upper bound (exclusive, strictly before)\n";
