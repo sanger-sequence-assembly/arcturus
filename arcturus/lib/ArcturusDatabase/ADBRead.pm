@@ -2849,13 +2849,12 @@ sub checkReadForConsistency {
         return (0,"Inconsistent sequence lengths for ".$read->getReadName());
     }
 
-# check process status 
 
-    if (my $status = $read->getProcessStatus()) {
-        return (0,$status) if ($status =~ /Completely\ssequencing\svector/i);
-        return (0,"Low $status") if ($status =~ /Trace\squality/i);
-        unless ($options{acceptlikeyeast}) {
-            return (0,$status) if ($status =~ /Matches\sYeast/i);
+    unless ($options{ignorestatus}) {
+# check process status, default only PASS or undefined 
+        if (my $status = $read->getProcessStatus()) {
+            return (0,$status) if ($status =~ /Completely\ssequencing\svector/i);
+            return (0,"Low $status") if ($status =~ /Trace\squality/i);
 	}
     }
 
@@ -3456,7 +3455,7 @@ sub getTagsForReads {
 
     my $dbh = $this->getConnection();
 
-    my $tags = &getReadTagsForSequenceIDs($dbh,\@sids,1000);
+    my $tags = &getReadTagsForSequenceIDs($dbh,\@sids,@_); # pass on options
 
 # add tag(s) to each read (use sequence ID as identifier)
 
@@ -3473,7 +3472,9 @@ sub getReadTagsForSequenceIDs {
 # use as private method only; blocked retrieval of read tags
     my $dbh = shift;
     my $seqIDs = shift; # array ref; array will be emptied
-    my $blocksize = shift || 1000;
+    my %options = @_;
+
+    my $blocksize = $options{blocksize} || 1000;
 
     &verifyPrivate($dbh,"getReadTagsForSequenceIDs");
 
@@ -3503,17 +3504,20 @@ sub getTagsForSequenceIDs {
 # compose query: use left join to retrieve data also if none in TAGSEQUENCE
 
     my $excludetags = $options{excludetags};
-#    $excludetags =~ s/\W+/,/g if $excludetags; # replace any separator by ',' 
+    $excludetags =~ s/\W+/\',\'/g if $excludetags; # replace any separator by ',' 
+    my $includetags = $options{includetags};
+    $includetags =~ s/\W+/\',\'/g if $includetags; # replace any separator by ',' 
 
     my $items = "seq_id,tagtype,pstart,pfinal,strand,comment," # tagcomment
               . "tagseqname,sequence,TAGSEQUENCE.tag_seq_id";
 
     my $query = "select $items from READTAG left join TAGSEQUENCE"
               . " using (tag_seq_id)"
-	      . " where seq_id in (".join (',',@$sequenceIDs) .")"
-              . "   and deprecated != 'Y'"
-#?             . "   and tagtype not in ($excludetags) " if $excludetags;
-      	      . " order by seq_id";
+	      . " where seq_id in (".join (',',@$sequenceIDs) .")";
+    $query   .= "   and deprecated != 'Y'" unless $options{all};
+    $query   .= "   and tagtype not in ('$excludetags')" if $excludetags;
+    $query   .= "   and tagtype in ('$includetags')"     if $includetags;
+    $query   .= " order by seq_id";
 
     $query =~ s/select/select distinct/ if $options{distinct};
 
@@ -3588,7 +3592,7 @@ sub putTagsForReads {
 
     my $dbh = $this->getConnection();
 
-    my $existingtags = &getReadTagsForSequenceIDs($dbh,\@sids,1000,distinct=>1); # empties @sids
+    my $existingtags = &getReadTagsForSequenceIDs($dbh,\@sids, distinct=>1, all=>1); # empties @sids
 
 # build existing tag hash
 
@@ -3686,13 +3690,13 @@ $logger->info("etag $etag filtered out");
 
     if ($options{synchronise}) {
 # existing tags also in the input list are marked as to be ignored
-$logger->warning("synchronise active");
+$logger->warning("synchronise active") if @$existingtags;
         foreach my $etag (@$existingtags) {
             next if $ignore->{$etag};
 # this existing tags was not found amongst the input tags: retire it
 $logger->warning("retireReadTag: ".$etag->writeToCaf());
 	    next if $options{noload}; # testmode
-next;
+next unless $options{commit}; 
             &retireReadTag($dbh,$etag);
 	}
     }
