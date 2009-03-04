@@ -54,9 +54,16 @@ my $url = "DBI:mysql:$dbname;host=$host;port=$port";
 
 my $dbh = DBI->connect($url, $username, $password, { RaiseError => 1 , PrintError => 0});
 
+my $arcturusPrivileges = 
+    "SELECT, INSERT, UPDATE, DELETE, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE";
+
+&revokeArcturusPrivileges($dbh, $dbname, $arcturusPrivileges);
+
 &convertMyISAMTablesToInnoDB($dbh, $opts) unless $skipconvert;
 
 &addForeignKeyConstraints($dbh, $opts) unless $skipfk;
+
+&grantArcturusPrivileges($dbh, $dbname, $arcturusPrivileges);
 
 $dbh->disconnect();
 
@@ -236,4 +243,32 @@ sub addForeignKeyConstraints {
 
 	my $rc = $dbh->do($query);
     }
+}
+
+sub revokeArcturusPrivileges {
+    my $dbh = shift;
+    my $dbname= shift;
+    my $privileges = shift;
+
+    print STDERR "Revoking privileges from arcturus ...";
+
+    my $query = "revoke $privileges on \`$dbname\`.* from 'arcturus'\@'\%'";
+
+    $dbh->do($query);
+
+    print STDERR " Done.\n";
+}
+
+sub grantArcturusPrivileges {
+    my $dbh = shift;
+    my $dbname= shift;
+    my $privileges = shift;
+
+    print STDERR "Granting privileges to arcturus ...";
+
+    my $query = "grant $privileges on \`$dbname\`.* to 'arcturus'\@'\%'";
+
+    $dbh->do($query);
+
+    print STDERR " Done.\n";
 }
