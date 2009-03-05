@@ -235,8 +235,6 @@ if (!$noexclude && !$update) {
 	$readstoskip->{$readname} = 1;
     }
 
-    $PARS{exclude} = $readstoskip;
-
     $logger->warning("$nr readnames found in database $organism");
 }
 
@@ -265,13 +263,15 @@ if ($source eq 'caf') {
 
     &showUsage("Cannot access file $PARS{caf}") unless $PARS{caf};
 
+    $PARS{exclude} = $readstoskip if $readstoskip;
+
 # add logger to input PARS
 
     $PARS{log} = $logger;
 
 # test for excess baggage; abort if present (force correct input)
 
-    my @valid = ('caf','exclude','log','readnamelike'); # ,'limit'
+    my @valid = ('caf','exclude','log','readnamelike','status'); # ,'limit'
     &showUsage("Invalid parameter(s)") if &testForExcessInput(\%PARS,\@valid);
 
     $factory = new CAFReadFactory(%PARS);
@@ -385,6 +385,7 @@ $readloadlist = $factory->getReadNamesToLoad() unless @$readloadlist;
 $logger->warning(scalar(@$readloadlist)." reads to be processed");
 
 foreach my $readname (@{$readloadlist}) {
+    next if ($readstoskip && $readstoskip->{$readname});
     if ($adb->hasRead(readname=>$readname)) {
  	$logger->info("read $readname is already loaded");
         next if (!$noloading && !$onlyloadtags && !$update); # noloading implies test
