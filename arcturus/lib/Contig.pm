@@ -440,6 +440,12 @@ sub getSequence {
     return &replaceNbyX($this->{Sequence},$options{minNX});
 }
 
+sub hasSequence {
+# return s true if both DNA and BaseQuality are defined 
+    my $this = shift;
+    return ($this->{Sequence} && $this->{BaseQuality});
+}
+
 sub replaceNbyX { # SHOULD GO TO ContigHelper.pm
 # private helper method with getSequence for MAF export: substitute
 # sequences of 'N's in the consensus sequence by 'X's and a few 'N's 
@@ -625,7 +631,7 @@ sub getParentContigs {
 
     if (!$this->{ParentContig} && $load && (my $ADB = $this->{SOURCE})) {
         return undef unless (ref($ADB) eq 'ArcturusDatabase');
-        $ADB->getParentContigsForContig($this,@_); # pass on options
+        $ADB->getParentContigsForContig($this,@_); # pass on any options
     }
     return $this->{ParentContig};
 }
@@ -664,7 +670,7 @@ sub getChildContigs {
 
     if (!$this->{ChildContig} && $load && (my $ADB = $this->{SOURCE})) {
         return undef unless (ref($ADB) eq 'ArcturusDatabase');
-        $ADB->getChildContigsForContig($this);
+        $ADB->getChildContigsForContig($this,@_); # pass on any parameters
     }
     return $this->{ChildContig}; # array reference
 }
@@ -1004,6 +1010,7 @@ sub propagateTagsToContig {
                            'annotation',   # list of tags to be screened
                            'finishing',    # 1 to include, 0 to exclude 
                            'markftags',    # mark tags if different tag on parent
+                           'cached',       # use caching when fetching offspring contigs
                            'banded');      # (not in use at the moment) link determination
 
     &verifyKeys('propagateTags',\%options,@validoptionkeys);
@@ -1092,7 +1099,7 @@ sub writeToCaf {
         my $tags = $this->getTags();
 # decide on which tags to export; default no annotation (assembly export)
         my ($includetag,$excludetag);
-        $excludetag = "ANNO|ASIT"; # default exclude these
+        $excludetag = "ASIT"; # default exclude
         if ($options{alltags}) {
             undef $excludetag;
         }
@@ -1364,10 +1371,9 @@ sub writeToEMBL {
     my %options = @_;
 
     &verifyKeys('writeToEMBL',\%options,'gap4name',
-                                        'includetag',
-                                        'excludetag', # default 'ANNO'
+                                        'includetag', # default 'ANNO'
+                                        'excludetag',
                                         'tagkey');
-
 # compose identifier
 
     my $arcturusname = $this->getContigName();
@@ -1407,7 +1413,9 @@ sub writeToEMBL {
 
         if ($this->hasTags(1)) { # force delayed loading
 # determine which tags to export
-            $options{includetag} = 'ANNO' unless $options{includetag};
+            unless ($options{includetag} || $options{excludetag}) {
+                $options{includetag} = 'ANNO' unless defined($options{includetag});
+	    }
             my $includetag = $options{includetag};
             $includetag =~ s/^\s+|\s+$//g; # leading/trailing blanks
             $includetag =~ s/\W+/|/g; # put separators in include list
@@ -1419,7 +1427,9 @@ sub writeToEMBL {
             my $joinhash = {};
             foreach my $tag (@$tags) {
                 my $tagtype = $tag->getType();
-                next if (!$includetag || $tagtype !~ /$includetag/);
+                if ($includetag) {
+                    next if ($tagtype !~ /$includetag/);
+		}
                 if ($excludetag) {
 # ignore tagtype, or tags with a matching comment
                     next if ($tagtype =~ /$excludetag/);
@@ -1464,8 +1474,7 @@ sub writeToEMBL {
             my $tagkey = $options{tagkey}; # default CDS set in Tag class
             foreach my $tag (@newtags) {
                 my $tagtype = $tag->getType();
-                next if (!$includetag || $tagtype !~ /$includetag/);
-
+                next if ($includetag && $tagtype !~ /$includetag/);
                 print $DFILE $tag->writeToEMBL(0,tagkey=>$tagkey);
             }
             print $DFILE "XX\n";
@@ -1626,7 +1635,8 @@ sub deleteLowQualityBases {
     my %options = @_;
     &verifyKeys('deleteLowQualityBases',\%options, 
                 'threshold','minimum','window','hqpm','symbols',
-                'exportaschild','components','nonew');
+                'exportaschild','exportasparent',
+                'components','nonew');
     return ContigHelper->deleteLowQualityBases($this,%options);
 }
 
