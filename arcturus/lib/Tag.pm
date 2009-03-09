@@ -646,11 +646,11 @@ sub writeToCaf {
 # GAP4 NOTE tag, no position info
     }
 
-    elsif ($host eq 'Contig' && $type eq 'ANNO') {
-# generate one or two tags, ANNO contains the systematic ID and comment
+    elsif ($host eq 'Contig' && $this->getSystematicID()) {
+# presence of a systematic ID indicates an annotation tag (to be verified)
         $string .= "@pos ";
 # add the systematic ID
-        my $tagtext = $this->getSystematicID() || 'unspecified'; 
+        my $tagtext = $this->getSystematicID();
         $tagtext .= ' ' . $comment if $comment;
         $string .= "\"$tagtext\"\n";
 # if also a comment available add an info tag
@@ -660,7 +660,7 @@ sub writeToCaf {
     }
 
     elsif ($host eq 'Contig' || !$host) {
-# standard output of tag with position and tag comment (except ANNO)
+# standard output of tag with position and tag comment (except annotation)
         $string .= "@pos "; 
         if ($tagcomment) {
             $tagcomment =~ s/\n/\\n\\/g; # new-line to caf format
@@ -769,7 +769,11 @@ sub writeToEMBL {
     }
     if ($comment) {
 # adhoc removal of split/fragment info from comment
-        if ($comment =~ /^(.+)((split|fragment).*)$/) {
+        if ($comment =~ /^(.+)\W+(original\stag)/) {
+            $comment = $2;
+            $string .= "FT $sp17 /arcturus_remap_info=\"$1\"\n";     
+	}
+        elsif ($comment =~ /^(.+)((split|fragment).*)$/) {
             $comment = $1;
             $string .= "FT $sp17 /arcturus_remap_info=\"$2\"\n";     
 	}
