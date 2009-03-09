@@ -13,6 +13,7 @@ BEGIN
   IF (intContigExists = 1) THEN
     delete from TAG2CONTIG where contig_id = contigId;
     delete from CONTIGTRANSFERREQUEST where contig_id = contigId;
+    delete from CONTIGORDER where contig_id = contigId;
     delete from CONSENSUS where contig_id = contigId;
 
     delete from MAPPING,SEGMENT using MAPPING left join SEGMENT using(mapping_id) where contig_id = contigId;
