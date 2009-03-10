@@ -637,40 +637,89 @@ sub putContig {
 
     my $user_id = $this->getArcturusUser();
 
-    my $contigid = &putMetaDataForContig($dbh,$contig,$checksum,$user_id);
+    my $problems_project_id = $this->getProblemsProjectID($dbh);
 
-    $this->{lastinsertedcontigid} = $contigid;
+    $dbh->{RaiseError} = 1;
 
-    return 0, "Failed to insert metadata for $contigname" unless $contigid;
+    my $contigid = 0;
 
-    $contig->setContigID($contigid);
+    eval {
+	$dbh->begin_work;
+
+	$contigid = &putMetaDataForContig($dbh,$contig,$checksum,$user_id,$problems_project_id);
+
+	$this->{lastinsertedcontigid} = $contigid;
+
+	return 0, "Failed to insert metadata for $contigname" unless $contigid;
+
+	$contig->setContigID($contigid);
 
 # then load the overall mappings (and put the mapping ID's in the instances)
 
-    return 0, "Failed to insert read-to-contig mappings for $contigname"
-        unless &putMappingsForContig($dbh,$contig,$log,type=>'read');
+	die "Failed to insert read-to-contig mappings for $contigname"
+	    unless &putMappingsForContig($dbh,$contig,$log,type=>'read');
 
 # the CONTIG2CONTIG mappings
 
-    return 0, "Failed to insert contig-to-contig mappings for $contigname"
-        unless &putMappingsForContig($dbh,$contig,$log,type=>'contig');
+	die "Failed to insert contig-to-contig mappings for $contigname"
+	    unless &putMappingsForContig($dbh,$contig,$log,type=>'contig');
 
 # and contig tags?
 
-    my %ctoptions = (notestexisting => 1); # it's a new contig
+	my %ctoptions = (notestexisting => 1); # it's a new contig
 # TODO ? add tagtype selection ? register number opf tags added in Project object
-    return 0, "Failed to insert tags for $contigname"
-        unless $this->putTagsForContig($contig,%ctoptions);
+	die "Failed to insert tags for $contigname"
+	    unless $this->putTagsForContig($contig,%ctoptions);
 
 # update the age counter in C2CMAPPING table (at very end of this insert)
 
-    $this->buildHistoryTreeForContig($contigid);
+	$this->buildHistoryTreeForContig($contigid);
 
 # and assign the contig to the specified project (if possible)
 
-    $message .= "; ".$this->allocateContigToProject($contig,$project) if $project;
+	$message .= "; ".$this->allocateContigToProject($contig,$project) if $project;
+
+	$dbh->commit;
+    };
+
+    if ($@) {
+	$message = "Failed to store contig in database: " . $@;
+
+	eval {
+	    $dbh->rollback;
+	};
+	if ($@) {
+	    $message .= "; ***** ROLLBACK FAILED: " . $@ . " *****";
+	}
+    }
+
+    $dbh->{RaiseError} = 0;
 
     return $contigid, $message;
+}
+
+sub getProblemsProjectID {
+    my $this = shift;
+
+    return $this->{'PROBLEMS_PROJECT_ID'} if defined($this->{'PROBLEMS_PROJECT_ID'});
+
+    my $dbh = shift;
+
+    my $query = "select project_id from PROJECT where name = ?";
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute('PROBLEMS');
+
+    my ($project_id) = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    die "Cannot determine project ID for PROBLEMS" unless defined($project_id);
+
+    $this->{'PROBLEMS_PROJECT_ID'} = $project_id;
+
+    return $project_id;
 }
 
 # ---------- (private) helper methods with putContig -----------
@@ -859,26 +908,27 @@ sub putMetaDataForContig {
     my $contig = shift; # Contig instance
     my $readhash = shift;
     my $userid = shift;
+    my $default_project_id = shift;
 
     &verifyPrivate($dbh,"informUsersOfChange");
 
     my $query = "insert into CONTIG "
               . "(gap4name,length,ncntgs,nreads,newreads,cover,userid"
-              . ",origin,created,readnamehash) "
-              . "VALUES (?,?,?,?,?,?,?,?,now(),?)";
+              . ",origin,created,readnamehash,project_id) "
+              . "VALUES (?,?,?,?,?,?,?,?,now(),?,?)";
 
     my $sth = $dbh->prepare_cached($query);
 
     my @data = ($contig->getGap4Name(),
                 $contig->getConsensusLength() || 0,
                 $contig->getNumberOfParentContigs(),
-#                $contig->hasParentContigs(),
                 $contig->getNumberOfReads(),
                 $contig->getNumberOfNewReads(),
                 $contig->getAverageCover(),
                 $userid,
                 $contig->getOrigin(),
-                $readhash);
+                $readhash,
+		$default_project_id);
 
     my $rc = $sth->execute(@data) || &queryFailed($query,@data); 
 
