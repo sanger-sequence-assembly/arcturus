@@ -48,7 +48,7 @@ my $validKeys = "organism|instance|caf|cafdefault|fofn|forn|read|out|"
               . "minreadid|maxreadid|skipaspedcheck|isconsensusread|icr|"
               . "noload|noexclude|onlyloadtags|olt|test|"
               . "group|skipqualityclipcheck|"
-              . "repair|update|ligation|fastafile|defaultquality";
+              . "repair|update|ligation|fastafile|defaultquality|qualityfile";
 
 my %PARS;
 
@@ -146,6 +146,7 @@ while (my $nextword = shift @ARGV) {
     $PARS{fastafile}    = shift @ARGV  if ($nextword eq '-fastafile');
     $PARS{ligation}     = shift @ARGV  if ($nextword eq '-ligation');
     $PARS{defaultquality} = shift @ARGV  if ($nextword eq '-defaultquality');
+    $PARS{qualityfile}  = shift @ARGV  if ($nextword eq '-qualityfile');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -651,6 +652,7 @@ sub showUsage {
 	print STDERR "\n";
 	print STDERR "-fastafile\tMANDATORY: name of FASTA file to load\n";
 	print STDERR "-ligation\tname of ligation for reads in this file [default: consensus]\n";
+	print STDERR "-qualityfile\tname of quality file to load\n";
 	print STDERR "-defaultquality\tdefault base quality [default: 2]\n";
 	print STDERR "\n";
     }

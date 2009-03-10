@@ -16,7 +16,7 @@ sub new {
 
     my $this = $type->SUPER::new();
 
-    my ($fastafile, $ligation, $qvalue);
+    my ($fastafile, $ligation, $qvalue, $qualityfile);
 
     while (my $nextword = shift) {
 	$nextword =~ s/^\-//;
@@ -25,6 +25,8 @@ sub new {
 
 	$ligation = shift if ($nextword eq 'ligation');
 
+	$qualityfile = shift if ($nextword eq 'qualityfile');
+
 	$qvalue = shift if ($nextword eq 'defaultquality');
     }
 
@@ -32,16 +34,33 @@ sub new {
 
     die "FASTA file \"$fastafile\" does not exist" unless -f $fastafile;
 
+    die "Quality file \"$qualityfile\" does not exist"
+	if (defined($qualityfile) && ! -f $qualityfile);
+
     $this->{fastafile} = $fastafile;
 
     $this->{ligation} = defined($ligation) ? $ligation : "consensus";
 
     $this->{defaultquality} = defined($qvalue) ? $qvalue : 2;
 
+    $this->{qualityfile} = $qualityfile;
+
     return $this;
 }
 
 sub getReadNamesToLoad {
+    my $this = shift;
+
+    my $sequences = $this->readFASTAFile();
+
+    $this->{sequences} = $sequences;
+
+    $this->{qualities} = $this->readQualityFile();
+
+    return [keys(%{$sequences})];
+}
+
+sub readFASTAFile {
     my $this = shift;
 
     my $sequences = {};
@@ -73,9 +92,53 @@ sub getReadNamesToLoad {
 	$sequences->{$readname} = $readseq;
     }
 
-    $this->{sequences} = $sequences;
+    return $sequences;
+}
 
-    return [keys(%{$sequences})];
+sub readQualityFile {
+    my $this = shift;
+
+    return undef unless defined($this->{qualityfile});
+
+    my $qualities = {};
+
+    open(QUALITY, $this->{qualityfile});
+
+    my ($readname, $readqual);
+
+    $readqual = '';
+
+    while (my $line = <QUALITY>) {
+	chop($line);
+
+	if ($line =~ /^>(\S+)/) {
+	    if (defined($readname)) {
+		$qualities->{$readname} = &convertQuality($readqual);
+		$readqual = '';
+	    }
+
+	    $readname = $1;
+	} elsif ($line =~ /^[\s\d]+$/) {
+	    $readqual .= ' ' if (length($readqual) > 0);
+	    $readqual .= $line;
+	}
+    }
+
+    close(QUALITY);
+
+    if (defined($readname) && length($readqual) > 0) {
+	$qualities->{$readname} = &convertQuality($readqual);
+    }
+
+    return $qualities;
+}
+
+sub convertQuality {
+    my $qualstring = shift;
+
+    my @qualarray = split(/\s+/, $qualstring);
+
+    return [@qualarray];
 }
 
 sub getReadByName {
@@ -84,6 +147,7 @@ sub getReadByName {
     my $readname = shift;
 
     my $dna = $this->{sequences}->{$readname};
+    my $qual = $this->{qualities}->{$readname};
 
     return undef unless defined($dna);
 
@@ -127,15 +191,19 @@ sub getReadByName {
 
     my @qual = ();
 
-    my $dnalen = length($dna);
+    if (defined($qual)) {
+	$read->setBaseQuality($qual);
+    } else {
+	my $dnalen = length($dna);
 
-    my $qvalue = $this->{defaultquality};
+	my $qvalue = $this->{defaultquality};
 
-    for (my $i = 0; $i < $dnalen; $i++) {
-	push @qual, $qvalue;
+	for (my $i = 0; $i < $dnalen; $i++) {
+	    push @qual, $qvalue;
+	}
+
+	$read->setBaseQuality([@qual]);
     }
-
-    $read->setBaseQuality([@qual]);
 
     # Clipping
 
