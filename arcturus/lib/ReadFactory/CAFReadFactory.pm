@@ -222,6 +222,7 @@ sub CAFFileParser {
 	}
 
         elsif ($record =~ /Is_read/) {
+	    next unless $reads{$object};
             $reads{$object}->{type} = 'Read';
             next;
         }
@@ -232,7 +233,7 @@ sub CAFFileParser {
 # decode the read meta data
             $record =~ s/^\s+|\s+$//g;
             my @items = split /\s+/,$record; 
-#print "rec:'$record' '@items' \n" if !$items[0];
+# print "rec:'$record' '@items' \n" if !$items[0];
             if ($items[0] =~ /Temp/i) {
                 $Read->setTemplate($items[1]);
             }
@@ -379,6 +380,9 @@ sub CAFFileParser {
         $this->logwarning("processing read $progress") unless ($progress%1000);
 
         my $readhash = $reads{$object};
+
+#my @keys = keys %$readhash;
+#$this->logwarning("keys for $object : @keys");
 
         unless ($readhash->{type} eq 'Read') {
             $this->logwarning("$readhash->{type} $object ignored");
