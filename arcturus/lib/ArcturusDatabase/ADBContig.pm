@@ -908,7 +908,8 @@ sub putMetaDataForContig {
     my $contig = shift; # Contig instance
     my $readhash = shift;
     my $userid = shift;
-    my $default_project_id = shift;
+#    my $default_project_id = shift;
+    my $default_project_id = 0;
 
     &verifyPrivate($dbh,"informUsersOfChange");
 
