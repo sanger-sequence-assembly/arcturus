@@ -445,6 +445,13 @@ sub getChildContigsForContig {
 # methods for importing CONTIGs or CONTIG attributes into the database
 #------------------------------------------------------------------------------
 
+sub importContig {
+    my $this = shift;
+    my $contig = shift;  # Contig instance
+    my $project = shift; # Project instance or '0' or undef
+    my %options = @_;
+}
+
 sub putContig {
 # enter a contig into the database
     my $this = shift;
@@ -849,8 +856,7 @@ sub allocateContigToProject {
         && !$inheritedproject->isEqual($project)) {
 # case 2
         my $inheritedname = $inheritedproject->getProjectName();
-        my ($success,$msg) = $this->assignContigToProject($contig,$inheritedproject,
-                                                          unassigned=>1,force=>1);
+        my ($success,$msg) = $this->assignContigToProject($contig,$inheritedproject,force=>1);
         if ($success) {
             $report .= "has been put in project $inheritedname";
             my $message = "contig $cid in project $inheritedname has been identified "
@@ -871,7 +877,7 @@ sub allocateContigToProject {
 
 # case 1 & case 3 : assign the contig to $project
 
-    my ($success,$msg) = $this->assignContigToProject($contig,$project,unassigned=>1,force=>1);
+    my ($success,$msg) = $this->assignContigToProject($contig,$project,force=>1);
 
     if ($success) {
         $report .= "has been put in project $projectname";
@@ -908,8 +914,7 @@ sub putMetaDataForContig {
     my $contig = shift; # Contig instance
     my $readhash = shift;
     my $userid = shift;
-#    my $default_project_id = shift;
-    my $default_project_id = 0;
+    my $default_project_id = shift;
 
     &verifyPrivate($dbh,"informUsersOfChange");
 
