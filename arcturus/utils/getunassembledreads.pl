@@ -32,7 +32,7 @@ my $mask;
 my $number;
 
 my $fasta;
-my $addtag;
+my $addtag = 1;
 
 my $namelike;
 my $namenotlike;
@@ -52,7 +52,7 @@ my $validKeys  = "organism|o|instance|i|"
                . "assembly|a|ligation|l|ligationname|ln|ligationcomplement|lc|"
                . "caf|fasta|fastq|aspedbefore|ab|aspedafter|aa|"
                . "includesingleton|is|blocksize|bs|selectmethod|sm|namelike|nl|"
-               . "namenotlike|nnl|excludelist|el|mask|tags|all|nofile|count|"
+               . "namenotlike|nnl|excludelist|el|mask|notags|all|nofile|count|"
                . "clipmethod|cm|threshold|th|minimumqualityrange|mqr|"
                . "status|nostatus|limit|"
                . "test|info|verbose|debug|log|help|h";
@@ -153,7 +153,7 @@ while (my $nextword = shift @ARGV) {
 
     $limit            = shift @ARGV  if ($nextword eq '-limit');
 
-    $addtag           = 1            if ($nextword eq '-tags');
+    $addtag           = 0            if ($nextword eq '-notags');
 
     $loglevel         = 1            if ($nextword eq '-verbose'); 
     $loglevel         = 2            if ($nextword eq '-info'); 
