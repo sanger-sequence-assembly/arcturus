@@ -26,6 +26,7 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	public static final int MODE_PAD_IS_DASH = 3;
 
 	private int mode = MODE_PAD_IS_STAR;
+	private char defaultPadCharacter = '*';
 
 	private boolean pad_present = false;
 	private boolean best_is_current = true;
@@ -58,6 +59,20 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 
 	public void setMode(int mode) {
 		this.mode = mode;
+		
+		switch (mode) {
+			case MODE_PAD_IS_N:
+				defaultPadCharacter = 'N';
+				break;
+				
+			case MODE_PAD_IS_DASH:
+				defaultPadCharacter = '-';
+				break;
+				
+			default:
+				defaultPadCharacter = '*';
+				break;
+		}
 	}
 
 	public int getMode() {
@@ -360,12 +375,12 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 		findBestBase();
 
 		if (bestbase < 0)
-			return (mode == MODE_PAD_IS_N) ? 'N' : '*';
+			return defaultPadCharacter;
 		else {
 			char c = basecodes.charAt(bestbase);
 
 			if (c == '*' || c == 'N')
-				return (mode == MODE_PAD_IS_N) ? 'N' : '*';
+				return defaultPadCharacter;
 			else
 				return c;
 		}
