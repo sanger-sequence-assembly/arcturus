@@ -520,6 +520,15 @@ sub writeContigsToCaf {
         $logger->error("$pd->{contigs} CONTIGS $pd->{reads} READS");
     }
 
+    my $minimum = $options{minnrofreads};
+    my $maximum = $options{maxnrofreads};
+
+    my %woptions;
+    foreach my $option ('readsonly','notags','alltags','includetag','excludetag') {
+        next unless defined $options{$option};
+        $woptions{$option} = $options{$option};
+    } 
+
     foreach my $contig_id (@$contigids) {
 
         next unless $contig_id; # just in case
@@ -539,19 +548,25 @@ sub writeContigsToCaf {
             $errors++;
             next;
         }
+
+        my $nrofreads = $contig->getNumberOfReads();
+	next if ($minimum && $nrofreads < $minimum);
+	next if ($maximum && $nrofreads > $maximum);
+
 # end region trimming (for export to gap4 database, re: prefinishing)
+
         if (my $cliplevel = $options{endregiontrim}) {
-             $contig->endRegionTrim(cliplevel=>$cliplevel);
+            my $newcontig = $contig->endRegionTrim(cliplevel=>$cliplevel);
+            $contig = $newcontig if $newcontig;
         }
 
-        if ($contig->writeToCaf($FILE)) { # returns 0 if no errors
+        if ($contig->writeToCaf($FILE,%woptions)) { # returns 0 if no errors
             my $message= "FAILED to export contig $contig_id";
             $logger->error($message) if $logger;
             $report .= $message."\n";
             $errors++;
         }
         else {
-            my $nrofreads = $contig->getNumberOfReads();
 	    $logger->error("CONTIG $contig_id $nrofreads") if $logger;
             $export++;
         }
@@ -575,9 +590,18 @@ sub writeContigsToFasta {
 
     my $ADB = $this->{ADB} || return (0,1,"Missing database connection");
 
+    my $minimum = $options{minnrofreads};
+    my $maximum = $options{maxnrofreads};
+
     my $export = 0;
     my $report = '';
     my $errors = 0;
+
+    my %woptions;
+    foreach my $option ('readsonly','gap4name','minNX') {
+        next unless defined $options{$option};
+        $woptions{$option} = $options{$option};
+    }
 
     foreach my $contig_id (@$contigids) {
 
@@ -588,11 +612,15 @@ sub writeContigsToFasta {
             $errors++;
             next;
         }
-# end region trimming
-        if (my $cliplevel = $options{endregiontrim}) {
-             $contig->endRegionTrim(cliplevel=>$cliplevel);
-        }
-# apply quality clipping
+
+# selection on number of reads
+
+        my $nrofreads = $contig->getNumberOfReads();
+	next if ($minimum && $nrofreads < $minimum);
+	next if ($maximum && $nrofreads > $maximum);
+
+# apply quality clipping, if any, first
+
         if ($options{qualityclip}) {
             my %qoptions; # only quality clipping options
             foreach my $option ('threshold','minimum','window','hqpm','symbols') {
@@ -608,10 +636,23 @@ sub writeContigsToFasta {
 	    }
         }
 
-        my %woptions;
-        foreach my $option ('readsonly','gap4name','minNX') {
-	    next unless defined $options{$option};
-            $woptions{$option} = $options{$option};
+# end region trimming
+
+        if (my $cliplevel = $options{endregiontrim}) {
+            my $newcontig = $contig->endRegionTrim(cliplevel=>$cliplevel);
+            $contig = $newcontig if $newcontig;
+        }
+
+# end region only masking
+
+        if (my $masking = $options{endregiononly}) {
+            my $symbol = $options{maskingsymbol} || 'X';
+            my $gaplength = $options{shrink} || $masking;
+            my $newcontig = $contig->extractEndRegion(endregionsize=>$masking,
+				                      sfill => $symbol,
+                                                      lfill => $gaplength,
+                                                      qfill => 1);
+            $contig = $newcontig if $newcontig;
 	}
 
         if ($contig->writeToFasta($DFILE,$QFILE,%woptions)) {
