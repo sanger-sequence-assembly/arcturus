@@ -308,6 +308,10 @@ public class CalculateConsensus {
 				ps.print("-pad_is_star");
 				break;
 
+			case Gap4BayesianConsensus.MODE_PAD_IS_DASH:
+				ps.print("-pad_is_dash");
+				break;
+
 			case Gap4BayesianConsensus.MODE_NO_PAD:
 				ps.print("-no_pad");
 				break;
