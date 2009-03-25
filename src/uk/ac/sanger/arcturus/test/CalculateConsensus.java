@@ -15,7 +15,7 @@ import java.io.*;
 import java.sql.*;
 
 public class CalculateConsensus {
-	private final int defaultPaddingMode = Gap4BayesianConsensus.MODE_PAD_IS_STAR;
+	private final int defaultPaddingMode = Gap4BayesianConsensus.MODE_PAD_IS_DASH;
 
 	private final int MAX_ALLOWED_PACKET = 8 * 1024 * 1024;
 
