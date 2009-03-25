@@ -23,6 +23,8 @@ my $batch;
 my $lock = 0;
 my $padded;
 my $readsonly = 0;
+my $minimum;
+my $maximum;
 my $output;
 my $minerva;
 my $fopn;
@@ -37,6 +39,7 @@ my $minNX = 1; # default
 my $qualityclip;
 my $clipthreshold;
 my $endregiontrim;
+#my $endregiononly;
 my $clipsymbol;
 my $gap4name;
 my $preview;
@@ -46,6 +49,7 @@ my $validKeys  = "organism|instance|project|assembly|fopn|ignore|scaffold|"
                . "caf|maf|readsonly|fasta|quality|lock|minNX|minerva|"
                . "mask|symbol|shrink|qualityclip|qc|qclipthreshold|qct|"
                . "qclipsymbol|qcs|endregiontrim|ert|gap4name|g4n|padded|"
+               . "minimum|min|maximum|max|"
                . "preview|confirm|batch|verbose|debug|help|test|append";
 
 while (my $nextword = shift @ARGV) {
@@ -91,7 +95,7 @@ while (my $nextword = shift @ARGV) {
     $readsonly   = 1            if ($nextword eq '-readsonly');
 
     if ($nextword eq '-fasta' || $nextword eq '-caf' || $nextword eq '-maf') {
-#print STDOUT "next $nextword\n";
+
         if (defined($fastafile) && $nextword ne '-fasta'
          || defined($caffile)   && $nextword ne '-caf'
          || defined($maffile)   && $nextword ne '-maf') {
@@ -124,8 +128,21 @@ while (my $nextword = shift @ARGV) {
     $clipsymbol    = shift @ARGV  if ($nextword eq '-qclipsymbol');
     $clipsymbol    = shift @ARGV  if ($nextword eq '-qcs');
 
-    $endregiontrim = shift @ARGV  if ($nextword eq '-endregiontrim');
-    $endregiontrim = shift @ARGV  if ($nextword eq '-ert');
+    if ($nextword eq '-ert' || $nextword eq '-endregiontrim') {
+        $endregiontrim = shift @ARGV;
+        if ($endregiontrim =~ /\D/ || $endregiontrim <= 0) {
+	    $nextword = $endregiontrim if ($endregiontrim =~ /\D/);
+            $endregiontrim = 15;
+        }
+    }
+
+    if ($nextword eq '-min' || $nextword eq '-minimum') {
+	$minimum = shift @ARGV;
+    }
+
+    if ($nextword eq '-max' || $nextword eq '-maximum') {
+	$maximum = shift @ARGV;
+    }
 
     $gap4name    = 1            if ($nextword eq '-gap4name');
     $gap4name    = 1            if ($nextword eq '-g4n');
@@ -315,12 +332,17 @@ $exportoptions{scaffoldids} = $scaffold if $scaffold;
 
 $exportoptions{endregiontrim} = $endregiontrim if $endregiontrim;
 
+$exportoptions{minnrofreads} = $minimum if ($minimum && $minimum > 0);
+
+$exportoptions{maxnrofreads} = $maximum if ($maximum && $maximum > 0);
+
 if (defined($caffile)) {
 #    $exportoptions{padded} = 1 if $padded;
     $exportoptions{qualitymask} = $masking if defined($masking);
+    $exportoptions{readsonly} = 1 if $readsonly;
 }
 elsif (defined($fastafile)) {
-    $exportoptions{'readsonly'} = 1 if $readsonly; # fasta
+    $exportoptions{readsonly} = 1 if $readsonly;
     $exportoptions{endregiononly} = $masking if defined($masking);
     $exportoptions{maskingsymbol} = $msymbol || 'X';
     $exportoptions{shrink} = $mshrink if $mshrink;
@@ -328,9 +350,9 @@ elsif (defined($fastafile)) {
     $exportoptions{qualityclip} = 1 if defined($qualityclip);
     $exportoptions{qualityclip} = 1 if defined($clipthreshold);
     $exportoptions{qualityclip} = 1 if defined($clipsymbol);
-    $exportoptions{qcthreshold} = $clipthreshold if defined($clipthreshold);
-    $exportoptions{qcsymbol} = $clipsymbol if defined($clipsymbol);
-    $exportoptions{gap4name} = 1 if $gap4name;
+    $exportoptions{threshold} = $clipthreshold if defined($clipthreshold);
+    $exportoptions{symbol}    = $clipsymbol if defined($clipsymbol);
+    $exportoptions{gap4name}  = 1 if $gap4name;
 #    if ($qualityclip) {
 #        $exportoptions{lqpm} = 30;
 #        $exportoptions{lqpm} = $clipthreshold if defined($clipthreshold);
@@ -464,7 +486,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-quality\tFASTA quality output file name\n";
 #    print STDERR "-padded\t\t(no value) export contigs in padded (caf) format\n";
-    print STDERR "-readsonly\t(no value) export only reads in fasta output\n";
+    print STDERR "-readsonly\t(no value) export only reads in caf or fasta output\n";
     print STDERR "\n";
     print STDERR "-gap4name\tadd the gap4name (lefthand read) to the identifier\n";
     print STDERR "\n";
@@ -492,7 +514,8 @@ sub showUsage {
                . "smaller than 'mask'\n\t\twill be reset to 'mask'\n";
 #    print STDERR "-padded\t\t(no value) export padded consensus sequence only\n";
     print STDERR "\n";
-    print STDERR "-endregiontrim\ttrim low quality endregions at level\n";
+    print STDERR "-ert\t\t(endregiontrim) remove low quality endregions at this quality level\n";
+#    print STDERR "-ero\t\t(endregiononly) extract this size endregions endregions at both ends\n";
     print STDERR "\n";
     print STDERR "-qualityclip\tRemove low quality pads (default '*')\n";
     print STDERR "-qclipsymbol\t(qcs) use specified symbol as low quality pad\n";
