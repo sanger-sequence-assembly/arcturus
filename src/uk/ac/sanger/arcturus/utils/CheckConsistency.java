@@ -34,6 +34,14 @@ public class CheckConsistency {
 					
 					"Contig {0,number,#} created at {1,time} on {1,date}, length {2,number,#}bp, in project {3}, has nreads=0"						
 			},
+			
+			{
+					"Are there any duplicate reads?",
+					
+					"select readname,hits from DUPLICATEREADS left join READINFO using(read_id)",
+					
+					"Read {0} appears {1,number,#} times"			
+			},
 
 			{
 					"Do all mappings correspond to contigs?",
