@@ -18,11 +18,22 @@ public class CheckConsistency {
 			{
 					"Do all contigs have the correct number of mappings?",
 
-					"select contig_id,nreads,count(*) as mapping_count"
-							+ " from CONTIG left join MAPPING using(contig_id)"
+					"select C.contig_id,nreads,count(*) as mapping_count"
+							+ " from CONTIG C, MAPPING M where C.contig_id=M.contig_id"
 							+ " group by contig_id having nreads != mapping_count",
 
-					"Contig {0,number,#} has nreads={1,number,#} but {2,number,#} mappings" },
+					"Contig {0,number,#} has nreads={1,number,#} but {2,number,#} mappings"
+			},
+					
+			{
+					"Are there any orphan contigs?",
+					
+					"select contig_id,C.created,length,name" + 
+					" from CONTIG C left join PROJECT P using(project_id)" +
+					" where C.nreads = 0",
+					
+					"Contig {0,number,#} created at {1,time} on {1,date}, length {2,number,#}bp, in project {3}, has nreads=0"						
+			},
 
 			{
 					"Do all mappings correspond to contigs?",
@@ -31,7 +42,8 @@ public class CheckConsistency {
 							+ " from MAPPING left join CONTIG using(contig_id)"
 							+ " where CONTIG.contig_id is null",
 							
-					"Mapping {0,number,#} for sequence {1,number,#} refers to non-existent contig {2,number,#}" },
+					"Mapping {0,number,#} for sequence {1,number,#} refers to non-existent contig {2,number,#}"
+			},
 
 			{
 					"Do all contig-to-sequence mappings have valid sequence data?",
@@ -40,7 +52,9 @@ public class CheckConsistency {
 							+ " from MAPPING left join SEQUENCE using(seq_id)"
 							+ " where sequence is null or quality is null",
 
-					"Mapping {1,number,#} in contig {0,number,#} has undefined sequence {2,number,#}" },
+					"Mapping {1,number,#} in contig {0,number,#} has undefined sequence {2,number,#}"
+			},
+			
 			{
 					"Do all mappings have a corresponding read?",
 
@@ -50,14 +64,18 @@ public class CheckConsistency {
 							+ " where readname is null",
 
 					"Mapping {1,number,#} in contig {0,number,#} has sequence {2,number,#}"
-							+ " with undefined read" },
+							+ " with undefined read"
+			},
+			
 			{
 					"Do all sequences have quality clipping data?",
 
 					"select SEQUENCE.seq_id from SEQUENCE left join QUALITYCLIP"
 							+ " using(seq_id) where QUALITYCLIP.seq_id is null",
 
-					"Sequence {0,number,#} has no quality clipping data" },
+					"Sequence {0,number,#} has no quality clipping data"
+			},
+			
 			{
 					"Do all sequences have a corresponding sequence-to-read mapping?",
 
@@ -65,7 +83,9 @@ public class CheckConsistency {
 							+ " using (seq_id)"
 							+ " where SEQ2READ.seq_id is null",
 
-					"Sequence {0,number,#} has no associated sequence-to-read mapping" },
+					"Sequence {0,number,#} has no associated sequence-to-read mapping"
+			},
+			
 			{
 					"Do all sequences with a sequence-to-read mapping have a valid read?",
 
@@ -73,7 +93,9 @@ public class CheckConsistency {
 							+ " on (SEQUENCE.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READINFO.read_id)"
 							+ " where readname is null and SEQ2READ.read_id is not null",
 
-					"Sequence {0,number,#} has no associated read (read_id is {1,number,#})" },
+					"Sequence {0,number,#} has no associated read (read_id is {1,number,#})"
+			},
+			
 			{
 					"Do all reads have valid sequence data?",
 
@@ -81,28 +103,35 @@ public class CheckConsistency {
 							+ " on (READINFO.read_id = SEQ2READ.read_id and SEQ2READ.seq_id = SEQUENCE.seq_id)"
 							+ " where sequence is null or quality is null",
 
-					"Read {0,number,#} ({1}) has no associated sequence" },
+					"Read {0,number,#} ({1}) has no associated sequence"
+			},
+			
 			{
 					"Do all reads have a template?",
 
 					"select read_id,readname from READINFO left join TEMPLATE"
 							+ " using (template_id) where name is null",
 
-					"Read {0,number,#} ({1}) has no associated template" },
+					"Read {0,number,#} ({1}) has no associated template"
+			},
+			
 			{
 					"Do all templates have a ligation?",
 
 					"select template_id,TEMPLATE.name from TEMPLATE left join LIGATION using (ligation_id)"
 							+ " where LIGATION.name is null",
 
-					"Template {0,number,#} ({1}) has no associated ligation" },
+					"Template {0,number,#} ({1}) has no associated ligation"
+			},
+			
 			{
 					"Do all ligations have a clone?",
 
 					"select ligation_id,LIGATION.name from LIGATION left join CLONE using(clone_id)"
 							+ " where CLONE.name is null",
 
-					"Ligation {0,number,#} ({1}) has no associated clone" }
+					"Ligation {0,number,#} ({1}) has no associated clone"
+			}
 
 	};
 
