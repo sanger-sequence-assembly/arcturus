@@ -32,6 +32,7 @@ my $caffile; # for standard CAF format
 my $maffile; # for Millikan format
 my $fastafile; # fasta
 my $qualityfile;
+my $singletonfile; # file for special singleton output
 my $masking;
 my $msymbol;
 my $mshrink;
@@ -45,12 +46,13 @@ my $gap4name;
 my $preview;
 my $append = 0;
 
-my $validKeys  = "organism|instance|project|assembly|fopn|ignore|scaffold|"
+my $validKeys  = "organism|o|instance|i|project|p|assembly|a|"
+               . "fopn|fofn|ignore|scaffold|"
                . "caf|maf|readsonly|fasta|quality|lock|minNX|minerva|"
+               . "minimum|min|maximum|max|singletons|readsonly|"
                . "mask|symbol|shrink|qualityclip|qc|qclipthreshold|qct|"
                . "qclipsymbol|qcs|endregiontrim|ert|gap4name|g4n|padded|"
-               . "minimum|min|maximum|max|"
-               . "preview|confirm|batch|verbose|debug|help|test|append";
+               . "preview|confirm|batch|verbose|debug|help|h|test|append";
 
 while (my $nextword = shift @ARGV) {
 
@@ -58,25 +60,30 @@ while (my $nextword = shift @ARGV) {
         &showUsage("Invalid keyword '$nextword'");
     }                                                                          
 
-    if ($nextword eq '-instance') {
+    if ($nextword eq '-i' || $nextword eq '-instance') {
 # the next statement prevents redefinition when used with e.g. a wrapper script
         die "You can't re-define instance" if $instance;
-        $instance     = shift @ARGV;
+        $instance = shift @ARGV;
     }
 
-    if ($nextword eq '-organism') {
+    if ($nextword eq '-o' || $nextword eq '-organism') {
 # the next statement prevents redefinition when used with e.g. a wrapper script
         die "You can't re-define organism" if $organism;
-        $organism     = shift @ARGV;
-    }  
+        $organism  = shift @ARGV;
+    }
 
-    $assembly    = shift @ARGV  if ($nextword eq '-assembly');
+    if ($nextword eq '-p' || $nextword eq '-project') {
+        $identifier = shift @ARGV;
+    }
 
-    $identifier  = shift @ARGV  if ($nextword eq '-project');
+    if ($nextword eq '-a' || $nextword eq '-assembly') {
+        $assembly  = shift @ARGV;
+    }
 
     $scaffold    = shift @ARGV  if ($nextword eq '-scaffold');
 
     $fopn        = shift @ARGV  if ($nextword eq '-fopn');
+    $fopn        = shift @ARGV  if ($nextword eq '-fofn');
 
     $ignorename  = shift @ARGV  if ($nextword eq '-ignore');
 
@@ -105,6 +112,10 @@ while (my $nextword = shift @ARGV) {
         $fastafile   = shift @ARGV  if ($nextword eq '-fasta'); # '0' for STDOUT
         $caffile     = shift @ARGV  if ($nextword eq '-caf');   # '0' for STDOUT
         $maffile     = shift @ARGV  if ($nextword eq '-maf');   # cannot be '0'
+    }
+    if ($nextword eq '-singletons') {
+        $singletonfile = shift @ARGV; 
+        $minimum = 2; # for other contigs
     }
 
     $append      = 1            if ($nextword eq '-append');
@@ -151,12 +162,11 @@ while (my $nextword = shift @ARGV) {
 
     $batch       = 1            if ($nextword eq '-batch');
 
-    &showUsage(0) if ($nextword eq '-help');
+    &showUsage(0) if ($nextword eq '-help' || $nextword eq '-h');
 }
 
 &showUsage("Invalid data in parameter list") if @ARGV;
 &showUsage("Sorry, padded option not yet operational") if $padded; # to be removed later
-
 
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
@@ -172,10 +182,6 @@ $logger->setPrefix("#MINERVA") if $minerva;
 # get the database connection
 #----------------------------------------------------------------
 
-&showUsage("Missing organism database") unless $organism;
-
-&showUsage("Missing server instance") unless $instance;
-
 unless (defined($fastafile) || defined($caffile) || $maffile) {
     &showUsage("Missing CAF, FASTA or MAF output file name") unless $preview;
 }
@@ -184,12 +190,23 @@ unless (defined($identifier) || $fopn || defined($assembly)) {
     &showUsage("Missing project ID or name");
 }
 
+if ($organism && $organism eq 'default' ||
+    $instance && $instance eq 'default') {
+    undef $organism;
+    undef $instance;
+}
+
 my $adb = new ArcturusDatabase (-instance => $instance,
-		                -organism => $organism);
+                                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-    &showUsage("Invalid organism '$organism' on server '$instance'");
+
+    &showUsage("Missing organism database") unless $organism;
+
+    &showUsage("Missing database instance") unless $instance;
+
+    &showUsage("Organism '$organism' not found on server '$instance'");
 }
  
 my $URL = $adb->getURL;
@@ -213,16 +230,19 @@ if ($padded && (defined($fastafile) || defined($maffile))) {
 
 # get file handles
 
-my ($fhDNA, $fhQTY, $fhRDS);
+my ($fhDNA, $fhQTY, $fhRDS, $fhSTN);
 
 unless ($preview) {
+    my $choice;
     if (defined($caffile) && $caffile) {
         $caffile .= '.caf' unless ($caffile =~ /\.caf$|null/);
         $fhDNA = new FileHandle($caffile, $append ? "a" : "w");
         &showUsage("Failed to create CAF output file \"$caffile\"") unless $fhDNA;
+        $choice = 'caf';
     }
     elsif (defined($caffile)) {
         $fhDNA = *STDOUT;
+        $choice = 'caf';
     }
 
     if (defined($fastafile) && $fastafile) {
@@ -236,9 +256,11 @@ unless ($preview) {
         elsif ($fastafile eq '/dev/null') {
             $fhQTY = $fhDNA;
         }
+        $choice = 'fas';
     }
     elsif (defined($fastafile)) {
         $fhDNA = *STDOUT;
+        $choice = 'fas';
     }
 
     if (defined($maffile)) {
@@ -251,6 +273,16 @@ unless ($preview) {
         $file = "$maffile.reads.placed";
         $fhRDS = new FileHandle($file,"w");
         &showUsage("Failed to create MAF output file \"$file\"") unless $fhRDS;
+    }
+
+    if (defined($singletonfile) && $singletonfile) {
+        &showUsage("You can't use the -singleton option for this output format") unless $choice;
+        $singletonfile .= '.$choice' unless ($singletonfile =~ /\.(${choice})$|null/); # or fasta?
+        $fhSTN = new FileHandle($singletonfile, $append ? "a" : "w");
+        &showUsage("Failed to create output file \"$singletonfile\" for singleton contigs") unless $fhSTN;
+    }
+    elsif (defined($singletonfile)) {
+        $fhSTN = *STDOUT;
     }
 }
 
@@ -325,6 +357,7 @@ while ($lock && $i < scalar(@projects)) {
 # okay, here we have collected all projects to be exported
 
 my %exportoptions;
+my %singleoptions; # for (possible) singleton export
 
 $exportoptions{logger} = $logger if $minerva;
 
@@ -343,9 +376,11 @@ if (defined($caffile)) {
 }
 elsif (defined($fastafile)) {
     $exportoptions{readsonly} = 1 if $readsonly;
-    $exportoptions{endregiononly} = $masking if defined($masking);
-    $exportoptions{maskingsymbol} = $msymbol || 'X';
-    $exportoptions{shrink} = $mshrink if $mshrink;
+    if (defined($masking)) {
+        $exportoptions{endregiononly} = $masking;
+        $exportoptions{maskingsymbol} = $msymbol || 'X';
+        $exportoptions{shrink} = $mshrink if $mshrink;
+    }
 
     $exportoptions{qualityclip} = 1 if defined($qualityclip);
     $exportoptions{qualityclip} = 1 if defined($clipthreshold);
@@ -353,16 +388,23 @@ elsif (defined($fastafile)) {
     $exportoptions{threshold} = $clipthreshold if defined($clipthreshold);
     $exportoptions{symbol}    = $clipsymbol if defined($clipsymbol);
     $exportoptions{gap4name}  = 1 if $gap4name;
-#    if ($qualityclip) {
-#        $exportoptions{lqpm} = 30;
-#        $exportoptions{lqpm} = $clipthreshold if defined($clipthreshold);
-#    }
 }
 elsif (defined($maffile)) {
     $exportoptions{'minNX'} = $minNX;
 }
 
 $exportoptions{'notacquirelock'} = 1 - $lock; # TO BE TESTED ? should be $lock
+
+# copy the options for the export of singleton (may or may not be actually used)
+
+foreach my $option (keys %exportoptions) {
+    next if ($option eq 'minnrofreads');
+    $singleoptions{$option} = $exportoptions{$option};
+}
+$singleoptions{maxnrofreads} = 1;
+$singleoptions{readsonly} = 1;
+
+# here we go
 
 my $errorcount = 0;
 
@@ -394,9 +436,19 @@ foreach my $project (@projects) {
 
     if (defined($caffile)) {
         @emr = $project->writeContigsToCaf($fhDNA,%exportoptions);
+        if ($singletonfile) {
+            my @semr = $project->writeContigsToCaf($fhSTN,%singleoptions);
+            $emr[0] += $semr[0];
+            $emr[1] += $semr[1];
+	}
     }
     elsif (defined($fastafile)) {
         @emr = $project->writeContigsToFasta($fhDNA,$fhQTY,%exportoptions);
+        if ($singletonfile) {
+            my @semr = $project->writeContigsToFasta($fhSTN,$fhQTY,%singleoptions);
+            $emr[0] += $semr[0];
+            $emr[1] += $semr[1];
+	}
     }
     elsif (defined($maffile)) {
         @emr = $project->writeContigsToMaf($fhDNA,$fhQTY,$fhRDS,%exportoptions);
@@ -447,7 +499,7 @@ sub showUsage {
     my $code = shift || 0;
 
     print STDERR "\n";
-    print STDERR "Export contigs in project(s) by ID/name or using a fopn with IDs or names\n";
+    print STDERR "Export contigs in project(s) by ID/name or using a fofn with IDs or names\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
     unless ($organism && $instance) {
@@ -465,13 +517,13 @@ sub showUsage {
         print STDERR "-fasta\t\tFASTA sequence output file name ('0' for STDOUT)\n";
     }
     print STDERR "-maf\t\tMAF output file name root (not '0')\n" unless $maffile;
-    unless ($fastafile || $caffile || $maffile) {
+    unless (defined($fastafile) || defined($caffile) || defined($maffile)) {
         print STDERR "\t\t***** CHOOSE AN OUTPUT FORMAT *****\n";
     }
     print STDERR "\n";
     print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n\n";
     print STDERR "-project\tProject ID or name; specify 'all' for everything\n";
-    print STDERR "-fopn\t\tname of file with list of project IDs or names\n";
+    print STDERR "-fofn\t\t(or fopn) name of file with list of project IDs or names\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
@@ -484,11 +536,21 @@ sub showUsage {
         print STDERR "-preview\t(no value) show what's going to happen\n";
     }
     print STDERR "\n";
+    print STDERR "-singleton\texport singleton contigs on this (separate) file\n";
+    print STDERR "\n";
     print STDERR "-quality\tFASTA quality output file name\n";
-#    print STDERR "-padded\t\t(no value) export contigs in padded (caf) format\n";
-    print STDERR "-readsonly\t(no value) export only reads in caf or fasta output\n";
+    print STDERR "\n";
+    print STDERR "-append\t\tappend output to (possibly) exiting file\n";
     print STDERR "\n";
     print STDERR "-gap4name\tadd the gap4name (lefthand read) to the identifier\n";
+    print STDERR "\n";
+    print STDERR "-min\t\t(minimum) minimum number of reads in a contig\n";
+    print STDERR "-max\t\t(maximum) maximum number of reads in a contig\n";
+#    print STDERR "-padded\t\t(no value) export contigs in padded (caf) format\n";
+    print STDERR "\n";
+    print STDERR "-readsonly\t(no value) export only reads in caf or fasta output\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS relating to locking and scaffolding\n";
     print STDERR "\n";
     print STDERR "Default setting exports all contigs in project scaffolded to\n";
     print STDERR "reproduce the order of the last import; override with -scaffold\n";
@@ -503,28 +565,31 @@ sub showUsage {
     print STDERR "-lock\t\t(no value) acquire a lock on the project and , if "
                 . "successful,\n\t\t\t   export its contigs\n";
     print STDERR "\n"; 
-    print STDERR "-mask\t\tlength of end regions of contig(s) to be exported, while "
-               . "the\n\t\tbases in the central part thereof will be replaced by a "
-               . "masking\n\t\tsymbol (to be specified separately)\n";
-    print STDERR "-symbol\t\tthe symbol used for the masking (default 'X')\n";
-
-    print STDERR "-shrink\t\tif specified, the size of the masked central part will "
-               . "be\n\t\ttruncated to size 'shrink'; longer contigs are then "
-               . "clipped\n\t\tto size '2*mask+shrink'; shrink values "
-               . "smaller than 'mask'\n\t\twill be reset to 'mask'\n";
-#    print STDERR "-padded\t\t(no value) export padded consensus sequence only\n";
+    print STDERR "OPTIONAL PARAMETERS for data manipulation before export (fasta only)\n";
     print STDERR "\n";
-    print STDERR "-ert\t\t(endregiontrim) remove low quality endregions at this quality level\n";
-#    print STDERR "-ero\t\t(endregiononly) extract this size endregions endregions at both ends\n";
+    print STDERR "-qc\t\t(qualityclip) remove low quality pads (default '*')\n";
     print STDERR "\n";
-    print STDERR "-qualityclip\tRemove low quality pads (default '*')\n";
-    print STDERR "-qclipsymbol\t(qcs) use specified symbol as low quality pad\n";
-    print STDERR "-qclipthreshold\t(qct) clip quality values below threshold\n";
+    print STDERR "-ert\t\t(endregiontrim) clip low quality endregions at this quality\n";
+    print STDERR "\n"; 
+    print STDERR "-mask\t\texport only the end regions of a contig of length specified\n";
+    print STDERR "\t\tthe two end parts will be separated by a string of (default) 'N'\n";
+    print STDERR "\t\tmasking symbols and given quality 1\n";
     print STDERR "\n";
-    print STDERR "-append\t\tappend output to named file\n";
+    print STDERR "OPTIONAL PARAMETERS qualifiers for data manipulation\n";
+    print STDERR "\n";
+    print STDERR "-qcs\t\t(qclipsymbol) use this symbol as low quality pad clipping\n";
+    print STDERR "-qct\t\t(qclipthreshold) clip quality values below threshold\n";
+    print STDERR "\n";
+    print STDERR "-symbol\t\tsymbol used for the masking \n";
+    print STDERR "-shrink\t\tif specified, the size of the masked central part will be\n"
+               . "\t\ttruncated to size 'shrink'; longer contigs are then clipped\n"
+               . "\t\tto size '2*mask+shrink'; shrink values smaller than mask length\n"
+               . "\t\twill be reset to 'mask'\n";
     print STDERR "\n";
     print STDERR "-minNX\t\treplace runs of at least minNX 'N's by 'X'-es\n";
     print STDERR "\n";
+#    print STDERR "-padded\t\t(no value) export padded consensus sequence only\n";
+#    print STDERR "-ero\t\t(endregiononly) extract this size endregions endregions at both ends\n";
     print STDERR "-verbose\t(no value) for some progress info\n";
     print STDERR "\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
