@@ -536,7 +536,7 @@ sub showUsage {
         print STDERR "-preview\t(no value) show what's going to happen\n";
     }
     print STDERR "\n";
-    print STDERR "-singleton\texport singleton contigs on this (separate) file\n";
+    print STDERR "-singletons\texport singleton contigs on this (separate) file\n";
     print STDERR "\n";
     print STDERR "-quality\tFASTA quality output file name\n";
     print STDERR "\n";
