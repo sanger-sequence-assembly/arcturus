@@ -315,6 +315,12 @@ public class CreateContigTransferPanel extends MinervaPanel {
 		public void refresh() {
 			try {
 				Set projectset = adb.getAllProjects();
+				
+				for (Iterator iter = projectset.iterator(); iter.hasNext();) {
+					Project project = (Project) iter.next();
+					if (!project.isActive())
+						iter.remove();
+				}
 
 				projects = new ProjectProxy[projectset.size()];
 
