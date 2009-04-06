@@ -238,8 +238,11 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 			Arrays.sort(myProjects, new ProjectComparator());
 
 			for (int i = 0; i < myProjects.length; i++)
-				if (!myProjects[i].isBin())
-					xferMenu.add(new ContigTransferAction(table, myProjects[i]));
+				if (!myProjects[i].isBin()) {
+					ContigTransferAction action = new ContigTransferAction(table, myProjects[i]);
+					action.setEnabled(myProjects[i].isActive());
+					xferMenu.add(action);
+				}
 			
 			Project bin = null;
 
