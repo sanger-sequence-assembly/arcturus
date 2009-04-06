@@ -288,6 +288,10 @@ public class Project extends Core {
 				return "Unknown";
 		}
 	}
+	
+	public boolean isActive() {
+		return status == IN_SHOTGUN || status == PREFINISHING || status == IN_FINISHING;
+	}
 
 	public boolean isRetired() {
 		return status == RETIRED;
