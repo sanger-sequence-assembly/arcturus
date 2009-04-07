@@ -394,7 +394,7 @@ sub deleteProject {
 
 my $CACHEDPROJECTS;
 
-sub getCachedProject {
+sub oldgetCachedProject {
     my $this = shift;
     my $pid  = shift; # we cache on project_id because it is unique
 
@@ -411,6 +411,38 @@ sub getCachedProject {
     }
 
     return $CACHEDPROJECTS->{$pid};  
+}
+
+sub getCachedProject {
+    my $this = shift;
+    my %options = @_;
+
+    $CACHEDPROJECTS = {} unless defined $CACHEDPROJECTS;
+
+# build the hash key from input project id or name and possibly assembly
+
+    my $identifier = $options{project_id};
+    unless ($identifier) {
+        $identifier = $options{projectname};
+        return undef unless $identifier;
+        if (my $assembly = $options{assembly}) {
+            $identifier = "$assembly-".$identifier;
+	}
+    }
+
+# cache the project on ID, on name and on assembly-name 
+
+    unless ($CACHEDPROJECTS->{$identifier}) {
+        my ($projects,$msg) = $this->getProject(%options);
+        return undef unless ($projects && @$projects == 1);
+        my $project = $projects->[0];
+        $CACHEDPROJECTS->{$project->getProjectID()} = $project;
+        $CACHEDPROJECTS->{$project->getProjectName()} = $project;
+        my $assembly = $project->getAssemblyID();
+        $CACHEDPROJECTS->{"$assembly-".$project->getProjectName()} = $project;
+    }
+
+    return $CACHEDPROJECTS->{$identifier};  
 }
 
 #------------------------------------------------------------------------------
@@ -719,7 +751,7 @@ sub assignReadAsContigToProject {
 
 #------------------------------------------------------------------------------
 
-sub unlinkContigID {
+sub oldunlinkContigID {
 # private remove link between contig_id and project_id (set project_id to 0)
 # my $lock = shift;
 # my $this = shift;
@@ -750,6 +782,53 @@ sub unlinkContigID {
 
     my $query = "update CONTIG join PROJECT using (project_id)"
               . "   set CONTIG.project_id = 0"
+              . " where CONTIG.contig_id = ?"
+#	      . "   and PROJECT.lockdate is null"  # ?? this sucks
+              . "   and PROJECT.status not in ('finished','quality checked')"; 
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $success = $sth->execute($contig_id) || &queryFailed($query,$contig_id);
+
+    $sth->finish();
+
+    return ($success,"OK") if $success;
+
+# report an unexpected lock status for the contig_id 
+
+    return (0,"Contig $contig_id was (unexpectedly) found to be locked");
+}
+
+sub unlinkContigID {
+# private remove link between contig_id and project_id
+#return &oldunlinkContigID(@_);
+    my $dbh = shift;
+    my $contig_id = shift || return undef;
+    my $assign_id = shift; # id of holding project (e.g. of PROBLEMS) before removal
+    my $confirm = shift;
+
+    &verifyPrivate($dbh,"unlinkContigID");
+
+# a contig can only be unlinked (assigned to the problems project) by the
+# the project's owner or a user with overriding privilege on unlocked project
+
+# should change be allowed by the lock owner? or project owner?
+
+    my ($lockstatus,@lockinfo) = &getLockedStatus($dbh,$contig_id,1);
+
+# check privilege, check lockstatus
+
+    if ($lockstatus == 3) {
+        return (0,"Contig $contig_id is not allocated to any project");
+    }
+    elsif ($lockstatus) {
+        return (0,"Contig $contig_id is locked by user $lockinfo[0]");
+    }
+
+    return (1,"OK") unless $confirm; # preview option   
+
+    my $query = "update CONTIG join PROJECT using (project_id)"
+              . "   set CONTIG.project_id = $assign_id"
               . " where CONTIG.contig_id = ?"
 #	      . "   and PROJECT.lockdate is null"  # ?? this sucks
               . "   and PROJECT.status not in ('finished','quality checked')"; 
