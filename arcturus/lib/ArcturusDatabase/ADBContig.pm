@@ -1017,11 +1017,18 @@ sub deleteContig {
 
     my $confirm = $options{confirm};
 
+# assign the contig to the PROBLEMS project before actual removal (to test privileges)
+
+    my $problem = $this->getCachedProject(projectname=>'PROBLEMS');
+    $problem = $this->getCachedProject(projectname=>'BIN') unless $problem; # fall back
+    return (0,"Contig $identifier cannot be deleted: no PROBLEM or BIN project") unless $problem;  
+    my $pid = $problem->getProjectID();
+
 # for some reason I have to call this private function on the fully specified
 # class; importing unlinkContigID using Exporter in ADBProject doesn't work as
 # expected ...
 
-    my ($status,$message) = ArcturusDatabase::ADBProject::unlinkContigID($dbh,$cid,$user,$confirm); 
+    my ($status,$message) = ArcturusDatabase::ADBProject::unlinkContigID($dbh,$cid,$pid,$confirm);
 
     return (0,"Contig $identifier cannot be deleted: $message") unless $status;
 
@@ -1031,8 +1038,7 @@ sub deleteContig {
 
     my $report = '';
     my $success = 1;
-    foreach my $table ('CONTIG','MAPPING','C2CMAPPING','CONSENSUS',
-                       'CONTIGTRANSFERREQUEST','TAG2CONTIG') {
+    foreach my $table ('C2CMAPPING','CONTIG') {
         my $query = "delete from $table where contig_id = $cid"; 
         my $deleted = $dbh->do($query) || &queryFailed($query);
         if (!$deleted && $table eq 'CONTIG') { # query failed
@@ -1816,7 +1822,9 @@ sub repairContigToContigMappings {
 
     if ($nm && $options{confirm}) {
         $message .= "Insert contig-to-contig mappings for $contig_id ..";
-        if (&putMappingsForContig($dbh,$contig,$log,type=>'contig')) {
+        my %insertoptions = (type=>'contig');
+        $insertoptions{allowemptymapping} = 1 if $options{allowemptymapping};
+        if (&putMappingsForContig($dbh,$contig,$log,%insertoptions)) {
             $message .= ".. DONE\n";
 # update the age of the mapping, if > 0
             if ($age) {
@@ -2318,6 +2326,8 @@ sub getSingleReadParentIDs {
             $query .= " and $constraints" if $constraints;
 	}
 
+        $query .= " order by contig_id";
+
         my $sth = $dbh->prepare_cached($query);
 
         $sth->execute(@data) || &queryFailed($query);
@@ -2363,6 +2373,8 @@ sub getSingleReadParentIDs {
             $constraints =~ s/PARENT/absentparent/g;
             $query .= "  and $constraints";
         }
+
+        $query .= " order by contig_id";
 
         my $sth = $dbh->prepare_cached($query);
 
