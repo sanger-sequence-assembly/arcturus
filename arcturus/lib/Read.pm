@@ -637,8 +637,8 @@ sub getSequencingVector {
 
 if (defined($this->{data}->{svector}->[0])) {
  unless ($this->{data}->{svector}->[0]->[0]) {
-  print STDERR "Read.pm: Get sequencing vector : 'unknown' for read ".
-                $this->getReadName."\n"; 
+#  print STDERR "Read.pm: Get sequencing vector : 'unknown' for read ".
+#                $this->getReadName."\n"; 
   $this->{data}->{svector}->[0]->[0] = "unknown";
  }
 }
@@ -1088,6 +1088,13 @@ sub vectorScreen {
     my $QL = $this->getLowQualityLeft();
     my $QR = $this->getLowQualityRight();
 
+    unless (defined($QL) && defined($QR)) {
+	$this->qualityClip();
+        $QL = $this->getLowQualityLeft();
+        $QR = $this->getLowQualityRight();
+        return 0 unless (defined($QL) && defined($QR)); # most likely a failed read
+    }
+
 # adjust for vector(s)
 
     my $svector = $this->getSequencingVector();
@@ -1114,6 +1121,11 @@ sub screen {
 
     foreach my $segment (@$vector) {
 # first if the segment is on the left-hand side
+
+unless (defined($segment->[1]) && defined($segment->[2]) && defined($ql) && defined($qr)) {
+    print STDOUT "segment vector: @$segment  ql $ql qr $qr\n";
+#    exit;
+} 
         if ($segment->[1] <= 1) {
             $ql = $segment->[2] if ($segment->[2] > $ql);
         }
