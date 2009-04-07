@@ -394,25 +394,6 @@ sub deleteProject {
 
 my $CACHEDPROJECTS;
 
-sub oldgetCachedProject {
-    my $this = shift;
-    my $pid  = shift; # we cache on project_id because it is unique
-
-    return undef unless (defined $pid && $pid !~ /\D/);
-
-    $CACHEDPROJECTS = {} unless defined $CACHEDPROJECTS;
-
-    unless ($CACHEDPROJECTS->{$pid}) {
-        my ($projects,$msg) = $this->getProject(project_id=>$pid);
-#print STDERR "new project cached: $pid $projects\n";
-        return undef unless ($projects && @$projects);
-#print STDERR "new project cached: $pid $projects  @$projects\n";
-        $CACHEDPROJECTS->{$pid} = $projects->[0];
-    }
-
-    return $CACHEDPROJECTS->{$pid};  
-}
-
 sub getCachedProject {
     my $this = shift;
     my %options = @_;
@@ -751,57 +732,8 @@ sub assignReadAsContigToProject {
 
 #------------------------------------------------------------------------------
 
-sub oldunlinkContigID {
-# private remove link between contig_id and project_id (set project_id to 0)
-# my $lock = shift;
-# my $this = shift;
-    my $dbh = shift;
-    my $contig_id = shift || return undef;
-    my $user = shift;
-    my $confirm = shift;
-
-    &verifyPrivate($dbh,"unlinkContigID");
-
-# a contig can only be unlinked (assigned to project_id = 0) by the owner
-# of the project or a user with overriding privilege on unlocked project
-
-# should change be allowed by the lock owner? or project owner?
-
-    my ($lockstatus,@lockinfo) = &getLockedStatus($dbh,$contig_id,1);
-
-# check privilege, check lockstatus
-
-    if ($lockstatus == 3) {
-        return (0,"Contig $contig_id is not allocated to any project");
-    }
-    elsif ($lockstatus) {
-        return (0,"Contig $contig_id is locked by user $lockinfo[0]");
-    }
-
-    return (1,"OK") unless $confirm; # preview option   
-
-    my $query = "update CONTIG join PROJECT using (project_id)"
-              . "   set CONTIG.project_id = 0"
-              . " where CONTIG.contig_id = ?"
-#	      . "   and PROJECT.lockdate is null"  # ?? this sucks
-              . "   and PROJECT.status not in ('finished','quality checked')"; 
-
-    my $sth = $dbh->prepare_cached($query);
-
-    my $success = $sth->execute($contig_id) || &queryFailed($query,$contig_id);
-
-    $sth->finish();
-
-    return ($success,"OK") if $success;
-
-# report an unexpected lock status for the contig_id 
-
-    return (0,"Contig $contig_id was (unexpectedly) found to be locked");
-}
-
 sub unlinkContigID {
 # private remove link between contig_id and project_id
-#return &oldunlinkContigID(@_);
     my $dbh = shift;
     my $contig_id = shift || return undef;
     my $assign_id = shift; # id of holding project (e.g. of PROBLEMS) before removal
