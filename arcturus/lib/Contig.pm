@@ -381,7 +381,7 @@ sub getProject {
 
     my $SOURCE = $this->{SOURCE}; # must be the parent database
     return undef unless (ref($SOURCE) eq 'ArcturusDatabase');
-    return $SOURCE->getCachedProject($this->{project});
+    return $SOURCE->getCachedProject(project_id => $this->{project});
 }
 
 sub setProject {
@@ -1482,7 +1482,7 @@ sub writeToEMBL {
   
 # the DNA section, count the base composition
 
-        my %base;
+        my %base = (A=>0,C=>0,G=>0,T=>0); # to have them defined
         while ($dna =~ /(.)/g) {
             $base{uc($1)}++; # count on upper case
         }
@@ -1618,7 +1618,7 @@ sub extractEndRegion {
     my %options = @_;
     &verifyKeys('extractEndRegion',\%options,
                 'endregionsize','sfill','qfill','lfill');
-    return ContigHelper->extractEndRegion($this,%options);
+    return ContigHelper->extractEndRegion($this,%options); # returns Contig
 }
 
 sub endRegionTrim {
@@ -1626,7 +1626,7 @@ sub endRegionTrim {
     my $this = shift;
     my %options = @_; 
     &verifyKeys('endRegionTrim',\%options,'new','cliplevel','complete');
-    return ContigHelper->endRegionTrim($this,%options);
+    return ContigHelper->endRegionTrim($this,%options); # returns Contig
 }
 
 sub deleteLowQualityBases {
