@@ -24,6 +24,7 @@ my $cleanup = 0;
 my $srparents;
 my $mincid;
 my $maxcid;
+my $limit;
 
 my $cproject;
 my $pproject;
@@ -35,7 +36,7 @@ my $confirm;
 my $validKeys  = "help|organism|instance|username|password|contig|fofn|focn|"
                . "singlereadparents|srp|srplinked|srpunlinked|mincid|maxcid|"
                . "project|childproject|cp|parentproject|pp|library|assembly|"
-               . "offspring|cleanup|parent|confirm|verbose";
+               . "offspring|limit|cleanup|parent|confirm|verbose";
 
 while (my $nextword = shift @ARGV) {
 
@@ -78,6 +79,7 @@ while (my $nextword = shift @ARGV) {
 
     $mincid       = shift @ARGV  if ($nextword eq '-mincid');
     $maxcid       = shift @ARGV  if ($nextword eq '-maxcid');
+    $limit        = shift @ARGV  if ($nextword eq '-limit');
 
     $cproject     = shift @ARGV  if ($nextword eq '-project');
     $cproject     = shift @ARGV  if ($nextword eq '-childproject');
@@ -184,7 +186,7 @@ if ($srparents && $srparents > 0) {
     foreach my $contig (@$pids) {
         push @contigs, $contig;
     }
-    $options{noparentcheck} = 1;
+#    $options{noparentcheck} = 1; # only for MyISAM tables
 }
 else {
 
@@ -246,19 +248,26 @@ if ($offspring) {
     
 $options{confirm} = 1 if $confirm;
 
-foreach my $contig_id (sort {$b <=> $a} @contigs) {
+# reverse sort for current contigs, query returns increasing order for single-read parents
+
+@contigs = sort {$b <=> $a} @contigs unless $srparents;
+
+my $delete = 0;
+foreach my $contig_id (@contigs) {
     next unless ($contig_id > 0);
     $logger->warning("Contig $contig_id is to be deleted");
     my ($success,$msg) = $adb->deleteContig($contig_id,%options);
     if ($confirm) {
         $logger->severe("FAILED to remove contig $contig_id") unless $success;
         $logger->warning("Contig $contig_id is deleted") if $success;
+        $delete++ if $success;
     }
     $logger->warning($msg);
+    last if ($limit && $limit > 0 && $delete >= $limit);
 }
 
-
-
+$logger->warning("$delete contigs were removed from the database");
+ 
 if ($confirm && $cleanup) {
     my $fullscan = $srparents;
     $fullscan = 1 unless @contigs; # run full scan when specified '-contig 0'
