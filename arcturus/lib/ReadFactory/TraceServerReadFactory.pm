@@ -17,7 +17,7 @@ sub new {
 
     my $this = $type->SUPER::new();
 
-    my ($group, $minreadid, $maxreads, $status);
+    my ($group, $minreadid, $maxreads, $status, $filter);
 
     while (my $nextword = shift) {
 	$nextword =~ s/^\-//;
@@ -29,6 +29,8 @@ sub new {
 	$maxreads = shift if ($nextword eq 'maxreads');
 
 	$status = shift if ($nextword eq 'status');
+
+	$filter = shift if ($nextword eq 'readnamelike');
     }
 
     die "No group specified" unless defined($group);
@@ -51,6 +53,8 @@ sub new {
 
     $this->{status} = defined($status) ? $status : "PASS";
 
+    $this->{filter} = $filter if defined($filter);
+
     $this->{readcount} = 0;
 
     return $this;
@@ -69,12 +73,15 @@ sub getReadNamesToLoad {
 
     my $minreadid = $this->{minreadid};
 
+    my $filter = $this->{filter};
+
     $grit->set($minreadid) if defined($minreadid);
 
     my $readnames = [];
 
     while (my $seq_id = $grit->next()) {
 	my $read = $ts->get_read_by_seq_id($seq_id);
+        next if (defined($filter) && $read->get_name() !~ /$filter/);       
 	push @{$readnames}, $read->get_name();
     }
 
