@@ -422,6 +422,7 @@ foreach my $contig_id (sort {$a <=> $b} keys %$link) {
 	    }
 # add the new link(s) to the C2CMAPPING list for this contig  TO BE TESTED
             my ($s,$m)= $adb->repairContigToContigMappings($contig,confirm=>1,
+                                                                   allowemptymapping=>1,
                                                                    nodelete=>1);
             $logger->special($m);
 	}
