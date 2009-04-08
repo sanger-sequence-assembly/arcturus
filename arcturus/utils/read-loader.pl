@@ -42,7 +42,7 @@ my $readstoskip;
 my $listofreads;
 
 my $validKeys = "organism|instance|caf|cafdefault|fofn|forn|read|out|"
-              . "limit|filter|source|exclude|info|help|asped|"
+              . "limit|source|exclude|info|help|asped|"
               . "filter|readnamelike|rootdir|status|"
               . "subdir|verbose|schema|projid|aspedafter|aspedbefore|"
               . "minreadid|maxreadid|skipaspedcheck|isconsensusread|icr|"
@@ -72,7 +72,7 @@ while (my $nextword = shift @ARGV) {
    
     if ($nextword eq '-source') {
 # the next statement prevents redefinition when used with e.g. a wrapper script
-        die "You can't re-define organism" if $source;
+        die "You can't re-define data source" if $source;
         $source       = lc(shift @ARGV);
     }
 
@@ -322,7 +322,7 @@ elsif ($source eq 'expfiles') {
 elsif ($source eq 'traceserver') {
     &showUsage("Missing group name for trace server") unless $PARS{group};
 
-    my @valid = ('group','minreadid','maxreads','status');
+    my @valid = ('group','minreadid','maxreads','status','readnamelike');
 
     &showUsage("Invalid parameter(s)") if &testForExcessInput(\%PARS,\@valid);
 
@@ -467,6 +467,10 @@ foreach my $readname (@{$readloadlist}) {
         else {
             $logger->info("read $readname: $errmsg");
         }
+
+        unless ($adb->getTraceArchiveIdentifierForRead($read)) {
+            $adb->putTraceArchiveIdentifierForRead($read);
+	}
 
         $adb->putTagsForReads([($read)]) if $read->hasTags();
  
