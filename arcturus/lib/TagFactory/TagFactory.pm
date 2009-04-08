@@ -551,6 +551,9 @@ $logger->debug("decode_oligo_info  $info ($sequence)");
     if ($info =~ /\\n\\/) {
         $change++ if($info =~ s/\s+/\\n\\/g);
     }
+#    if ($info =~ /\\n[^\\]/) {
+#        $change++ if($info =~ s/\\n/\\n\\/g);
+#    }
 # replace multiple occurring \n\ by one
     $change++ if ($info =~ s/(\\n\\){2,}/\\n\\/g); 
 # remove possible place holder name
@@ -1446,11 +1449,11 @@ if ($options{debug} && $options{debug}>1) {
     my $rcomment = $otag->getTagComment();
     if ($newcomment = &mergetagcomments ($lcomment,$rcomment)) {
 # and check the new comment
-        my ($total,$frags) = &unravelfragments($newcomment);
+        my ($lead,$total,$frags) = &unravelfragments($newcomment);
 
         if (@$frags == 1 && $frags->[0]->[0] == 1 && $frags->[0]->[1] == $total) {
-            $comment = 'rejoined intermediate tag fragments';
-            $newcomment = 'original tag';
+            $comment = 'rejoined intermediate tag fragments (original tag)';
+            $newcomment = $lead;
         }
     }
     else {
@@ -1637,11 +1640,11 @@ sub mergetagcomments {
 # re-combine tag comments for fragments of a split tag
     my ($leftc,$rightc) = @_;
 
-    my ($tl,$l) = &unravelfragments($leftc);
+    my ($ll,$tl,$l) = &unravelfragments($leftc);
 
-    my ($tr,$r) = &unravelfragments($rightc);
+    my ($lr,$tr,$r) = &unravelfragments($rightc);
 
-    my $tagcomment = '';
+    my $mergecomment = '';
 # check the total number of fragments
     if ($l && $r && @$l && @$r && $tl == $tr) {
 # we are dealing with fragments of a split tag; compose the new tagcomment
@@ -1651,22 +1654,27 @@ sub mergetagcomments {
 # sort according to increasing begin number
         @$parts = sort {$a->[0] <=> $b->[0]} @$parts;
 # and reassemble the list in a new fragment comment
-        $tagcomment = &composefragments($tl,$parts) if @$parts;
+        $mergecomment = &composefragments($tl,$parts) if @$parts;
     }
 
-    return $tagcomment;
+    if (defined($ll) && defined($lr) && $ll eq $lr) {
+        $mergecomment = $ll.$mergecomment;
+    }
+
+    return $mergecomment;
 }
 
 sub unravelfragments {
 # decode fragment description for a split tag
     my $string = shift;
 
-    return undef unless ($string =~ /fragment[s]?\s+([\d\,\-]+)\s+of\s+(\d+)/);
+    return undef unless ($string =~ /^(.*)fragment[s]?\s+([\d\,\-]+)\s+of\s+(\d+)/);
 
 # decodes string like: 'fragment N,M,K-L of T' (total number at end)
 
-    my $parts = $1;
-    my $total = $2;
+    my $lead = $1;
+    my $parts = $2;
+    my $total = $3;
 # the parts can contain a single number, a range (n-m) or a set of ranges
     my @parts;
     my @intervals = split /\,/,$parts;
@@ -1677,7 +1685,9 @@ sub unravelfragments {
         push @parts,[@part];
     }
 
-    return $total,[@parts]; # total & array of arrays
+    $lead =~ s/^\s+|\s+$//;
+
+    return $lead,$total,[@parts]; # total & array of arrays
 }
 
 sub composefragments {
@@ -1710,9 +1720,9 @@ sub composefragments {
         }
     }
 
-    my $tagcomment = "fragment " . $fragmentstring." of $total";
+    my $fragment = "fragment " . $fragmentstring." of $total";
 
-    return $tagcomment;
+    return $fragment;
 }
 
 #-----------------------------------------------------------------------------
