@@ -710,17 +710,15 @@ sub getReadsForCondition {
 
 # retrieve version 0 (un-edited reads only, the raw data)
 
-$this->defineReadMetaData(); # unless $this->{read_attributes};
+    $this->defineReadMetaData(); # unless $this->{read_attributes};
 
-    my $query = "select READINFO.read_id,SEQ2READ.seq_id,"
+    my $query = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version,"
               .        "$this->{read_attributes},$this->{template_addons}"
               . "  from READINFO,SEQ2READ,TEMPLATE $tables"
               . " where READINFO.read_id = SEQ2READ.read_id"
               . "   and READINFO.template_id = TEMPLATE.template_id";
 # add the other conditions
-    $query   .= "    and $condition" if $condition;
-
-$this->logQuery('getReadsForCondition',$query);
+    $query   .= "   and $condition" if $condition;
 
 # execute
 
@@ -732,7 +730,7 @@ $this->logQuery('getReadsForCondition',$query);
 
     my @reads;
 
-    while (my ($read_id, $seq_id, @attributes) = $sth->fetchrow_array()) {
+    while (my ($read_id, $seq_id, $version, @attributes) = $sth->fetchrow_array()) {
 
 	my $read = new Read();
 
@@ -740,7 +738,7 @@ $this->logQuery('getReadsForCondition',$query);
 
         $read->setSequenceID($seq_id);
 
-        $read->setVersion(0);
+        $read->setVersion($version);
 
         $this->addMetaDataForRead($read,@attributes);
 
@@ -3510,6 +3508,7 @@ sub getTagsForSequenceIDs {
 
     my $items = "seq_id,tagtype,pstart,pfinal,strand,comment," # tagcomment
               . "tagseqname,sequence,TAGSEQUENCE.tag_seq_id";
+    $items   .= ",deprecated" if $options{all};
 
     my $query = "select $items from READTAG left join TAGSEQUENCE"
               . " using (tag_seq_id)"
@@ -3521,7 +3520,7 @@ sub getTagsForSequenceIDs {
 
     $query =~ s/select/select distinct/ if $options{distinct};
 
-    my @tag;
+    my @tags;
 
     my $sth = $dbh->prepare($query);
 
@@ -3539,13 +3538,17 @@ sub getTagsForSequenceIDs {
         $tag->setTagSequenceName (shift @ary); # tagseqname
         $tag->setDNA             (shift @ary); # sequence
 	$tag->setTagSequenceID   (shift @ary); # tag sequence identifier
+# check on the deprecated status, if one is expected
+        if ($options{all} && (my $deprecated = shift @ary)) {
+            $tag->setComment("Is_deprecated") if ($deprecated eq 'Y');
+	}
 # add to output array
-        push @tag, $tag;
+        push @tags, $tag;
     }
 
     $sth->finish();
 
-    return [@tag];
+    return [@tags];
 }
 
 use TagFactory::TagFactory;
@@ -3592,7 +3595,14 @@ sub putTagsForReads {
 
     my $dbh = $this->getConnection();
 
-    my $existingtags = &getReadTagsForSequenceIDs($dbh,\@sids, distinct=>1, all=>1); # empties @sids
+    my %goption = (distinct=>1,all=>1);
+# allow override of defaults
+    foreach my $option ('distinct','all') { 
+	next unless defined $options{$option};
+	$goption{$option} = $options{$option};
+    }
+
+    my $existingtags = &getReadTagsForSequenceIDs($dbh,\@sids,%goption); # empties @sids
 
 # build existing tag hash
 
@@ -3651,8 +3661,9 @@ sub putTagsForReads {
 # do a final scan, if we still have unmatched tags
 
         next unless ($rcount || $ecount);
-	    
-$logger->info("there are unmatched tags, r:$rcount  e:$ecount (".scalar(@$etags).") seq_id $seq_id");
+
+        $logger->info("there are unmatched tags, r:$rcount  e:$ecount (".scalar(@$etags)
+                     .") seq_id $seq_id");
 
         foreach my $rtag (@$rtags) {
             last unless $rcount;
@@ -3662,7 +3673,6 @@ $logger->info("there are unmatched tags, r:$rcount  e:$ecount (".scalar(@$etags)
 # count the number of input and existing tags in matches
                     $rcount-- unless $ignore->{$rtag}++;
                     $ecount-- unless $ignore->{$etag}++;
-$logger->info("rtag $rtag filtered out");
 		}
 	    }
 	}
@@ -3675,7 +3685,6 @@ $logger->info("rtag $rtag filtered out");
 # count the number of input and existing tags in matches
                     $rcount-- unless $ignore->{$rtag}++;
                     $ecount-- unless $ignore->{$etag}++;
-$logger->info("etag $etag filtered out");
 		}
 	    }
 	}
@@ -3690,14 +3699,16 @@ $logger->info("etag $etag filtered out");
 
     if ($options{synchronise}) {
 # existing tags also in the input list are marked as to be ignored
-$logger->warning("synchronise active") if @$existingtags;
+        $logger->info("synchronise active") if @$existingtags;
         foreach my $etag (@$existingtags) {
             next if $ignore->{$etag};
-# this existing tags was not found amongst the input tags: retire it
-$logger->warning("retireReadTag: ".$etag->writeToCaf());
+# this existing tags was not found amongst the input tags: check retire status
+            next if ($etag->getComment() eq 'Is_deprecated');
+# ok, retire the tag
+            $logger->info("retireReadTag: ".$etag->writeToCaf());
 	    next if $options{noload}; # testmode
-next unless $options{commit}; 
-            &retireReadTag($dbh,$etag);
+            my $success = &retireReadTag($dbh,$etag) + 0;
+            $logger->warning("Failed to retire read tag") unless $success;
 	}
     }
 
@@ -3710,13 +3721,13 @@ next unless $options{commit};
         foreach my $rtag (@$rtags) {
             next if $ignore->{$rtag};
             push @tags,$rtag;
-$logger->info("tag to be added:\n".$rtag->writeToCaf());
+            $logger->info("tag to be added:\n".$rtag->writeToCaf());
 	}
     }
 
 # here we have a list of new tags which have to be loaded
 
-$logger->info("new tags to be loaded : ".scalar(@tags));
+    $logger->info("new tags to be loaded : ".scalar(@tags));
 
     return '0.0' unless @tags; # returns True for success but empty
 
@@ -3918,7 +3929,8 @@ sub putReadTags {
     }
 
     return $tagsloaded; 
-#    return $tagsloaded,$tagsmissed; # contig-loader.pl read-loader.pl oligo-tag-loader (read-tag-tester readtag-cleanup)
+# return $tagsloaded,$tagsmissed; 
+# contig-loader.pl read-loader.pl oligo-tag-loader (read-tag-tester readtag-cleanup)
 }
 
 sub retireReadTag {
@@ -3933,18 +3945,19 @@ sub retireReadTag {
     my ($pstart,$pfinal) = $tag->getPosition();
     my $strand           = $tag->getStrand();
     $strand =~ s/(\w)\w*/$1/;
-    my $comment          = $tag->getTagComment();
+    my $tagcomment       = $tag->getTagComment();
 # we quote the comment string because it may contain odd characters
-    $comment = $dbh->quote($comment);
+    $tagcomment = $dbh->quote($tagcomment);
 
     my $query = "update READTAG set deprecated = 'Y'"
    	      . " where seq_id  = "    .  $tag->getSequenceID()  
+              . "   and deprecated != 'Y'"
               . "   and tagtype = '"   .  $tag->getType() . "'"
               . "   and tag_seq_id = " . ($tag->getTagSequenceID() || 0)
               . "   and pstart = "     .  $pstart
               . "   and pfinal = "     .  $pfinal
               . "   and strand = '"    .  $strand . "'";
-    $query   .= "   and comment like $comment" if $comment;
+    $query   .= "   and comment = $tagcomment" if $tagcomment;
 
     return $dbh->do($query); # true for success
 }
