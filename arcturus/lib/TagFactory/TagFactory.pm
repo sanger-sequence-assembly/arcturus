@@ -251,7 +251,7 @@ sub get_tag_DNA {
     my $tagcomment = $tag->getTagComment();
 
     my $report = '';
-    if ($tagcomment =~ /([ACGT\*]{5,})/i) {
+    if ($tagcomment =~ /\b([ACGT\*]{5,}\b)/i) {
         my $DNA = $1; my $dna = qw($DNA); # can contain "*"
 # test if the DNA occurs twice in the data; remove multiple occurrences
         if ($tagcomment =~ s/($dna[^ACGT].*?)(sequence\=)?$dna/$1/i) {
