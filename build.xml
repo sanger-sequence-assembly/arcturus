@@ -70,7 +70,7 @@
     <jar jarfile="${jar.file}"
          manifest="${src.dir}/MANIFEST.MF">
         <fileset dir="${build.classes}" />
-	<fileset dir="${src.dir}" includes="resources/icons/*.*,resources/images/*.*,resources/*.props"/>
+	<fileset dir="${src.dir}" includes="resources/icons/*.*,resources/images/*.*,resources/xml/*.*,resources/*.props"/>
     </jar>
   </target>
 
