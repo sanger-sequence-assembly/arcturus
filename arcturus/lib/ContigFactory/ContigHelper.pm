@@ -478,22 +478,30 @@ sub deleteLowQualityBases {
 
     my $logger = &verifyLogger('deleteLowQualityBases');
 
-$logger->debug("ENTER @_");
-
 # step 1: analyse DNA and Quality data to determine the clipping points
+    
+    my $contigname = $contig->getContigName();
 
-    my $pads = &findlowquality($contig->getSequence(),
-                               $contig->getBaseQuality(),
-                               $options{symbols},   # default 'ACGTN-'
-                               $options{threshold}, # default 20
-                               $options{minimum},   # default 0,15
-                               $options{hqpm},      # default 0,30
-                               $options{window});   # default 9
+    my $flq = &findlowquality($contig->getSequence(),
+                              $contig->getBaseQuality(),
+                              $options{symbols},   # default 'ACGTN'
+                              $options{threshold}, # default 20
+                              $options{minimum},   # default 0,15
+                              $options{hqpm},      # default 0,30
+                              $options{window});   # default 9
 
-    unless ($pads) {
-        my $cnm = $contig->getContigName();
-        $logger->error("Missing DNA or quality data in $cnm");
-        return $contig, 0; # no low quality stuff found
+    unless ($flq) {
+# bad things have happened
+        $logger->warning("Missing or invalid base quality data in $contigname");
+        $logger->severe("missing DNA or quality data") unless $contig->hasSequence();
+        return $contig, 0;
+    }
+
+    my ($pads,$mask) = @$flq;
+
+    unless ($pads && @$pads) {
+        $logger->warning("No low quality data found in $contigname");
+        return $contig, 1; # no low quality stuff found
     }
 
 # step 2: remove low quality pads from the sequence & quality;
@@ -503,7 +511,6 @@ $logger->debug("ENTER @_");
                                                    $pads);
 
 $logger->debug("ContigFactory->deleteLowQualityBases  sl:".length($sequence)."  ql:".scalar(@$quality));
-$logger->debug("map $ori2new\n".$ori2new->toString(text=>'ASSEMBLED'));
 
 # out: new sequence, quality array and the mapping from original to new
 
@@ -537,19 +544,27 @@ $logger->debug("map $ori2new\n".$ori2new->toString(text=>'ASSEMBLED'));
                 
     $clippedcontig->setBaseQuality($quality);
 
-    $clippedcontig->addContigNote("low_quality_removed");
+    $clippedcontig->addContigNote("low_quality_removed:$mask");
+
+    $clippedcontig->setContigID( 1000000 + $contig->getContigID() ); # to give it an ID
+
+    $ori2new->setHostSequenceID( $contig->getContigID() ); # X domain original contig
+
+    $ori2new->setSequenceID( $clippedcontig->getContigID() ); # Y domain clipped contig
+
+$logger->debug("map $ori2new\n".$ori2new->toString(text=>'ASSEMBLED'));
+
+    $clippedcontig->addContigToContigMapping($ori2new);
 
 # either treat the new contig as a child of the input contig
 
     if ($options{exportaschild}) {
-
-$logger->info("exporting as CHILD");
-
-        my $mapping = $ori2new->inverse();
-        $mapping->setSequenceID($contig->getContigID());
-        $clippedcontig->addContigToContigMapping($mapping);
         $clippedcontig->addParentContig($contig);
         $contig->addChildContig($clippedcontig);
+    }
+    elsif ($options{exportasparent}) {
+        $clippedcontig->addChildContig($contig);
+        $contig->addParentContig($clippedcontig);
     }
 # or port the transformed contig components by re-mapping from old to new
     elsif ($options{components}) {
@@ -569,8 +584,7 @@ sub replaceLowQualityBases {
 
     &verifyParameter($contig,'replaceLowQualityBases');
 
-my $log = &verifyLogger('replaceLowQualityBases');
-$log->debug("options  @_");
+    my $logger = &verifyLogger('replaceLowQualityBases');
 
 # test input contig data
 
@@ -607,13 +621,22 @@ $log->debug("options  @_");
         $sequence = uc($sequence);
     }
 
-    my $pads = &findlowquality($sequence,           # ? no test DNA
-                               $quality,
-                               $options{symbols},   # default 'ACGTN-'
-                               $options{threshold}, # default 20
-                               $options{minimum},   # default 0,15
-                               $options{hqpm},      # default 0,30
-                               $options{window});   # default 9
+    my $flq = &findlowquality($contig->getSequence(),
+                              $quality,
+                              $options{symbols},   # default 'ACGTN'
+                              $options{threshold}, # default 20
+                              $options{minimum},   # default 0,15
+                              $options{hqpm},      # default 0,30
+                              $options{window});   # default 9
+
+    unless ($flq) {
+# bad things have happened
+        $logger->warning("Missing or invalid base quality data in $contigname");
+        $logger->severe("missing DNA or quality data") unless $contig->hasSequence();
+        return 0;
+    }
+
+    my ($pads,$mask) = @$flq;
 
     if ($pads && @$pads) {
 # there are low quality bases
@@ -698,17 +721,24 @@ sub removeLowQualityReads {
 
     my $logger = &verifyLogger('removeLowQualityBases');
 
-$logger->debug("ENTER @_");
-
 # step 1: analyse DNA and Quality data to determine the clipping points
 
-    my $pads = &findlowquality($contig->getSequence(),
-                               $contig->getBaseQuality(),
-                               $options{symbols},   # default 'ACGTN-'
-                               $options{threshold}, # default 20
-                               $options{minimum},   # default 0,15
-                               $options{hqpm},      # default 0,30
-                               $options{window});   # default 9
+    my $flq = &findlowquality($contig->getSequence(),
+                              $contig->getBaseQuality(),
+                              $options{symbols},   # default 'ACGTN'
+                              $options{threshold}, # default 20
+                              $options{minimum},   # default 0,15
+                              $options{hqpm},      # default 0,30
+                              $options{window});   # default 9
+
+    unless ($flq) {
+# bad things have happened
+        $logger->warning("Missing or invalid base quality data in ".$contig->getContigName());
+        $logger->severe("missing DNA or quality data") unless $contig->hasSequence();
+        return 0;
+    }
+
+    my ($pads,$mask) = @$flq;
 
     return $contig unless ($pads && @$pads); # no low quality stuff found
 
@@ -980,21 +1010,20 @@ sub extractEndRegion {
 
     &verifyParameter($contig,'extractEndRegion');
 
-#    my $logger = &verifyLogger('extractEndRegion');
-#$logger->error("ENTER: @_");
+    my $logger = &verifyLogger('extractEndRegion');
 
-    my ($sequence,$quality) = &endregiononly($contig->getSequence(),
-                                             $contig->getBaseQuality(),
-                                             $options{endregionsize}, # def 100
-                                             $options{sfill},  # def X
-                                             $options{lfill},  # def 0
-                                             $options{qfill}); # def 0
+    my $sq = &endregiononly($contig->getSequence(),
+                            $contig->getBaseQuality(),
+                            $options{endregionsize} || 100, # extracted length at either end
+                            $options{sfill}         || 'X', # replacement symbol for central part
+                            $options{lfill}         || 0,   # replace centre with string of this length
+                            $options{qfill})        || 1;   # quality value to be used in centre
 # create a new output contig
 
     my $newcontig = new Contig();
     $newcontig->setContigName($contig->getContigName);
-    $newcontig->setSequence($sequence);
-    $newcontig->setBaseQuality($quality);
+    $newcontig->setSequence($sq->[0]);
+    $newcontig->setBaseQuality($sq->[1]);
     $newcontig->addContigNote("endregiononly");
     $newcontig->setGap4Name($contig->getGap4Name);
 
@@ -1005,15 +1034,11 @@ sub endregiononly {
 # helper method, private: generate masked sequence and quality data
     my $sequence = shift;
     my $quality  = shift;
-
-    &verifyPrivate($sequence,'endregiononly');
-
 # options
-
-    my $ersize = shift || 100; # extracted length at either end
-    my $symbol = shift || 'X'; # replacement symbol for central part
-    my $centre = shift || 0;   # replace centre with string of this length
-    my $qfill  = shift || 0;   # quality value to be used in centre
+    my $ersize = shift; # extracted length at either end
+    my $symbol = shift; # replacement symbol for central part
+    my $centre = shift; # replace centre with string of this length
+    my $qfill  = shift; # quality value to be used in centre
 
     &verifyPrivate($sequence,'endregiononly');
 
@@ -1026,29 +1051,29 @@ sub endregiononly {
     if ($ersize > 0 && $symbol && $length > 2*$ersize) {
 
         my $begin  = substr $sequence,0,$ersize;
-        my $centre = substr $sequence,$ersize,$length-2*$ersize;
+        my $center = substr $sequence,$ersize,$length-2*$ersize;
         my $end = substr $sequence,$length-$ersize,$ersize;
 
 # adjust the center, if shrink option
 
         if ($centre && $length-2*$ersize >= $centre) {
-            $centre = '';
+            $center = '';
             while ($centre--) {
-                $centre .= $symbol;
+                $center .= $symbol;
             }
         }
 	else {
-            $centre =~ s/./$symbol/g;
+            $center =~ s/./$symbol/g;
 	}
 
-        $sequence = $begin.$centre.$end;
+        $sequence = $begin.$center.$end;
 
 # assemble new quality array, if an input was defined
 
         if ($quality) {
 
             my @newquality = @$quality[0 .. $ersize-1];
-            my $length = length($centre);
+            my $length = length($center);
             while ($length--) {
 		push @newquality, $qfill;
 	    }
@@ -1058,7 +1083,7 @@ sub endregiononly {
 	}
     }
 
-    return $sequence,$quality;
+    return [($sequence,$quality)];
 }
 
 #-----------------------------------------------------------------------------
@@ -1073,7 +1098,7 @@ sub endRegionTrim {
 
     my $logger = &verifyLogger('endRegionTrim');
 
-$logger->debug("ENTER: @_");
+$logger->error("ENTER: @_");
 
     my $clength = $contig->getConsensusLength();
 
@@ -1122,7 +1147,7 @@ $logger->debug("ENTER: @_");
 
         my $mask = new Mapping('Masking map');
         $mask->putSegment(@crange,@crange);
-print "mask mapping ".$mask->writeToString()."\n";
+$logger->error("mask mapping ".$mask->writeToString());
 
         my @deletereads;
         foreach my $mapping (@$mappings) {
@@ -1140,9 +1165,11 @@ print "mask mapping ".$mask->writeToString()."\n";
                 next; 
    	    }
 # new mapping outside range, so delete read
-print STDOUT "mapping to be deleted: ".$mapping->writeToString()."\n";
+$logger->error("mapping to be deleted: ".$mapping->writeToString());
             push @deletereads,$mapping->getMappingName();
         }
+# what about the reads to be deleted?
+
 # and use the statistic function to cleanup the contig
         $class->statistics($trimmedcontig,pass=>2);
     }
@@ -1153,11 +1180,13 @@ print STDOUT "mapping to be deleted: ".$mapping->writeToString()."\n";
         my ($cstart,$cfinal) = @crange;
         my $newsequence = substr($sequence,$cstart-1,$cfinal-$cstart+1);
         my @newquality  = @$basequality [$cstart-1 .. $cfinal-1];
-                        $contig->setBaseQuality(\@newquality);
-                    $contig->setSequence($newsequence);
+        $contig->setBaseQuality(\@newquality);
+        $contig->setSequence($newsequence);
     }
 
-    return $trimmedcontig, "clipped range @crange (1 - $clength)";
+    $trimmedcontig->setContigNote("clipped range @crange ($clength)");
+
+    return $trimmedcontig;
 }
 
 sub endregiontrim {
@@ -1206,7 +1235,7 @@ sub findlowquality {
 
 # options (and defaults if 0 or undef)
  
-    my $symbols               = shift || 'ACGTN-';
+    my $symbols               = shift || 'ACGTN';
     my $threshold             = shift;
     my $minimum               = shift;
     my $highqualitypadminimum = shift;
@@ -1281,7 +1310,11 @@ $logger->debug("pad at $i");
 
 #    @$pads = sort {$a <=> $b} @$pads;
 
-    return $pads;
+    my $mask = "$fwindow:$highqualitypadminimum:$minimum:$threshold:$symbols";
+
+#print STDERR "pads $pads  mask $mask\n";
+#    return $pads,$mask;
+    return [($pads,$mask)]; # array reference
 }
 
 sub slidingmeanfilter {
@@ -1884,8 +1917,7 @@ sub crossmatch {
 # option strong       : set True for comparison at read mapping level
 # option noguillotine : if NOT set, require a minumum number of reads in C2C segment
       
-$options{new} = 1;
-        return &linkToContig($cthis,$cthat,%options) unless $options{new};
+        return &linkToContig($cthis,$cthat,%options) if $options{useold};
  
         return &linkcontigs($cthis,$cthat,%options); 
     }
@@ -2367,11 +2399,12 @@ $logger->info("segment after filter @$segment");
 # here, test if the mapping is valid, using the overall maping range
         my ($isValid,$msg) = &isValidMapping($thiscontig,$thatcontig,$mapping,$overlapreads);
 $logger->info("isVALIDmapping $isValid\n$msg",ss=>1);
+
 # here possible recovery based on analysis of continuity of mapping segments
 
 # if still not valid, 
         if (!$isValid && !$options{forcelink}) {
-$logger->debug("Spurious link detected to contig ".$thatcontig->getContigName());
+#$logger->debug("Spurious link detected to contig ".$thatcontig->getContigName());
             return 0, $overlapreads;
         }
 # in case of split contig
@@ -2402,7 +2435,10 @@ $logger->debug("equal mappings: \n".$mapping->toString()."\n".$c2cmap->toString(
             }
         }
         $thiscontig->addContigToContigMapping($mapping);
-# what about the parent?
+    }
+# single-read parent without valid link : add empty link
+    elsif ($thatcontig->getNumberOfReads() == 1) {
+        $thiscontig->addContigToContigMapping($mapping);
     }
 
 # and return the number of segments, which could be 0
@@ -3041,6 +3077,8 @@ sub cleanupsegmentlist {
 }
 
 #------------------------------------------------------------------------------
+# remapping tags
+#------------------------------------------------------------------------------
 
 sub propagateTagsToContig {
     my $class = shift;
@@ -3117,9 +3155,7 @@ return $class->newpropagateTagsToContig(@_);
         return 0;
     }
 
-#-------------------------------------------------------------------------
 # propagate the tags from parent to target; define tag selection
-#-------------------------------------------------------------------------
 
 # get the tags on the parent (as they are, but sorted and unique)
 
