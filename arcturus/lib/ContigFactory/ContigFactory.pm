@@ -211,9 +211,13 @@ sub emblFileParser {
     undef my $contig;
     undef my @contigtag;
 
+    my $parsesrc = 0;
+    my $srcdescriptors = "source|contig|gap";
+
     my $parsetag = 0;
     my $tagdescriptors = "Tag|CDS|CDS_motif|repeat_region";
-    my %translation = (CDS_motif => 'CDSM' , repeat_region => 'REPT' , CDS => 'CDS' , Tag => 'TAG');  
+    my %translation = (CDS_motif => 'CDSM' , repeat_region => 'REPT' , CDS => 'CDS' , Tag => 'TAG');
+
 
     my $sequence = '';
     my $length = 0;
@@ -226,7 +230,7 @@ sub emblFileParser {
 
         $line++;
         if ($report && ($line%$report == 0)) {
-            $logger->error("processing line $line",bs => 1);
+            $logger->error("processing line $line",bs => 0);
 	}
 
         if ($record !~ /\S/) {
@@ -316,42 +320,96 @@ sub emblFileParser {
                 push @contigtag,$contigtag;
                 $parsetag = 1;
  	    }
-# if parsetag flag not on, we are outside a tag
-            if ($parsetag && @contigtag) {
+# look for 'source' keyword
+            elsif ($info =~ /($srcdescriptors)\s+(\d+)[\.\>\<]+(\d+)/) {
+                my ($type,$ts,$tf) = ($1,$2,$3);
+		$type = $translation{$type} || $type;
+                my $contigtag = TagFactory->makeContigTag($type,$ts,$tf);
+                $contigtag->setStrand('Forward');
+                push @contigtag,$contigtag;
+		$parsetag = 0;
+                $parsesrc = 1;
+	    }
+            elsif ($info =~ /($srcdescriptors)\s+complement\(([^\)]+)\)/) {
+                my ($type,$joinstring) = ($1,$2);
+		$type = $translation{$type} || $type;
+                my $contigtag = TagFactory->makeContigTag($type);
+                my ($ts,$tf) = split /\.+/,$joinstring;
+                $contigtag->setPosition($ts,$tf);
+                $contigtag->setStrand('Reverse');
+                push @contigtag,$contigtag;
+		$parsetag = 0;
+                $parsesrc = 1;
+	    }
+# if parsetag flag not on, we are outside an annotation tag
+            elsif ($parsetag && @contigtag) {
                 my $contigtag = $contigtag[$#contigtag]; # most recent addition
-# replace this by a simple adding to an array; only pick up systematic ID
-	      if (0) {
-
-                if ($info =~ /\bsystematic_id\b\=\"(.+)\"/) {
-                    $contigtag->setSystematicID($1);
-		}
+# replace this by a simple adding to an array
+		if ($options{fulltagcomment}) {
+# only separate out systematic ID
+                    if ($info =~ /\bsystematic_id\b\=\"(.+)\"/) {
+                        $contigtag->setSystematicID($1);
+			next;
+	 	    }
+#                   if ($info =~ /\barcturus\_note\b\=\"(.+)\"/) {
+#                       $contig->addContigNote($1) if $contig; # ??
+#                       next;
+#	            }
+  		    my $tagcomment = $contigtag->getTagComment();
+                    $tagcomment = [] unless defined $tagcomment;
+                    if (ref($tagcomment) eq 'ARRAY') {
+                        push @$tagcomment,$info; # as is
+                        $contigtag->setTagComment($tagcomment);
+                    }                
+	        }
+	        else {
+# concatenate selected bits of info
+                    my $tagcomment = $contigtag->getTagComment() || '';
+                    if ($info =~ /(arcturus\_note|ortholog|systematic_id)/) {
+                        my $kind = $1;
+                        unless ($tagcomment =~ /\b$kind\b/) { 
+                            $info =~ s/(^\s*|\s*$|\/)//g;
+                            if ($info =~ /\bsystematic_id\b\=\"(.+)\"/) {
+                                $contigtag->setSystematicID($1);
+		            }
+                            if ($info =~ /\barcturus\_note\b\=\"(.+)\"/) {
+                                $contig->addContigNote($1) if $contig;
+		            }
+			    else {
+                                $tagcomment .= '\\n\\' if $tagcomment;
+	       	                $tagcomment .= $info;
+     		                $contigtag->setTagComment($tagcomment);
+			    }
+		        }
+                    }
+		    else {
+#print STDOUT "not parsed: $info \n";
+		    }
+                }
+                  
+            }
+# parse source information
+            elsif ($parsesrc && @contigtag) {
+                my $contigtag = $contigtag[$#contigtag]; # most recent addition
+                my $tagtype = $contigtag->getType();
+                $info =~ s/(^\s*|\s*$|\/)//g;
+                if ($info =~ /\bnote\b\=\"(.+)\"/) {
+                    $contig->addContigNote($1) if ($tagtype eq 'source');
+	        }
+                elsif ($info =~ /\blabel\b\=(.+)/) {
+#print "label $1  tagtype $tagtype\n";
+                    my $label = $1;
+                    $label =~ s/^[\s|\"|\']+|[\s|\"|\']+$//g;
+                    $contigtag->setComment($label) if ($tagtype eq 'contig');
+                    $contigtag->setTagSequenceName($label);
+                }
 		my $tagcomment = $contigtag->getTagComment();
                 $tagcomment = [] unless defined $tagcomment;
                 if (ref($tagcomment) eq 'ARRAY') {
                     push @$tagcomment,$info; # as is
                     $contigtag->setTagComment($tagcomment);
-                } # else ignore                
-
-	      }
-	      else {
-                my $tagcomment = $contigtag->getTagComment() || '';
-                if ($info =~ /(note|ortholog|systematic)/) {
-                    my $kind = $1;
-                    unless ($tagcomment =~ /$kind/) { 
-                        $info =~ s/(^\s*|\s*$|\/)//g;
-                        $tagcomment .= '\\n\\' if $tagcomment;
-	       	        $tagcomment .= $info;
-   		        $contigtag->setTagComment($tagcomment);
-                        if ($info =~ /\bsystematic_id\b\=\"(.+)\"/) {
-                            $contigtag->setSystematicID($1);
-		        }
-                        if ($info =~ /\bnote\b\=\"(.+)\"/) {
-#                            $contigtag->setComment($1);
-		        }
-		    }
                 }
-              }  
-            }
+	    }
 # else other info is to be parsed
             else {
 # to be developed
