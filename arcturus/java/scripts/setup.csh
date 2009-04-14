@@ -17,7 +17,7 @@ endif
 
 # Set JAVA_HOME and location of Arcturus JAR file
 
-setenv JAVA_HOME /software/jdk1.6.0_01
+setenv JAVA_HOME /software/jdk1.6.0_13
 set ARCTURUS_JAR=${ARCTURUS_HOME}/../arcturus.jar
 
 # Augment heap size if running on a 64-bit cluster machine
