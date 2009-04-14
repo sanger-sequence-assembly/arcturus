@@ -12,16 +12,26 @@ import java.util.List;
 
 import java.awt.*;
 import java.awt.event.*;
+import java.io.InputStream;
 
 public class CheckConsistencyPanel extends MinervaPanel {
-	protected CheckConsistency checker = new CheckConsistency();
+	protected CheckConsistency checker;
 	protected JTextArea textarea = new JTextArea();
 	protected JButton btnRefresh;
 	protected JButton btnClear;
 
 	public CheckConsistencyPanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
 		super(new BorderLayout(), parent, adb);
-
+		
+		try {
+			InputStream is = getClass().getResourceAsStream("/resources/xml/checkconsistency.xml");
+			checker = new CheckConsistency(is);
+			is.close();
+		}
+		catch (Exception e) {
+			Arcturus.logSevere("An error occurred when trying to initialise the consistency checker", e);
+		}
+		
 		createMenus();
 
 		btnRefresh = new JButton(actionRefresh);

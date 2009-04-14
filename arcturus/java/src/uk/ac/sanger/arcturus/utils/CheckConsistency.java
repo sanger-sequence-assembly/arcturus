@@ -7,141 +7,40 @@ import uk.ac.sanger.arcturus.gui.OrganismChooserPanel;
 
 import java.sql.*;
 import java.io.*;
+import java.util.List;
+import java.util.Vector;
 import java.text.MessageFormat;
+
+import org.xml.sax.Attributes;
+import org.xml.sax.SAXException;
+import org.xml.sax.SAXParseException;
+import org.xml.sax.helpers.DefaultHandler;
+
+import javax.xml.parsers.SAXParserFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.parsers.SAXParser;
 
 import javax.swing.JOptionPane;
 
 public class CheckConsistency {
 	protected CheckConsistencyListener listener = null;
 	
-	protected String[][] tests = {
-			{
-					"Do all contigs have the correct number of mappings?",
+	protected List<Test> tests;
+	
+	public CheckConsistency(InputStream is) throws SAXException, IOException, ParserConfigurationException {
+		tests = parseXML(is);
+	}
+	
+	private List<Test> parseXML(InputStream is) throws SAXException, IOException, ParserConfigurationException {
+		MyHandler handler = new MyHandler();
+		SAXParserFactory factory = SAXParserFactory.newInstance();
+		factory.setValidating(true);
+		
+		SAXParser saxParser = factory.newSAXParser();
+		saxParser.parse(is, handler);
 
-					"select C.contig_id,nreads,count(*) as mapping_count"
-							+ " from CONTIG C, MAPPING M where C.contig_id=M.contig_id"
-							+ " group by contig_id having nreads != mapping_count",
-
-					"Contig {0,number,#} has nreads={1,number,#} but {2,number,#} mappings"
-			},
-					
-			{
-					"Are there any orphan contigs?",
-					
-					"select contig_id,C.created,length,name" + 
-					" from CONTIG C left join PROJECT P using(project_id)" +
-					" where C.nreads = 0",
-					
-					"Contig {0,number,#} created at {1,time} on {1,date}, length {2,number,#}bp, in project {3}, has nreads=0"						
-			},
-			
-			{
-					"Are there any duplicate reads?",
-					
-					"select readname,hits from DUPLICATEREADS left join READINFO using(read_id)",
-					
-					"Read {0} appears {1,number,#} times"			
-			},
-
-			{
-					"Do all mappings correspond to contigs?",
-					
-					"select mapping_id,seq_id,MAPPING.contig_id"
-							+ " from MAPPING left join CONTIG using(contig_id)"
-							+ " where CONTIG.contig_id is null",
-							
-					"Mapping {0,number,#} for sequence {1,number,#} refers to non-existent contig {2,number,#}"
-			},
-
-			{
-					"Do all contig-to-sequence mappings have valid sequence data?",
-
-					"select contig_id,mapping_id,MAPPING.seq_id"
-							+ " from MAPPING left join SEQUENCE using(seq_id)"
-							+ " where sequence is null or quality is null",
-
-					"Mapping {1,number,#} in contig {0,number,#} has undefined sequence {2,number,#}"
-			},
-			
-			{
-					"Do all mappings have a corresponding read?",
-
-					"select contig_id,mapping_id,MAPPING.seq_id"
-							+ " from MAPPING left join (SEQ2READ,READINFO)"
-							+ " on (MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READINFO.read_id)"
-							+ " where readname is null",
-
-					"Mapping {1,number,#} in contig {0,number,#} has sequence {2,number,#}"
-							+ " with undefined read"
-			},
-			
-			{
-					"Do all sequences have quality clipping data?",
-
-					"select SEQUENCE.seq_id from SEQUENCE left join QUALITYCLIP"
-							+ " using(seq_id) where QUALITYCLIP.seq_id is null",
-
-					"Sequence {0,number,#} has no quality clipping data"
-			},
-			
-			{
-					"Do all sequences have a corresponding sequence-to-read mapping?",
-
-					"select SEQUENCE.seq_id from SEQUENCE left join SEQ2READ"
-							+ " using (seq_id)"
-							+ " where SEQ2READ.seq_id is null",
-
-					"Sequence {0,number,#} has no associated sequence-to-read mapping"
-			},
-			
-			{
-					"Do all sequences with a sequence-to-read mapping have a valid read?",
-
-					"select SEQUENCE.seq_id,SEQ2READ.read_id from SEQUENCE left join (SEQ2READ,READINFO)"
-							+ " on (SEQUENCE.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READINFO.read_id)"
-							+ " where readname is null and SEQ2READ.read_id is not null",
-
-					"Sequence {0,number,#} has no associated read (read_id is {1,number,#})"
-			},
-			
-			{
-					"Do all reads have valid sequence data?",
-
-					"select READINFO.read_id,readname from READINFO left join (SEQ2READ,SEQUENCE)"
-							+ " on (READINFO.read_id = SEQ2READ.read_id and SEQ2READ.seq_id = SEQUENCE.seq_id)"
-							+ " where sequence is null or quality is null",
-
-					"Read {0,number,#} ({1}) has no associated sequence"
-			},
-			
-			{
-					"Do all reads have a template?",
-
-					"select read_id,readname from READINFO left join TEMPLATE"
-							+ " using (template_id) where name is null",
-
-					"Read {0,number,#} ({1}) has no associated template"
-			},
-			
-			{
-					"Do all templates have a ligation?",
-
-					"select template_id,TEMPLATE.name from TEMPLATE left join LIGATION using (ligation_id)"
-							+ " where LIGATION.name is null",
-
-					"Template {0,number,#} ({1}) has no associated ligation"
-			},
-			
-			{
-					"Do all ligations have a clone?",
-
-					"select ligation_id,LIGATION.name from LIGATION left join CLONE using(clone_id)"
-							+ " where CLONE.name is null",
-
-					"Ligation {0,number,#} ({1}) has no associated clone"
-			}
-
-	};
+		return handler.getTests();
+	}
 
 	public void checkConsistency(ArcturusDatabase adb, CheckConsistencyListener listener)
 		throws SQLException {
@@ -155,13 +54,13 @@ public class CheckConsistency {
 	protected void checkConsistency(Connection conn) throws SQLException {
 		Statement stmt = conn.createStatement();
 
-		for (int i = 0; i < tests.length; i++) {
-			notifyListener(tests[i][0]);
+		for (Test test : tests) {
+			notifyListener(test.getDescription());
 			notifyListener("");
 
-			MessageFormat format = new MessageFormat(tests[i][2]);
+			MessageFormat format = new MessageFormat(test.getFormat());
 
-			int rows = doQuery(stmt, tests[i][1], format);
+			int rows = doQuery(stmt, test.getQuery(), format);
 
 			String message;
 
@@ -263,7 +162,11 @@ public class CheckConsistency {
 
 			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 
-			CheckConsistency cc = new CheckConsistency();
+			InputStream is = CheckConsistency.class.getResourceAsStream("/resources/xml/checkconsistency.xml");
+			
+			CheckConsistency cc = new CheckConsistency(is);
+			
+			is.close();
 
 			CheckConsistencyListener listener = new CheckConsistencyListener() {
 				public void report(String message) {
@@ -278,6 +181,179 @@ public class CheckConsistency {
 		} catch (Exception e) {
 			Arcturus.logSevere(e);
 			System.exit(1);
+		}
+	}
+	
+	class MyHandler extends DefaultHandler {
+		private List<Test> tests;
+		private String description;
+		private String query;
+		private String format;
+		private StringBuilder content;
+		
+		public List<Test> getTests() {
+			return tests;
+		}
+		
+		public void startDocument() throws SAXException {
+			//System.out.println("startDocument");
+			tests = new Vector<Test>();
+		}	
+
+		public void endDocument() throws SAXException {
+			//System.out.println("endDocument");
+		}
+
+		private int getTypeCode(String lName, String qName) {
+			if (lName != null && lName.length() > 0)
+				return getTypeCode(lName);
+			else if (qName != null && qName.length() > 0)
+				return getTypeCode(qName);
+			else
+				return -1;
+		}
+
+		private int getTypeCode(String name) {
+			if (name.equals("description"))
+				return Test.DESCRIPTION;
+
+			if (name.equals("query"))
+				return Test.QUERY;
+
+			if (name.equals("format"))
+				return Test.FORMAT;
+			
+			if (name.equals("test"))
+				return Test.TEST;
+
+			return -1;
+		}
+		
+		public void startElement(String namespaceURI, String lName, String qName,
+				Attributes attrs) throws SAXException {
+			//String name = (lName != null && lName.length() > 0) ? lName : qName;		
+			//System.out.println("startElement(" + name + ")");
+			
+			int type = getTypeCode(lName, qName);
+			
+			switch (type) {
+				case Test.TEST:
+					description = null;
+					query = null;
+					format = null;
+					break;
+					
+				case Test.DESCRIPTION:
+				case Test.QUERY:
+				case Test.FORMAT:
+					content = new StringBuilder();
+					break;
+					
+				default:
+					content = null;
+					break;
+			}
+		}
+		
+		public void endElement(String namespaceURI, String lName,String qName) throws SAXException {
+			//String name = (lName != null && lName.length() > 0) ? lName : qName;			
+			//System.out.println("endElement(" + name + ")");
+		
+			int type = getTypeCode(lName, qName);
+			
+			switch (type) {
+				case Test.TEST:
+					Test test = new Test(description, query, format);
+					tests.add(test);
+					break;
+					
+				case Test.DESCRIPTION:
+					description = removeWhiteSpace(content);
+					break;
+					
+				case Test.QUERY:
+					query = removeWhiteSpace(content);
+					break;
+					
+				case Test.FORMAT:
+					format = removeWhiteSpace(content);
+					break;				
+			}
+		
+		}
+		
+		public void ignorableWhitespace(char[] ch,
+                int start,
+                int length)
+                throws SAXException	{
+			//System.out.println("ignorableWhitespace(length=" + length + ")");
+		}
+		
+		public void characters(char[] ch, int start, int length)
+                throws SAXException {
+			//String string = new String(ch, start, length);
+			//System.out.println("characters(" + string + ")");
+			
+			if (content != null)
+				content.append(ch, start, length);
+		}
+		
+		public void error(SAXParseException e) throws SAXParseException {
+			throw e;
+		}
+
+		public void warning(SAXParseException err) throws SAXParseException {
+			System.out.println("** Warning" + ", line " + err.getLineNumber()
+					+ ", uri " + err.getSystemId());
+			System.out.println("   " + err.getMessage());
+		}
+	
+		private String removeWhiteSpace(StringBuilder sb) {
+			String str = sb.toString();
+			String[] lines = str.split("[\\n\\r]");
+			
+			sb = new StringBuilder();
+			for (int i = 0; i < lines.length; i++) {
+				if (i > 0)
+					sb.append(' ');
+				
+				sb.append(lines[i].trim());
+			}
+			
+			return sb.toString().trim();
+		}
+	}
+
+	class Test {
+		public static final int DESCRIPTION = 1;
+		public static final int QUERY = 2;
+		public static final int FORMAT = 3;
+		public static final int TEST = 4;
+		
+		private final String description;
+		private final String query;
+		private final String format;
+		
+		public Test(String description, String query, String format) {
+			this.description = description;
+			this.query = query;
+			this.format = format;
+		}
+		
+		public String getDescription() {
+			return description;
+		}
+		
+		public String getQuery() {
+			return query;
+		}
+		
+		public String getFormat() {
+			return format;
+		}
+		
+		public String toString() {
+			return "Test[description=\"" + description + "\", query=\"" + query + "\", format=\"" + format + "\"]";
 		}
 	}
 }
