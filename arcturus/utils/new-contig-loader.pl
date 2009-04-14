@@ -77,8 +77,8 @@ my $noaspedcheck;           # (re: read load mode)
 my $rtagtypeaccept = 'default'; 
 my $loadreadtags = 1;       # (default) load new read tags found on caf file
 my $echoreadtags;           # list the read tags found; implies no loading
-my $syncreadtags = 0;       # retire readtags which are NOT in the current lis
-#my $syncreadtags = 1;       # retire readtags which are NOT in the current lis
+#my $syncreadtags = 0;       # retire readtags which are NOT in the current lis
+my $syncreadtags = 1;       # retire readtags which are NOT in the current lis
 
 # project
 
@@ -134,8 +134,8 @@ my $validkeys  = "organism|o|instance|i|"
                . "annotationtags|ats|finishingtags|fts|"
 
                . "readtagtype|rtt|noloadreadtags|nlrt|showreadtags|srt|"
-#               . "loadreadtags|lrt|nosynchronisereadtags|nsrt|"
-               . "loadreadtags|lrt|synchronisereadtags|syncrt|"
+               . "loadreadtags|lrt|nosynchronisereadtags|nsrt|"
+#               . "loadreadtags|lrt|synchronisereadtags|syncrt|"
 
                . "assignproject|ap|defaultproject|dp|setprojectby|spb|"
                . "projectlock|pl|dounlock|project|p|noprojectlock|npl|"
@@ -1042,7 +1042,7 @@ print STDOUT " end no frugal scan\n";
 # present the contig to the database and compare with existing contigs
 
 # &testeditedconsensusreads 
-	    $logger->info("Testing contig against database");
+	    $logger->info("Testing contig $identifier against database");
 
             if ($contig->isValid(forimport => 1)) {
 
@@ -1286,7 +1286,7 @@ sub testreadsindatabase {
             $logger->warning("read to be stored ($readload) : $readname");
             if ($read->isEdited()) {
                 undef $read->{alignToTrace};
-                $logger->warning("required un-edit edited read $readname");
+                $logger->info("required un-edit edited read $readname");
 #                next; # ignore here, or override ?
  	    }
 
@@ -1399,14 +1399,16 @@ $logger->monitor("ENTER processing : readtags for ".scalar(@$reads)." reads",mem
 
     $logger->info("Processing readtags for ".scalar(@$reads)." reads (@_)");
 
-    if ($options{load}) { # load (new) read tags
-        my $success = $adb->putTagsForReads($reads,autoload=>1);
-        $logger->debug("put read tags : success = $success");
-    }
+# synchronise goes before load
 
     if ($options{sync}) { # load (new) tags and remove existing tags not in list
         my $success = $adb->putTagsForReads($reads,autoload=>1,synchronise=>1);
         $logger->debug("synchronise read tags : success = $success");
+    }
+
+    elsif ($options{load}) { # load (new) read tags
+        my $success = $adb->putTagsForReads($reads,autoload=>1);
+        $logger->debug("put read tags : success = $success");
     }
 $logger->monitor("AFTER processing readtags",memory=>1,timing=>1) if $monitor;
 
@@ -1524,7 +1526,9 @@ sub sendMessage {
     my ($user,$message) = @_;
 
     print STDOUT "message to be emailed to user $user:\n$message\n\n";
-$user="ejz+$user"; # temporary redirect
+    my $helpdesk = "'arcturus-help'";
+    $user="$helpdesk+$user";
+$user="$helpdesk+ejz"; # temporary redirect
 
     my $mail = new Mail::Send;
     $mail->to($user);
@@ -1642,7 +1646,8 @@ sub showUsage {
     print STDERR "-nlrt\t\t(noloadreadtags) as it says; also active when using -noload option\n";
     print STDERR "\n";
     print STDERR "-rtt\t\t(readtagtype) comma-separated list of explicitly defined tags (def: all)\n";
-    print STDERR "-syncrt\t\t(synchronisereadtags) load tags; retire tags which are NOT on caf file\n";
+#    print STDERR "-syncrt\t\t(synchronisereadtags) load tags; retire tags which are NOT on caf file\n";
+    print STDERR "-nsrt\t\t(nosynchronisereadtags) switch off default retire tags which are NOT on caf file\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS for tag testing:\n";
     print STDERR "\n";
