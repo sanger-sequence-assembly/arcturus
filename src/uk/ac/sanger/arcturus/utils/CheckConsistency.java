@@ -44,17 +44,25 @@ public class CheckConsistency {
 
 	public void checkConsistency(ArcturusDatabase adb, CheckConsistencyListener listener)
 		throws SQLException {
+		checkConsistency(adb, listener, false);
+	}
+	
+	public void checkConsistency(ArcturusDatabase adb, CheckConsistencyListener listener, boolean criticalOnly)
+	throws SQLException {
 		this.listener = listener;
 		Connection conn = adb.getPooledConnection(this);
-		checkConsistency(conn);
+		checkConsistency(conn,criticalOnly);
 		conn.close();
 		this.listener = null;
 	}
 
-	protected void checkConsistency(Connection conn) throws SQLException {
+	protected void checkConsistency(Connection conn, boolean criticalOnly) throws SQLException {
 		Statement stmt = conn.createStatement();
 
 		for (Test test : tests) {
+			if (criticalOnly && !test.isCritical())
+				continue;
+			
 			notifyListener(test.getDescription());
 			notifyListener("");
 
@@ -189,6 +197,7 @@ public class CheckConsistency {
 		private String description;
 		private String query;
 		private String format;
+		private boolean critical;
 		private StringBuilder content;
 		
 		public List<Test> getTests() {
@@ -240,7 +249,9 @@ public class CheckConsistency {
 				case Test.TEST:
 					description = null;
 					query = null;
-					format = null;
+					format = null;				
+					String criticality = attrs.getValue("critical");
+					critical = criticality != null && criticality.equalsIgnoreCase("YES");
 					break;
 					
 				case Test.DESCRIPTION:
@@ -263,7 +274,7 @@ public class CheckConsistency {
 			
 			switch (type) {
 				case Test.TEST:
-					Test test = new Test(description, query, format);
+					Test test = new Test(description, query, format, critical);
 					tests.add(test);
 					break;
 					
@@ -333,11 +344,13 @@ public class CheckConsistency {
 		private final String description;
 		private final String query;
 		private final String format;
+		private final boolean critical;
 		
-		public Test(String description, String query, String format) {
+		public Test(String description, String query, String format, boolean critical) {
 			this.description = description;
 			this.query = query;
 			this.format = format;
+			this.critical = critical;
 		}
 		
 		public String getDescription() {
@@ -352,8 +365,16 @@ public class CheckConsistency {
 			return format;
 		}
 		
+		public boolean isCritical() {
+			return critical;
+		}
+		
 		public String toString() {
-			return "Test[description=\"" + description + "\", query=\"" + query + "\", format=\"" + format + "\"]";
+			return "Test[description=\"" + description +
+				"\", query=\"" + query +
+				"\", format=\"" + format + "\"" +
+				", critical=" + (critical ? "YES" : "NO") +
+				"]";
 		}
 	}
 }

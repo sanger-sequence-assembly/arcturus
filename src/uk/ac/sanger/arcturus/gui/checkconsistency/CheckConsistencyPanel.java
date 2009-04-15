@@ -89,7 +89,7 @@ public class CheckConsistencyPanel extends MinervaPanel {
 			CheckConsistency.CheckConsistencyListener {
 		protected Void doInBackground() throws Exception {
 			try {
-				checker.checkConsistency(adb, this);
+				checker.checkConsistency(adb, this, true);
 			}
 			catch (SQLException sqle) {
 				Arcturus.logWarning("An error occurred whilst checking the database", sqle);
