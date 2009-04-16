@@ -9,17 +9,22 @@ sub new {
     my $type = shift;
 
     my ($url, $base, $instance, $organism, $newUsername, $newPassword);
+    my ($ldapuser, $ldappass);
 
     while (my $nextword = shift) {
 	$nextword =~ s/^\-//;
 
 	$url = shift if ($nextword eq 'url');
 
+	$ldapuser = shift if ($nextword eq 'ldapuser');
+
+	$ldappass = shift if ($nextword eq 'ldappass');
+
 	$base = shift if ($nextword eq 'base');
 
 	$instance = shift if ($nextword eq 'instance');
 
-	$organism = shift if ($nextword eq 'organism');
+	$organism = shift if ($nextword eq 'organism' || $nextword eq 'node');
 
 	$newUsername = shift if ($nextword eq 'username');
 
@@ -46,8 +51,9 @@ sub new {
 
     my $ldap = Net::LDAP->new($url) or die "Cannot connect to LDAP server: $@";
 
-    # An anonymous bind
-    my $mesg = $ldap->bind;
+    # Bind anonymously if no username and password were given
+    my $mesg = (defined($ldapuser) && defined($ldappass)) ?
+	$ldap->bind($ldapuser, password => $ldappass) : $ldap->bind;
 
     $mesg->code && die $mesg->error;
 
@@ -81,14 +87,14 @@ sub new {
 
 	my $datasourcetype = pop @datasourcelist;
 
-	my $datasource = {};
+	my $attributes = {};
 
 	while (my $item = shift @items) {
 	    my ($id,$key,$value) = $item =~ /\#(\d+)\#(\w+)\#(\w+)/;
-	    $datasource->{$key} = $value;
+	    $attributes->{$key} = $value;
 	}
 	
-	my ($url, $username, $password) = &buildUrl($datasourcetype, $datasource);
+	my ($url, $username, $password) = &buildUrl($datasourcetype, $attributes);
 
 	if (defined($newUsername) && defined($newPassword)) {
 	    $username = $newUsername;
@@ -99,6 +105,7 @@ sub new {
 	    $this->{URL} = $url;
 	    $this->{Username} = $username;
 	    $this->{Password} = $password;
+	    $this->{Attributes} = $attributes;
 	    $found = 1;
 	    last;
 	}
@@ -232,6 +239,13 @@ sub getDescription {
     my $this = shift;
 
     return $this->{'description'};
+}
+
+sub getAttribute {
+    my $this = shift;
+    my $attrname = shift;
+
+    return $this->{Attributes}->{$attrname};
 }
 
 1;

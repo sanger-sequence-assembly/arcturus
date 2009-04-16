@@ -9,12 +9,13 @@ use DBI;
 use Net::LDAP;
 use Term::ReadKey;
 
+use DataSource;
+
 my $instance;
 my $organism;
 my $subdir;
 
-my $dbhost;
-my $dbport;
+my $dbnode;
 my $dbname;
 
 my $ldapurl;
@@ -31,19 +32,12 @@ my $directory;
 my $nocreatedatabase = 0;
 my $skipdbsteps = 0;
 
-my $mysql_admin_username = "arcturus_dba";
-
-my $mysql_normal_username = "arcturus";
-my $mysql_normal_password = "***REMOVED***";
-
-my $mysql_master_URL = "DBI:mysql:database=arcturus;host=mcs3a;port=15001";
-
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
 
-    $dbhost = shift @ARGV if ($nextword eq '-host');
-    $dbport = shift @ARGV if ($nextword eq '-port');
+    $dbnode = shift @ARGV if ($nextword eq '-node');
+
     $dbname = shift @ARGV if ($nextword eq '-db');
 
     $ldapurl = shift @ARGV if ($nextword eq '-ldapurl');
@@ -69,8 +63,12 @@ while (my $nextword = shift @ARGV) {
     }
 }
 
-unless (defined($instance) && defined($organism) && defined($dbhost)
-	&& defined($dbport) && defined($description) && defined($ldapurl)
+$ldapurl  = $ENV{'ARCTURUS_LDAP_URL'} unless defined($ldapurl);
+$ldapuser = $ENV{'ARCTURUS_LDAP_USERNAME'} unless defined($ldapuser);
+$rootdn   = $ENV{'ARCTURUS_LDAP_ROOT_DN'} unless defined($rootdn);
+
+unless (defined($instance) && defined($organism) && defined($dbnode)
+	&& defined($description) && defined($ldapurl)
 	&& defined($ldapuser) && defined($rootdn) && defined($subdir)) {
     &showUsage("One or more mandatory parameters are missing");
     exit(1);
@@ -87,22 +85,44 @@ unless (defined($dbname)) {
     print STDERR "WARNING: No database name specified, using $organism as the default.\n\n";
 }
 
+my $dsa = new DataSource(-url => $ldapurl,
+			 -base => $rootdn,
+			 -instance => 'arcturus',
+			 -node => 'arcturus');
+
+die "Failed to create a DataSource for arcturus/arcturus" unless defined($dsa);
+
+my $mysql_normal_username = $dsa->getAttribute("user");
+my $mysql_normal_password = $dsa->getAttribute("password");
+
+my $ldappass = &getPassword("Enter password for LDAP user \"$ldapuser\"", "ARCTURUS_LDAP_PASSWORD");
+
+if (!defined($ldappass) || length($ldappass) == 0) {
+    print STDERR "No password was entered\n";
+    exit(2);
+}
+
+my $dsb = new DataSource(-url => $ldapurl,
+			 -base => $rootdn,
+			 -instance => 'admin',
+			 -node => $dbnode,
+			 -ldapuser => $ldapuser,
+			 -ldappass => $ldappass);
+   
+die "Failed to create a DataSource for admin/$dbnode" unless defined($dsb);
+
+my $dbhost = $dsb->getAttribute("serverName");
+my $dbport = $dsb->getAttribute("port");
+my $dbuser = $dsb->getAttribute("user");
+my $dbpass = $dsb->getAttribute("password");
+
 unless ($skipdbsteps) {
-    my $users_and_roles = &getUsersAndRoles($mysql_master_URL, $mysql_normal_username, $mysql_normal_password);
-
-    my $dsn = "DBI:mysql:database=arcturus;host=$dbhost;port=$dbport";
-
-    my $dbpw = &getPassword("Enter password for MySQL user $mysql_admin_username", "ARCTURUS_DBA_PW");
-    
-    if (!defined($dbpw) || length($dbpw) == 0) {
-	print STDERR "No password was entered\n";
-	exit(2);
-    }
-    
-    my $dbh = DBI->connect($dsn, $mysql_admin_username, $dbpw);
+    my $users_and_roles = &getUsersAndRoles($dsa);
+ 
+    my $dbh = $dsb->getConnection(-options => {RaiseError => 1, PrintError => 1});
     
     unless (defined($dbh)) {
-	print STDERR "Failed to connect to $dsn as $mysql_admin_username\n";
+	print STDERR "Failed to connect to MySQL node \"$dbnode\" as Arcturus DBA user\n";
 	print STDERR "DBI error is $DBI::errstr\n";
 	exit(3);
     }
@@ -210,16 +230,11 @@ unless ($skipdbsteps) {
     print STDERR "OK\n\n";
     
     $dbh->disconnect();
-    
-    if (!defined($dbpw) || length($dbpw) == 0) {
-	print STDERR "No password was entered\n";
-	exit(2);
-    }
-    
+
     print STDERR "### Creating views ... ";
     
     my $command = "cat /software/arcturus/sql/views/*.sql | " .
-	" mysql -h $dbhost -P $dbport -u $mysql_admin_username --password=$dbpw $dbname";
+	" mysql -h $dbhost -P $dbport -u $dbuser --password=$dbpass $dbname";
     
     my $rc = system($command);
     
@@ -233,7 +248,7 @@ unless ($skipdbsteps) {
     print STDERR "### Creating stored procedures ... ";
     
     $command = "cat /software/arcturus/sql/procedures/*.sql | " .
-	" mysql -h $dbhost -P $dbport -u arcturus_dba --password=$dbpw $dbname";
+	" mysql -h $dbhost -P $dbport -u $dbuser --password=$dbpass $dbname";
     
     $rc = system($command);
     
@@ -246,9 +261,9 @@ unless ($skipdbsteps) {
     
     print STDERR "### Preparing to populate tables for $dbname ... ";
     
-    $dsn = "DBI:mysql:database=$dbname;host=$dbhost;port=$dbport";
+    my $dsn = "DBI:mysql:database=$dbname;host=$dbhost;port=$dbport";
     
-    my $dbh = DBI->connect($dsn, "arcturus", "***REMOVED***");
+    my $dbh = DBI->connect($dsn, $mysql_normal_username, $mysql_normal_password);
     
     unless (defined($dbh)) {
 	print STDERR "Failed to connect to $dsn as arcturus\n";
@@ -407,16 +422,9 @@ my $dn = "$reldn,$rootdn";
 
 print STDERR "### Creating an LDAP entry $dn ...\n";
 
-my $ldappw = &getPassword("Enter password for LDAP user \"$ldapuser\"", "LDAP_ADMIN_PW");
-
-if (!defined($ldappw) || length($ldappw) == 0) {
-    print STDERR "No password was entered\n";
-    exit(2);
-}
-
 my $ldap = Net::LDAP->new($ldapurl) or die "$@";
  
-my $mesg = $ldap->bind($ldapuser, password => $ldappw);
+my $mesg = $ldap->bind($ldapuser, password => $ldappass);
 $mesg->code && die $mesg->error;
 
 &checkOrCreateLDAPNode($subdirdn, $rootdn, $ldap);
@@ -530,13 +538,12 @@ sub getPassword {
 }
 
 sub getUsersAndRoles {
-    my ($url, $username, $password, $junk) = @_;
+    my ($ds, $junk) = @_;
 
-    my $dbh = DBI->connect($url, $username, $password);
+    my $dbh = $ds->getConnection(-options => {RaiseError => 1, PrintError => 1});
 
     unless (defined($dbh)) {
-	print STDERR "Unable to connect to master Arcturus instance $url", 
-	" to fetch list of users and roles\n";
+	print STDERR "Unable to connect to database to fetch list of users and roles\n";
 	die "DBI->connect failed";
     }
 
@@ -646,12 +653,12 @@ sub showUsage {
     print STDERR "    -instance\t\tName of instance\n";
     print STDERR "    -organism\t\tName of organism\n";
     print STDERR "\n";
-    print STDERR "    -host\t\tMySQL host\n";
-    print STDERR "    -port\t\tMySQL port\n";
+    print STDERR "    -node\t\tArcturus MySQL instance name (arcp, hlmp, ...)\n";
     print STDERR "\n";
-    print STDERR "    -ldapurl\t\tLDAP URL\n";
-    print STDERR "    -ldapuser\t\tLDAP username\n";
-    print STDERR "    -rootdn\t\tLDAP root DN\n";
+    print STDERR "    -ldapurl\t\tLDAP URL [Or set ARCTURUS_LDAP_URL]\n";
+    print STDERR "    -ldapuser\t\tLDAP username [Or set ARCTURUS_LDAP_USERNAME]\n";
+    print STDERR "    -rootdn\t\tLDAP root DN [Or set ARCTURUS_LDAP_ROOT_DN]\n";
+    print STDERR "\n";
     print STDERR "    -subdir\t\tSub-directory of LDAP tree (e.g. bacteria/Salmonella)\n";
     print STDERR "\n";
     print STDERR "    -description\tDescription for LDAP entry\n";
