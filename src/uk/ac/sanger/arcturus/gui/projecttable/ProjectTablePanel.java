@@ -489,7 +489,7 @@ public class ProjectTablePanel extends MinervaPanel implements
 				return;
 			}
 
-			if (Arcturus.isLinux() && (directory == null || directory.trim().length() == 0)) {
+			if (directory == null || directory.trim().length() == 0) {
 				JOptionPane.showMessageDialog(this,
 						"You did not specify a directory for the project",
 						"Failed to create the project",
@@ -507,7 +507,8 @@ public class ProjectTablePanel extends MinervaPanel implements
 					
 					if (!Arcturus.isLinux())
 						message += "\nBUT YOU MUST NOW CREATE THE PROJECT DIRECTORY YOURSELF" +
-							"\nBY LOGGING INTO A LINUX MACHINE AND USING THE mkdir COMMAND";
+							"\nBY LOGGING INTO A LINUX MACHINE AND USING THIS COMMAND:" +
+							"\n\nmkdir -p " + directory;
 
 					JOptionPane.showMessageDialog(this,
 							message,

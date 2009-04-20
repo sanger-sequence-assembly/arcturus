@@ -1,5 +1,6 @@
 package uk.ac.sanger.arcturus.jdbc;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ProjectLockException;
@@ -697,7 +698,7 @@ public class ProjectManager extends AbstractManager {
 
 	public boolean createNewProject(Assembly assembly, String name, Person owner,
 			String directory) throws SQLException, IOException {
-		if (directory != null) {
+		if (Arcturus.isLinux()) {
 			File dir = new File(directory);
 		
 			if (dir.exists()) {
