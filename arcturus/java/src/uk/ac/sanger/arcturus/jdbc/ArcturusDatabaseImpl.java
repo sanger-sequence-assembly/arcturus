@@ -1088,25 +1088,13 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 			rs.close();
 			stmt.close();
 
-			// String separator = System.getProperty("file.separator");
-			String separator = "/";
-
 			if (dirname != null) {
-				String[] parts = dirname.split(separator);
-
-				for (int i = parts.length - 1; i >= 0; i--) {
-					if (parts[i].equalsIgnoreCase(name)) {
-						dirname = "";
-
-						for (int j = 0; j <= i; j++)
-							if (parts[j].length() > 0)
-								dirname += separator + parts[j];
-
-						defaultDirectory = dirname;
-
-						return;
-					}
-				}
+				int lastSlash = dirname.lastIndexOf("/");
+				
+				if (lastSlash > -1)
+					dirname = dirname.substring(0, lastSlash);
+				
+				defaultDirectory = dirname;
 			}
 		} catch (SQLException e) {
 			Arcturus
