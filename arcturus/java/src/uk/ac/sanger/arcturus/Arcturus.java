@@ -38,7 +38,8 @@ public class Arcturus {
 		
 		String osname = System.getProperty("os.name");
 		
-		LINUX = osname != null && osname.equalsIgnoreCase("linux");
+		LINUX = osname != null && osname.equalsIgnoreCase("linux")
+			&& !Boolean.getBoolean("emulateWindows");
 	}
 	
 	public static boolean isLinux() {

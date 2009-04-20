@@ -78,9 +78,6 @@ public class NewProjectPanel extends JPanel {
 		c.gridwidth = 2;
 		
 		add(txtDirectory, c);
-		
-		// Disable the directory name field unless we are running on Linux
-		txtDirectory.setEnabled(Arcturus.isLinux());
 
 		c.anchor = GridBagConstraints.EAST;
 		c.fill = GridBagConstraints.HORIZONTAL;
@@ -141,7 +138,7 @@ public class NewProjectPanel extends JPanel {
 	}
 	
 	public String getDirectory() {
-		return txtDirectory.isEnabled() ? txtDirectory.getText().trim() : null;
+		return txtDirectory.getText().trim();
 	}
 	
 	public void setDirectory(String directory) {
