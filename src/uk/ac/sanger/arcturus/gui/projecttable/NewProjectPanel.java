@@ -5,7 +5,6 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
-import java.io.IOException;
 import java.sql.SQLException;
 
 import uk.ac.sanger.arcturus.data.Assembly;
@@ -79,6 +78,9 @@ public class NewProjectPanel extends JPanel {
 		c.gridwidth = 2;
 		
 		add(txtDirectory, c);
+		
+		// Disable the directory name field unless we are running on Linux
+		txtDirectory.setEnabled(Arcturus.isLinux());
 
 		c.anchor = GridBagConstraints.EAST;
 		c.fill = GridBagConstraints.HORIZONTAL;
@@ -92,6 +94,9 @@ public class NewProjectPanel extends JPanel {
 				browseWorkDir();
 			}			
 		});
+		
+		// Disable the directory browser unless we are running on Linux
+		btnBrowse.setEnabled(Arcturus.isLinux());
 
 		c.gridy++;
 		
@@ -136,7 +141,7 @@ public class NewProjectPanel extends JPanel {
 	}
 	
 	public String getDirectory() {
-		return txtDirectory.getText();
+		return txtDirectory.isEnabled() ? txtDirectory.getText().trim() : null;
 	}
 	
 	public void setDirectory(String directory) {
@@ -162,12 +167,11 @@ public class NewProjectPanel extends JPanel {
 		updateUserList();
 		updateAssemblyList();
 		
-		String dirname = adb.getDefaultDirectory();
+		if (txtDirectory.isEnabled()) {
+			String dirname = adb.getDefaultDirectory();
 		
-		if (dirname == null)
-			dirname = System.getProperty("user.dir");
-		
-		txtDirectory.setText(dirname);
+			txtDirectory.setText(dirname);
+		}
 	}
 	
 	private void updateUserList() {
