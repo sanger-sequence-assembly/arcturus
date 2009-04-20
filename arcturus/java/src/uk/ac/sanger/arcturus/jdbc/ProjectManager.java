@@ -3,7 +3,6 @@ package uk.ac.sanger.arcturus.jdbc;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ProjectLockException;
-import uk.ac.sanger.arcturus.people.PeopleManager;
 import uk.ac.sanger.arcturus.people.Person;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.utils.ProjectSummary;
@@ -698,15 +697,17 @@ public class ProjectManager extends AbstractManager {
 
 	public boolean createNewProject(Assembly assembly, String name, Person owner,
 			String directory) throws SQLException, IOException {
-		File dir = new File(directory);
+		if (directory != null) {
+			File dir = new File(directory);
 		
-		if (dir.exists()) {
-			if (!dir.isDirectory())
-				throw new IOException("A file named \"" + directory +
-						"\" already exists and is not a directory");
-		} else {
-			if (!dir.mkdirs())
-				throw new IOException("Unable to create a directory named \"" + directory + "\"");
+			if (dir.exists()) {
+				if (!dir.isDirectory())
+					throw new IOException("A file named \"" + directory +
+					"\" already exists and is not a directory");
+			} else {
+				if (!dir.mkdirs())
+					throw new IOException("Unable to create a directory named \"" + directory + "\"");
+			}
 		}
 		
 		pstmtCreateNewProject.setInt(1, assembly.getID());

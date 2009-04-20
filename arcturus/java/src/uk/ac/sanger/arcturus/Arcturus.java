@@ -27,12 +27,22 @@ public class Arcturus {
 	protected static Logger logger = Logger.getLogger("uk.ac.sanger.arcturus");
 
 	protected static long jarFileTimestamp = 0L;
+	
+	protected static final boolean LINUX; 
 
 	static {
 		setJarFileTimestamp();
 		loadProperties();
 		initialiseLogging();
 		initialiseJMXRemoteServer();
+		
+		String osname = System.getProperty("os.name");
+		
+		LINUX = osname != null && osname.equalsIgnoreCase("linux");
+	}
+	
+	public static boolean isLinux() {
+		return LINUX;
 	}
 
 	private static void setJarFileTimestamp() {

@@ -489,7 +489,7 @@ public class ProjectTablePanel extends MinervaPanel implements
 				return;
 			}
 
-			if (directory == null || directory.trim().length() == 0) {
+			if (Arcturus.isLinux() && (directory == null || directory.trim().length() == 0)) {
 				JOptionPane.showMessageDialog(this,
 						"You did not specify a directory for the project",
 						"Failed to create the project",
@@ -500,11 +500,17 @@ public class ProjectTablePanel extends MinervaPanel implements
 
 			try {
 				if (adb.createNewProject(assembly, name.trim(), owner,
-						directory.trim())) {
+						directory)) {
 					refresh();
+					
+					String message = "Successfully created project " + name;
+					
+					if (!Arcturus.isLinux())
+						message += "\nBUT YOU MUST NOW CREATE THE PROJECT DIRECTORY YOURSELF" +
+							"\nBY LOGGING INTO A LINUX MACHINE AND USING THE mkdir COMMAND";
 
 					JOptionPane.showMessageDialog(this,
-							"Successfully created project " + name,
+							message,
 							"The project was created",
 							JOptionPane.INFORMATION_MESSAGE);
 				}
