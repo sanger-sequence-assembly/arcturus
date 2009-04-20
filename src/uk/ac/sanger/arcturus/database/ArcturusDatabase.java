@@ -71,7 +71,7 @@ public interface ArcturusDatabase {
 	 * Closes the connection pool belonging to this object.
 	 */
 
-	public abstract void closeConnectionPool();
+	public void closeConnectionPool();
 
 	/**
 	 * Returns the DataSource which was used to create this object.
@@ -79,7 +79,7 @@ public interface ArcturusDatabase {
 	 * @return the DataSource which was used to create this object.
 	 */
 
-	public abstract DataSource getDataSource();
+	public DataSource getDataSource();
 
 	/**
 	 * Returns the description which was used to create this object.
@@ -87,7 +87,7 @@ public interface ArcturusDatabase {
 	 * @return the description which was used to create this object.
 	 */
 
-	public abstract String getDescription();
+	public String getDescription();
 
 	/**
 	 * Returns the name which was used to create this object.
@@ -95,7 +95,7 @@ public interface ArcturusDatabase {
 	 * @return the name which was used to create this object.
 	 */
 
-	public abstract String getName();
+	public String getName();
 
 	/**
 	 * Returns the instance which created this object.
@@ -103,7 +103,7 @@ public interface ArcturusDatabase {
 	 * @return the instance which created this object.
 	 */
 
-	public abstract ArcturusInstance getInstance();
+	public ArcturusInstance getInstance();
 
 	/**
 	 * Establishes a JDBC connection to a database, using the parameters stored
@@ -119,7 +119,7 @@ public interface ArcturusDatabase {
 	 *             the database.
 	 */
 
-	public abstract Connection getConnection() throws SQLException;
+	public Connection getConnection() throws SQLException;
 
 	/**
 	 * Establishes a unique (non-cached) JDBC connection to a database, using
@@ -136,7 +136,7 @@ public interface ArcturusDatabase {
 	 *             the database.
 	 */
 
-	public abstract Connection getPooledConnection(Object owner)
+	public Connection getPooledConnection(Object owner)
 			throws SQLException;
 
 	/**
@@ -146,7 +146,7 @@ public interface ArcturusDatabase {
 	 *            the Logger to which logging messages will be sent.
 	 */
 
-	public abstract void setLogger(Logger logger);
+	public void setLogger(Logger logger);
 
 	/**
 	 * Gets the logger for this object.
@@ -154,341 +154,341 @@ public interface ArcturusDatabase {
 	 * @return the Logger to which logging messages will be sent.
 	 */
 
-	public abstract Logger getLogger();
+	public Logger getLogger();
 	
-	public abstract void setCacheing(int type, boolean cacheing);
+	public void setCacheing(int type, boolean cacheing);
 	
-	public abstract boolean isCacheing(int type);
+	public boolean isCacheing(int type);
 	
-	public abstract void clearCache(int type);
+	public void clearCache(int type);
 	
-	public abstract void preload(int type) throws SQLException;
+	public void preload(int type) throws SQLException;
 
-	public abstract Clone getCloneByName(String name) throws SQLException;
+	public Clone getCloneByName(String name) throws SQLException;
 
-	public abstract Clone getCloneByID(int id) throws SQLException;
+	public Clone getCloneByID(int id) throws SQLException;
 
-	public abstract Ligation getLigationByName(String name) throws SQLException;
+	public Ligation getLigationByName(String name) throws SQLException;
 
-	public abstract Ligation getLigationByID(int id) throws SQLException;
+	public Ligation getLigationByID(int id) throws SQLException;
 
-	public abstract Template getTemplateByName(String name) throws SQLException;
+	public Template getTemplateByName(String name) throws SQLException;
 
-	public abstract Template getTemplateByName(String name, boolean autoload)
+	public Template getTemplateByName(String name, boolean autoload)
 			throws SQLException;
 
-	public abstract Template getTemplateByID(int id) throws SQLException;
+	public Template getTemplateByID(int id) throws SQLException;
 
-	public abstract Template getTemplateByID(int id, boolean autoload)
+	public Template getTemplateByID(int id, boolean autoload)
 			throws SQLException;
 
-	public abstract Template findOrCreateTemplate(int id, String name,
+	public Template findOrCreateTemplate(int id, String name,
 			Ligation ligation);
 
-	public abstract Read getReadByName(String name) throws SQLException;
+	public Read getReadByName(String name) throws SQLException;
 
-	public abstract Read getReadByName(String name, boolean autoload)
+	public Read getReadByName(String name, boolean autoload)
 			throws SQLException;
 
-	public abstract Read getReadByID(int id) throws SQLException;
+	public Read getReadByID(int id) throws SQLException;
 
-	public abstract Read getReadByID(int id, boolean autoload)
+	public Read getReadByID(int id, boolean autoload)
 			throws SQLException;
 
-	public abstract int loadReadsByTemplate(int template_id)
+	public int loadReadsByTemplate(int template_id)
 			throws SQLException;
 
-	public abstract Read findOrCreateRead(int id, String name,
+	public Read findOrCreateRead(int id, String name,
 			Template template, java.util.Date asped, String strand,
 			String primer, String chemistry);
 
-	public abstract int[] getUnassembledReadIDList() throws SQLException;
+	public int[] getUnassembledReadIDList() throws SQLException;
 
-	public abstract Sequence getSequenceByReadID(int readid)
+	public Sequence getSequenceByReadID(int readid)
 			throws SQLException;
 
-	public abstract Sequence getSequenceByReadID(int readid, boolean autoload)
+	public Sequence getSequenceByReadID(int readid, boolean autoload)
 			throws SQLException;
 
-	public abstract Sequence getFullSequenceByReadID(int readid)
+	public Sequence getFullSequenceByReadID(int readid)
 			throws SQLException;
 
-	public abstract Sequence getFullSequenceByReadID(int readid,
+	public Sequence getFullSequenceByReadID(int readid,
 			boolean autoload) throws SQLException;
 
-	public abstract Sequence getSequenceBySequenceID(int seqid)
+	public Sequence getSequenceBySequenceID(int seqid)
 			throws SQLException;
 
-	public abstract Sequence getSequenceBySequenceID(int seqid, boolean autoload)
+	public Sequence getSequenceBySequenceID(int seqid, boolean autoload)
 			throws SQLException;
 
-	public abstract Sequence getFullSequenceBySequenceID(int seqid)
+	public Sequence getFullSequenceBySequenceID(int seqid)
 			throws SQLException;
 
-	public abstract Sequence getFullSequenceBySequenceID(int seqid,
+	public Sequence getFullSequenceBySequenceID(int seqid,
 			boolean autoload) throws SQLException;
 
-	public abstract void getDNAAndQualityForSequence(Sequence sequence)
+	public void getDNAAndQualityForSequence(Sequence sequence)
 			throws SQLException;
 
-	public abstract Sequence findOrCreateSequence(int seq_id, int length);
+	public Sequence findOrCreateSequence(int seq_id, int length);
 
-	public abstract Contig getContigByID(int id, int options)
+	public Contig getContigByID(int id, int options)
 			throws SQLException, DataFormatException;
 
-	public abstract Contig getContigByID(int id) throws SQLException,
+	public Contig getContigByID(int id) throws SQLException,
 			DataFormatException;
 
-	public abstract Contig getContigByReadName(String readname, int options)
+	public Contig getContigByReadName(String readname, int options)
 			throws SQLException, DataFormatException;
 
-	public abstract Contig getContigByReadName(String readname)
+	public Contig getContigByReadName(String readname)
 			throws SQLException, DataFormatException;
 
-	public abstract void updateContig(Contig contig, int options)
+	public void updateContig(Contig contig, int options)
 			throws SQLException, DataFormatException;
 
-	public abstract boolean isCurrentContig(int contigid) throws SQLException;
+	public boolean isCurrentContig(int contigid) throws SQLException;
 
-	public abstract int[] getCurrentContigIDList() throws SQLException;
+	public int[] getCurrentContigIDList() throws SQLException;
 
-	public abstract int countCurrentContigs(int minlen) throws SQLException;
+	public int countCurrentContigs(int minlen) throws SQLException;
 
-	public abstract int countCurrentContigs() throws SQLException;
+	public int countCurrentContigs() throws SQLException;
 
-	public abstract int processCurrentContigs(int options, int minlen,
+	public int processCurrentContigs(int options, int minlen,
 			ContigProcessor processor) throws SQLException, DataFormatException;
 
-	public abstract int processCurrentContigs(int options,
+	public int processCurrentContigs(int options,
 			ContigProcessor processor) throws SQLException, DataFormatException;
 
-	public abstract Set getCurrentContigs(int options, int minlen)
+	public Set getCurrentContigs(int options, int minlen)
 			throws SQLException, DataFormatException;
 
-	public abstract Set getCurrentContigs(int options) throws SQLException,
+	public Set getCurrentContigs(int options) throws SQLException,
 			DataFormatException;
 
-	public abstract int countContigsByProject(int project_id, int minlen)
+	public int countContigsByProject(int project_id, int minlen)
 			throws SQLException;
 
-	public abstract int countContigsByProject(int project_id)
+	public int countContigsByProject(int project_id)
 			throws SQLException;
 
-	public abstract int processContigsByProject(int project_id, int options,
+	public int processContigsByProject(int project_id, int options,
 			int minlen, ContigProcessor processor) throws SQLException,
 			DataFormatException;
 
-	public abstract int processContigsByProject(int project_id, int options,
+	public int processContigsByProject(int project_id, int options,
 			ContigProcessor processor) throws SQLException, DataFormatException;
 
-	public abstract Set<Contig> getContigsByProject(int project_id,
+	public Set<Contig> getContigsByProject(int project_id,
 			int options, int minlen) throws SQLException, DataFormatException;
 
-	public abstract Set getContigsByProject(int project_id, int options)
+	public Set getContigsByProject(int project_id, int options)
 			throws SQLException, DataFormatException;
 
-	public abstract Set<Contig> getChildContigs(Contig parent)
+	public Set<Contig> getChildContigs(Contig parent)
 			throws SQLException;
 
-	public abstract Project getProjectByID(int id) throws SQLException;
+	public Project getProjectByID(int id) throws SQLException;
 
-	public abstract Project getProjectByID(int id, boolean autoload)
+	public Project getProjectByID(int id, boolean autoload)
 			throws SQLException;
 
-	public abstract Project getProjectByName(Assembly assembly, String name)
+	public Project getProjectByName(Assembly assembly, String name)
 			throws SQLException;
 
-	public abstract Set<Project> getAllProjects() throws SQLException;
+	public Set<Project> getAllProjects() throws SQLException;
 
-	public abstract Set<Project> getProjectsForOwner(Person owner)
+	public Set<Project> getProjectsForOwner(Person owner)
 			throws SQLException;
 
-	public abstract void refreshProject(Project project) throws SQLException;
+	public void refreshProject(Project project) throws SQLException;
 
-	public abstract void refreshAllProject() throws SQLException;
+	public void refreshAllProject() throws SQLException;
 
-	public abstract void setAssemblyForProject(Project project,
+	public void setAssemblyForProject(Project project,
 			Assembly assembly) throws SQLException;
 
-	public abstract void getProjectSummary(Project project, int minlen,
+	public void getProjectSummary(Project project, int minlen,
 			int minreads, ProjectSummary summary) throws SQLException;
 
-	public abstract ProjectSummary getProjectSummary(Project project,
+	public ProjectSummary getProjectSummary(Project project,
 			int minlen, int minreads) throws SQLException;
 
-	public abstract void getProjectSummary(Project project, int minlen,
+	public void getProjectSummary(Project project, int minlen,
 			ProjectSummary summary) throws SQLException;
 
-	public abstract void getProjectSummary(Project project,
+	public void getProjectSummary(Project project,
 			ProjectSummary summary) throws SQLException;
 
-	public abstract ProjectSummary getProjectSummary(Project project, int minlen)
+	public ProjectSummary getProjectSummary(Project project, int minlen)
 			throws SQLException;
 
-	public abstract ProjectSummary getProjectSummary(Project project)
+	public ProjectSummary getProjectSummary(Project project)
 			throws SQLException;
 
-	public abstract Map getProjectSummary(int minlen, int minreads)
+	public Map getProjectSummary(int minlen, int minreads)
 			throws SQLException;
 
-	public abstract Map getProjectSummary(int minlen) throws SQLException;
+	public Map getProjectSummary(int minlen) throws SQLException;
 
-	public abstract Map getProjectSummary() throws SQLException;
+	public Map getProjectSummary() throws SQLException;
 
-	public abstract boolean canUserUnlockProject(Project project, Person user)
+	public boolean canUserUnlockProject(Project project, Person user)
 			throws SQLException;
 
-	public abstract boolean canUserLockProjectForSelf(Project project,
+	public boolean canUserLockProjectForSelf(Project project,
 			Person user) throws SQLException;
 
-	public abstract boolean canUserLockProject(Project project, Person user)
+	public boolean canUserLockProject(Project project, Person user)
 			throws SQLException;
 
-	public abstract boolean canUserLockProjectForOwner(Project project,
+	public boolean canUserLockProjectForOwner(Project project,
 			Person user) throws SQLException;
 
-	public abstract boolean unlockProject(Project project) throws SQLException,
+	public boolean unlockProject(Project project) throws SQLException,
 			ProjectLockException;
 
-	public abstract boolean lockProject(Project project) throws SQLException,
+	public boolean lockProject(Project project) throws SQLException,
 			ProjectLockException;
 
-	public abstract boolean unlockProjectForExport(Project project)
+	public boolean unlockProjectForExport(Project project)
 			throws SQLException, ProjectLockException;
 
-	public abstract boolean lockProjectForExport(Project project)
+	public boolean lockProjectForExport(Project project)
 			throws SQLException, ProjectLockException;
 
-	public abstract boolean lockProjectForOwner(Project project)
+	public boolean lockProjectForOwner(Project project)
 			throws SQLException, ProjectLockException;
 
-	public abstract boolean setProjectLockOwner(Project project, Person person)
+	public boolean setProjectLockOwner(Project project, Person person)
 			throws SQLException, ProjectLockException;
 
-	public abstract void setProjectOwner(Project project, Person person)
+	public void setProjectOwner(Project project, Person person)
 			throws SQLException;
 
-	public abstract boolean createNewProject(Assembly assembly, String name,
+	public boolean createNewProject(Assembly assembly, String name,
 			Person owner, String directory) throws SQLException, IOException;
 
-	public abstract boolean canUserChangeProjectStatus(Project project,
+	public boolean canUserChangeProjectStatus(Project project,
 			Person user) throws SQLException;
 
-	public abstract boolean canUserChangeProjectStatus(Project project)
+	public boolean canUserChangeProjectStatus(Project project)
 			throws SQLException;
 
-	public abstract boolean changeProjectStatus(Project project, int status)
+	public boolean changeProjectStatus(Project project, int status)
 			throws SQLException;
 
-	public abstract boolean retireProject(Project project) throws SQLException;
+	public boolean retireProject(Project project) throws SQLException;
 
-	public abstract Project getBinForProject(Project project)
+	public Project getBinForProject(Project project)
 			throws SQLException;
 
-	public abstract Assembly getAssemblyByID(int id) throws SQLException;
+	public Assembly getAssemblyByID(int id) throws SQLException;
 
-	public abstract Assembly getAssemblyByID(int id, boolean autoload)
+	public Assembly getAssemblyByID(int id, boolean autoload)
 			throws SQLException;
 
-	public abstract Assembly getAssemblyByName(String name) throws SQLException;
+	public Assembly getAssemblyByName(String name) throws SQLException;
 
-	public abstract Assembly[] getAllAssemblies() throws SQLException;
+	public Assembly[] getAllAssemblies() throws SQLException;
 
-	public abstract void refreshAssembly(Assembly assembly) throws SQLException;
+	public void refreshAssembly(Assembly assembly) throws SQLException;
 
-	public abstract void refreshAllAssemblies() throws SQLException;
+	public void refreshAllAssemblies() throws SQLException;
 
-	public abstract boolean hasFullPrivileges(Person person);
+	public boolean hasFullPrivileges(Person person);
 
-	public abstract boolean hasFullPrivileges() throws SQLException;
+	public boolean hasFullPrivileges() throws SQLException;
 
-	public abstract boolean isCoordinator(Person person);
+	public boolean isCoordinator(Person person);
 
-	public abstract boolean isCoordinator();
+	public boolean isCoordinator();
 
-	public abstract Person[] getAllUsers(boolean includeNobody)
+	public Person[] getAllUsers(boolean includeNobody)
 			throws SQLException;
 
-	public abstract Person[] getAllUsers() throws SQLException;
+	public Person[] getAllUsers() throws SQLException;
 
-	public abstract Person findUser(String username);
+	public Person findUser(String username);
 
-	public abstract Person findMe();
+	public Person findMe();
 
-	public abstract boolean isMe(Person person);
+	public boolean isMe(Person person);
 
-	public abstract ContigTransferRequest[] getContigTransferRequestsByUser(
+	public ContigTransferRequest[] getContigTransferRequestsByUser(
 			Person user, int mode) throws SQLException;
 
-	public abstract ContigTransferRequest createContigTransferRequest(
+	public ContigTransferRequest createContigTransferRequest(
 			Person requester, int contigId, int toProjectId)
 			throws ContigTransferRequestException, SQLException;
 
-	public abstract ContigTransferRequest createContigTransferRequest(
+	public ContigTransferRequest createContigTransferRequest(
 			int contigId, int toProjectId)
 			throws ContigTransferRequestException, SQLException;
 
-	public abstract ContigTransferRequest createContigTransferRequest(
+	public ContigTransferRequest createContigTransferRequest(
 			Person requester, Contig contig, Project project)
 			throws ContigTransferRequestException, SQLException;
 
-	public abstract ContigTransferRequest createContigTransferRequest(
+	public ContigTransferRequest createContigTransferRequest(
 			Contig contig, Project project)
 			throws ContigTransferRequestException, SQLException;
 
-	public abstract void reviewContigTransferRequest(
+	public void reviewContigTransferRequest(
 			ContigTransferRequest request, Person reviewer, int newStatus)
 			throws ContigTransferRequestException, SQLException;
 
-	public abstract void reviewContigTransferRequest(int requestId,
+	public void reviewContigTransferRequest(int requestId,
 			Person reviewer, int newStatus)
 			throws ContigTransferRequestException, SQLException;
 
-	public abstract void reviewContigTransferRequest(int requestId,
+	public void reviewContigTransferRequest(int requestId,
 			int newStatus) throws ContigTransferRequestException, SQLException;
 
-	public abstract void executeContigTransferRequest(
+	public void executeContigTransferRequest(
 			ContigTransferRequest request, Person reviewer,
 			boolean notifyListeners) throws ContigTransferRequestException,
 			SQLException;
 
-	public abstract void executeContigTransferRequest(int requestId,
+	public void executeContigTransferRequest(int requestId,
 			Person reviewer, boolean notifyListeners)
 			throws ContigTransferRequestException, SQLException;
 
-	public abstract void executeContigTransferRequest(int requestId,
+	public void executeContigTransferRequest(int requestId,
 			boolean notifyListeners) throws ContigTransferRequestException,
 			SQLException;
 
-	public abstract void setDebugging(boolean debugging);
+	public void setDebugging(boolean debugging);
 
-	public abstract boolean canCancelRequest(ContigTransferRequest request,
+	public boolean canCancelRequest(ContigTransferRequest request,
 			Person person) throws SQLException;
 
-	public abstract boolean canRefuseRequest(ContigTransferRequest request,
+	public boolean canRefuseRequest(ContigTransferRequest request,
 			Person person) throws SQLException;
 
-	public abstract boolean canApproveRequest(ContigTransferRequest request,
+	public boolean canApproveRequest(ContigTransferRequest request,
 			Person person) throws SQLException;
 
-	public abstract boolean canExecuteRequest(ContigTransferRequest request,
+	public boolean canExecuteRequest(ContigTransferRequest request,
 			Person person) throws SQLException;
 
-	public abstract void moveContigs(Project fromProject, Project toProject)
+	public void moveContigs(Project fromProject, Project toProject)
 			throws SQLException;
 
-	public abstract void addProjectChangeEventListener(Project project,
+	public void addProjectChangeEventListener(Project project,
 			ProjectChangeEventListener listener);
 
-	public abstract void addProjectChangeEventListener(
+	public void addProjectChangeEventListener(
 			ProjectChangeEventListener listener);
 
-	public abstract void removeProjectChangeEventListener(
+	public void removeProjectChangeEventListener(
 			ProjectChangeEventListener listener);
 
-	public abstract void notifyProjectChangeEventListeners(
+	public void notifyProjectChangeEventListeners(
 			ProjectChangeEvent event, Class listenerClass);
 
-	public abstract String getDefaultDirectory();
+	public String getDefaultDirectory();
 
 }
