@@ -10,37 +10,45 @@ public class SSHConnection {
 
 		conn.connect();
 
-		boolean isAuthenticated = false;
-
 		File home = new File(System.getProperty("user.home"));
-		File sshdir = new File(home, ".ssh");
 		
+		// We should also look in the "My Documents" folder on Windows systems,
+		// as the user may have mistakenly installed the key file there.
+		File mydocs = new File(home, "My Documents");
+
+		File sshdir1 = new File(home, ".ssh");
+		File sshdir2 = new File(mydocs, ".ssh");
+
+		File[] sshdir = { sshdir1, sshdir2 };
+
 		String keyfilePass = null;
 		String username = System.getProperty("user.name");
-		
+
 		String[] pkfiles = { "id_dsa", "id_rsa" };
-		
-		int foundFiles = 0;
-		
-		for (int i = 0; i < pkfiles.length && !isAuthenticated; i++) {
-			File keyfile = new File(sshdir, pkfiles[i]);
-			
-			if (keyfile.exists()) {
-				foundFiles++;
-			
-				if (conn.authenticateWithPublicKey(username, keyfile, keyfilePass))
+
+		File keyfile = null;
+
+		for (int j = 0; j < sshdir.length; j++) {
+			for (int i = 0; i < pkfiles.length; i++) {
+				keyfile = new File(sshdir[j], pkfiles[i]);
+
+				if (keyfile.exists()) {
+					if (conn.authenticateWithPublicKey(username, keyfile,
+							keyfilePass))
 						return conn;
+				} else
+					keyfile = null;
 			}
 		}
-		
-		if (foundFiles == 0)
-			throw new IOException("Could not find any key files to to authenticate an SSH connection.");
 
-		if (isAuthenticated == false)
-			throw new IOException("Found a key file, but failed to authenticate an SSH connection.");
-		
 		conn.close();
-		
-		return null;
+
+		if (keyfile == null)
+			throw new IOException(
+					"Could not find any key files to to authenticate an SSH connection.");
+		else
+			throw new IOException("Found a key file ("
+					+ keyfile.getAbsolutePath()
+					+ "), but failed to authenticate an SSH connection.");
 	}
 }
