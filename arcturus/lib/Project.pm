@@ -499,6 +499,7 @@ sub writeContigsToCaf {
     my $this = shift;
     my $FILE = shift; # obligatory file handle
     my %options = @_; # frugal=> , logger=>, endregiontrim=> & options for getContigIDsForExport
+print STDERR "writeContigsToCaf : @_\n";
 
     my ($contigids,$status) = $this->getContigIDsForExport(%options);
     return (0,1,$status) unless ($contigids && @$contigids);
@@ -527,7 +528,11 @@ sub writeContigsToCaf {
     foreach my $option ('readsonly','notags','alltags','includetag','excludetag') {
         next unless defined $options{$option};
         $woptions{$option} = $options{$option};
-    } 
+    }
+# add quality masking option (if any) when readsonly export
+    if ($options{readsonly}  &&  $options{qualitymask}) {
+        $woptions{qualitymask} = $options{qualitymask};
+    }
 
     foreach my $contig_id (@$contigids) {
 
