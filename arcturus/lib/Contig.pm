@@ -1042,10 +1042,11 @@ sub writeToCaf {
     my $FILE = shift; # obligatory file handle
     my %options = @_;
 
-    my @validoptionkeys = ('noreads',   # don't export reads, only contig
-                           'readsonly', # only export reads
- #                          'gap4name',  # 
-                           'notags',    # don't export tags
+    my @validoptionkeys = ('noreads',     # don't export reads, only contig
+                           'readsonly',   # only export reads
+                           'qualitymask', # if readsonly: mask low quality read sequence
+ #                          'gap4name',   # 
+                           'notags',      # don't export tags
 		           'alltags',
                            'includetag',
                            'excludetag');
