@@ -37,6 +37,7 @@ my $addtag = 1;
 my $namelike;
 my $namenotlike;
 my $excludelist;
+my $includelist;
 my $status;
 
 my $threshold;  # only with clipmethod
@@ -52,7 +53,8 @@ my $validKeys  = "organism|o|instance|i|"
                . "assembly|a|ligation|l|ligationname|ln|ligationcomplement|lc|"
                . "caf|fasta|fastq|aspedbefore|ab|aspedafter|aa|"
                . "includesingleton|is|blocksize|bs|selectmethod|sm|namelike|nl|"
-               . "namenotlike|nnl|excludelist|el|mask|notags|all|nofile|count|"
+               . "namenotlike|nnl|excludelist|elincludelist|il|fofn|"
+               . "|mask|notags|all|nofile|count|"
                . "clipmethod|cm|threshold|th|minimumqualityrange|mqr|"
                . "status|nostatus|limit|"
                . "test|info|verbose|debug|log|help|h";
@@ -93,8 +95,13 @@ while (my $nextword = shift @ARGV) {
     $namenotlike      = shift @ARGV  if ($nextword eq '-namenotlike');
     $namenotlike      = shift @ARGV  if ($nextword eq '-nnl');
 
-    $excludelist      = shift @ARGV  if ($nextword eq '-excludelist');
-    $excludelist      = shift @ARGV  if ($nextword eq '-el');
+    if ($nextword eq '-el' || $nextword eq '-excludelist') {
+        $excludelist  = shift @ARGV;
+    }
+
+    if ($nextword eq '-fofn' || $nextword eq '-il' || $nextword eq '-includelist') {
+        $includelist  = shift @ARGV;
+    }
 
 # selection on assembly 
 
@@ -218,7 +225,11 @@ $adb->setLogger($logger);
 
 my ($CAF,$FAS,$QLT,$QMASK,$FAQ);
 
-if ($fasta == 1) {
+if (!defined($fasta)) {
+    $logger->info("No output file format specified");
+}
+
+elsif ($fasta == 1) {
 # fasta output
     if ($outputFileName) {
         $outputFileName .= '.fas' unless ($outputFileName =~ /\.fas/);
@@ -298,6 +309,14 @@ if ($excludelist) {
     }
 }
 
+my %includehash;
+if ($excludelist) {
+    my $namelist = &getNamesFromFile($includelist);
+    foreach my $name (@$namelist) {
+        $includehash{$name}++;
+    }
+}
+
 $logger->info("Getting read IDs for unassembled reads");
 
 my $readids = [];
@@ -369,6 +388,11 @@ while (my $remainder = scalar(@$readids)) {
 
     foreach my $read (@$reads) {
         my $readname = $read->getReadName();
+        if ($includelist && !$includehash{$readname}) {
+            print STDERR "read $readname not in include list\n";
+            $excluded++;
+            next;
+        }
         if ($excludelist && $excludehash{$readname}) {
             print STDERR "read $readname excluded\n";
             $excluded++;
@@ -577,6 +601,8 @@ sub showUsage {
     print STDOUT "\t\tstatus); exports reads 1 to number provided \n";
     print STDOUT "\n";
     print STDOUT "-excludelist\tfile of readnames to be excluded\n";
+    print STDOUT "\n";
+    print STDOUT "-fofn\t\t(il,includelist) file of readnames to be included\n";
     print STDOUT "\n";
     print STDOUT "-blocksize\t(default 50000) for blocked execution\n";
     print STDOUT "\n";
