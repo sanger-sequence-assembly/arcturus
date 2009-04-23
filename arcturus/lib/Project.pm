@@ -498,8 +498,8 @@ sub writeContigsToCaf {
 # write all contigs in this project to CAF; standard project export
     my $this = shift;
     my $FILE = shift; # obligatory file handle
-    my %options = @_; # frugal=> , logger=>, endregiontrim=> & options for getContigIDsForExport
-print STDERR "writeContigsToCaf : @_\n";
+    my %options = @_; # frugal=> , logger=>, endregiontrim=> & options
+                      # for getContigIDsForExport & Contig::writeToCaf
 
     my ($contigids,$status) = $this->getContigIDsForExport(%options);
     return (0,1,$status) unless ($contigids && @$contigids);
