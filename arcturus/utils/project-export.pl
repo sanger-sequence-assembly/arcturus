@@ -40,7 +40,7 @@ my $minNX = 1; # default
 my $qualityclip;
 my $clipthreshold;
 my $endregiontrim;
-#my $endregiononly;
+my $endregiononly;
 my $clipsymbol;
 my $gap4name;
 my $preview;
@@ -48,10 +48,11 @@ my $append = 0;
 
 my $validKeys  = "organism|o|instance|i|project|p|assembly|a|"
                . "fopn|fofn|ignore|scaffold|"
-               . "caf|maf|readsonly|fasta|quality|lock|minNX|minerva|"
+               . "caf|maf|fasta|quality|lock|minNX|minerva|"
                . "minimum|min|maximum|max|singletons|readsonly|"
-               . "mask|symbol|shrink|qualityclip|qc|qclipthreshold|qct|"
-               . "qclipsymbol|qcs|endregiontrim|ert|gap4name|g4n|padded|"
+               . "mask|symbol|shrink|"
+               . "qualityclip|qc|qclipthreshold|qct|qclipsymbol|qcs|"
+               . "endregiontrim|ert|endregiononly|ero|gap4name|g4n|padded|"
                . "preview|confirm|batch|verbose|debug|help|h|test|append";
 
 while (my $nextword = shift @ARGV) {
@@ -143,7 +144,15 @@ while (my $nextword = shift @ARGV) {
         $endregiontrim = shift @ARGV;
         if ($endregiontrim =~ /\D/ || $endregiontrim <= 0) {
 	    $nextword = $endregiontrim if ($endregiontrim =~ /\D/);
-            $endregiontrim = 15;
+            $endregiontrim = 15;  # default
+        }
+    }
+
+    if ($nextword eq '-ero' || $nextword eq '-endregiononly') {
+        $endregiononly = shift @ARGV;
+        if ($endregiononly =~ /\D/ || $endregiononly <= 0) {
+	    $nextword = $endregiononly if ($endregiononly =~ /\D/);
+            $endregiononly = 100; # default
         }
     }
 
@@ -226,6 +235,11 @@ $fopn = &getNamesFromFile($fopn) if $fopn;
 if ($padded && (defined($fastafile) || defined($maffile))) {
     $logger->info("Redundant '-padded' key ignored");
     undef $padded;
+}
+
+if ($readsonly) { # overrides possible singletons specification 
+    undef $singletonfile;
+    $minimum = 1;
 }
 
 # get file handles
@@ -372,12 +386,14 @@ $exportoptions{maxnrofreads} = $maximum if ($maximum && $maximum > 0);
 if (defined($caffile)) {
 #    $exportoptions{padded} = 1 if $padded;
     $exportoptions{qualitymask} = $masking if defined($masking);
-    $exportoptions{readsonly} = 1 if $readsonly;
+    if ($readsonly) { # overrides singleton option
+        $exportoptions{readsonly} = 1;
+    }
 }
 elsif (defined($fastafile)) {
     $exportoptions{readsonly} = 1 if $readsonly;
-    if (defined($masking)) {
-        $exportoptions{endregiononly} = $masking;
+    if (defined($endregiononly)) {
+        $exportoptions{endregiononly} = $endregiononly;
         $exportoptions{maskingsymbol} = $msymbol || 'X';
         $exportoptions{shrink} = $mshrink if $mshrink;
     }
@@ -401,6 +417,7 @@ foreach my $option (keys %exportoptions) {
     next if ($option eq 'minnrofreads');
     $singleoptions{$option} = $exportoptions{$option};
 }
+
 $singleoptions{maxnrofreads} = 1;
 $singleoptions{readsonly} = 1;
 
@@ -548,7 +565,10 @@ sub showUsage {
     print STDERR "-max\t\t(maximum) maximum number of reads in a contig\n";
 #    print STDERR "-padded\t\t(no value) export contigs in padded (caf) format\n";
     print STDERR "\n";
-    print STDERR "-readsonly\t(no value) export only reads in caf or fasta output\n";
+    print STDERR "-readsonly\t(no value) export only reads in caf or fasta output (overrides\n";
+    print STDERR "\t\tany singleton specification; all reads on one output file\n";
+    print STDERR "\n";
+     
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS relating to locking and scaffolding\n";
     print STDERR "\n";
@@ -571,7 +591,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-ert\t\t(endregiontrim) clip low quality endregions at this quality\n";
     print STDERR "\n"; 
-    print STDERR "-mask\t\texport only the end regions of a contig of length specified\n";
+    print STDERR "-ero\t\t(endregiononly) export the contig's end regions having this length\n";
     print STDERR "\t\tthe two end parts will be separated by a string of (default) 'N'\n";
     print STDERR "\t\tmasking symbols and given quality 1\n";
     print STDERR "\n";
