@@ -952,7 +952,8 @@ sub deleteContig {
 # this function requires DBA privilege
     my $this = shift;
     my $identifier = shift;
-    my %options = @_;
+    my %options = @_; # treatassinglereadparent=>, forcedelete=>
+#                       confirm=>, cleanup=>
 
     $identifier = $this->{lastinsertedcontigid} unless $identifier;
 
@@ -994,8 +995,10 @@ sub deleteContig {
 
 # safeguard: contig may not be among the parents (careful with override!)
 
-    unless ($nreads == 1 && $options{noparentcheck}) {
-# only single-read contigs can be exempted from this protection
+    my $deletetarget = "contig_id";
+    unless ($nreads == 1 && $options{treatassinglereadparent}) {
+# test if this contig IS NOT a parent of another contig; if so, never delete 
+# only single-read parent contigs can be exempted from this protection
         my $pquery = "select parent_id from C2CMAPPING where parent_id = $cid";
 
         my $isparent = $dbh->do($pquery) || &queryFailed($pquery);
@@ -1005,6 +1008,16 @@ sub deleteContig {
             return 0, "Contig $identifier is, or may be, a parent "
                     . "and can't be deleted";
 	}
+    }
+    else {
+# test if this single-read contig itself HAS NO parent
+        my $pquery = "select parent_id from C2CMAPPING where contig_id = $cid";
+        my $hasparent = $dbh->do($pquery) || &queryFailed($pquery);
+        if (!$hasparent || $hasparent > 0) { # exit, unless forcedelete
+            return 0, "Single-read contig $identifier has, or may have, a parent "
+                    . "and can't be deleted" unless $options{forcedelete};
+	}
+        $deletetarget = "parent_id";
     }
 
 # here we finally test for ambiguity not found by parent test
@@ -1039,7 +1052,8 @@ sub deleteContig {
     my $report = '';
     my $success = 1;
     foreach my $table ('C2CMAPPING','CONTIG') {
-        my $query = "delete from $table where contig_id = $cid"; 
+        my $query = "delete from $table where $deletetarget = $cid";         
+        $deletetarget = "contig_id"; # replace possible initial target parent_id
         my $deleted = $dbh->do($query) || &queryFailed($query);
         if (!$deleted && $table eq 'CONTIG') { # query failed
             $success = 0; last;
@@ -1048,21 +1062,11 @@ sub deleteContig {
             $report .= ($deleted+0). " delete(s) done from $table\n";
 	}
         else {
-            $report .= " No deletes done from $table\n";
+            $report .= " No deletes done from $table for $deletetarget = $cid\n";
 	}
     }
 
-# if noparentcheck active, the deleted contig can be a (single-read) parent
-
-    if ($nreads == 1 && $options{noparentcheck}) {
-        my $query = "delete from C2CMAPPING where parent_id = $cid"; 
-        my $deleted = $dbh->do($query) || &queryFailed($query);
-        $success = 0 unless $deleted;
-        $report .= "No delete done from C2CMAPPING for parent_id = $cid\n"
-                    unless ($deleted && ($deleted+0));
-    }
-
-# remove the redundent entries in SEGMENT and C2CSEGMENT
+# remove the redundent entries in SEGMENT and C2CSEGMENT (MyISAM tables)
 
     return ($success,$report) unless $options{cleanup};
 
