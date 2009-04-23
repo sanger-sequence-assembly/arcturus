@@ -25,7 +25,8 @@ my $verbose;
 #----------------------------------------------------------------
 
 my $validKeys = "organism|o|instance|i|"
-              . "addprivilege|ap|removeprivilege|rp|deleteuser|du|force|"
+#              . "addprivilege|ap|removeprivilege|rp|"
+              . "deleteuser|du|force|"
               . "user|u|privilege|p|newuser|nu|newrole|nr|list|l|"
               . "verbose|help|h";
  
@@ -50,14 +51,14 @@ while (my $nextword = shift @ARGV) {
         $organism  = shift @ARGV;
     }
 
-    if ($nextword eq '-ap' || $nextword eq '-addprivilege') {
-        $privilege = shift @ARGV;
-        $action    = 1;
-    }
-    if ($nextword eq '-rp' || $nextword eq '-removeprivilege') {
-        $privilege = shift @ARGV;
-        $action    = 2;
-    }
+#    if ($nextword eq '-ap' || $nextword eq '-addprivilege') {
+#        $privilege = shift @ARGV;
+#        $action    = 1;
+#    }
+#    if ($nextword eq '-rp' || $nextword eq '-removeprivilege') {
+#        $privilege = shift @ARGV;
+#        $action    = 2;
+#    }
 
     if ($nextword eq '-du' || $nextword eq '-deleteuser') {
         $user      = shift @ARGV;
@@ -78,7 +79,7 @@ while (my $nextword = shift @ARGV) {
         $user      = shift @ARGV;
     }
 
-    $privilege     = shift @ARGV  if ($nextword eq '-privilege');
+#    $privilege     = shift @ARGV  if ($nextword eq '-privilege');
 
     $force         = 1            if ($nextword eq '-force');
 
@@ -146,7 +147,7 @@ $logger->info("Database $URL opened succesfully");
 # translate possibly abbreviated privilege specification by full
 #----------------------------------------------------------------
 
-if ($privilege) {
+if (0 && $privilege) { # OBSOLETE
 # get the current set of valid privileges
     my $privileges = $adb->getValidPrivileges(); # returns a hash
 
@@ -250,20 +251,20 @@ if (!$action) {
     }
 }
 
-# the options 1-3 require user to be defined
+# the options 1-3 require user to be defined (options 1,2 disbled)
 
 elsif ($action >= 1 && $action <= 3) {
 
-    if ($action == 1 && $user && $privilege) {
+     if ($action == 1 && $user && $privilege) {
 # add new user privilege; requires both user and privilege to be defined
-       ($status,$msg) = $adb->addUserPrivilege($user,$privilege);
-        $success = 1 if $status;
-    }
+#       ($status,$msg) = $adb->addUserPrivilege($user,$privilege);
+#        $success = 1 if $status;
+     }
 
-    elsif ($action == 2 && $user && $privilege) {
+     elsif ($action == 2 && $user && $privilege) {
 # delete a privilege for a user; requires both user and privilege to be defined
-       ($status,$msg) = $adb->removeUserPrivilege($user,$privilege);
-        $success = 1 if $status;
+#      ($status,$msg) = $adb->removeUserPrivilege($user,$privilege);
+#       $success = 1 if $status;
     }
 
     elsif ($action == 3 && $user) {
@@ -285,7 +286,7 @@ elsif ($action >= 1 && $action <= 3) {
 
 
 if ($action == 4 || $action == 5) {
-print STDERR "option $action to be develeoped\n";
+# print STDERR "option $action to be develeoped\n";
    ($status,$msg) = $adb->addNewUser($user,$role) if ($action == 4);
    ($status,$msg) = $adb->updateUser($user,$role) if ($action == 5);
     $success = 1 if $status;
@@ -326,11 +327,11 @@ sub showUsage {
     print STDERR "-list\t\t (no value) show the current user privileges\n";
     print STDERR "\n";
     print STDERR "-user\t\t username to be processed\n";
-    print STDERR "-privilege\t username to be processed\n";
-    print STDERR "\n";
-    print STDERR "\t\t adding or removing privilege require user to be defined\n";
-    print STDERR "-addprivilege\t (ap)add the specified privilege\n";
-    print STDERR "-removeprivilege (rp)remove the specified privilege\n";
+#    print STDERR "-privilege\t username to be processed\n";
+#   print STDERR "\n";
+#   print STDERR "\t\t adding or removing privilege require user to be defined\n";
+#   print STDERR "-addprivilege\t (ap)add the specified privilege\n";
+#   print STDERR "-removeprivilege (rp)remove the specified privilege\n";
     print STDERR "\n";
     print STDERR "-newuser\t(nu)\n";
     print STDERR "-newrole\t(nr) for user\n";
