@@ -304,7 +304,7 @@ sub getPrivilegesForUser {
 # return the privileges hash for the specified user or the default user
     my $this = shift;
     my $user = shift;
-    my %options = @_;
+    my %options = @_; # refresh=>
 
     $user = $this->getArcturusUser() unless $user;
 
@@ -333,59 +333,81 @@ sub fetchUserPrivileges {
     my $dbh = shift;
     my %option = @_; # either 'like' or 'user' or none
 
-# first get all userdata from PRIVILEGE (also when user not in USER) 
+# define roles, privileges and 
 
-    my $query = "select PRIVILEGE.username,privilege,role"
-              . "  from PRIVILEGE left join USER using (username)";
+    my @privileges = ('grant_privileges',
+                      'assign_project',
+                      'create_project',
+                      'lock_project',
+                      'move_any_contig');
 
-# then add user data in USER with user not in PRIVILEGE
+    my %privileges = (administrator => '11111', assembler => '00000',    annotator  => '00000',
+                      coordinator   => '01111', finisher  => '00111', 'team leader' => '11111',
+                      superuser     => '11111', none      => '00000');
 
-    my $union = "select USER.username,'NONE',role"
-              . "  from USER left join PRIVILEGE using (username)"
-	      . " where PRIVILEGE.username is null";
+# first get the userdata 
+
+    my $query = "select username,role from USER";
+
+# without further qualification returns all users
  
     my @bind;    
     if ($option{like}) { # allowing wild card
-        $query .= " where PRIVILEGE.username like ?";
-        $union .= "   and USER.username like ?";
-	push @bind, $option{like},$option{like};
+        $query .= " where USER.username like ?";
+	push @bind, $option{like};
     }
     elsif ($option{user}) { # exact match
-        $query .= " where PRIVILEGE.username = ?";
-        $union .= "   and USER.username = ?";
-        push @bind, $option{user},$option{user};
+        $query .= " where USER.username = ?";
+        push @bind, $option{user};
     }
-
-    $query .= " union ".$union;
+    elsif (keys %option) {
+# invalid usage
+    }
 
     my $sth = $dbh->prepare_cached($query);
 
     $sth->execute(@bind) || &queryFailed($query,@bind) && return undef;
 
+    my $user_hash;
     my $privilege_hash = {};
-    while (my ($username,$privilege,$role) = $sth->fetchrow_array()) {
-        $privilege = 'none' unless $privilege; # or null?
+    while (my ($username,$role) = $sth->fetchrow_array()) {
         $role      = 'none' unless $role; # 
         $privilege_hash->{$username} = {} unless $privilege_hash->{$username};
-        $privilege_hash->{$username}->{$privilege} = $role;
+        $user_hash = $privilege_hash->{$username} unless $user_hash;
+# collect privileges for this role
+        my $items = $privileges{$role} || next;
+        my @items = split '',$items;
+        for (my $i = 0 ; $i < 5 ; $i++) {
+            next unless $items[$i];
+            my $privilege = $privileges[$i];
+            $privilege_hash->{$username}->{$privilege} = $role;
+        }
     }
 
     $sth->finish();
 
     return $privilege_hash unless ($option{user}); # hash for all users
 
-    return $privilege_hash->{ $option{user} } || {}; # sub hash for user
+# return data for a specified user as hash
+
+    return undef unless $user_hash; # user does not exist
+
+    unless (keys %$user_hash) {
+        $user_hash->{none} = 'none';
+    }
+
+    return $user_hash; # sub hash for user
 }
 
 sub getRoleForUser {
 # return the role for the specified user or the default user
     my $this = shift;
     my $user = shift;
-    my %options = @_;
+    my %options = @_; # refresh=>
 
     my $privilege = $this->getPrivilegesForUser($user,%options);
 
-    my ($dummy,$role) = each %$privilege; # the first pair
+    my ($dummy,$role) = each %$privilege; # the first pair, if any
 
     return $role || 'none';
 }
@@ -419,7 +441,7 @@ sub addNewUser {
     my $dbh = $this->getConnection();
 
     my $userprivilege = &fetchUserPrivileges($dbh,user=>$user);
-    if (my @privileges = keys %$userprivilege) {
+    if ($userprivilege && (my @privileges = keys %$userprivilege)) {
         my $currentrole = $userprivilege->{$privileges[0]};  
         return 0, "user '$user' already exists" if &verifyUserRole($currentrole);   
     }
@@ -453,7 +475,7 @@ sub updateUser {
 # the current user can only change a role lower than or equal its own seniority 
     unless ($seniority && $seniority >= &verifyUserRole($role)) {
         my $logger = &verifyLogger('updateUser');
-        $logger->error("seniority $seniority : role $role ". &verifyUserRole($role));
+        $logger->info("seniority $seniority : role $role ". &verifyUserRole($role));
         return 0, "you do not have privilege for this operation";
     }
 
@@ -462,11 +484,11 @@ sub updateUser {
     my $dbh = $this->getConnection();
 
     my $userprivilege = &fetchUserPrivileges($dbh,user=>$user);
-    if (my @privileges = keys %$userprivilege) {  
+    if ($userprivilege && (my @privileges = keys %$userprivilege)) {  
         my $currentrole = $userprivilege->{$privileges[0]};  
         unless (defined &verifyUserRole($currentrole)) {
-# occurs when 'user' is absent from both USER and PRIVILEGE tables
-            return 0, "user '$user' does not exist (1)";
+# occurs when 'user' is absent from USER table
+            return 0, "user '$user' does not exist";
         } 
         return 0, "user '$user' already has role $role" if ($currentrole eq $role);   
     }
@@ -494,162 +516,15 @@ sub updateUser {
 
 }
 
-sub addUserPrivilege {
-# add the given privilege for the user
-    my $this = shift;
-    my ($user,$privilege) = @_;
-
-    return 0, "missing parameters" unless ($user && $privilege);
-
-    return 0, "invalid username provided" if ($user !~ /[\w\%\_]/); # if ($user =~ /\W/)
-
-    unless (&verifyPrivilege($privilege)) {
-        return 0, "Invalid privilege '$privilege' specified";
-    }
-
-# check if user privilege is already there
-
-    my $dbh = $this->getConnection();
-
-    my $currentprivilege = &fetchUserPrivileges($dbh,user=>$user);
-
-    if ($currentprivilege->{$privilege}) {   
-        return 0, "user '$user' already has privilege '$privilege'";   
-    }
-
-# test if the current user can do this operation
-
-    unless ($this->userCanGrantPrivilege()) {
-        return 0, "you do not have privilege for this operation";
-    }
-
-    unless ($this->testUserRole($user,privilege=>$privilege)) {
-        return 0, "you do not have privilege for this operation";
-    }
-
-# either update an existing empty privilege, or insert a new row
-
-    my ($query,$sth,$nrw);
-
-    if ($currentprivilege->{none}) {
-# there is 
-        $query = "update PRIVILEGE set privilege = ?"
-	       . " where privilege = '' and username in "
-               . "(select username from USER where username = ?)";
-        $sth = $dbh->prepare_cached($query);
-        $nrw = $sth->execute($privilege,$user) || &queryFailed($query,$privilege,$user);
-        $sth->finish();
-    }
-
-# insert a new row
-
-    else {
-        $query = "insert into PRIVILEGE (username,privilege) "
-               . "select username, '$privilege' as privilege "
-               . "  from USER where username = ?";
-        $sth = $dbh->prepare_cached($query);
-        $nrw = $sth->execute($user) || &queryFailed($query,$user);
-        $sth->finish();
-    }
-
-    return 1, "privilege '$privilege' added for user '$user'" if ($nrw+0);
-
-    return 0, "failed to add privilege '$privilege' for user '$user'";
-}
-
-sub removeUserPrivilege {
-# remove the given privilege for the user
-    my $this = shift;
-    my $user = shift;
-    my $privilege = shift;
-    my %options = @_;
-
-    return 0, "missing parameters" unless ($user && $privilege);
-
-    return 0, "invalid username provided" if ($user !~ /[\w\%\_]/);
-
-    unless ($privilege eq 'none' || &verifyPrivilege($privilege)) {
-        return 0, "Invalid privilege '$privilege' specified";
-    }
-
-# get current privileges; check if user has privilege
-
-    my $dbh = $this->getConnection();
-
-    my $currentprivilege = &fetchUserPrivileges($dbh,user=>$user);
-
-    unless ($currentprivilege->{$privilege}) {
-        return 0, "user '$user' does not exist" unless keys %$currentprivilege;
-        return 0, "user '$user' does not have privilege '$privilege'";
-    }
-
-# test if the current user can do this operation
-
-    unless ($this->userCanGrantPrivilege()) {
-        return 0, "you do not have privilege for this operation";
-    }
-
-    unless ($this->testUserRole($user,privilege=>$privilege,seniority=>1)) {
-        return 0, "you do not have privilege for this operation";
-    }
-
-# check number of privileges left; can user be removed?
-
-    my $remainder = scalar(keys %$currentprivilege) - 1;
-
-    my $query;
-    unless ($remainder && $options{force}) {
-# update the record in order to keep the user name in the PRIVILEGE list, as it
-# may occur elsewhere in the database; also no join with USER here required
-        $query = "update PRIVILEGE set privilege = null"
-               . " where username = ? and privilege = ?";
-    }
-
-    if ($remainder || $options{force}) {
-# the privilege can be removed (at least one record for user will remain)
-        $query = "delete from PRIVILEGE where username = ? and privilege = ?";
-        $privilege = '' if ($privilege eq 'none');
-    }
-
-    my $sth = $dbh->prepare_cached($query);
-    my $nrw = $sth->execute($user,$privilege) || &queryFailed($query,@_);
-    $sth->finish();
-
-    unless ($nrw+0) {
-        return 0, "failed to (force) remove user '$user'" unless $privilege;
-        return 0, "failed to remove user '$user'" if ($privilege eq 'none');
-        return 0, "failed to remove privilege '$privilege' for user '$user'";
-    }
-
-    return 1, "privilege '$privilege' removed for user '$user'" if $privilege;
-    return 1, "user '$user' removed" unless $privilege;
-}
 
 #---------------------------------------------------------------------------------
 
 sub deleteUser {
-# remove all privileges of user from USER table
+# update role to 'none' 
     my $this = shift;
     my $user = shift;
-    my %options = @_;
 
-# get list of privileges
-
-    my $dbh = $this->getConnection();
-
-    my $userprivileges = &fetchUserPrivileges($dbh,user=>$user);
-
-    return 0, "user '$user' does not exist" unless keys %$userprivileges;
-
-    my $f = $options{force};
-
-    my ($status,$msg);
-    foreach my $privilege (keys %$userprivileges) {
-       ($status,$msg) = $this->removeUserPrivilege($user,$privilege,force => $f);
-        last unless $status;
-    }
-
-    return $status,$msg;
+    return $this->updateUser($user,'none');
 }
 
 # testUserRole makes a decision about precedence of privilege when 
@@ -767,7 +642,9 @@ sub verifyUserRole {
                      'superuser'   => 5, 'assembler'     => 4,
                      'coordinator' => 2, 'none'          => 0); # space for more
 
-    return $userroles{lc($userrole)} if defined($userrole); # return seniority
+    if (defined($userrole)) { # return seniority
+        return $userroles{lc($userrole)} || 0;
+    }
 
     return \%userroles; # return hash reference
 }
