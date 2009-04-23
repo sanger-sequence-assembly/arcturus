@@ -25,6 +25,7 @@ my $srparents;
 my $mincid;
 my $maxcid;
 my $limit;
+my $force;
 
 my $cproject;
 my $pproject;
@@ -36,7 +37,7 @@ my $confirm;
 my $validKeys  = "help|organism|instance|username|password|contig|fofn|focn|"
                . "singlereadparents|srp|srplinked|srpunlinked|mincid|maxcid|"
                . "project|childproject|cp|parentproject|pp|library|assembly|"
-               . "offspring|limit|cleanup|parent|confirm|verbose";
+               . "offspring|limit|cleanup|parent|force|confirm|verbose";
 
 while (my $nextword = shift @ARGV) {
 
@@ -80,6 +81,8 @@ while (my $nextword = shift @ARGV) {
     $mincid       = shift @ARGV  if ($nextword eq '-mincid');
     $maxcid       = shift @ARGV  if ($nextword eq '-maxcid');
     $limit        = shift @ARGV  if ($nextword eq '-limit');
+
+    $force        = 1            if ($nextword eq '-force');
 
     $cproject     = shift @ARGV  if ($nextword eq '-project');
     $cproject     = shift @ARGV  if ($nextword eq '-childproject');
@@ -186,7 +189,8 @@ if ($srparents && $srparents > 0) {
     foreach my $contig (@$pids) {
         push @contigs, $contig;
     }
-#    $options{noparentcheck} = 1; # only for MyISAM tables
+    $options{treatassinglereadparent} = 1;
+    $options{forcedelete} = 1 if $force;
 }
 else {
 
