@@ -516,7 +516,7 @@ sub getSequence {
 
     return $this->{Sequence} unless (defined($ql) && defined($qr));
 
-    return &maskDNA($this->{Sequence},$ql,$qr,substr($symbol,0,1));
+    return &maskDNA($this->{Sequence},$ql-1,$qr+1,substr($symbol,0,1));
 }
 
 sub maskDNA {
