@@ -35,8 +35,8 @@ my $verbose;
 my $confirm;
 
 my $validKeys  = "help|organism|instance|username|password|contig|fofn|focn|"
-               . "singlereadparents|srp|srplinked|srpunlinked|mincid|maxcid|"
-               . "project|childproject|cp|parentproject|pp|library|assembly|"
+               . "singlereadparents|srp|srplinked|srpunlinked|srpunlinkedall|mincid|"
+               . "maxcid|project|childproject|cp|parentproject|pp|library|assembly|"
                . "offspring|limit|cleanup|parent|force|confirm|verbose";
 
 while (my $nextword = shift @ARGV) {
@@ -77,6 +77,7 @@ while (my $nextword = shift @ARGV) {
     $srparents    = 1            if ($nextword eq '-srp');         # all parents
     $srparents    = 2            if ($nextword eq '-srplinked');   # linked only
     $srparents    = 3            if ($nextword eq '-srpunlinked'); # unlinked only
+    $srparents    = 4            if ($nextword eq '-srpunlinkedall'); # allow s-r children
 
     $mincid       = shift @ARGV  if ($nextword eq '-mincid');
     $maxcid       = shift @ARGV  if ($nextword eq '-maxcid');
@@ -182,6 +183,7 @@ if ($srparents && $srparents > 0) {
     $getoptions{maxcid} = $maxcid if $maxcid;
     $getoptions{project} = $cpid if $cpid; # child's project
     $getoptions{parentproject} = $ppid if $ppid;
+
     my $pids = $adb->getSingleReadParentIDs(%getoptions);
 
     $logger->warning(scalar(@$pids)." single read parents found");
@@ -407,8 +409,9 @@ sub showUsage {
     print STDERR "-offspring\tremove descendants of the input contigs\n";
     print STDERR "\n";
     print STDERR "-srp\t\tdelete single-read parent contigs\n";
-    print STDERR "-srplinked\tsame, excluding parentss with missing links\n";
+    print STDERR "-srplinked\tsame, excluding parents with missing links\n";
     print STDERR "-srpunlinked\tsame, including parents with links\n";
+    print STDERR "-srpunlinkedall\tsame, include single-read children\n";
     print STDERR "-mincid\t\tminumum (child) contig ID\n";
     print STDERR "-maxcid\t\tmaxumum (child) contig ID\n";
     print STDERR "-childproject\tproject name or ID for child contigs\n";
