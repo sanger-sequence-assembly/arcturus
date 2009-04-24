@@ -1295,9 +1295,11 @@ sub putMappingsForContig {
     my $mapping;
     foreach $mapping (@$mappings) {
 
-# protect against empty mappings (unless invoked via method 'markAsVirtualParent')
+# optionally scan against empty mappings
 
-        next unless ($mapping->hasSegments() || $option{allowemptymapping});
+        unless ($mapping->hasSegments()) {
+	    next if $option{notallowemptymapping};
+	}
 
         my ($cstart, $cfinish) = $mapping->getContigRange();
 
@@ -1567,9 +1569,7 @@ sub markAsVirtualParent {
 
 # present for loading
 
-    my %options = (type=>'contig',allowemptymapping=>1);
-
-    return &putMappingsForContig($adb,$contig,$log,%options);
+    return &putMappingsForContig($adb,$contig,$log,type=>'contig');
 }
 
 #-----------------------------------------------------------------------------
@@ -1826,9 +1826,7 @@ sub repairContigToContigMappings {
 
     if ($nm && $options{confirm}) {
         $message .= "Insert contig-to-contig mappings for $contig_id ..";
-        my %insertoptions = (type=>'contig');
-        $insertoptions{allowemptymapping} = 1 if $options{allowemptymapping};
-        if (&putMappingsForContig($dbh,$contig,$log,%insertoptions)) {
+        if (&putMappingsForContig($dbh,$contig,$log,type=>'contig')) {
             $message .= ".. DONE\n";
 # update the age of the mapping, if > 0
             if ($age) {
@@ -1866,7 +1864,7 @@ sub getParentIDsForContig {
     &verifyParameter($contig,"getParentIDsForContig");
 
 #my $log = $this->verifyLogger('getParentIDsForContig');
-#$log->debug("searching parents from scratch using age tree");
+#$log->warning("searching parents from scratch using age tree: @_");
 
     return undef unless $contig->hasReads();
 
@@ -2353,7 +2351,8 @@ sub getSingleReadParentIDs {
 	                   . "project_id integer not null";
         my $create = "create temporary table absentparent "
                    . "($temporaryitems, key(contig_id)) as "
-                   . "select CONTIG.contig_id from CONTIG left join C2CMAPPING"
+                   . "select CONTIG.contig_id, CONTIG.project_id"
+                   . "  from CONTIG left join C2CMAPPING"
                    . "   on (CONTIG.contig_id = C2CMAPPING.parent_id)"
                    . " where CONTIG.nreads = 1 "
 		   . "   and C2CMAPPING.parent_id is null";
@@ -2361,6 +2360,7 @@ sub getSingleReadParentIDs {
         my $rw = $dbh->do($create) || &queryFailed($create);
 
 # now find those parent IDs which are linked to contigs via the MAPPING table
+        my $cmp = ($linktype > 2) ? '>=' : '>';
         my $query = "select distinct absentparent.contig_id "
                   . "  from absentparent,MAPPING as PMAP, SEQ2READ as PS2R,"
                   . "       SEQ2READ as CS2R,  MAPPING as CMAP, CONTIG"
@@ -2371,11 +2371,12 @@ sub getSingleReadParentIDs {
                   . "   and CMAP.contig_id = CONTIG.contig_id"
                   . "   and CONTIG.contig_id > absentparent.contig_id"
 #                  . "   and CONTIG.contig_id in (".join(',',@current).")"
-                  . "   and CONTIG.nreads > 1";
+                  . "   and CONTIG.nreads $cmp 1";
+
         if ($constraints) {
             $constraints =~ s/C2CMAPPING|CHILD/CONTIG/g;
             $constraints =~ s/PARENT/absentparent/g;
-            $query .= "  and $constraints";
+            $query .= " and $constraints";
         }
 
         $query .= " order by contig_id";
