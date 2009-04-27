@@ -27,22 +27,39 @@ public class SSHConnection {
 		String[] pkfiles = { "id_dsa", "id_rsa" };
 
 		File keyfile = null;
+		
+		String message = "Failed to get an SSH connection.\n";
 
 		for (int j = 0; j < sshdir.length; j++) {
 			for (int i = 0; i < pkfiles.length; i++) {
 				keyfile = new File(sshdir[j], pkfiles[i]);
+				
+				message += "Checking " + keyfile + " : ";
 
 				if (keyfile.exists()) {
-					if (conn.authenticateWithPublicKey(username, keyfile,
-							keyfilePass))
-						return conn;
-				} else
+					try {
+						if (conn.authenticateWithPublicKey(username, keyfile,
+								keyfilePass))
+							return conn;
+						else
+							message += "cannot authenticate with this key.\n";
+					}
+					catch (IOException ioe) {
+						message += "encountered an exception of type " + ioe.getClass().getName() +
+							" (" + ioe.getMessage() + ")\n";
+					}
+				} else {
+					message += "does not exist.\n";
 					keyfile = null;
+				}
 			}
 		}
 
 		conn.close();
+		
+		throw new IOException(message);
 
+		/*
 		if (keyfile == null)
 			throw new IOException(
 					"Could not find any key files to to authenticate an SSH connection.");
@@ -50,5 +67,6 @@ public class SSHConnection {
 			throw new IOException("Found a key file ("
 					+ keyfile.getAbsolutePath()
 					+ "), but failed to authenticate an SSH connection.");
+		*/
 	}
 }
