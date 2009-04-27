@@ -148,12 +148,16 @@ sub checkSlave {
 	}
 
 	my $lag = $row->{'Seconds_Behind_Master'};
-	if ($lag == 0) {
-	    print "\tSlave is in synch with master\n";
-	} else {
-	    print "\tSlave is $lag seconds behind master\n";
-	}
 
+	if (defined($lag)) {
+	    if ($lag == 0) {
+		print "\tSlave is in synch with master\n";
+	    } else {
+		print "\tSlave is $lag seconds behind master\n";
+	    }
+	} else {
+	    print "\t***** Unable to determine slave's time lag behind master *****\n";
+	}
 	print "\n";
     } else {
 	print "\t ***** Failed to get slave status from $name *****\n";
