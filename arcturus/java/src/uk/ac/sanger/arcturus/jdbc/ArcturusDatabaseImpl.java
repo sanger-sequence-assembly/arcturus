@@ -307,14 +307,14 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	}
 
 	public synchronized Clone getCloneByName(String name) throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getCloneByName(" + name + ")");
 
 		return cloneManager.getCloneByName(name);
 	}
 
 	public synchronized Clone getCloneByID(int id) throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getCloneByID(" + id + ")");
 
 		return cloneManager.getCloneByID(id);
@@ -322,14 +322,14 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Ligation getLigationByName(String name)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getLigationByName(" + name + ")");
 
 		return ligationManager.getLigationByName(name);
 	}
 
 	public synchronized Ligation getLigationByID(int id) throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getLigationByID(" + id + ")");
 
 		return ligationManager.getLigationByID(id);
@@ -337,7 +337,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Template getTemplateByName(String name)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getTemplateByName(" + name + ")");
 
 		return templateManager.getTemplateByName(name);
@@ -345,14 +345,14 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Template getTemplateByName(String name, boolean autoload)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getTemplateByName(" + name + ", " + autoload + ")");
 
 		return templateManager.getTemplateByName(name, autoload);
 	}
 
 	public synchronized Template getTemplateByID(int id) throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getTemplateByID(" + id + ")");
 
 		return templateManager.getTemplateByID(id);
@@ -360,7 +360,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Template getTemplateByID(int id, boolean autoload)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getTemplateByID(" + id + ", " + autoload + ")");
 
 		return templateManager.getTemplateByID(id, autoload);
@@ -376,7 +376,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	}
 
 	public synchronized Read getReadByName(String name) throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getReadByName(" + name + ")");
 
 		return readManager.getReadByName(name);
@@ -384,14 +384,14 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Read getReadByName(String name, boolean autoload)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getReadByName(" + name + ", " + autoload + ")");
 
 		return readManager.getReadByName(name, autoload);
 	}
 
 	public synchronized Read getReadByID(int id) throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getReadByID(" + id + ")");
 
 		return readManager.getReadByID(id);
@@ -399,7 +399,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Read getReadByID(int id, boolean autoload)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getReadByID(" + id + ", " + autoload + ")");
 
 		return readManager.getReadByID(id, autoload);
@@ -407,7 +407,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized int loadReadsByTemplate(int template_id)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("loadReadsByTemplate(" + template_id + ")");
 
 		return readManager.loadReadsByTemplate(template_id);
@@ -430,7 +430,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Sequence getSequenceByReadID(int readid)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getSequenceByReadID(" + readid + ")");
 
 		return sequenceManager.getSequenceByReadID(readid);
@@ -438,7 +438,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Sequence getSequenceByReadID(int readid,
 			boolean autoload) throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger
 					.info("getSequenceByReadID(" + readid + ", " + autoload
 							+ ")");
@@ -448,7 +448,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Sequence getFullSequenceByReadID(int readid)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getFullSequenceByReadID(" + readid + ")");
 
 		return sequenceManager.getFullSequenceByReadID(readid);
@@ -456,7 +456,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Sequence getFullSequenceByReadID(int readid,
 			boolean autoload) throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getFullSequenceByReadID(" + readid + ", " + autoload
 					+ ")");
 
@@ -465,7 +465,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Sequence getSequenceBySequenceID(int seqid)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getSequenceBySequenceID(" + seqid + ")");
 
 		return sequenceManager.getSequenceBySequenceID(seqid);
@@ -473,7 +473,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Sequence getSequenceBySequenceID(int seqid,
 			boolean autoload) throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getSequenceBySequenceID(" + seqid + ", " + autoload
 					+ ")");
 
@@ -482,7 +482,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Sequence getFullSequenceBySequenceID(int seqid)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getFullSequenceBySequenceID(" + seqid + ")");
 
 		return sequenceManager.getFullSequenceBySequenceID(seqid);
@@ -490,7 +490,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Sequence getFullSequenceBySequenceID(int seqid,
 			boolean autoload) throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getFullSequenceBySequenceID(" + seqid + ", "
 					+ autoload + ")");
 
@@ -499,7 +499,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized void getDNAAndQualityForSequence(Sequence sequence)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getDNAAndQualityForSequence(seqid=" + sequence.getID()
 					+ ")");
 
@@ -582,7 +582,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized int countContigsByProject(int project_id, int minlen)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("countContigsByProject(" + project_id + ", " + minlen
 					+ ")");
 
@@ -597,7 +597,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	public synchronized int processContigsByProject(int project_id,
 			int options, int minlen, ContigProcessor processor)
 			throws SQLException, DataFormatException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("processContigsByProject(" + project_id + ", options="
 					+ options + ", minlen=" + minlen + ")");
 
@@ -613,7 +613,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Set<Contig> getContigsByProject(int project_id,
 			int options, int minlen) throws SQLException, DataFormatException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getContigsByProject(" + project_id + ", options="
 					+ options + ", minlen=" + minlen + ")");
 
@@ -644,7 +644,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	}
 
 	public synchronized Project getProjectByID(int id) throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getProjectByID(" + id + ")");
 
 		return projectManager.getProjectByID(id);
@@ -652,7 +652,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Project getProjectByID(int id, boolean autoload)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger
 					.info("getProjectByID(" + id + ", autoload=" + autoload
 							+ ")");
@@ -662,7 +662,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Project getProjectByName(Assembly assembly, String name)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getProjectByName(assembly=" + assembly.getName()
 					+ ", name=" + name + ")");
 
@@ -670,7 +670,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	}
 
 	public synchronized Set<Project> getAllProjects() throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getAllProjects");
 
 		return projectManager.getAllProjects();
@@ -683,14 +683,14 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized void refreshProject(Project project)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("refreshProject(" + project + ")");
 
 		projectManager.refreshProject(project);
 	}
 
 	public synchronized void refreshAllProject() throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("refreshAllProjects");
 
 		projectManager.refreshAllProjects();
@@ -698,7 +698,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized void setAssemblyForProject(Project project,
 			Assembly assembly) throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("setAssemblyForProject(" + project + ", " + assembly
 					+ ")");
 
@@ -836,7 +836,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	}
 
 	public synchronized Assembly getAssemblyByID(int id) throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getAssemblyByID(" + id + ")");
 
 		return assemblyManager.getAssemblyByID(id);
@@ -844,7 +844,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Assembly getAssemblyByID(int id, boolean autoload)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getAssemblyByID(" + id + ", autoload=" + autoload
 					+ ")");
 
@@ -853,14 +853,14 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized Assembly getAssemblyByName(String name)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getAssemblyByName(" + name + ")");
 
 		return assemblyManager.getAssemblyByName(name);
 	}
 
 	public synchronized Assembly[] getAllAssemblies() throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getAllAssemblies");
 
 		return assemblyManager.getAllAssemblies();
@@ -868,14 +868,14 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized void refreshAssembly(Assembly assembly)
 			throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("refreshAssembly(" + assembly + ")");
 
 		assemblyManager.refreshAssembly(assembly);
 	}
 
 	public synchronized void refreshAllAssemblies() throws SQLException {
-		if (logger != null && logger.isLoggable(Level.INFO))
+		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("refreshAllAssemblies");
 
 		assemblyManager.refreshAllAssemblies();
