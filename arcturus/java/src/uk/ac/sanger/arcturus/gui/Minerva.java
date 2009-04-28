@@ -112,18 +112,14 @@ public class Minerva {
 
 			splash.setVisible(false);
 			splash.dispose();
-		} catch (NamingException ne) {
+		} catch (Exception e) {
 			splash.setVisible(false);
 			splash.dispose();
 			
-			Arcturus.logInfo(ne);
-			System.exit(1);
-		}
-		catch (Exception e) {
-			splash.setVisible(false);
-			splash.dispose();
-			
-			Arcturus.logWarning(e);
+			if (e instanceof NamingException)
+				Arcturus.logInfo(e);
+			else
+				Arcturus.logWarning(e);
 			System.exit(1);
 		}
 	}
