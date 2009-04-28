@@ -242,7 +242,7 @@ public class Arcturus {
 		else
 			warner = new MessageDialogHandler();
 
-		warner.setLevel(Level.WARNING);
+		warner.setLevel(Level.INFO);
 
 		logger.addHandler(warner);
 
@@ -299,6 +299,10 @@ public class Arcturus {
 
 	public static void logInfo(String message) {
 		logger.log(Level.INFO, message);
+	}
+
+	public static void logInfo(Throwable throwable) {
+		logger.log(Level.INFO, throwable.getMessage(), throwable);
 	}
 
 	public static void logInfo(String message, Throwable throwable) {
