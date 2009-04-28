@@ -87,6 +87,9 @@ public class Minerva {
 			System.exit(1);
 		}
 
+		SplashWindow splash = new SplashWindow();
+		splash.showCentred();
+
 		try {
 			String[] inames = instances.split(",");
 
@@ -95,14 +98,9 @@ public class Minerva {
 			for (int i = 0; i < inames.length; i++)
 				ai[i] = ArcturusInstance.getInstance(inames[i]);
 
-			SplashWindow splash = null;
-
 			String caption = (organism == null) ? instances : organism;
 
 			MinervaFrame frame = createMinervaFrame(caption);
-
-			splash = new SplashWindow(frame);
-			splash.showCentred();
 
 			JComponent component = (organism == null) ? createInstanceDisplay(ai)
 					: createOrganismDisplay(organism);
@@ -114,7 +112,11 @@ public class Minerva {
 
 			splash.setVisible(false);
 			splash.dispose();
-		} catch (Exception e) {
+		} catch (NamingException ne) {
+			Arcturus.logInfo(ne);
+			System.exit(1);
+		}
+		catch (Exception e) {
 			Arcturus.logWarning(e);
 			System.exit(1);
 		}
@@ -240,8 +242,8 @@ public class Minerva {
 	class SplashWindow extends JWindow {
 		private JLabel imageLabel;
 
-		public SplashWindow(Frame frame) {
-			super(frame);
+		public SplashWindow() {
+			super((Frame)null);
 
 			setName("SplashWindow");
 
