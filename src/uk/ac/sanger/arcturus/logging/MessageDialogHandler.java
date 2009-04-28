@@ -32,7 +32,8 @@ public class MessageDialogHandler extends Handler {
 			if (throwable instanceof javax.naming.ServiceUnavailableException ||
 					throwable instanceof javax.naming.CommunicationException) {
 				message = "Minerva cannot connect to the LDAP server.\n" +
-				"Please try again later.";
+				"Please try again later.\n" +
+				"If the problem persists, please submit a helpdesk ticket.";
 			} else {
 				StringBuffer sb = new StringBuffer();
 
