@@ -254,7 +254,7 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 		final String message;
 		
 		Read read = event.getRead();
-		String readname = (read == null) ? null : read.getName();
+		String readname = (read == null) ? event.getPattern() : read.getName();
 		
 		switch (event.getStatus()) {
 			case ReadFinderEvent.START:
