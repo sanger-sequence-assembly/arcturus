@@ -75,7 +75,7 @@ public class ReadFinder {
 
 		if (listener != null) {
 			event.setPattern(readname);
-			event.setStatus(ReadFinderEvent.START);
+			event.setReadAndStatus(null, ReadFinderEvent.START);
 			listener.readFinderUpdate(event);
 		}
 		
@@ -137,10 +137,6 @@ public class ReadFinder {
 		
 		if (nreads == 0 && listener != null) {
 			event.setStatus(ReadFinderEvent.READ_DOES_NOT_EXIST);
-			listener.readFinderUpdate(event);
-			
-			event.setPattern(readname);
-			event.setStatus(ReadFinderEvent.START);
 			listener.readFinderUpdate(event);
 		}
 	}
