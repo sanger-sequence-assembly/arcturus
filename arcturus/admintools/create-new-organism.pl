@@ -353,58 +353,6 @@ unless ($skipdbsteps) {
     
     print STDERR "OK\n\n";
     
-    print STDERR "### Populating the PRIVILEGE table ...\n";
-    
-    my %privileges = ('finisher' => ['create_project', 'lock_project', 'move_any_contig'],
-		      'team leader' => ['assign_project', 'grant_privileges', 'create_project', 'lock_project', 'move_any_contig'],
-		      'administrator' => ['assign_project', 'grant_privileges', 'create_project', 'lock_project', 'move_any_contig']
-		      );
-    
-    $query = "select username,role from USER";
-    
-    $sth = $dbh->prepare($query);
-    &db_die("Failed to prepare query \"$query\"");
-    
-    $sth->execute();
-    &db_die("Failed to execute query \"$query\"");
-    
-    my %roles;
-    
-    while (my ($user,$role) = $sth->fetchrow_array()) {
-	$roles{$user} = $role;
-    }
-    
-    $sth->finish();
-    
-    $query = "insert into PRIVILEGE(username,privilege) values (?,?)";
-    
-    $sth = $dbh->prepare($query);
-    &db_die("Failed to prepare query \"$query\"");
-
-    foreach my $user (sort keys %roles) {
-	my $role = $roles{$user};
-	
-	printf STDERR "\t%-8s %-20s\t", $user, $role;
-	
-	my $privs = $privileges{$role};
-	
-	if (defined($privs)) {
-	    foreach my $priv (@{$privs}) {
-		$sth->execute($user, $priv);
-		&db_die("Failed to execute query \"$query\" with user=$user, privilege=$priv");
-		print STDERR " $priv";
-	    }
-	} else {
-	    print STDERR " *** NO PRIVILEGES DEFINED ***";
-	}
-	
-	print STDERR "\n";
-    }
-    
-    $sth->finish();
-    
-    print STDERR "\nOK\n\n";
-    
     $dbh->disconnect();
 }
 
