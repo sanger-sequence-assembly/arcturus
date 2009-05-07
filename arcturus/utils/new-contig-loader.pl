@@ -1526,9 +1526,13 @@ sub sendMessage {
     my ($user,$message) = @_;
 
     print STDOUT "message to be emailed to user $user:\n$message\n\n";
-    my $helpdesk = "'arcturus-help'";
-    $user="$helpdesk+$user";
-$user="$helpdesk+ejz"; # temporary redirect
+
+#    This does not work the way Ed thinks it does, because arcturus-help is
+#    a key in the mail.aliases NIS map and the +suffix trick cannot be used.
+#
+#    my $helpdesk = "'arcturus-help'";
+#    $user="$helpdesk+$user";
+#    $user="$helpdesk+ejz"; # temporary redirect
 
     my $mail = new Mail::Send;
     $mail->to($user);
