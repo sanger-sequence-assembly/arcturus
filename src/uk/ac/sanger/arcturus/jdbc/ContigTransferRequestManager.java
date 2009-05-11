@@ -61,6 +61,8 @@ public class ContigTransferRequestManager {
 		conn = adb.getConnection();
 
 		prepareStatements();
+		
+		debugging = Boolean.getBoolean("debugging");
 	}
 
 	protected void prepareStatements() throws SQLException {
@@ -460,7 +462,7 @@ public class ContigTransferRequestManager {
 
 		if (user.equals(dstOwner) && !requester.equals(dstOwner))
 			return true;
-
+		
 		return adb.hasFullPrivileges(user);
 	}
 	
@@ -505,6 +507,9 @@ public class ContigTransferRequestManager {
 			
 			if (userOwnsSrcProject && userOwnsDstProject)
 				return true;
+			
+			if (srcProjectIsUnowned && dstProjectIsUnowned)
+				return true;
 		}
 		
 		// If the source and destination projects have owners, then the owner
@@ -516,8 +521,14 @@ public class ContigTransferRequestManager {
 			
 			if (requesterOwnsDstProject && userOwnsSrcProject)
 				return true;
-		}
-
+		}	
+		
+		if (userOwnsSrcProject && dstProjectIsUnowned)
+			return true;
+		
+		if (userOwnsDstProject && srcProjectIsUnowned)
+			return true;
+		
 		// A project manager, coordinator or administrator can approve any request.
 		return adb.hasFullPrivileges(user);
 	}
