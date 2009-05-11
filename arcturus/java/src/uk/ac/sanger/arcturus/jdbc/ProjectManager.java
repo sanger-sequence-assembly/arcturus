@@ -256,6 +256,8 @@ public class ProjectManager extends AbstractManager {
 				project.setLockOwner(lockowner);
 				project.setCreated(created);
 				project.setCreator(creator);
+				project.setDirectory(directory);
+				project.setStatus(status);
 			}
 		}
 
