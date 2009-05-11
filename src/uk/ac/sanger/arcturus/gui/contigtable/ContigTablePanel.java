@@ -34,7 +34,7 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 	protected MinervaAbstractAction actionViewContigs;
 	protected MinervaAbstractAction actionScaffoldContig;
 	
-	protected JMenu xferMenu = null;
+	protected JMenu xferMenu = new JMenu("Transfer selected contigs to");
 	
 	protected JPopupMenu contigPopupMenu = new JPopupMenu();
 	
@@ -95,6 +95,8 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 			cbGroupByProject.setEnabled(false);
 
 		updateActions();
+
+		adb.addProjectChangeEventListener(this);
 	}
 
 	protected void createActions() {
@@ -213,10 +215,31 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 		
 		contigMenu.add(actionScaffoldContig);
 
+		contigMenu.addSeparator();
+
+		contigMenu.add(xferMenu);
+		
+		refreshContigTransferMenu();
+		
+		contigPopupMenu.add(actionViewContigs);
+
+		contigPopupMenu.addSeparator();
+
+		contigPopupMenu.add(actionExportAsCAF);
+
+		contigPopupMenu.add(actionExportAsFasta);
+		
+		contigPopupMenu.addSeparator();
+		
+		contigPopupMenu.add(actionScaffoldContig);
+	}
+	
+	protected void refreshContigTransferMenu() {
+		xferMenu.removeAll();
+		
 		Person me = adb.findMe();
 
 		Set mypset = null;
-
 		try {
 			if (adb.isCoordinator())
 				mypset = adb.getAllProjects();
@@ -227,11 +250,6 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 		}
 
 		if (mypset != null && !mypset.isEmpty()) {
-			contigMenu.addSeparator();
-
-			xferMenu = new JMenu("Transfer selected contigs to");
-
-			contigMenu.add(xferMenu);
 			
 			Project[] myProjects = (Project[]) mypset.toArray(new Project[0]);
 
@@ -262,18 +280,7 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 		        xferMenu.getPopupMenu().setLayout(menuGrid); 
 			}
 		}
-		
-		contigPopupMenu.add(actionViewContigs);
 
-		contigPopupMenu.addSeparator();
-
-		contigPopupMenu.add(actionExportAsCAF);
-
-		contigPopupMenu.add(actionExportAsFasta);
-		
-		contigPopupMenu.addSeparator();
-		
-		contigPopupMenu.add(actionScaffoldContig);
 	}
 
 	class ProjectComparator implements Comparator {
@@ -330,6 +337,7 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 
 	public void refresh() {
 		table.refresh();
+		refreshContigTransferMenu();
 	}
 
 	protected boolean isRefreshable() {
