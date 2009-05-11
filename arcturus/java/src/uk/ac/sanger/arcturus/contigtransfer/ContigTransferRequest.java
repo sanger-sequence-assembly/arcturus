@@ -310,8 +310,12 @@ public class ContigTransferRequest {
 	}
 	
 	public String toString() {
+		String oldOwner = oldProject.getOwner() == null ? "" : "(" + oldProject.getOwner().getName() + ")";
+		String newOwner = newProject.getOwner() == null ? "" : "(" + newProject.getOwner().getName() + ")";
+		
 		return "ContigTransferRequest[id=" + request_id + ", contig_id=" + contig.getID() +
-			", old_project=" + oldProject.getName() + ", new_project=" + newProject.getName() +
+			", old_project=" + oldProject.getName() + oldOwner +
+			", new_project=" + newProject.getName() + newOwner +
 			", requester=" + requester.getName() + ", opened=" + openedDate + "]";
 	}
 }
