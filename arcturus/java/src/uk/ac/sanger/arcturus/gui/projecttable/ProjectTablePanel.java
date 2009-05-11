@@ -21,6 +21,7 @@ import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.people.*;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEventListener;
+import uk.ac.sanger.arcturus.projectchange.ProjectChangeEventNotifier;
 
 import com.mysql.jdbc.MysqlErrorNumbers;
 
@@ -514,6 +515,9 @@ public class ProjectTablePanel extends MinervaPanel implements
 							message,
 							"The project was created",
 							JOptionPane.INFORMATION_MESSAGE);
+					
+					ProjectChangeEvent event = new ProjectChangeEvent(this, ProjectChangeEventNotifier.ANY_PROJECT, ProjectChangeEvent.CREATED);
+					adb.notifyProjectChangeEventListeners(event, null);
 				}
 			} catch (SQLException e) {
 				if (e.getErrorCode() == MysqlErrorNumbers.ER_DUP_ENTRY)

@@ -173,7 +173,11 @@ public class CreateContigTransferPanel extends MinervaPanel {
 	}
 
 	public void refresh() {
-		// Does nothing
+		plm.refresh();
+	}
+
+	protected boolean isRefreshable() {
+		return true;
 	}
 
 	protected void closePanel() {
@@ -376,10 +380,6 @@ public class CreateContigTransferPanel extends MinervaPanel {
 			return project.getName()
 					.compareToIgnoreCase(that.project.getName());
 		}
-	}
-
-	protected boolean isRefreshable() {
-		return false;
 	}
 
 	protected void doPrint() {
