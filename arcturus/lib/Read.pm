@@ -1050,8 +1050,12 @@ sub qualityClip {
     elsif ($clipmethod eq 'someothermethodtobedeveloped') {
         return 0; # method to be defined 
     }
-    elsif(defined($clipmethod)) {
+    elsif($clipmethod) { # clip method not 0
         return 0; # invalid method 
+    }
+    else { # clip method set to 0: use clip values as is
+        $QL = $this->getLowQualityLeft();
+        $QR = $this->getLowQualityRight();
     }
 
 # optionally screen for vector sequence
