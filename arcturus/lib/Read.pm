@@ -1035,7 +1035,8 @@ sub qualityClip {
 #          threshold level (default 15)
 #          minimum range (default 32)
 
-    my $clipmethod =  $options{clipmethod} || 'phredclip';
+    my $clipmethod =  $options{clipmethod};
+    $clipmethod = 'phredclip' unless defined($clipmethod);
 
     my ($QL,$QR);
 
@@ -1049,7 +1050,7 @@ sub qualityClip {
     elsif ($clipmethod eq 'someothermethodtobedeveloped') {
         return 0; # method to be defined 
     }
-    else {
+    elsif(defined($clipmethod)) {
         return 0; # invalid method 
     }
 
