@@ -13,6 +13,7 @@ use DataSource;
 
 my $instance;
 my $organism;
+my $repository;
 my $subdir;
 
 my $dbnode;
@@ -27,7 +28,6 @@ my $description;
 my $template;
 
 my $projects;
-my $directory;
 
 my $nocreatedatabase = 0;
 my $skipdbsteps = 0;
@@ -35,6 +35,8 @@ my $skipdbsteps = 0;
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
+
+    $repository = shift @ARGV if ($nextword eq '-repository');
 
     $dbnode = shift @ARGV if ($nextword eq '-node');
 
@@ -52,8 +54,6 @@ while (my $nextword = shift @ARGV) {
 
     $projects = shift @ARGV if ($nextword eq '-projects');
 
-    $directory = shift @ARGV if ($nextword eq '-directory');
-
     $nocreatedatabase = 1 if ($nextword eq '-nocreatedatabase');
     $skipdbsteps = 1 if ($nextword eq '-skipdbsteps');
 
@@ -69,7 +69,7 @@ $rootdn   = $ENV{'ARCTURUS_LDAP_ROOT_DN'} unless defined($rootdn);
 
 unless (defined($instance) && defined($organism) && defined($dbnode)
 	&& defined($description) && defined($ldapurl)
-	&& defined($ldapuser) && defined($rootdn) && defined($subdir)) {
+	&& defined($ldapuser) && defined($rootdn) && defined($subdir) && defined($repository)) {
     &showUsage("One or more mandatory parameters are missing");
     exit(1);
 }
@@ -294,15 +294,15 @@ unless ($skipdbsteps) {
     
     print STDERR "### Creating BIN and PROBLEMS projects ... ";
     
-    $query = "insert into PROJECT(assembly_id,name,creator,created) values(?,?,?,NOW())";
+    $query = "insert into PROJECT(assembly_id,name,creator,created,directory) values(?,?,?,NOW(),?)";
     
     $sth = $dbh->prepare($query);
     &db_die("Failed to prepare query \"$query\"");
     
-    $sth->execute($assembly_id, 'BIN', $me);
+    $sth->execute($assembly_id, 'BIN', $me, $repository . "/split/BIN");
     &db_die("Failed to execute query \"$query\" for BIN");
     
-    $sth->execute($assembly_id, 'PROBLEMS', $me);
+    $sth->execute($assembly_id, 'PROBLEMS', $me, undef);
     &db_die("Failed to execute query \"$query\" for PROBLEMS");
     
     print STDERR "OK\n\n";
@@ -311,7 +311,7 @@ unless ($skipdbsteps) {
 	print STDERR "### Creating user-specified projects ...\n";
 	
 	foreach my $project (split(/,/, $projects)) {
-	    $sth->execute($assembly_id, $project, $me);
+	    $sth->execute($assembly_id, $project, $me, $repository . "/split/" . $project);
 	    &db_die("Failed to execute query \"$query\" for $project");
 	    print STDERR "\t$project\n";
 	}
@@ -320,21 +320,7 @@ unless ($skipdbsteps) {
     }
     
     $sth->finish();
-    
-    if (defined($directory)) {
-	print STDERR "### Setting the directory for the projects ... ";
-	
-	$query = "update PROJECT set directory = concat('" . $directory . "/', name) where name != 'PROBLEMS'";
-	
-	$sth = $dbh->prepare($query);
-	&db_die("Failed to prepare query \"$query\"");
-	
-	$sth->execute();
-	&db_die("Failed to execute query \"$query\"");
-	
-	print STDERR "OK\n\n";
-    }
-    
+        
     print STDERR "### Populating the USER table ... ";
     
     $query = "insert into USER(username,role) values(?,?)";
@@ -601,6 +587,8 @@ sub showUsage {
     print STDERR "    -instance\t\tName of instance\n";
     print STDERR "    -organism\t\tName of organism\n";
     print STDERR "\n";
+    print STDERR "    -repository\t\tRepository directory location\n";
+    print STDERR "\n";
     print STDERR "    -node\t\tArcturus MySQL instance name (arcp, hlmp, ...)\n";
     print STDERR "\n";
     print STDERR "    -ldapurl\t\tLDAP URL [Or set ARCTURUS_LDAP_URL]\n";
@@ -617,7 +605,6 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -db\t\t\tMySQL database to create (default: organism name)\n";
     print STDERR "    -projects\t\tProjects to add to the database\n";
-    print STDERR "    -directory\t\tBase directory for projects\n";
     print STDERR "    -nocreatedatabase\tDatabase already exists, do not create it\n";
     print STDERR "    -skipdbsteps\tSkip the MySQL steps\n";
 }
