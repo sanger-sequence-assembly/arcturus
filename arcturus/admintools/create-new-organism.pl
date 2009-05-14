@@ -29,6 +29,8 @@ my $template;
 
 my $projects;
 
+my $appendtofile;
+
 my $nocreatedatabase = 0;
 my $skipdbsteps = 0;
 
@@ -53,6 +55,8 @@ while (my $nextword = shift @ARGV) {
     $description = shift @ARGV if ($nextword eq '-description');
 
     $projects = shift @ARGV if ($nextword eq '-projects');
+
+    $appendtofile = shift @ARGV if ($nextword eq '-appendtofile');
 
     $nocreatedatabase = 1 if ($nextword eq '-nocreatedatabase');
     $skipdbsteps = 1 if ($nextword eq '-skipdbsteps');
@@ -392,6 +396,20 @@ if ($result->code) {
 
 $mesg = $ldap->unbind;
 
+if (defined($appendtofile)) {
+    print STDERR "### Appending organism name to $appendtofile ...";
+
+    eval {
+	open(FILE, ">>$appendtofile");
+	print FILE $organism,"\n";
+	close(FILE);
+	print STDERR " OK\n";
+    };
+    if ($@) {
+	print STDERR " failed : $@\n";
+    }
+}
+
 print STDERR "\nTHE SCRIPT HAS COMPLETED\n";
 
 exit(0);
@@ -607,4 +625,5 @@ sub showUsage {
     print STDERR "    -projects\t\tProjects to add to the database\n";
     print STDERR "    -nocreatedatabase\tDatabase already exists, do not create it\n";
     print STDERR "    -skipdbsteps\tSkip the MySQL steps\n";
+    print STDERR "    -appendtofile\tAppend the organism name to this file\n";
 }

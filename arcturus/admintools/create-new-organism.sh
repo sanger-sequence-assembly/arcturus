@@ -1,8 +1,11 @@
 #!/bin/bash
 
+### These settings are Sanger-specific
 LDAP_URL="ldap://ldap.internal.sanger.ac.uk/"
 LDAP_ROOT_DN="cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk"
 LDAP_USER="uid=${USER},ou=people,dc=sanger,dc=ac,dc=uk"
+ACTIVE_ORGANISMS_LIST=~arcturus/active-organisms.list
+### End of Sanger-specific settings
 
 SCRIPT_HOME=`dirname $0`
 
@@ -72,4 +75,5 @@ ${SCRIPT_HOME}/create-new-organism.pl \
     -ldapuser ${LDAP_USER} \
     -subdir $subdir \
     -description "$description" \
-    -repository $reposdir
+    -repository $reposdir \
+    -appendtofile $ACTIVE_ORGANISMS_LIST
