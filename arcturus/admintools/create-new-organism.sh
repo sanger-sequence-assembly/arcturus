@@ -46,6 +46,10 @@ read subdir
 echo -n "Enter description (e.g. Clostridium difficile strain CDSM) > "
 read description
 
+echo "Enter the names of projects to be created, as a comma-separated"
+echo -n "list e.g. PROJ1,PROJ2,PROJ3 (BIN will be created anyway) > "
+read projects
+
 echo "----- Summary of input -----------------------------------"
 echo "Arcturus instance     $instance"
 echo "Organism name         $organism"
@@ -54,6 +58,13 @@ echo "MySQL instance        $node"
 echo "Template database     $template"
 echo "LDAP sub-directory    $subdir"
 echo "Description           $description"
+
+if [ "x$projects" != "x" ]
+then
+    echo "Projects              $projects"
+    projects="-projects $projects"
+fi
+
 echo "----------------------------------------------------------"
 
 echo -n "Is this correct? [yes/no] > "
@@ -76,4 +87,5 @@ ${SCRIPT_HOME}/create-new-organism.pl \
     -subdir $subdir \
     -description "$description" \
     -repository $reposdir \
-    -appendtofile $ACTIVE_ORGANISMS_LIST
+    -appendtofile $ACTIVE_ORGANISMS_LIST \
+    $projects
