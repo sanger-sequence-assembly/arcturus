@@ -130,7 +130,7 @@ public class ContigTable extends SortableTable {
 		int pads = 0;
 		
 		for (int i = 0; i < input.length; i++)
-			if (input[i] == '*')
+			if (input[i] == '*' || input[i] == '-')
 				pads++;
 		
 		if (pads == 0)
@@ -141,7 +141,7 @@ public class ContigTable extends SortableTable {
 		int j = 0;
 		
 		for (int i = 0; i < input.length; i++)
-			if (input[i] != '*')
+			if (input[i] != '*' && input[i] != '-')
 				output[j++] = input[i];
 		
 		return output;
