@@ -11,6 +11,13 @@ use DataSource;
 use Compress::Zlib;
 use FileHandle;
 
+use constant NONE => 0;
+use constant DEPAD => 1;
+use constant PAD_IS_STAR => 2;
+use constant PAD_IS_DASH => 3;
+use constant PAD_IS_N => 4;
+use constant PAD_IS_X => 5;
+
 my $verbose = 0;
 my @dblist = ();
 
@@ -20,10 +27,7 @@ my $minlen;
 my $verbose;
 my $fastafile;
 my $destdir;
-my $padton;
-my $padtox;
-my $padtodash;
-my $depad;
+my $paddingmode = NONE;
 my $fastafh;
 my $contigids;
 my $allcontigs = 0;
@@ -61,11 +65,12 @@ while (my $nextword = shift @ARGV) {
 
     $ends = shift @ARGV if ($nextword eq '-ends');
 
-    $padton = 1 if ($nextword eq '-padton');
-    $padtox = 1 if ($nextword eq '-padtox');
-    $padtodash = 1 if ($nextword eq '-padtodash');
+    $paddingmode = PAD_IS_N    if ($nextword eq '-padton');
+    $paddingmode = PAD_IS_X    if ($nextword eq '-padtox');
+    $paddingmode = PAD_IS_DASH if ($nextword eq '-padtodash');
+    $paddingmode = PAD_IS_STAR if ($nextword eq '-padtostar');
 
-    $depad = 1 if ($nextword eq '-depad');
+    $paddingmode = DEPAD       if ($nextword eq '-depad');
 
     $padmapfile = shift @ARGV if ($nextword eq '-padmap');
 
@@ -86,19 +91,6 @@ unless (defined($organism) &&
     &showUsage();
     exit(1);
 }
-
-$depad = 0 unless defined($depad);
-
-$padton = 0 unless defined($padton);
-$padton = 0 if $depad;
-
-$padtox = 0 unless defined($padtox);
-$padtox = 0 if $depad;
-
-$padtodash = 1 if defined($ascaf);
-
-$padtodash = 0 unless defined($padtodash);
-$padtodash = 0 if $depad;
 
 my $ds = new DataSource(-instance => $instance, -organism => $organism);
 
@@ -232,21 +224,24 @@ while(my @ary = $sth->fetchrow_array()) {
 	print $padfh "\n";
     }
 
-    if ($depad) {
+    if ($paddingmode == DEPAD) {
 	# Depad
 	$sequence =~ s/[NnXx\*\-]//g;
-    } elsif ($padton) {
+    } elsif ($paddingmode == PAD_IS_N) {
 	# Convert pads to N ...
 	$sequence =~ s/[\*\-]/N/g;
-    } elsif ($padtox) {
+    } elsif ($paddingmode == PAD_IS_X) {
 	# Convert pads to X ...
 	$sequence =~ s/[\*\-]/X/g;
-    } elsif ($padtodash) {
+    } elsif ($paddingmode == PAD_IS_DASH) {
 	# Convert pads to dash
 	$sequence =~ s/\*/\-/g;
+    } elsif ($paddingmode == PAD_IS_STAR) {
+	# Convert pads to star
+	$sequence =~ s/\-/\*/g;
     }
 
-    next if ($depad && defined($minlen) && length($sequence) < $minlen);
+    next if ($paddingmode == DEPAD && defined($minlen) && length($sequence) < $minlen);
 
     if ($ends && length($sequence) > 2 * $ends) {
 	my $leftend = substr($sequence, 0, $ends);
@@ -424,9 +419,11 @@ sub showUsage {
     print STDERR "PADDING OPTIONS:\n";
     print STDERR "    -depad\t\tRemove pad characters from sequence\n";
     print STDERR "    -padmap\t\tName of file for depadded-to-padded coordinate mapping\n";
+    print STDERR "\n";
     print STDERR "    -padton\t\tConvert pads to N\n";
     print STDERR "    -padtox\t\tConvert pads to X\n";
     print STDERR "    -padtodash\t\tConvert pads to dashes\n";
+    print STDERR "    -padtostar\t\tConvert pads to stars\n";
 }
 
 sub getProjectIDs {
