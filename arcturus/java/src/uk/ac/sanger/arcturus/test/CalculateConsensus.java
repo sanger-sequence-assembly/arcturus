@@ -170,21 +170,13 @@ public class CalculateConsensus {
 
 			Statement stmt = conn.createStatement();
 
-			String query = "set session max_allowed_packet = "
-					+ MAX_ALLOWED_PACKET;
-
-			try {
-				stmt.executeUpdate(query);
-			} catch (SQLException sqle) {
-				Arcturus.logWarning("Failed to increase max_allowed_packet to "
-						+ MAX_ALLOWED_PACKET, sqle);
-			}
-
-			stmtStoreConsensus = conn.prepareStatement("insert into " + consensustable
-					+ " (contig_id,length,sequence,quality)"
-					+ " VALUES(?,?,?,?)"
-					+ " ON DUPLICATE KEY UPDATE" 
-					+ " sequence=VALUES(sequence), quality=VALUES(quality), length=VALUES(length)");
+			String query = "insert into " + consensustable
+				+ " (contig_id,length,sequence,quality)"
+				+ " VALUES(?,?,?,?)"
+				+ " ON DUPLICATE KEY UPDATE" 
+				+ " sequence=VALUES(sequence), quality=VALUES(quality), length=VALUES(length)";
+			
+			stmtStoreConsensus = conn.prepareStatement(query);
 
 			if (contigList == null) {
 				query = allcontigs ? "select CONTIG.contig_id,length(sequence) from CONTIG left join "
