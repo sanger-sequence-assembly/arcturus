@@ -500,7 +500,7 @@ sub deleteLowQualityBases {
     my ($pads,$mask) = @$flq;
 
     unless ($pads && @$pads) {
-        $logger->warning("No low quality data found in $contigname");
+        $logger->special("No low quality data found in $contigname");
         return $contig, 1; # no low quality stuff found
     }
 
