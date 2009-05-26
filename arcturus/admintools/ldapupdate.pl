@@ -110,7 +110,7 @@ foreach my $entry ($mesg->all_entries) {
 
     my $datasourcetype = pop @datasourcelist;
 
-    my$datasource = {};
+    my $datasource = {};
 
     while (my $item = shift @items) {
 	my ($id,$key,$value) = $item =~ /\#(\d+)\#(\w+)\#(\S+)/;
