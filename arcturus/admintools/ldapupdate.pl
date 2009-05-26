@@ -1,10 +1,27 @@
 #!/usr/local/bin/perl
 
+use strict;
+
 use Net::LDAP;
 use Term::ReadKey;
 use DBI;
 
-while ($nextword = shift @ARGV) {
+my $server;
+my $base;
+my $instance;
+my $organism;
+my $listall = 0;
+my $verbose = 0;
+my $newhost;
+my $newport;
+my $newuser;
+my $newpass;
+my $showurl = 0;
+my $testurl = 0;
+my $update = 0;
+my $principal;
+
+while (my $nextword = shift @ARGV) {
     $server = shift @ARGV if ($nextword eq '-server');
 
     $base = shift @ARGV if ($nextword eq '-base');
@@ -20,6 +37,10 @@ while ($nextword = shift @ARGV) {
     $newhost = shift @ARGV if ($nextword eq '-newhost');
 
     $newport = shift @ARGV if ($nextword eq '-newport');
+
+    $newuser = shift @ARGV if ($nextword eq '-newuser');
+
+    $newpass = shift @ARGV if ($nextword eq '-newpass');
 
     $showurl = 1 if ($nextword eq '-showurl');
 
@@ -43,13 +64,12 @@ $base = "cn=$instance," . $base if defined($instance);
 
 $listall = 1 unless defined($organism);
 
-if ($listall) {
-    $filter = 'objectClass=javaNamingReference';
-} else {
-    $filter = "&(objectClass=javaNamingReference)(cn=$organism)";
-}
+my $filter = $listall ?
+    'objectClass=javaNamingReference' : "&(objectClass=javaNamingReference)(cn=$organism)";
 
-$ldap = Net::LDAP->new($server) or die "$@";
+my $ldap = Net::LDAP->new($server) or die "$@";
+
+my $password;
 
 if (defined($principal)) {
     print "Password: ";
@@ -59,7 +79,7 @@ if (defined($principal)) {
     chop $password;
 }
  
-$mesg = (defined($principal) && defined($password)) ?
+my $mesg = (defined($principal) && defined($password)) ?
     $ldap->bind($principal, password => $password) : $ldap->bind;
  
 $mesg = $ldap->search( # perform a search
@@ -70,13 +90,13 @@ $mesg = $ldap->search( # perform a search
  
 $mesg->code && die $mesg->error;
  
-foreach $entry ($mesg->all_entries) {
+foreach my $entry ($mesg->all_entries) {
     #$entry->dump;
-    $dn = $entry->dn;
-    @items = $entry->get_value('javaClassName');
-    $classname = shift @items;
+    my $dn = $entry->dn;
+    my @items = $entry->get_value('javaClassName');
+    my $classname = shift @items;
     @items = $entry->get_value('javaFactory');
-    $factory = shift @items;
+    my $factory = shift @items;
     @items = $entry->get_value('javaReferenceAddress');
 
     print "$dn\n";
@@ -86,14 +106,14 @@ foreach $entry ($mesg->all_entries) {
 	print "    Factory=$factory\n" if defined($factory);
     }
 
-    @datasourcelist = split(/\./, $classname);
+    my @datasourcelist = split(/\./, $classname);
 
-    $datasourcetype = pop @datasourcelist;
+    my $datasourcetype = pop @datasourcelist;
 
-    $datasource = {};
+    my$datasource = {};
 
-    while ($item = shift @items) {
-	($id,$key,$value) = $item =~ /\#(\d+)\#(\w+)\#(\S+)/;
+    while (my $item = shift @items) {
+	my ($id,$key,$value) = $item =~ /\#(\d+)\#(\w+)\#(\S+)/;
 	$datasource->{$key} = $value;
 	print "        $key=$value\n" if $verbose;
     }
@@ -101,12 +121,15 @@ foreach $entry ($mesg->all_entries) {
     &changeHost($datasource, $newhost) if defined($newhost);
     &changePort($datasource, $newport) if defined($newport);
 
+    &changeUsername($datasource, $newuser) if defined($newuser);
+    &changePassword($datasource, $newpass) if defined($newpass);
+
     if (($testurl || $showurl) && defined($datasourcetype)) {
-	($url, $username, $password) = &buildUrl($datasourcetype, $datasource);
+	my ($url, $username, $password) = &buildUrl($datasourcetype, $datasource);
 	if (defined($url)) {
 	    print "        URL=$url\n";
 	    if ($testurl) {
-		$dbh = DBI->connect($url, $username, $password, {RaiseError => 0, PrintError => 0});
+		my $dbh = DBI->connect($url, $username, $password, {RaiseError => 0, PrintError => 0});
 		if (defined($dbh)) {
 		    print "        CONNECT OK\n";
 		} else {
@@ -119,12 +142,12 @@ foreach $entry ($mesg->all_entries) {
 	}
     }
 
-    if (defined($update) && (defined($newport) || defined($newhost))) {
-	$refaddr = &createReferenceAddress($datasource);
+    if (defined($update) && (defined($newport) || defined($newhost) || defined($newuser) || defined($newpass))) {
+	my $refaddr = &createReferenceAddress($datasource);
 
 	print STDERR join("\n", @{$refaddr}), "\n\n";
 
-	$msg2 = $ldap->modify($dn, replace => [ 'javaReferenceAddress' => $refaddr ]);
+	my $msg2 = $ldap->modify($dn, replace => [ 'javaReferenceAddress' => $refaddr ]);
 
 	print STDERR "Failed to update javaReferenceAddress for $dn: " . $msg2->error . "\n"
 	    if $msg2->code;
@@ -194,6 +217,26 @@ sub changePort {
     $dshash->{'portNumber'} = $newport if defined($dshash->{'portNumber'}); # Oracle style
 }
 
+sub changeUsername {
+    my $dshash = shift;
+    my $newuser = shift;
+
+    return unless defined($newuser);
+
+    $dshash->{'user'} = $newuser if defined($dshash->{'user'});             # MySQL style
+    $dshash->{'userName'} = $newuser if defined($dshash->{'userName'});     # Oracle style
+}
+
+sub changePassword {
+    my $dshash = shift;
+    my $newpass = shift;
+
+    return unless defined($newpass);
+
+    $dshash->{'password'} = $newpass if defined($dshash->{'password'});     # MySQL style
+    $dshash->{'passWord'} = $newpass if defined($dshash->{'passWord'});     # Oracle style
+}
+
 sub createReferenceAddress {
     my $dshash = shift;
 
@@ -236,7 +279,11 @@ sub showUsage {
 		"",
 		"-newhost\tName of new MySQL host",
 		"-newport\tPort number of new MySQL host",
-		"-update\t\tUpdate the tree with the new host and/or port",
+		"",
+		"-newuser\tNew MySQL username",
+		"-newpass\tNew MySQL password",
+		"",
+		"-update\t\tUpdate the tree with the new host, port, username and/or password",
 		"",
 		"-showurl\tDisplay the DBI URL for each entry",
 		"-testurl\tTest the DBI URL for each entry",
