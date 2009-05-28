@@ -5,13 +5,8 @@ use strict;
 use DBI;
 
 my $slaves = [
-	      { 'host' => 'mcs1a',
-		'port' => 15002,
-		'username' => 'monitor',
-		'password' => 'WhoWatchesTheWatchers' },
-
-	      { 'host' => 'mcs2a',
-		'port' => 15002,
+	      { 'host' => 'mcs3a',
+		'port' => 15004,
 		'username' => 'monitor',
 		'password' => 'WhoWatchesTheWatchers' },
 
