@@ -23,20 +23,26 @@ set reassembler="/usr/local/bin/perl ${wgshome}/bin/reassembler"
 
 set dlimit=24000000
 
-if ($#argv != 3) then
-echo Usage: $0 instance organism project
+if ($#argv < 3) then
+echo Usage: $0 instance organism project [allunassembledflag]
+# allunassembledflag true  results in using all unassembled reads
+#                    false results in using only reads of the project  
     exit 1
 endif
 
 set instance=$1
 set organism=$2
 set project=$3
-
+set allunassembled = 0
+if ($#argv > 3) then
+    set allunassembled = $4
+endif
 
 set newreads = /tmp/newreads.${project}.caf
 
 set oldcontigs = /tmp/oldcontigs.${project}.caf
 
+set unassembled = /tmp/unassembled.${project}.caf
 
 set export=0
 if ( ! -f ${newreads} ) then
@@ -49,6 +55,12 @@ if ( ! -f ${oldcontigs} ) then
     set export=1
 endif
 
+if ($allunassembled > 0) then
+    if ( ! -f ${unassembled} ) then
+#    echo contigss to be exported
+        set export=1
+    endif
+endif
 
 if ($export == 1) then
 
@@ -58,15 +70,37 @@ if ($export == 1) then
         	                   -organism    ${organism} \
 	        	           -project     ${project} \
 				   -caf         ${oldcontigs} \
-                                   -singletons  ${newreads}
-# mask options?
+                                   -singletons  ${newreads} \
+                                   -mask x
+
+# if all unassembled reads are used append them to ${newreads}; we use
+# all unassembled reads except the ones in single reads contigs which
+# can belong to other projects
+
+    if ($allunassembled > 0) then
+
+        echo exporting unassembled reads for ${project}
+
+        ${arcturusbin}/getunassembledreads -instance    ${instance} \
+              	                           -organism    ${organism} \
+                                           -caf         ${unassembled} \
+                                           -nostatus     \
+                                           -mqr 40       \
+                                           -mask x
+        if ( !(-z ${unassembled}) ) then
+            cat ${newreads} ${unassembled} > /tmp/cat.caf
+            mv /tmp/cat.caf ${newreads} 
+            rm ${unassembled}
+        endif
+
+    endif
+
 endif
 
 if ( -z ${newreads} ) then
     echo there are no new reads for project ${project}
     exit 1
 endif
-
 
 if ( -z ${oldcontigs} ) then
     set phrapexe=phrap.manyreads
@@ -119,16 +153,14 @@ else
 
 endif
 
-exit 1
+exit 1 # test
 
-${arcturusbin}/contig-loader -instance ${instance} \
-                             -organism ${organism} \
-                             -project  ${project} \
-                             -caf ${depaddedassembly}
-# tag options ...
+${arcturusbin}/new-contig-loader -instance ${instance} \
+                                 -organism ${organism} \
+                                 -project  ${project} \
+                                 -caf ${depaddedassembly}
+# ? tag options ...
 
 ${arcturusjava}/calculateconsensus -instance ${instance} \
                                    -organism ${organism}
 
-#rm -f oldcontigs.caf newreads.caf newassembly.caf assembly
-#gzip newassembly.depad.caf
