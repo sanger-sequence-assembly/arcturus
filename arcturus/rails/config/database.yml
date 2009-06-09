@@ -1,0 +1,16 @@
+development:
+  adapter: mysql
+  host: mcs4a
+  port: 3311
+  database: INNOCHAB
+  username: arcturus
+  password: ***REMOVED***
+
+production:
+  adapter: mysql
+  host: mcs6
+  port: 15003
+  database: arcturus
+  username: arcturus
+  password: ***REMOVED***
+

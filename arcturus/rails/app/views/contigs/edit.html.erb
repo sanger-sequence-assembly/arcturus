@@ -1,0 +1,12 @@
+<h1>Editing contig</h1>
+
+<% form_for(@contig) do |f| %>
+  <%= f.error_messages %>
+
+  <p>
+    <%= f.submit 'Update' %>
+  </p>
+<% end %>
+
+<%= link_to 'Show', @contig %> |
+<%= link_to 'Back', contigs_path %>

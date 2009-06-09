@@ -1,0 +1,42 @@
+<h1>Contigs for <%=h @project.name %>  </h1>
+
+<table cellpadding="3">
+  <tr>
+    <th align="left">ID</th>
+    <th align="left">Gap4 name</th>
+    <th align="right">Length</th>
+    <th align="right">No. of reads</th>
+    <th align="center">Created</th>
+    <th align="center">Last updated</th>
+  </tr>
+
+<% @contigs = @project.current_contig_list %>
+
+<% @contigs.each do |@contig| %>
+  <tr>
+    <td>
+      <%=h @contig['contig_id'] %>
+    </td>
+
+    <td>
+      <%=h @contig['gap4name'] %>
+    </td>
+
+    <td align="right">
+      <%=h @contig['basepairs'] %>
+    </td>
+
+    <td align="right">
+      <%=h @contig['read_count'] %>
+    </td>
+
+    <td>
+      <%=h @contig['created'] %>
+    </td>
+
+    <td>
+      <%=h @contig['updated'] %>
+    </td>
+  </tr>
+<% end %>
+</table>
