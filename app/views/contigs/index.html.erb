@@ -1,0 +1,27 @@
+<h1>Listing contigs</h1>
+
+<table cellpadding="3">
+  <tr>
+    <th align="left">ID</th>
+    <th align="left">Gap4 name</th>
+    <th>Basepairs</th>
+    <th>Reads</th>
+    <th>Created</th>
+    <th>Actions</th>
+  </tr>
+
+<% @contigs.each do |contig| %>
+  <tr>
+    <td><%= contig.contig_id %></td>
+    <td><%= contig.gap4name %></td>
+    <td align="right"><%= contig.length %></td>
+    <td align="right"><%= contig.nreads %></td>
+    <td><%= contig.created %></td>
+    <td><%= link_to 'Show', contig %></td>
+  </tr>
+<% end %>
+</table>
+
+<br />
+
+<%= link_to 'New contig', new_contig_path %>
