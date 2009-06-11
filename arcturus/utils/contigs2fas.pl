@@ -200,7 +200,8 @@ while(my @ary = $sth->fetchrow_array()) {
 	length($sequence),"\n";
     }
 
-    my $contigname = $usegapname && defined($gap4name) ? $gap4name : sprintf("contig%06d", $contigid);
+    my $contigname = $usegapname && defined($gap4name) ?
+	$gap4name : $instance . "_" . $organism . "_contig_" . $contigid;
 
     if (defined($padfh)) {
 	my $mappings = &padMap($sequence, '*');
