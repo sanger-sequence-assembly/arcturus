@@ -1,0 +1,18 @@
+<h1>Listing tag_to_contigs</h1>
+
+<table>
+  <tr>
+  </tr>
+
+<% @tag_to_contigs.each do |tag_to_contig| %>
+  <tr>
+    <td><%= link_to 'Show', tag_to_contig %></td>
+    <td><%= link_to 'Edit', edit_tag_to_contig_path(tag_to_contig) %></td>
+    <td><%= link_to 'Destroy', tag_to_contig, :confirm => 'Are you sure?', :method => :delete %></td>
+  </tr>
+<% end %>
+</table>
+
+<br />
+
+<%= link_to 'New tag_to_contig', new_tag_to_contig_path %>

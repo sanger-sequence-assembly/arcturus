@@ -1,4 +1,6 @@
 ActionController::Routing::Routes.draw do |map|
+  map.resources :tag_to_contigs
+
   map.resources :contig_tags
 
   map.resources :contigs
