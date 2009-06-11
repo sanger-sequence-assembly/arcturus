@@ -1,4 +1,4 @@
-package uk.ac.sanger.arcturus.test;
+package uk.ac.sanger.arcturus.utils;
 
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
