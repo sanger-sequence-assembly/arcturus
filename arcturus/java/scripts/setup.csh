@@ -7,6 +7,9 @@ set ARCTURUS_HOME=`dirname $0`
 # This is the Arcturus root package name
 set ARCTURUS_PACKAGE=uk.ac.sanger.arcturus
 
+# This is the utils package
+set ARCTURUS_UTILS_PACKAGE=${ARCTURUS_PACKAGE}.utils
+
 # This is the test package
 set ARCTURUS_TEST_PACKAGE=${ARCTURUS_PACKAGE}.test
 
