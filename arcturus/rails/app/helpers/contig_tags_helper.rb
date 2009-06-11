@@ -1,0 +1,2 @@
+module ContigTagsHelper
+end
