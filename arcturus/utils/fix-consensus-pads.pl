@@ -79,17 +79,15 @@ while (my ($contig_id, $seqlen, $sequence) = $sth->fetchrow_array()) {
 
     $update_sth->execute($sequence, $contig_id);
 
-    printf "%8d %8d %8d\n", $contig_id, $seqlen, $count if $verbose;
+    printf STDERR "%8d %8d %8d\n", $contig_id, $seqlen, $count if $verbose;
 
     $fixed_contigs++;
     $fixed_length += $count;
 }
 
-if ($verbose) {
-    print "Scanned $all_contigs contigs ($all_length bp).";
-    print "  Fixed $fixed_length pads in $fixed_contigs contigs." if ($fixed_length > 0);
-    print "\n";
-}
+print STDERR "Scanned $all_contigs contigs ($all_length bp).";
+print STDERR "  Fixed $fixed_length pads in $fixed_contigs contigs." if ($fixed_length > 0);
+print STDERR "\n";
 
 $sth->finish();
 $update_sth->finish();
