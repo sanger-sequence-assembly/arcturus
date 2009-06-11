@@ -18,6 +18,8 @@ use constant PAD_IS_DASH => 3;
 use constant PAD_IS_N => 4;
 use constant PAD_IS_X => 5;
 
+use constant FASTA_CHUNK_SIZE => 50;
+
 my $verbose = 0;
 my @dblist = ();
 
@@ -145,26 +147,26 @@ $pexclude = &getProjectIDs($pexclude, $projectname2id) if defined($pexclude);
 
 $minlen = 1000 unless (defined($minlen) || defined($contigids));
 
+my $fields = "gap4name,C.contig_id,C.length,sequence" . ($ascaf ? ",quality" : "");
+my $tables = (defined($contigids) || $allcontigs ? "CONTIG" : "CURRENTCONTIGS") .
+    " C left join CONSENSUS CS using(contig_id)";
+
+my @conds;
+
 if (defined($contigids)) {
-    $query = "select gap4name,contig_id,length from CONTIG where contig_id in ($contigids)";
+    push @conds, "C.contig_id in ($contigids)";
 } elsif ($allcontigs) {
-    $query = "select gap4name,contig_id,length from CONTIG";
-    $query .= " where length > $minlen" if defined($minlen);
+    push @conds, "C.length > $minlen" if defined($minlen);
 } else {
-    $query = "select gap4name,contig_id,length from CURRENTCONTIGS";
-
-    my @conds;
-
-    push @conds, "length > $minlen" if defined($minlen);
+    push @conds, "C.length > $minlen" if defined($minlen);
 
     push @conds, "project_id in ($pinclude)" if defined($pinclude);
 
     push @conds, "project_id not in ($pexclude)" if defined($pexclude);
-
-    if (@conds) {
-	$query .= " where " . join(" and ",@conds);
-    }
 }
+
+my $query = "select $fields from $tables";
+$query .= " where " . join(" and ",@conds) if (@conds);
 
 print STDERR $query,"\n";
 
@@ -174,21 +176,10 @@ $sth = $dbh->prepare($query);
 $sth->execute();
 &db_die("execute($query) failed");
 
-$query = "select sequence,quality from CONSENSUS where contig_id = ?";
-
-my $sth_sequence = $dbh->prepare($query);
-&db_die("prepare($query) failed");
-
 $totseqlen = 0;
 
 while(my @ary = $sth->fetchrow_array()) {
-    my ($gap4name, $contigid, $contiglength) = @ary;
-
-    $sth_sequence->execute($contigid);
-
-    my ($compressedsequence, $compressedquality) = $sth_sequence->fetchrow_array();
-
-    $sth_sequence->finish();
+    my ($gap4name, $contigid, $contiglength,$compressedsequence, $compressedquality) = @ary;
 
     unless (defined($compressedsequence)) {
 	print STDERR "WARNING: Some contigs have no consensus sequence.\n";
@@ -339,9 +330,13 @@ sub writeSequence {
     my $fh = shift;
     my $sequence = shift;
 
-    while (length($sequence) > 0) {
-	print $fh substr($sequence, 0, 50), "\n";
-	$sequence = substr($sequence, 50);
+    my $seqlen = length($sequence);
+
+    for (my $offset = 0; $offset < $seqlen; $offset += FASTA_CHUNK_SIZE) {
+	my $chunk_length = $seqlen > $offset + FASTA_CHUNK_SIZE ?
+	    FASTA_CHUNK_SIZE : $seqlen - $offset;
+
+	print $fh substr($sequence, $offset, $chunk_length),"\n";
     }
 }
 
@@ -353,7 +348,7 @@ sub writeQuality {
 
     for (my $i = 0; $i < $qlen; $i++) {
 	print $fh (($i % 50) > 0) ? " " : "", $quality->[$i];
-	print $fh "\n" if (($i % 50)  == 49);
+	print $fh "\n" if (($i % 50) == 49);
     }
 
     print $fh "\n" if (($qlen % 50) > 0);
