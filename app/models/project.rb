@@ -2,6 +2,10 @@ class Project < ArcturusDatabase
   belongs_to :assembly
   has_many :contig
 
+  validates_presence_of :name
+  validates_presence_of :creator
+  validates_presence_of :assembly
+ 
   set_table_name 'PROJECT'
   self.primary_key = "project_id"
 
