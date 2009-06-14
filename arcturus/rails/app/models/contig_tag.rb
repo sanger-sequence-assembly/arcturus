@@ -1,6 +1,5 @@
 class ContigTag < ActiveRecord::Base
-  has_many :tag_to_contigs, :foreign_key => "tag_id"
-  has_many :contigs, :through => :tag_to_contigs
+  has_many :tag_mappings, :foreign_key => "tag_id"
 
   set_table_name 'CONTIGTAG'
   self.primary_key = "tag_id"
