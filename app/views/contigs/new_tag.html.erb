@@ -1,0 +1,47 @@
+<h1>New tag</h1>
+
+<% form_for :tag_mapping, 
+	:url => {:controller => :tag_mappings, :action => :create, :method => :post, :instance => params['instance'], :organism => params['organism'], :contig_id => @contig['contig_id']} do |f| %>
+  <%= f.error_messages %>
+
+  <table>
+    <tr>
+      <td colspan="2"><b>Tag position</b></td>
+    </tr>
+
+    <tr>
+      <td>Start position:</td>
+      <td><%= f.text_field :cstart %></td>
+    </tr>
+
+    <tr>
+      <td>End position:</td>
+      <td><%= f.text_field :cfinal %></td>
+    </tr>
+
+    <tr>
+      <td>Strand:</td>
+      <td><%= f.select :strand, %w{ F R U } %></td>
+    </tr>
+
+    <tr>
+      <td colspan="2"><b>Tag properties</b></td>
+    </tr>
+
+    <% fields_for :contig_tag do |ff| %>
+
+    <tr>
+      <td>Tag type:</td>
+      <td><%= ff.text_field :tagtype %></td>
+    </tr>
+
+    <tr>
+      <td>Systematic ID:</td>
+      <td><%= ff.text_field :systematic_id %></td>
+    </tr>
+    <% end %>
+  </table>
+  <p>
+    <%= f.submit 'Create' %>
+  </p>
+<% end %>

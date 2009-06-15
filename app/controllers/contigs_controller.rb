@@ -82,4 +82,26 @@ class ContigsController < ApplicationController
       format.xml  { head :ok }
     end
   end
+
+  # LIST TAGS /contigs/tags/1
+  def list_tags
+    @contig = Contig.find(params[:id])
+    @mappings = @contig.tag_mappings.sort {|x,y| x.cstart <=> y.cstart }
+  end
+
+  # NEW TAG /contigs/new_tag/1
+  def new_tag
+    @contig = Contig.find(params[:id])
+  end
+
+  # SHOW SEQUENCE /contigs/show_sequence/1
+  def show_sequence
+    @contig = Contig.find(params[:id])
+
+    respond_to do |format|
+      format.html
+      format.text  { render :text => @contig.to_fasta }
+    end
+  end
+
 end
