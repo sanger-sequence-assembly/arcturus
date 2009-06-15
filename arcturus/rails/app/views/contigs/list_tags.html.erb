@@ -1,0 +1,59 @@
+<h1>Tags for contig <%=h @contig.contig_id %>  </h1>
+
+<table cellpadding="3">
+  <tr>
+    <th align="left">Mapping ID</th>
+    <th align="left">Tag ID</th>
+    <th align="left">Type</th>
+    <th align="left">Systematic ID</th>
+    <th align="right">Start</th>
+    <th align="right">End</th>
+    <th align="center">Strand</th>
+    <th align="left">Comment</th>
+  </tr>
+
+<% @mappings.each do |@mapping| %>
+  <tr>
+    <td>
+      <%=h @mapping['id'] %>
+    </td>
+
+    <% @tag = @mapping.tag %>
+
+    <td>
+      <%=h @tag['tag_id'] %>
+    </td>
+
+    <td>
+      <%=h @tag['tagtype'] %>
+    </td>
+
+    <td>
+      <%=h @tag['systematic_id'] %>
+    </td>
+
+    <td align="right">
+      <%=h @mapping['cstart'] %>
+    </td>
+
+    <td align="right">
+      <%=h @mapping['cfinal'] %>
+    </td>
+
+    <td align="center">
+      <%=h @mapping['strand'] %>
+    </td>
+
+    <td>
+      <%=h @tag['tagcomment'] %>
+    </td>
+  </tr>
+<% end %>
+</table>
+
+<br />
+
+<%=
+   link_to 'New tag', :instance => params[:instance], :organism => params[:organism], :action => 'new_tag',
+	:id => @contig.contig_id
+%>

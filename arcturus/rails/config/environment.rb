@@ -55,6 +55,12 @@ MYSQL_READ_ONLY_PASSWORD = "LookButDontTouch"
 
 ARCTURUS_DEV_INSTANCE = "test"
 
+require 'zlib'
+
+INFLATER =  Zlib::Inflate.new
+
+Mime::Type.register "text/plain", :FASTA
+
 # Useful debugging tip from 
 # http://weblog.jamisbuck.org/2007/1/8/watching-activerecord-do-it-s-thing
 # Enables logging of SQL statements within script/console

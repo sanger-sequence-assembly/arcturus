@@ -40,12 +40,17 @@ class TagMappingsController < ApplicationController
   # POST /tag_mappings
   # POST /tag_mappings.xml
   def create
+    @contig_tag = ContigTag.new(params[:contig_tag])
+    @contig_tag.save!
+
     @tag_mapping = TagMapping.new(params[:tag_mapping])
+    @tag_mapping.tag = @contig_tag
+    @tag_mapping.contig_id = params['contig_id']
 
     respond_to do |format|
-      if @tag_mapping.save
+      if (@tag_mapping.save!)
         flash[:notice] = 'TagMapping was successfully created.'
-        format.html { redirect_to(@tag_mapping) }
+        format.html { redirect_to({:controller => "contigs",:action => "list_tags", :instance => params[:instance], :organism => params[:organism], :id => @tag_mapping.contig_id}) }
         format.xml  { render :xml => @tag_mapping, :status => :created, :location => @tag_mapping }
       else
         format.html { render :action => "new" }

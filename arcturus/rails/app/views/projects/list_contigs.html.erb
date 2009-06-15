@@ -8,6 +8,7 @@
     <th align="right">No. of reads</th>
     <th align="center">Created</th>
     <th align="center">Last updated</th>
+    <th align="center" colspan="2">Actions</th>
   </tr>
 
 <% @contigs = @project.current_contig_list %>
@@ -36,6 +37,22 @@
 
     <td>
       <%=h @contig['updated'] %>
+    </td>
+ 
+    <td>
+      <%= 
+         link_to 'List tags', :instance => params[:instance], :organism => params[:organism],
+		:controller => 'contigs',
+		:action => 'list_tags', :id => @contig['contig_id']
+      %>
+    </td>
+ 
+    <td>
+      <%= 
+         link_to 'Show sequence', :instance => params[:instance], :organism => params[:organism],
+		:controller => 'contigs',
+		:action => 'show_sequence', :id => @contig['contig_id']
+      %>
     </td>
   </tr>
 <% end %>

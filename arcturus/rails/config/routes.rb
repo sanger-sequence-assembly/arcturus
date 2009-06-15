@@ -1,10 +1,4 @@
 ActionController::Routing::Routes.draw do |map|
-  map.resources :tag_mappings
-
-  map.resources :contig_tags
-
-  map.resources :contigs
-
 
   map.connect ":instance/:organism/:controller"
   map.connect ":instance/:organism/:controller/:action"
