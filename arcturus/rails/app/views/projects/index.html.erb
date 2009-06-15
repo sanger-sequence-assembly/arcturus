@@ -8,7 +8,7 @@
     <th align="right">Max. length</th>
     <th align="right">No. of reads</th>
     <th align="center">Last updated</th>
-    <th align="center" colspan="2">Actions</th>
+    <th align="center" colspan="3">Actions</th>
   </tr>
 
 <% @projects.each do |project| %>
@@ -53,7 +53,7 @@
 
    <td>
       <%=
-         # link_to 'Edit', edit_project_path(project)
+         link_to 'Export contigs', :instance => params[:instance], :organism => params[:organism], :action => 'export_contigs', :id => project, :format => "text"
        %>
     </td>
   </tr>
