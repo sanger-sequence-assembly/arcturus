@@ -5,6 +5,8 @@ class ApplicationController < ActionController::Base
   helper :all # include all helpers, all the time
   protect_from_forgery # See ActionController::RequestForgeryProtection for details
 
+  require 'etc'
+
   # Scrub sensitive parameters from your log
   # filter_parameter_logging :password
 
@@ -59,4 +61,9 @@ private
       dbparams[:password] = MYSQL_READ_ONLY_PASSWORD
     end
   end
+
+  def current_user
+    Etc.getlogin # (on all platforms)
+  end
+
 end
