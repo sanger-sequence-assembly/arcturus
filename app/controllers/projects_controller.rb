@@ -91,4 +91,15 @@ class ProjectsController < ApplicationController
   def list_contigs
     @project = Project.find(params[:id])
   end
+
+  # EXPORT CONTIGS /projects/export_contigs/1
+  def export_contigs
+    @project = Project.find(params[:id])
+    @contigs = @project.current_contigs
+
+    respond_to do |format|
+      format.html
+      format.text
+    end
+  end
 end

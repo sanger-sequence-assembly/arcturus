@@ -22,4 +22,8 @@ class Project < ArcturusDatabase
 	" from CURRENTCONTIGS where project_id = #{project_id} order by length desc"
     connection.select_all(@query)
   end
+
+  def current_contigs
+    Contig.find_by_sql("select * from CONTIG where contig_id in (select contig_id from CURRENTCONTIGS where project_id = #{project_id})")
+  end
 end
