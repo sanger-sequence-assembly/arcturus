@@ -1,16 +1,96 @@
-<h1>Editing assembly</h1>
 
-<% form_for(@assembly) do |f| %>
+<h2>Edit assembly <%= @assembly %> for database : <%= params['instance'] %> / <%= params['organism'] %> </h2>
+
+<% form_for :assembly, :url => {:controller => :assemblies, 
+                                :action => :update, 
+                                :id => @assembly, 
+                                :method => :post, 
+                                :instance => params['instance'], 
+                                :organism => params['organism']} do |f| %>
   <%= f.error_messages %>
 
-  <p>
-    <%= f.label :name %><br />
-    <%= f.text_field :name %>
-  </p>
-  <p>
-    <%= f.submit 'Update' %>
-  </p>
+  <table bgcolor='lightyellow' cellspacing="20">
+
+    <tr>
+      <td align="left">
+        <%= f.label :assembly_name %>:
+      </td>
+      <td align="right">
+        <%= f.text_field :name, :value => @assembly.name%>
+      </td>
+    </tr>
+
+    <tr>
+      <td align="left">
+        <%= f.label :chromosome %>:
+      </td>
+      <td align="left">
+        <%= f.text_field :chromosome, :size => 3, :value => @assembly.chromosome %>
+      </td>
+    </tr>
+
+    <tr>
+      <td align="left">
+        <%= f.label :approximate_size %>:
+      </td>
+      <td align="left">
+        <%= f.text_field :size, :size => 8, :value => @assembly.size %>
+      </td>
+    </tr>
+
+    <tr>
+      <td align="left">
+        <%= f.label :status %>:
+      </td>
+      <td align="left">
+        <%= f.select(:progress, %w{other shotgun finishing finished} ) %>
+      </td>
+    </tr>
+
+    <tr>
+      <td align="left">
+        <%= f.label :comment %>:
+      </td>
+      <td align="right">
+        <%= f.text_field :comment, :value => @assembly.comment %>
+      </td>
+    </tr>
+
+    <tr>
+      <td align="left">
+        <%= f.label :origin %>:
+      </td>
+      <td align="right">
+        <%= f.text_field :origin, :size => 30, :value => @assembly.origin %>
+      </td>
+    </tr>
+
+    <tr>
+      <td align="left">
+        <%= f.label :created %>:
+      </td>
+      <td align="left">
+        <%= @assembly.created %>
+      </td>
+    </tr>
+
+  </table>
+
+  <br />
+
+  <table cellspacing="20">
+
+  <tr><td align="left" bgcolor='orange'> <%= f.submit 'Update' %> </td></tr>
+
+  </table>
+
 <% end %>
 
-<%= link_to 'Show', @assembly %> |
-<%= link_to 'Back', assemblies_path %>
+  <table cellspacing="20">
+  <tr><td align="left" bgcolor='lightblue'>
+  <%= link_to 'Back to assembly overview', :instance => params[:instance], 
+                                           :organism => params[:organism], 
+                                           :action => 'index' %>
+  </td></tr>
+  </table>
+
