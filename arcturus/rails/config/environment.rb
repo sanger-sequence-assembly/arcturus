@@ -45,6 +45,7 @@ end
 LDAP_HOST = "ldap.internal.sanger.ac.uk"
 LDAP_PORT = 389
 LDAP_BASE = "cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk"
+LDAP_PEOPLE_BASE = "ou=people,dc=sanger,dc=ac,dc=uk"
 
 require 'net/ldap'
 
