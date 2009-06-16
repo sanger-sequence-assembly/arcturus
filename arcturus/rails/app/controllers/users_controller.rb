@@ -37,6 +37,8 @@ class UsersController < ApplicationController
   # GET /users/1/edit
   def edit
     @user = User.find(params[:id])
+
+    @roles = [ 'finisher', 'coordinator', 'team leader', 'administrator' ]
   end
 
   # POST /users
@@ -61,12 +63,12 @@ class UsersController < ApplicationController
   # PUT /users/1
   # PUT /users/1.xml
   def update
-    @user = User.find(params[:id])
+    @user = User.find(params[:user]['username'])
 
     respond_to do |format|
       if @user.update_attributes(params[:user])
         flash[:notice] = 'User was successfully updated.'
-        format.html { redirect_to(@user) }
+        format.html { redirect_to({:action => "show", :instance => params[:instance], :organism => params[:organism], :id => @user}) }
         format.xml  { head :ok }
       else
         format.html { render :action => "edit" }
