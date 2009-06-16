@@ -1,0 +1,6 @@
+User: <%= @user.username %> <br />
+Role: <%= @user.role %>
+<hr />
+<%= 
+  link_to 'Back', :instance => params[:instance], :organism => params[:organism], :action => 'index'
+%>

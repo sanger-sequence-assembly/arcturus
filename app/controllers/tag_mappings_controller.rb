@@ -1,4 +1,7 @@
 class TagMappingsController < ApplicationController
+  # Bypass authentication for the moment
+  skip_before_filter :verify_authenticity_token
+
   # GET /tag_mappings
   # GET /tag_mappings.xml
   def index
@@ -50,7 +53,7 @@ class TagMappingsController < ApplicationController
       if (@tag_mapping.save!)
         flash[:notice] = 'TagMapping was successfully created.'
         format.html { redirect_to({:controller => "contigs",:action => "list_tags", :instance => params[:instance], :organism => params[:organism], :id => @tag_mapping.contig_id}) }
-        format.xml  { render :xml => @tag_mapping, :status => :created, :location => @tag_mapping }
+        format.xml  { head :ok }
       else
         format.html { render :action => "new" }
         format.xml  { render :xml => @tag_mapping.errors, :status => :unprocessable_entity }
