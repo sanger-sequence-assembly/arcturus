@@ -40,8 +40,7 @@ class TagMappingsController < ApplicationController
   # POST /tag_mappings
   # POST /tag_mappings.xml
   def create
-    @contig_tag = ContigTag.new(params[:contig_tag])
-    @contig_tag.save!
+    @contig_tag = ContigTag.find_or_create_by_systematic_id_and_tagtype(params[:contig_tag])
 
     @tag_mapping = TagMapping.new(params[:tag_mapping])
     @tag_mapping.tag = @contig_tag
