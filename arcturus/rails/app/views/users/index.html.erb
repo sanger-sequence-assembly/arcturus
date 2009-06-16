@@ -1,0 +1,22 @@
+<h1>Listing users</h1>
+
+<table>
+  <tr>
+    <th>Username</th>
+    <th>Role</th>
+    <th colspan="2">Actions</th>
+  </tr>
+
+<% @users.each do |user| %>
+  <tr>
+    <td><%= user.username %></td>
+    <td><%= user.role %></td>
+    <td><%= link_to 'Show', :instance => params[:instance], :organism => params[:organism], :action => 'show', :id => user %></td>
+    <td><%= link_to 'Edit', :instance => params[:instance], :organism => params[:organism], :action => 'edit', :id => user %></td>
+  </tr>
+<% end %>
+</table>
+
+<br />
+
+<%= link_to 'New user', :instance => params[:instance], :organism => params[:organism], :action => 'new' %>

@@ -1,4 +1,6 @@
 ActionController::Routing::Routes.draw do |map|
+  map.resources :users
+
 
   map.connect ":instance/:organism/:controller"
   map.connect ":instance/:organism/:controller/:action"
