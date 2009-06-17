@@ -1,0 +1,45 @@
+<h1>Current location of tag <%=h @tag.tag_id %>  </h1>
+
+Tag type: <%=h @tag['tagtype'] %><br />
+Systematic ID: <%=h @tag['systematic_id'] %><br />
+
+<table cellpadding="3">
+  <tr>
+    <th align="left">Mapping ID</th>
+    <th align="right">Contig ID</th>
+    <th align="right">Start</th>
+    <th align="right">End</th>
+    <th align="center">Strand</th>
+    <th align="left">Comment</th>
+  </tr>
+
+<% @mappings.each do |@mapping| %>
+  <tr>
+    <td>
+      <%=h @mapping['id'] %>
+    </td>
+
+    <td align="right">
+      <%=h @mapping['contig_id'] %>
+    </td>
+
+    <td align="right">
+      <%=h @mapping['cstart'] %>
+    </td>
+
+    <td align="right">
+      <%=h @mapping['cfinal'] %>
+    </td>
+
+    <td align="center">
+      <%=h @mapping['strand'] %>
+    </td>
+
+    <td>
+      <%=h @tag['tagcomment'] %>
+    </td>
+  </tr>
+<% end %>
+</table>
+
+<br />

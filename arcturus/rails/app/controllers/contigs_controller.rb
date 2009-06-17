@@ -87,6 +87,11 @@ class ContigsController < ApplicationController
   def list_tags
     @contig = Contig.find(params[:id])
     @mappings = @contig.tag_mappings.sort {|x,y| x.cstart <=> y.cstart }
+
+    respond_to do |format|
+      format.html
+      format.xml { render :xml => @mappings.to_xml(:include => :tag) }
+    end
   end
 
   # NEW TAG /contigs/new_tag/1
