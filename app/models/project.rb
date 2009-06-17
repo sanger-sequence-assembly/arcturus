@@ -12,8 +12,10 @@ class Project < ArcturusDatabase
   def current_contigs_summary
     @query = "select sum(length) as total_length,count(*) as contig_count," +
       " max(length) as max_length,sum(nreads) as read_count," +
-      " max(updated) as last_update from CURRENTCONTIGS" +
-      " where project_id = #{project_id}"
+      " max(CURRENTCONTIGS.updated) as last_update" +
+      " from CURRENTCONTIGS join PROJECT using (project_id)" +
+      " where project_id = #{project_id}" +
+      " order by assembly_id, project_id"
     connection.select_all(@query).first
   end
 
@@ -26,4 +28,10 @@ class Project < ArcturusDatabase
   def current_contigs
     Contig.find_by_sql("select * from CONTIG where contig_id in (select contig_id from CURRENTCONTIGS where project_id = #{project_id})")
   end
+
+  def self.for_assembly_id(assembly_id)
+    find(:all,
+         :conditions => "assembly_id = #{assembly_id}")
+  end
+
 end
