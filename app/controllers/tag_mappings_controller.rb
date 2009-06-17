@@ -95,17 +95,20 @@ class TagMappingsController < ApplicationController
   def find_contig_tag
     @tag = ContigTag.find_by_systematic_id(params[:id])
 
-    respond_to do |format|
-      if ! @tag.nil?
+    if @tag.nil?
+      flash[:notice] = "Unable to find a tag with systematic ID #{params[:id]}"
+      redirect_to :action => :tag_not_found, :instance => params[:instance], :organism => params[:organism], :id => params[:id]
+    else
+      respond_to do |format|
         @query = "select T2C.* from TAG2CONTIG T2C,CURRENTCONTIGS CC where tag_id = #{@tag.tag_id} and T2C.contig_id = CC.contig_id"
         @mappings = TagMapping.find_by_sql(@query)
         format.html
         format.xml { render :xml => @mappings.to_xml(:include => :tag) }
-      else
-        format.html { redirect_to :status => 404 }
-        format.xml  { head :ok }
       end
     end
   end
 
+  def tag_not_found
+    @systematic_id = params[:id]
+  end
 end
