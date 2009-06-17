@@ -91,8 +91,8 @@ class TagMappingsController < ApplicationController
   end
 
 
-  # FIND TAG /tag_mappings/find_tag/1
-  def find_tag
+  # FIND TAG /tag_mappings/find_contig_tag/1
+  def find_contig_tag
     @tag = ContigTag.find_by_systematic_id(params[:id])
 
     respond_to do |format|
