@@ -23,6 +23,13 @@
   </tr>
 
   <tr>
+    <td>Gap 4 directory:</td>
+    <td>
+      <%=h @project.directory %>
+    </td>
+  </tr>
+
+  <tr>
     <td>Created:</td>
     <td>
       <%=h @project.created %>
@@ -95,7 +102,10 @@
 <hr />
 
 <%=
-  # link_to 'Edit', edit_project_path(@project)
+  link_to 'Edit', :instance => params[:instance],
+                  :organism => params[:organism],
+                  :action => 'edit',
+                  :id => @project
 %> |
 <%= 
   link_to 'Back', :instance => params[:instance], :organism => params[:organism], :action => 'index'
