@@ -1,8 +1,9 @@
-<h1>Projects for <%=h params['instance'] %> / <%=h params['organism'] %>  </h1>
+<h2>Projects for <%=h params['instance'] %> / <%=h params['organism'] %> </h2>
 
 <table cellpadding="3">
   <tr>
     <th align="left">Name</th>
+    <th align="left">Assembly</th>
     <th align="right">Total length</th>
     <th align="right">No. of contigs</th>
     <th align="right">Max. length</th>
@@ -15,6 +16,10 @@
   <tr>
     <td>
       <%=h project.name %>
+    </td>
+
+    <td>
+      <%=h @assemblies_hash[project.assembly_id] %>
     </td>
 
     <% @summary = project.current_contigs_summary %>
@@ -44,6 +49,12 @@
          link_to 'Show', :instance => params[:instance], :organism => params[:organism], :action => 'show', :id => project
       %>
     </td>
+
+    <td>
+      <%=
+         # link_to 'Edit', edit_project_path(project)
+       %>
+    </td>
  
     <td>
       <%= 
@@ -56,6 +67,7 @@
          link_to 'Export contigs', :instance => params[:instance], :organism => params[:organism], :action => 'export_contigs', :id => project, :format => "text"
        %>
     </td>
+
   </tr>
 <% end %>
 </table>
@@ -63,5 +75,16 @@
 <br />
 
 <%=
-   link_to 'New project', :instance => params[:instance], :organism => params[:organism], :action => 'new'
+   link_to 'New project', :instance => params[:instance],
+                          :organism => params[:organism],
+                          :assembly => params[:assembly_id],
+                          :action => 'new'
 %>
+
+<br />
+
+<% if @for_assembly > 0 then %>
+<%= link_to 'Back to assemby', :instance => params[:instance], 
+                               :organism => params[:organism], 
+                               :controller => 'assemblies' %>
+<%end %>
