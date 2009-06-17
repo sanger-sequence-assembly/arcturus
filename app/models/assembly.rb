@@ -1,6 +1,9 @@
 class Assembly < ArcturusDatabase
   has_many :project
 
+  validates_presence_of :name
+  validates_presence_of :creator
+
   set_table_name 'ASSEMBLY'
   self.primary_key = "assembly_id"
 
@@ -41,5 +44,24 @@ class Assembly < ArcturusDatabase
   def before_create
       self.created ||= Time.now
   end 
+
+  def self.current_assemblies
+      Assembly.find(:all, :order => "name")
+  end
+
+  def self.current_assemblies_as_array 
+      Assembly.find(:all, :order => "name").map { |a| [a.assembly_id, a.name] }
+#      Assembly.all.map { |a| [a.assembly_id, a.name] }
+#      current_assemblies.map { |a| [a.assembly_id, a.name] }
+  end
+
+  def self.current_assemblies_as_hash
+      hash = Hash.new
+#      current_assemblies.each do |a|
+      self.all.each do |a|
+          hash[a.assembly_id] = a.name
+      end
+      hash
+  end
 
 end
