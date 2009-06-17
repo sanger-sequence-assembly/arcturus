@@ -45,10 +45,11 @@
       </td>
 
       <td bgcolor='white'>
-        <%= link_to 'Projects', :instance => params[:instance], 
+        <%= link_to 'Projects', :controller => 'projects',
+                                :action => 'index',
+                                :instance => params[:instance], 
                                 :organism => params[:organism], 
-                                :action => 'list_projects',
-                                :id => assembly %>
+                                :assembly_id => assembly %>
       </td>
 
       <td bgcolor='orange'>
