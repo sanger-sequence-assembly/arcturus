@@ -1,8 +1,18 @@
 class ProjectsController < ApplicationController
   # GET /projects
   # GET /projects.xml
+
   def index
-    @projects = Project.all
+
+    @for_assembly = 0
+    if params[:assembly_id] then
+       @projects = Project.for_assembly_id(params[:assembly_id])
+       @for_assembly = 1
+    else
+       @projects = Project.all
+    end
+
+    @assemblies_hash = Assembly.current_assemblies_as_hash
 
     respond_to do |format|
       format.html # index.html.erb
@@ -24,6 +34,16 @@ class ProjectsController < ApplicationController
   # GET /projects/new
   # GET /projects/new.xml
   def new
+
+    @assemblies_hash = Assembly.current_assemblies_as_hash
+
+    if params['assembly'] then
+       @currentprojects = Project.for_assembly_id(params[:assembly])
+    else
+       @currentprojects = Project.all
+       @assemblies = Assembly.current_assemblies
+    end
+
     @project = Project.new
 
     respond_to do |format|
@@ -48,9 +68,11 @@ class ProjectsController < ApplicationController
     respond_to do |format|
       if @project.save
         flash[:notice] = 'Project was successfully created.'
-        # format.html { redirect_to(@project) }
-       format.html { redirect_to({:action => "show", :instance => params[:instance], :organism => params[:organism], :id => @project}) }
-       format.xml  { render :xml => @project, :status => :created, :location => @project }
+        format.html { redirect_to( { :action => "show",
+                                     :instance => params[:instance], 
+                                     :organism => params[:organism],
+                                     :id => @project}) }
+        format.xml  { render :xml => @project, :status => :created, :location => @project }
       else
         format.html { render :action => "new" }
         format.xml  { render :xml => @project.errors, :status => :unprocessable_entity }
@@ -66,7 +88,10 @@ class ProjectsController < ApplicationController
     respond_to do |format|
       if @project.update_attributes(params[:project])
         flash[:notice] = 'Project was successfully updated.'
-        format.html { redirect_to({:action => "show", :instance => params[:instance], :organism => params[:organism], :id => @project}) }
+        format.html { redirect_to( { :action => "show",
+                                     :instance => params[:instance],
+                                     :organism => params[:organism],
+                                     :id => @project}) }
         format.xml  { head :ok }
       else
         format.html { render :action => "edit" }
