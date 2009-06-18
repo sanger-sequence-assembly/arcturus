@@ -12,10 +12,8 @@ class Project < ArcturusDatabase
   def current_contigs_summary
     @query = "select sum(length) as total_length,count(*) as contig_count," +
       " max(length) as max_length,sum(nreads) as read_count," +
-      " max(CURRENTCONTIGS.updated) as last_update" +
-      " from CURRENTCONTIGS join PROJECT using (project_id)" +
-      " where project_id = #{project_id}" +
-      " order by assembly_id, project_id"
+      " max(updated) as last_update from CURRENTCONTIGS " +
+      " where project_id = #{project_id}"
     connection.select_all(@query).first
   end
 
