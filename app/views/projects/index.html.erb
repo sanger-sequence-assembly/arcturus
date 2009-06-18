@@ -28,7 +28,7 @@
     </td>
 
     <td>
-      <%=h @assemblies_hash[project.assembly_id] %>
+      <%=h project.assembly.name %>
     </td>
 
     <% @summary = project.current_contigs_summary %>
@@ -87,7 +87,7 @@
 <br />
 
 <% if @for_assembly > 0 then %>
-<%= link_to 'Back to assemby', :instance => params[:instance], 
+<%= link_to 'Back to assembly', :instance => params[:instance], 
                                :organism => params[:organism], 
                                :controller => 'assemblies' %>
 <%end %>
