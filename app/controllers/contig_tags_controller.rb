@@ -84,7 +84,7 @@ class ContigTagsController < ApplicationController
   end
 
 
-  # FIND TAG /tag_mappings/find_contig_tag/1
+  # FIND /contig_tags/find/1
   def find
     if params[:systematic_id]
       @tag = ContigTag.find_by_systematic_id(params[:systematic_id])
