@@ -1,9 +1,6 @@
 <h2>Create a new project for 
-    <% if params['assembly'] then 
-       assembly = params['assembly']
-       acurrent = @assemblies_hash[assembly.to_i] 
-     %>
-       assembly <%=h acurrent %>
+    <% if params['assembly'] then %>
+       assembly <%=h @assembly %>
     <%end %>
     <%=h params['instance'] %> / <%=h params['organism'] %>
 </h2>
@@ -13,12 +10,12 @@
     <table cellpadding=10>
     <tr><th align='left'>Existing projects</th><th align='left'>name</th><th>assembly</th></tr>
     <% @currentprojects.each do |p| %>
-    <tr><td>&nbsp</td><td><%=h p.name %></td><td> <%=h @assemblies_hash[p.assembly_id] %></td></tr>
+    <tr><td>&nbsp</td><td><%=h p.name %></td><td> <%=h p.assembly %></td></tr>
     <% end %>
     </table>
 <% else %>
     <h4>There are currently no projects defined 
-       <% if params['assembly'] then %> for assembly <%=h acurrent %>
+       <% if params['assembly'] then %> for assembly <%=h @assembly %>
        <% end %>
     </h4>
 <% end %>
@@ -109,9 +106,16 @@
 
   <table cellspacing="20">
   <tr><td align="left" bgcolor='lightblue'>
-  <%= link_to 'Go back to project overview', :instance => params[:instance],
-                                              :organism => params[:organism],
-                                              :action => 'index' %>
+    <% @linkhash = { :instance => params[:instance],
+                     :organism => params[:organism],
+                     :action => 'index'}
+       if params['assembly'] then 
+         @linkhash[:assembly_id] = params['assembly']
+       end 
+     %>
+
+    <%= link_to 'Go back to project overview', @linkhash %>
+
   </td></tr>
   </table>
 
@@ -119,5 +123,3 @@
   </table>
 
 <p>
-
-<%# link_to 'Back', projects_path %>
