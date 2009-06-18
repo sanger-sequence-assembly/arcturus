@@ -6,13 +6,12 @@ class ProjectsController < ApplicationController
 
     @for_assembly = 0
     if params[:assembly_id] then
-       @projects = Project.for_assembly_id(params[:assembly_id])
+       @projects = Project.find(:all,
+                                :conditions => "assembly_id = #{params[:assembly_id]}")
        @for_assembly = 1
     else
        @projects = Project.all
     end
-
-    @assemblies_hash = Assembly.current_assemblies_as_hash
 
     respond_to do |format|
       format.html # index.html.erb
