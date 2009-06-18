@@ -6,8 +6,13 @@
   @xml.TagType(@tag.tagtype)
   @xml.SystematicID(@tag.systematic_id)
 
+  unless @tag.tagcomment.nil?
+    @xml.TagComment(@tag.tagcomment)
+  end
+
   @mappings.each do |@mapping|
     @xml.TagMapping do
+      @xml.MappingID(@mapping.id)
       @xml.ContigID(@mapping.contig_id)
       @xml.ContigStartPosition(@mapping.cstart)
       @xml.ContigEndPosition(@mapping.cfinal)
