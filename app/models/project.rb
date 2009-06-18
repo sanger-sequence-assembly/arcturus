@@ -17,12 +17,6 @@ class Project < ArcturusDatabase
     connection.select_all(@query).first
   end
 
-  def current_contig_list
-    @query = "select contig_id,gap4name,length as basepairs,nreads as read_count,created,updated" +
-	" from CURRENTCONTIGS where project_id = #{project_id} order by length desc"
-    connection.select_all(@query)
-  end
-
   def current_contigs
     Contig.find_by_sql("select * from CONTIG where contig_id in (select contig_id from CURRENTCONTIGS where project_id = #{project_id})")
   end
