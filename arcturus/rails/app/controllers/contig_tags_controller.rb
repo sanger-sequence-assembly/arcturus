@@ -97,20 +97,26 @@ class ContigTagsController < ApplicationController
                   :instance => params[:instance],
                   :organism => params[:organism],
                   :id => params[:id],
-                  :systematic_id => params[:systematic_id]
+                  :systematic_id => params[:systematic_id],
+                  :format => params[:format]
     else
       @query = "select T2C.* from TAG2CONTIG T2C,CURRENTCONTIGS CC where tag_id = #{@tag.tag_id} and T2C.contig_id = CC.contig_id"
       @mappings = TagMapping.find_by_sql(@query)
 
       respond_to do |format|
-        format.html
-        format.xml { render :xml => @mappings.to_xml(:include => :tag) }
+        format.html # find.html.erb
+        format.xml  # find.erb
       end
     end
   end
 
-  def tag_not_found
+  def not_found
     @systematic_id = params[:id]
+
+    respond_to do |format|
+      format.html
+      format.xml { head :not_found }
+    end
   end
 
 end
