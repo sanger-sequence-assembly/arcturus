@@ -1,3 +1,5 @@
+<%= stylesheet_link_tag "table_rows", :media => "all" %>
+
 <h2>Projects for <%=h params['instance'] %> / <%=h params['organism'] %> </h2>
 
 <table cellpadding="3">
@@ -12,8 +14,15 @@
     <th align="center" colspan="3">Actions</th>
   </tr>
 
+<% @row_number = 0 %>
+
 <% @projects.each do |project| %>
-  <tr>
+<% 
+  @row_number += 1
+  @style = (@row_number % 2 == 0) ? "table_row_even" : "table_row_odd"
+%>
+
+  <tr class="<%= @style %>">
     <td>
       <%=h project.name %>
     </td>
@@ -48,12 +57,6 @@
       <%= 
          link_to 'Show', :instance => params[:instance], :organism => params[:organism], :action => 'show', :id => project
       %>
-    </td>
-
-    <td>
-      <%=
-         # link_to 'Edit', edit_project_path(project)
-       %>
     </td>
  
     <td>
