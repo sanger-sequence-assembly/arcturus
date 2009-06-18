@@ -1,7 +1,19 @@
 <h1>Current location of tag <%=h @tag.tag_id %>  </h1>
 
-Tag type: <%=h @tag['tagtype'] %><br />
-Systematic ID: <%=h @tag['systematic_id'] %><br />
+<table cellpadding="3">
+  <tr>
+    <td>Tag type:</td>
+    <td><%=h @tag['tagtype'] %></td>
+  </tr>
+  <tr>
+    <td>Systematic ID:</td>
+    <td><%=h @tag['systematic_id'] %></td>
+  </tr>
+  <tr>
+    <td>Comment</td>
+    <td><%h= @tag['tagcomment'] %></td>
+  </tr>
+</table>
 
 <table cellpadding="3">
   <tr>
@@ -10,7 +22,6 @@ Systematic ID: <%=h @tag['systematic_id'] %><br />
     <th align="right">Start</th>
     <th align="right">End</th>
     <th align="center">Strand</th>
-    <th align="left">Comment</th>
   </tr>
 
 <% @mappings.each do |@mapping| %>
@@ -33,10 +44,6 @@ Systematic ID: <%=h @tag['systematic_id'] %><br />
 
     <td align="center">
       <%=h @mapping['strand'] %>
-    </td>
-
-    <td>
-      <%=h @tag['tagcomment'] %>
     </td>
   </tr>
 <% end %>
