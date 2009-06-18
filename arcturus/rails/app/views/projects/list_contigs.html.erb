@@ -13,7 +13,7 @@
     <th align="center" colspan="2">Actions</th>
   </tr>
 
-<% @contigs = @project.current_contig_list %>
+<% @contigs = @project.current_contigs %>
 
 <% @row_number = 0 %>
 
@@ -25,34 +25,34 @@
 
   <tr class="<%= @style %>">
     <td>
-      <%=h @contig['contig_id'] %>
+      <%=h @contig.contig_id %>
     </td>
 
     <td>
-      <%=h @contig['gap4name'] %>
+      <%=h @contig.gap4name %>
     </td>
 
     <td align="right">
-      <%=h @contig['basepairs'] %>
+      <%=h @contig.length %>
     </td>
 
     <td align="right">
-      <%=h @contig['read_count'] %>
+      <%=h @contig.nreads %>
     </td>
 
     <td>
-      <%=h @contig['created'] %>
+      <%=h @contig.created %>
     </td>
 
     <td>
-      <%=h @contig['updated'] %>
+      <%=h @contig.updated %>
     </td>
  
     <td>
       <%= 
          link_to 'List tags', :instance => params[:instance], :organism => params[:organism],
 		:controller => 'contigs',
-		:action => 'list_tags', :id => @contig['contig_id']
+		:action => 'list_tags', :id => @contig
       %>
     </td>
  
@@ -60,7 +60,7 @@
       <%= 
          link_to 'Show sequence', :instance => params[:instance], :organism => params[:organism],
 		:controller => 'contigs',
-		:action => 'show_sequence', :id => @contig['contig_id']
+		:action => 'show_sequence', :id => @contig
       %>
     </td>
   </tr>
