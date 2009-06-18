@@ -1,0 +1,83 @@
+
+<h2>Confirm deletion of project <%= @project %> for database : <%= params['instance'] %> / <%= params['organism'] %> </h2>
+
+<% form_for :assembly, :url => {:controller => :projects, 
+                                :action => :destroy, 
+                                :id => @project, 
+                                :method => :post, 
+                                :instance => params['instance'], 
+                                :organism => params['organism']} do |f| %>
+  <%= f.error_messages %>
+
+  <br />
+
+  <table bgcolor='lightyellow' cellspacing="10">
+
+<table cellpadding="3">
+
+  <tr>
+    <td colspan="2" align="left">
+      <em>Project properties</em>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Name:</td>
+    <td>
+      <%=h @project.name %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Assembly:</td>
+    <td>
+      <%=h @project.assembly.name %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Gap 4 directory:</td>
+    <td>
+      <%=h @project.directory %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Owner:</td>
+    <td>
+      <%=h @project.owner %>
+    </td>
+  </tr>
+
+  <tr>
+    <td align = "left">
+      Comment:
+    </td>
+    <td>
+      <%=h @project.comment %>
+    </td>
+  </tr>
+
+  </table>
+
+  <br />
+
+  <table cellspacing="10">
+
+  <tr>
+    <td align="left" bgcolor='yellow'><b>Confirm:</b></td>
+    <td align="left" bgcolor='red'> <%= f.submit 'DELETE' %> </td>
+  </tr>
+
+  </table>
+
+<% end %>
+
+
+  <table cellspacing="10">
+  <tr><td align="left" bgcolor='lightblue'>
+  <%= link_to 'Back to project overview', :instance => params[:instance], 
+                                          :organism => params[:organism], 
+                                          :action => 'index' %>
+  </td></tr>
+  </table>
