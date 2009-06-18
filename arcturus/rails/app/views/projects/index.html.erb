@@ -11,6 +11,7 @@
     <th align="right">Max. length</th>
     <th align="right">No. of reads</th>
     <th align="center">Last updated</th>
+    <th align="center">Owner</th>
     <th align="center" colspan="3">Actions</th>
   </tr>
 
@@ -51,6 +52,10 @@
 
     <td>
       <%=h @summary['last_update'] %>
+    </td>
+
+    <td align="center">
+      <%=h project.owner %>
     </td>
 
     <td>
