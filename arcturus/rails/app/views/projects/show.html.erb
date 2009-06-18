@@ -1,4 +1,4 @@
-<h1>Information for project <%=h @project.name %></h1>
+<h2>Information for project <%=h @project.name %></h2>
 
 <table cellpadding="3">
 
@@ -109,4 +109,12 @@
 %> |
 <%= 
   link_to 'Back', :instance => params[:instance], :organism => params[:organism], :action => 'index'
+%> |
+
+<%=
+  link_to 'Destroy', :instance => params[:instance],
+                     :organism => params[:organism],
+                     :action => 'delete_confirm',
+                     :confirm => "Are you sure?",
+                     :id => @project
 %>
