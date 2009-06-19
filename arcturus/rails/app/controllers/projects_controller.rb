@@ -34,10 +34,9 @@ class ProjectsController < ApplicationController
   # GET /projects/new.xml
   def new
 
-    @assemblies_hash = Assembly.current_assemblies_as_hash
-
     if params['assembly'] then
        @currentprojects = Project.for_assembly_id(params[:assembly])
+       @assembly = Assembly.find(params['assembly'].to_i)
     else
        @currentprojects = Project.all
        @assemblies = Assembly.current_assemblies
@@ -86,11 +85,11 @@ class ProjectsController < ApplicationController
 
     respond_to do |format|
       if @project.update_attributes(params[:project])
-        flash[:notice] = 'Project was successfully updated.'
-        format.html { redirect_to( { :action => "show",
-                                     :instance => params[:instance],
-                                     :organism => params[:organism],
-                                     :id => @project}) }
+        flash[:notice] = 'Project #{@project} was successfully updated'
+        format.html { redirect_to :action => "show",
+                                  :instance => params[:instance],
+                                  :organism => params[:organism],
+                                  :id => @project }
         format.xml  { head :ok }
       else
         format.html { render :action => "edit" }
@@ -101,12 +100,22 @@ class ProjectsController < ApplicationController
 
   # DELETE /projects/1
   # DELETE /projects/1.xml
+  def delete_confirm
+    @project = Project.find(params[:id])
+  end      
+
   def destroy
     @project = Project.find(params[:id])
+
+    @projectname = @project.name
+
     @project.destroy
 
     respond_to do |format|
-      format.html { redirect_to(projects_url) }
+      flash[:notice] = 'Project #{@projectname} was deleted'
+      format.html { redirect_to  :action => "index",
+                                  :instance => params[:instance],
+                                  :organism => params[:organism] }
       format.xml  { head :ok }
     end
   end
