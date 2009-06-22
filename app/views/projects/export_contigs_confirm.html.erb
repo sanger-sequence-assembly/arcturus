@@ -1,0 +1,47 @@
+
+<h2>Confirm export of contigs for project <%= @project.name %> in : 
+             <%= params['instance'] %> / <%= params['organism'] %> </h2>
+
+<table bgcolor='lightyellow' cellspacing="10">
+  <tr><td align = "right">
+     Either
+  </td>
+  <td>
+    <%= link_to 'Continue', :instance => params[:instance],
+                            :organism => params[:organism],
+                            :action => :export_contigs,
+                            :id     => @project,
+                            :format => "text"
+     %>
+  </td>
+  <td align = "left">
+     with listing on your browser
+  </td></tr>
+
+  <tr>
+    <td colspan=2 align="right">
+     or export to file:
+    </td>
+
+    <% form_for :project, :url => {:controller => :projects,
+                                   :instance => params['instance'],
+                                   :organism => params['organism'],
+                                   :action => :export_contigs_to_file,
+                                   :id => @project,
+                                   :method => :post} do |f| %>
+      <%= f.error_messages %>
+
+      <td align="left">
+
+<%=
+ # f.text_field_tag ( "file", nil,  :size => 32, :maxlength => 256)
+%>
+       <input type='text' name="file" value="output file name" size=32 maxlength=256>
+
+      </td>
+      <td> 
+        <%= f.submit 'Export' %>
+      <td>
+    <% end %>
+  </tr>
+</table>
