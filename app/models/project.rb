@@ -20,4 +20,12 @@ class Project < ArcturusDatabase
   def current_contigs
     Contig.find_by_sql("select * from CONTIG where contig_id in (select contig_id from CURRENTCONTIGS where project_id = #{project_id}) order by length desc")
   end
+
+  def self.status_enumeration
+    @columns = connection.select_one("show columns from PROJECT like 'status'")
+    @enum = @columns['Type']
+    @enumlist = @enum.sub(/enum\((.+)\)/,'\1')
+    @enumlist.split(',')
+  end 
+
 end
