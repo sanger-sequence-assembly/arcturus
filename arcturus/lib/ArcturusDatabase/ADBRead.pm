@@ -3575,7 +3575,7 @@ sub putTagsForReads {
 
     my $readseqidhash = {};
     foreach my $read (@$reads) {
-        next unless $read->hasTags();
+        next unless ($options{synchronise} || $read->hasTags());
         if (my $seq_id = $read->getSequenceID()) {
             $readseqidhash->{$seq_id} = $read;
         }         
@@ -3722,6 +3722,7 @@ sub putTagsForReads {
             next if $ignore->{$rtag};
             push @tags,$rtag;
             $logger->info("tag to be added:\n".$rtag->writeToCaf());
+	    $logger->info("tag has no sequence ID") unless $rtag->getSequenceID();
 	}
     }
 
@@ -3947,7 +3948,7 @@ sub retireReadTag {
     $strand =~ s/(\w)\w*/$1/;
     my $tagcomment       = $tag->getTagComment();
 # we quote the comment string because it may contain odd characters
-    $tagcomment = $dbh->quote($tagcomment);
+    $tagcomment = $dbh->quote($tagcomment) if $tagcomment;
 
     my $query = "update READTAG set deprecated = 'Y'"
    	      . " where seq_id  = "    .  $tag->getSequenceID()  
