@@ -44,6 +44,10 @@ class ProjectsController < ApplicationController
 
     @project = Project.new
 
+    @users = self.users_extended
+
+    @status = Project.status_enumeration
+
     respond_to do |format|
       format.html # new.html.erb
       format.xml  { render :xml => @project }
@@ -53,6 +57,12 @@ class ProjectsController < ApplicationController
   # GET /projects/1/edit
   def edit
     @project = Project.find(params[:id])
+
+    @assemblies = Assembly.current_assemblies
+
+    @users = self.users_extended
+
+    @status = Project.status_enumeration
   end
 
   # POST /projects
@@ -85,7 +95,7 @@ class ProjectsController < ApplicationController
 
     respond_to do |format|
       if @project.update_attributes(params[:project])
-        flash[:notice] = 'Project #{@project} was successfully updated'
+        flash[:notice] = "Project #{@project.name} was successfully updated"
         format.html { redirect_to :action => "show",
                                   :instance => params[:instance],
                                   :organism => params[:organism],
@@ -112,7 +122,7 @@ class ProjectsController < ApplicationController
     @project.destroy
 
     respond_to do |format|
-      flash[:notice] = 'Project #{@projectname} was deleted'
+      flash[:notice] = "Project #{@projectname} was deleted"
       format.html { redirect_to  :action => "index",
                                   :instance => params[:instance],
                                   :organism => params[:organism] }
@@ -126,6 +136,10 @@ class ProjectsController < ApplicationController
   end
 
   # EXPORT CONTIGS /projects/export_contigs/1
+  def export_contigs_confirm
+    @project = Project.find(params[:id])
+  end 
+
   def export_contigs
     @project = Project.find(params[:id])
     @contigs = @project.current_contigs
@@ -135,4 +149,34 @@ class ProjectsController < ApplicationController
       format.text
     end
   end
+
+  def export_contigs_to_file
+    @project = Project.find(params[:id])
+    @contigs = @project.current_contigs
+    @fastafile = params[:file]
+
+    respond_to do |format|
+      format.html
+    end
+
+    file = File.open(@fastafile, modestring="w")
+    
+    @contigs.each do |c| 
+       file.write(c.to_fasta)
+    end
+ 
+    file.close
+  end
+
+protected
+
+  def users_extended
+    @users = User.find(:all, :order => "username")
+# and add an empty user up front
+    @empty_user = User.new()
+    @empty_user.username = nil
+    @users.unshift(@empty_user);
+    @users
+  end
+
 end
