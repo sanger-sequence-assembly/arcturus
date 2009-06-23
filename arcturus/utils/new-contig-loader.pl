@@ -77,7 +77,6 @@ my $noaspedcheck;           # (re: read load mode)
 my $rtagtypeaccept = 'default'; 
 my $loadreadtags = 1;       # (default) load new read tags found on caf file
 my $echoreadtags;           # list the read tags found; implies no loading
-#my $syncreadtags = 0;       # retire readtags which are NOT in the current lis
 my $syncreadtags = 1;       # retire readtags which are NOT in the current lis
 
 # project
@@ -90,6 +89,11 @@ my $scaffoldfile;
 
 my $projectlock;            # if set acquire lock on project first ? shoulb always
 my $autolockmode = 1;
+
+# filter for mixed assembly capilary reads
+
+my $rejectreadname = '\.[pq][12]k\.[\w\-]+';
+my $manglereadname = '\.[pq][12]k\.[\w\-]+';
 
 # output
 
@@ -124,6 +128,8 @@ my $validkeys  = "organism|o|instance|i|"
 
                . "padded|safemode|maximum|minimum|filter|withoutparents|wp|"
                . "testcontig|tc|noload|notest|parseonly|nobreak|consensus|"
+# beware! may allow loading corrupted reads
+               . "acceptclippedcapillaryreads|accr|rejectreadname|rrn|" # beware!
 
                . "noloadreads|nlr|doloadreads|dlr|"
                . "consensusreadname|crn|noaspedcheck|nac|"
@@ -135,7 +141,6 @@ my $validkeys  = "organism|o|instance|i|"
 
                . "readtagtype|rtt|noloadreadtags|nlrt|showreadtags|srt|"
                . "loadreadtags|lrt|nosynchronisereadtags|nsrt|"
-#               . "loadreadtags|lrt|synchronisereadtags|syncrt|"
 
                . "assignproject|ap|defaultproject|dp|setprojectby|spb|"
                . "projectlock|pl|dounlock|project|p|noprojectlock|npl|"
@@ -215,6 +220,15 @@ while (my $nextword = shift @ARGV) {
     if ($nextword eq '-wp' || $nextword eq '-withoutparents') {
         $withoutparents = 1;
     } 
+
+# readname selection
+
+    if ($nextword eq "-acceptclippedcapillaryreads" || $nextword eq "-accr") {
+        undef $manglereadname;         
+    } # beware! allows loading corrupted reads
+    elsif ($nextword eq "-rejectreadnames" || $nextword eq "-rrn") {
+        $rejectreadname = shift @ARGV;
+    }
 
     $consensus        = 1  if ($nextword eq '-consensus');
 
@@ -306,10 +320,8 @@ while (my $nextword = shift @ARGV) {
         $loadreadtags = 0;
         $echoreadtags = 1;            
     }
-#    if ($nextword eq '-nosynchronisereadtags' || $nextword eq '-nsrt') {
-#        $syncreadtags = 0;
-    if ($nextword eq '-synchronisereadtags' || $nextword eq '-syncrt') {
-        $syncreadtags = 1;
+    if ($nextword eq '-nosynchronisereadtags' || $nextword eq '-nsrt') {
+        $syncreadtags = 0;
     } 
 
 # project ('assignproject' forces its use, by-passing inheritance)
@@ -575,6 +587,8 @@ $poptions{contigtaglist}    = $ctagtypeaccept    if $ctagtypeaccept;
 $poptions{blockobject} = {}; # hash table for read and contig names to ignore
 # $poptions{nrofreads} = 100000; # approximate maximum nr of reads to be used
 
+$poptions{rejectreadname} = $rejectreadname if $rejectreadname; # MAY BE NOT REQUIRED
+
 my %readtagoptions;
 
 $readtagoptions{load} = 1 if $loadreadtags;
@@ -678,6 +692,17 @@ if ($frugal) { # this whole block should go to a contig "factory"
             $rankhash{$rank} = $objectname;
 	}
         elsif ($objecttype =~ /read/) {
+# filter readnames to avoid loading unwanted reads into arcturus
+            if ($manglereadname && $objectname =~ /$manglereadname/) {
+                $logger->severe("The assembly contains reads mangled by the Newbler asssembler");
+		$logger->severe("Loading is aborted");
+  	        $adb->disconnect();
+	        exit 1;
+            }
+            if ($rejectreadname && $objectname =~ /$rejectreadname/) {
+		$logger->warning("read $objectname was rejected");
+                next;
+	    }
 	    push @readnames,$objectname;
 	}
         elsif ($objecttype =~ /assembly/) {
@@ -792,7 +817,7 @@ while (!$fullscan) {
 # find contigs not returned and add to inventory with unshift TO BE DEVELOPED
 	    }
 
-# unless the read hash was built previously, continue with the contig extraction
+# unless the read hash if it was built previously, continue with the contig extraction
 
 	    if ($uservhashlocal) {
                 my @reads;
@@ -801,6 +826,9 @@ while (!$fullscan) {
                     my $reads = $contig->getReads();
                     push @reads,@$reads if $reads;
                     foreach my $read (@$reads) {
+#FILTER readname filter here??
+#print STDERR "$objectname rejected\n" if ($rejectreadname && $objectname =~ /$rejectreadname/);
+#next if ($rejectreadname && $objectname =~ /$rejectreadname/);
                         push @names,$read->getReadName();
 		    }
                 }
@@ -817,6 +845,7 @@ while (!$fullscan) {
                 undef @reads;
                 undef $ereads;
 	    }
+# HERE FILTER out unwanted reads?
             $logger->monitor("after extract",memory=>1,timing=>1) if $usage;
         }
         else {
@@ -917,6 +946,8 @@ print STDOUT " end no frugal scan\n";
 
         my $identifier = $contig->getContigName();
 
+# OR DO WE FILTER HERE $contig->deleteReadsLike($ignorereadslike);
+
         my $nr = $contig->getNumberOfReads();
 
         $logger->warning("Processing contig $identifier with $nr reads ... ") if ($nr > 1);
@@ -940,7 +971,7 @@ print STDOUT " end no frugal scan\n";
                 my $readname = $read->getName();
                 $logger->fine("read $readname");
                 undef $inventory->{$readname} if $frugal; # remove from inventory
-                next unless $read->hasTags();
+                next unless ($readtagoptions{sync} || $read->hasTags());
                 $logger->fine("read $readname has tags");
                 push @$reads,$read;
 	    }
@@ -1403,12 +1434,12 @@ $logger->monitor("ENTER processing : readtags for ".scalar(@$reads)." reads",mem
 
     if ($options{sync}) { # load (new) tags and remove existing tags not in list
         my $success = $adb->putTagsForReads($reads,autoload=>1,synchronise=>1);
-        $logger->debug("synchronise read tags : success = $success");
+        $logger->info("synchronise read tags : success = $success");
     }
 
     elsif ($options{load}) { # load (new) read tags
         my $success = $adb->putTagsForReads($reads,autoload=>1);
-        $logger->debug("put read tags : success = $success");
+        $logger->info("put read tags : success = $success");
     }
 $logger->monitor("AFTER processing readtags",memory=>1,timing=>1) if $monitor;
 
