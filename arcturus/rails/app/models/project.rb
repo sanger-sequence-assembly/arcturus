@@ -24,8 +24,8 @@ class Project < ArcturusDatabase
   def self.status_enumeration
     @columns = connection.select_one("show columns from PROJECT like 'status'")
     @enum = @columns['Type']
-    @enumlist = @enum.sub(/enum\((.+)\)/,'\1')
-    @enumlist.split(',')
+    @enumlist = @enum.sub(/enum\(\'(.+)\'\)/,'\1')
+    @enumlist.split('\',\'')
   end 
 
 end
