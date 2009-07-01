@@ -1,16 +1,88 @@
-<h1>Editing project</h1>
 
-<% form_for(@project) do |f| %>
+<h2>Edit project <%= @project.name %> for database : <%= params['instance'] %> / <%= params['organism'] %> </h2>
+
+<% form_for :project,  :url => {:controller => :projects,
+                                :action => :update,
+                                :id => @project,
+                                :method => :post,
+                                :instance => params['instance'],
+                                :organism => params['organism']} do |f| %>
   <%= f.error_messages %>
 
-  <p>
-    <%= f.label :name %><br />
-    <%= f.text_field :name %>
-  </p>
-  <p>
-    <%= f.submit 'Update' %>
-  </p>
+  <table bgcolor='lightyellow' cellspacing="20">
+
+    <tr>
+      <td align="left">
+        <%= f.label :project_name %>:
+      </td>
+      <td align="right">
+        <%= f.text_field :name, :value => @project.name, :size => 16 %>
+      </td>
+    </tr>
+
+    <tr>
+      <td>
+        <%= f.label :assembly, "Assembly" %>:
+      </td>
+      <td>
+        <%= f.collection_select(:assembly_id, @assemblies, :assembly_id, :name) %>
+      </td>
+    </tr>
+
+
+    <tr>
+      <td align="left">
+        <%= f.label :owner %>:
+      </td>
+      <td align="left">
+        <%= f.collection_select(:owner, @users, :username, :username) %>
+      </td>
+    </tr>
+
+    <tr>
+      <td align="left">
+        <%= f.label :status %>:
+      </td>
+     <td align="left">
+        <%= f.collection_select(:status, @status, :to_s, :to_s ) %>
+      </td>
+    </tr>
+
+    <tr>
+      <td align="left">
+        <%= f.label :directory %>:
+      </td>
+      <td align="left">
+        <%= f.text_field(:directory, :value => @project.directory , :size => 32, :maxlength => 256) %>
+      </td>
+    </tr>
+
+    <tr>
+      <td align="left">
+        <%= f.label :comment %>:
+      </td>
+      <td align="right">
+        <%= f.text_field :comment, :value => @project.comment, :size => 32, :maxlength => 256 %>
+      </td>
+    </tr>
+
+  </table>
+
+  <br />
+
+  <table cellspacing="20">
+
+  <tr><td align="left" bgcolor='orange'> <%= f.submit 'Update' %> </td></tr>
+
+  </table>
+
 <% end %>
 
-<%= link_to 'Show', @project %> |
-<%= link_to 'Back', projects_path %>
+<table cellspacing="20">
+<tr><td align="left" bgcolor='lightblue'>
+<%= link_to 'Back to project overview', :instance => params[:instance],
+                                        :organism => params[:organism],
+                                        :action => 'index' %>
+</td></tr>
+</table>
+
