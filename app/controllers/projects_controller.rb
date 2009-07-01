@@ -69,6 +69,14 @@ class ProjectsController < ApplicationController
   # POST /projects.xml
   def create
     # raise params[:project].inspect
+
+    owner_name = params[:project][:owner]
+
+    unless owner_name.nil?
+      owner = User.find_by_username(owner_name)
+      params[:project][:owner] = owner
+    end
+
     @project = Project.new(params[:project])
 
     @project.created = Time.now
