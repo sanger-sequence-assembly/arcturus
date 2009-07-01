@@ -1,20 +1,22 @@
-#!/bin/csh -f
+#!/bin/bash
 
-set SCRIPT_HOME=`dirname $0`
-set SCRIPT_NAME=`basename $0`
+SCRIPT_HOME=`dirname $0`
+SCRIPT_NAME=`basename $0`
 
-set PERL_SCRIPT_NAME=${SCRIPT_HOME}/${SCRIPT_NAME}.pl
+PERL_SCRIPT_NAME=${SCRIPT_HOME}/${SCRIPT_NAME}.pl
 
-set PERL_LIB_DIR=${SCRIPT_HOME}/../lib
+PERL_LIB_DIR=${SCRIPT_HOME}/../lib
 
-if ( $?PERL5LIB ) then
-  setenv PERL5LIB ${PERL_LIB_DIR}:${PERL5LIB}
+if [ "x$PERL5LIB" != "x" ]
+then
+  export PERL5LIB=${PERL_LIB_DIR}:${PERL5LIB}
 else
-  setenv PERL5LIB ${PERL_LIB_DIR}
-endif
+  export PERL5LIB=${PERL_LIB_DIR}
+fi
 
-if ( -x ${PERL_SCRIPT_NAME} ) then
-    exec ${PERL_SCRIPT_NAME} $*
+if [ -x ${PERL_SCRIPT_NAME} ]
+then
+    exec ${PERL_SCRIPT_NAME} "$@"
 else
     echo Error: ${PERL_SCRIPT_NAME} is not a valid command
-endif
+fi
