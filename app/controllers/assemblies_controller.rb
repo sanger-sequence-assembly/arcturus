@@ -24,12 +24,6 @@ class AssembliesController < ApplicationController
     end
   end
 
-
-  def list_projects
-    @assembly = Assembly.find(params[:id])
-  end
-
-
   # GET /assemblies/new
   # GET /assemblies/new.xml
 
@@ -107,5 +101,18 @@ class AssembliesController < ApplicationController
                                                      :organism => params[:organism]}
        format.xml  { head :ok }
     end
+  end
+
+  def forward
+# catch assembly and
+    organismhash = params[:arcturus]
+    organism = organismhash[:organism]
+
+puts params.inspect
+    redirect_to :controller => :assemblies,
+                :instance => params[:instance],
+                :organism => organism,
+                :action => 'index',
+                :id => @assembly
   end
 end
