@@ -1,5 +1,6 @@
 class Project < ArcturusDatabase
   belongs_to :assembly
+  belongs_to :owner, :class_name => 'User', :foreign_key => 'owner'
   has_many :contig
 
   validates_presence_of :name
