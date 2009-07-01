@@ -55,7 +55,7 @@
     </td>
 
     <td align="center">
-      <%=h project.owner %>
+      <%=h project.owner.nil? ? '' : project.owner.full_name %>
     </td>
 
     <td>

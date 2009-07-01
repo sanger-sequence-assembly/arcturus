@@ -46,7 +46,7 @@
   <tr>
     <td>Owner:</td>
     <td>
-      <%=h @project.owner %>
+      <%=h @project.owner.nil? ? '' : @project.owner.full_name %>
     </td>
   </tr>
 
