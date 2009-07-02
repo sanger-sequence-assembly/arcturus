@@ -1,4 +1,7 @@
 class Contig < ActiveRecord::Base
+  set_table_name 'CONTIG'
+  set_primary_key "contig_id"
+
   belongs_to :project
 
   validates_presence_of :project
@@ -7,9 +10,6 @@ class Contig < ActiveRecord::Base
 
   has_many :tag_mappings
   has_many :tags, :through => :tag_mappings
-
-  set_table_name 'CONTIG'
-  self.primary_key = "contig_id"
 
   def get_consensus
     @query = "select sequence from CONSENSUS where contig_id = #{contig_id}"

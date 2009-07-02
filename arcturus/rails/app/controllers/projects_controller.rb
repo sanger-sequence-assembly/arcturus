@@ -35,7 +35,7 @@ class ProjectsController < ApplicationController
   def new
 
     if params['assembly'] then
-       @currentprojects = Project.for_assembly_id(params[:assembly])
+       @currentprojects = Project.find_all_by_assembly_id(params[:assembly])
        @assembly = Assembly.find(params['assembly'].to_i)
     else
        @currentprojects = Project.all
@@ -44,7 +44,9 @@ class ProjectsController < ApplicationController
 
     @project = Project.new
 
-    @users = self.users_extended
+    #@users = self.users_extended
+
+    @users = User.find(:all, :order => "username")
 
     @status = Project.status_enumeration
 
@@ -60,7 +62,9 @@ class ProjectsController < ApplicationController
 
     @assemblies = Assembly.current_assemblies
 
-    @users = self.users_extended
+    #@users = self.users_extended
+
+    @users = User.find(:all, :order => "username")
 
     @status = Project.status_enumeration
   end
@@ -70,14 +74,18 @@ class ProjectsController < ApplicationController
   def create
     # raise params[:project].inspect
 
-    owner_name = params[:project][:owner]
+    owner = nil
 
-    unless owner_name.nil?
-      owner = User.find_by_username(owner_name)
-      params[:project][:owner] = owner
+    if params[:project].has_key?(:owner)
+      owner = User.find(params[:project][:owner])
+      params[:project].delete(:owner)
     end
 
     @project = Project.new(params[:project])
+
+    unless owner.nil?
+      @project.owner = owner
+    end
 
     @project.created = Time.now
 
@@ -100,6 +108,15 @@ class ProjectsController < ApplicationController
   # PUT /projects/1.xml
   def update
     @project = Project.find(params[:id])
+
+    if params[:project].has_key?(:owner)
+      owner = User.find(params[:project][:owner])
+      params[:project].delete(:owner)
+
+      unless owner.nil?
+         @project.owner = owner
+      end
+    end
 
     respond_to do |format|
       if @project.update_attributes(params[:project])

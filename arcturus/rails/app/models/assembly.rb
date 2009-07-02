@@ -1,11 +1,11 @@
 class Assembly < ArcturusDatabase
+  set_table_name 'ASSEMBLY'
+  set_primary_key "assembly_id"
+
   has_many :project
 
   validates_presence_of :name
   validates_presence_of :creator
-
-  set_table_name 'ASSEMBLY'
-  self.primary_key = "assembly_id"
 
   def projects
       @query = "select project_id from PROJECT where assembly_id = #{assembly_id} order by project_id"

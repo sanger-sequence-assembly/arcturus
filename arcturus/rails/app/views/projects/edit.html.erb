@@ -35,7 +35,7 @@
         <%= f.label :owner %>:
       </td>
       <td align="left">
-        <%= f.collection_select(:owner, @users, :username, :username) %>
+        <%= f.collection_select(:owner, @users, :id, :full_name, {:prompt => true}) %>
       </td>
     </tr>
 

@@ -1,4 +1,7 @@
 class Project < ArcturusDatabase
+  set_table_name 'PROJECT'
+  set_primary_key "project_id"
+
   belongs_to :assembly
   belongs_to :owner, :class_name => 'User', :foreign_key => 'owner'
   has_many :contig
@@ -7,9 +10,6 @@ class Project < ArcturusDatabase
   validates_presence_of :creator
   validates_presence_of :assembly
  
-  set_table_name 'PROJECT'
-  self.primary_key = "project_id"
-
   def current_contigs_summary
     @query = "select sum(length) as total_length,count(*) as contig_count," +
       " max(length) as max_length,sum(nreads) as read_count," +
