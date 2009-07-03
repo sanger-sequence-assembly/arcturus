@@ -17,11 +17,12 @@
     <td align="right"><%= contig.length %></td>
     <td align="right"><%= contig.nreads %></td>
     <td><%= contig.created %></td>
-    <td><%= link_to 'Show', contig %></td>
+    <td><%= link_to 'Show',  :instance => params[:instance],
+                             :organism => params[:organism],
+                             :action => 'show',
+                             :id => contig %></td>
   </tr>
 <% end %>
 </table>
 
 <br />
-
-<%= link_to 'New contig', new_contig_path %>

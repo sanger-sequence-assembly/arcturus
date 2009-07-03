@@ -47,7 +47,13 @@
     <td>
       <%=h @contig.updated %>
     </td>
- 
+
+    <td><%= link_to 'Show',  :instance => params[:instance],
+                             :organism => params[:organism],
+                             :controller => 'contigs',
+                             :action => 'show',
+                             :id => @contig %></td>
+
     <td>
       <%= 
          link_to 'List tags', :instance => params[:instance], :organism => params[:organism],
