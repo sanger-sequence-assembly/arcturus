@@ -41,11 +41,11 @@
     </td>
 
     <td>
-      <%=h @contig.created %>
+      <%=h @contig.created.strftime("%Y-%m-%d %H:%M:%S") %>
     </td>
 
     <td>
-      <%=h @contig.updated %>
+      <%=h @contig.updated.strftime("%Y-%m-%d %H:%M:%S") %>
     </td>
 
     <td><%= link_to 'Show',  :instance => params[:instance],
@@ -72,3 +72,7 @@
   </tr>
 <% end %>
 </table>
+
+<hr />
+
+<%= link_to 'Back', :back %>
