@@ -1,6 +1,6 @@
 class Contig < ActiveRecord::Base
   set_table_name 'CONTIG'
-  set_primary_key "contig_id"
+  self.primary_key = "contig_id"
 
   belongs_to :project
 

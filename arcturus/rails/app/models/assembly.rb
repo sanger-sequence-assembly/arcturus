@@ -1,6 +1,6 @@
 class Assembly < ArcturusDatabase
   set_table_name 'ASSEMBLY'
-  set_primary_key "assembly_id"
+  self.primary_key = "assembly_id"
 
   has_many :project
 
