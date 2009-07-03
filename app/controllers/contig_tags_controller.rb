@@ -13,11 +13,27 @@ class ContigTagsController < ApplicationController
   # GET /contig_tags/1
   # GET /contig_tags/1.xml
   def show
-    @contig_tag = ContigTag.find(params[:id])
+    if params[:systematic_id]
+      @tag = ContigTag.find_by_systematic_id(params[:systematic_id])
+    else
+      @tag = ContigTag.find(params[:id])
+    end
 
-    respond_to do |format|
-      format.html # show.html.erb
-      format.xml  { render :xml => @contig_tag }
+    if @tag.nil?
+      redirect_to :action => :not_found,
+                  :instance => params[:instance],
+                  :organism => params[:organism],
+                  :id => params[:id],
+                  :systematic_id => params[:systematic_id],
+                  :format => params[:format]
+    else
+      @query = "select T2C.* from TAG2CONTIG T2C,CURRENTCONTIGS CC where tag_id = #{@tag.tag_id} and T2C.contig_id = CC.contig_id"
+      @mappings = TagMapping.find_by_sql(@query)
+
+      respond_to do |format|
+        format.html # find.html.erb
+        format.xml  # find.erb
+      end
     end
   end
 
@@ -78,35 +94,11 @@ class ContigTagsController < ApplicationController
     @contig_tag.destroy
 
     respond_to do |format|
-      format.html { redirect_to(contig_tags_url) }
+      flash[:notice] = 'ContigTag was successfully destroyed.'
+      format.html { redirect_to :action => :index,
+                                :instance => params[:instance],
+                                :organism => params[:organism] }
       format.xml  { head :ok }
-    end
-  end
-
-
-  # FIND /contig_tags/find/1
-  def find
-    if params[:systematic_id]
-      @tag = ContigTag.find_by_systematic_id(params[:systematic_id])
-    else
-      @tag = ContigTag.find(params[:id])
-    end
-
-    if @tag.nil?
-      redirect_to :action => :not_found,
-                  :instance => params[:instance],
-                  :organism => params[:organism],
-                  :id => params[:id],
-                  :systematic_id => params[:systematic_id],
-                  :format => params[:format]
-    else
-      @query = "select T2C.* from TAG2CONTIG T2C,CURRENTCONTIGS CC where tag_id = #{@tag.tag_id} and T2C.contig_id = CC.contig_id"
-      @mappings = TagMapping.find_by_sql(@query)
-
-      respond_to do |format|
-        format.html # find.html.erb
-        format.xml  # find.erb
-      end
     end
   end
 
