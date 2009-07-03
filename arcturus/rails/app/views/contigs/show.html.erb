@@ -1,3 +1,57 @@
+<h1>Information for contig <%= @contig.contig_id %></h1>
 
-<%= link_to 'Edit', edit_contig_path(@contig) %> |
-<%= link_to 'Back', contigs_path %>
+<table cellpadding="3">
+
+  <tr>
+    <td colspan="2" align="left">
+      <em>Contig properties</em>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Length:</td>
+    <td>
+      <%=h @contig.length %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Reads:</td>
+    <td>
+      <%=h @contig.nreads %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Created:</td>
+    <td>
+      <%=h @contig.created %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Updated:</td>
+    <td>
+      <%=h @contig.updated %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Project:</td>
+    <td>
+      <%=h @contig.project.name %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Gap4 name:</td>
+    <td>
+      <%=h @contig.gap4name %>
+    </td>
+  </tr>
+
+</table>
+
+<hr />
+
+<%= link_to 'Back', :instance => params[:instance], :organism => params[:organism], :action => 'index' %>
