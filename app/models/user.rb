@@ -1,6 +1,6 @@
 class User < ActiveRecord::Base
   set_table_name 'USER'
-  set_primary_key "username"
+  self.primary_key = "username"
 
   def full_name
     @filter = Net::LDAP::Filter.eq("uid", username)

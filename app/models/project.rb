@@ -1,6 +1,6 @@
 class Project < ArcturusDatabase
   set_table_name 'PROJECT'
-  set_primary_key "project_id"
+  self.primary_key = "project_id"
 
   belongs_to :assembly
   belongs_to :owner, :class_name => 'User', :foreign_key => 'owner'
