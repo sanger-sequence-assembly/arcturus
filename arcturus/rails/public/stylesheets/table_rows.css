@@ -6,3 +6,14 @@
   background-color: #ccccee;
 }
 
+.table_cell_odd {
+  background-color: #ffffff;
+}
+
+.table_cell_even {
+  background-color: #ccccee;
+}
+
+.highlight {
+  background-color: #ffffcc;
+}
