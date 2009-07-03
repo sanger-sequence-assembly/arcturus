@@ -70,3 +70,6 @@ if "irb" == $0
   ActiveRecord::Base.logger = Logger.new(STDOUT)
 end
 
+# control appearance of organism inventory form
+
+ARCTURUS_LINK_OPTION = 1 # (alternatively 0)
