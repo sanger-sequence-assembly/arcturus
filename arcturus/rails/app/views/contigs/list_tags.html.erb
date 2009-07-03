@@ -14,15 +14,15 @@
     <th align="left">Comment</th>
   </tr>
 
-<% @row_number = 0 %>
+<% row_number = 0 %>
 
 <% @mappings.each do |@mapping| %>
 <% 
-  @row_number += 1
-  @style = (@row_number % 2 == 0) ? "table_row_even" : "table_row_odd"
+  row_number += 1
+  style = (row_number % 2 == 0) ? "table_row_even" : "table_row_odd"
 %>
 
-  <tr class="<%= @style %>">
+  <tr class="<%= style %>">
     <td>
       <%=h @mapping['id'] %>
     </td>
