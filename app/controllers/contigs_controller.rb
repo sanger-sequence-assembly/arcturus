@@ -105,7 +105,7 @@ class ContigsController < ApplicationController
 
     respond_to do |format|
       format.html
-      format.text  { render :text => @contig.to_fasta }
+      format.text  { render :text => @contig.to_fasta(true) }
     end
   end
 

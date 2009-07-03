@@ -24,11 +24,18 @@ class Contig < ActiveRecord::Base
     end
   end
 
-  def to_fasta
+  def to_fasta(verbose=false)
     @seq = get_consensus
     @seqlen = @seq.length
     @fasta = String.new
-    @fasta.concat(">contig#{contig_id}\n")
+    @fasta.concat(">contig#{contig_id}")
+
+    if verbose
+      cstr = created.strftime("%Y-%m-%d_%H:%M:%S")
+      @fasta.concat(" length=#{length} reads=#{nreads} created=#{cstr} project=#{project.name}")
+    end
+
+    @fasta.concat("\n")
     0.step(@seq.length, 50) do |offset|
       @fasta.concat(@seq.slice(offset, 50))
       @fasta.concat("\n");

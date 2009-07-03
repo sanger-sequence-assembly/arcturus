@@ -1,7 +1,3 @@
-<% @seq = @contig.get_consensus %>
 <pre>
-&gt;contig<%= @contig.contig_id %>
-<% 0.step(@seq.length, 50) do |offset| -%>
-<%= @seq.slice(offset, 50) %>
-<% end %>
+<%= @contig.to_fasta(true) %>
 </pre>
