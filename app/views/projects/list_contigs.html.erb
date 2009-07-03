@@ -15,15 +15,15 @@
 
 <% @contigs = @project.current_contigs %>
 
-<% @row_number = 0 %>
+<% row_number = 0 %>
 
 <% @contigs.each do |@contig| %>
 <% 
-  @row_number += 1
-  @style = (@row_number % 2 == 0) ? "table_row_even" : "table_row_odd"
+  row_number += 1
+  style = (row_number % 2 == 0) ? "table_row_even" : "table_row_odd"
 %>
 
-  <tr class="<%= @style %>">
+  <tr class="<%= style %>">
     <td>
       <%=h @contig.contig_id %>
     </td>
