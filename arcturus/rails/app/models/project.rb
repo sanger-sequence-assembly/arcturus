@@ -9,6 +9,12 @@ class Project < ArcturusDatabase
   validates_presence_of :name
   validates_presence_of :creator
   validates_presence_of :assembly
+
+  def owner=(user)
+    new_owner = (user.nil? or user.kind_of? User) ? user : User.find(user)
+    puts "new_owner = #{new_owner.inspect}"
+    write_attribute(:owner, new_owner)
+  end
  
   def current_contigs_summary
     @query = "select sum(length) as total_length,count(*) as contig_count," +

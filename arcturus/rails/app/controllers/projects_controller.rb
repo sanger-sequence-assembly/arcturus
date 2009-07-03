@@ -44,8 +44,6 @@ class ProjectsController < ApplicationController
 
     @project = Project.new
 
-    #@users = self.users_extended
-
     @users = User.find(:all, :order => "username")
 
     @status = Project.status_enumeration
@@ -62,8 +60,6 @@ class ProjectsController < ApplicationController
 
     @assemblies = Assembly.current_assemblies
 
-    #@users = self.users_extended
-
     @users = User.find(:all, :order => "username")
 
     @status = Project.status_enumeration
@@ -72,20 +68,7 @@ class ProjectsController < ApplicationController
   # POST /projects
   # POST /projects.xml
   def create
-    # raise params[:project].inspect
-
-    owner = nil
-
-    if params[:project].has_key?(:owner)
-      owner = User.find(params[:project][:owner])
-      params[:project].delete(:owner)
-    end
-
     @project = Project.new(params[:project])
-
-    unless owner.nil?
-      @project.owner = owner
-    end
 
     @project.created = Time.now
 
@@ -108,15 +91,6 @@ class ProjectsController < ApplicationController
   # PUT /projects/1.xml
   def update
     @project = Project.find(params[:id])
-
-    if params[:project].has_key?(:owner)
-      owner = User.find(params[:project][:owner])
-      params[:project].delete(:owner)
-
-      unless owner.nil?
-         @project.owner = owner
-      end
-    end
 
     respond_to do |format|
       if @project.update_attributes(params[:project])
