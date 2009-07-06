@@ -1,0 +1,7 @@
+default_contig:
+  contig_id:   1
+  gap4name:    'default_contig'
+  project_id:  1
+  length:      5000
+  nreads:      10 
+  created:     '2009-01-01'
