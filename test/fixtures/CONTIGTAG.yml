@@ -1,0 +1,14 @@
+default_tag:
+  tag_id:         1
+  tagtype:        DFLT
+  systematic_id:  default_tag
+
+test_tag_2:
+  tag_id:         2
+  tagtype:        TEST
+  systematic_id:  TEST0002
+
+test_tag_3:
+  tag_id:         3
+  tagtype:        TEST
+  systematic_id:  TEST0003
