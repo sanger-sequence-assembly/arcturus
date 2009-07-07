@@ -6,6 +6,8 @@ ActionController::Routing::Routes.draw do |map|
   map.connect ":instance/:organism/:controller/:action/:id"
   map.connect ":instance/:organism/:controller/:action/:id.:format"
 
+  map.connect "arcturus/:instance", :controller => 'arcturus', :action => 'index'
+
   # map.resources :assemblies
 
   # map.resources :projects

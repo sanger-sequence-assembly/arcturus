@@ -1,96 +1,34 @@
 <%= stylesheet_link_tag "table_rows", :media => "all" %>
 
-<h3>Arcturus view <%= @view %> has <%= @inventory.length %> organism databases </h3>
+<h3>Arcturus instance <%= @instance_name %> has <%= @organisms.length %> organism databases </h3>
 
 <br />
 
-<% @columns = 8; @rows = ((@inventory.length + @columns - 1)/@columns).floor  %>
-
-<table cellspacing="10">
-
-<% for @r in 1..@rows %>
-
+<table cellspacing="3">
   <tr>
-
-  <% for @c in 1..@columns %>
-
-    <% @entry = (@c - 1) * @rows + @r - 1 %>
-
-    <% @style = (@entry < @inventory.length && (@r + @c) % 2 == 0) ? "table_cell_even" : "table_cell_odd" %>
-
-    <% @organism = @inventory[@entry] %>
-
-    <td class="<%= @style %>">
-
-    <% if (@entry < @inventory.length) then %>
-
-       <% if ARCTURUS_LINK_OPTION != 0 then %>
-
-          <%= link_to @organism, :controller => :assemblies,
-                                 :instance => @instance,
-                                 :organism => @organism %>
-       <% else %>
-          <%= @inventory[@entry] %>
-       <% end %>
-
-    <% else %>
-       &nbsp
-    <% end %>
-
-    </td>
-
-  <% end %>
-
+    <th align="left">Nickname</th>
+    <th align="left">Description</th>
   </tr>
 
-<% end %>
+  <% row_number = 0 %>
+
+  <% @organisms.keys.sort.each do |nickname| %>
+    <% 
+      row_number += 1
+      style = (row_number % 2 == 0) ? "table_row_even" : "table_row_odd"
+    %>
+  <tr class="<%= style %>">
+    <td>
+      <%= 
+         link_to nickname, :instance => @instance_name, :organism => nickname, :controller => 'projects', :action => 'index'
+      %>
+    </td>
+
+   <td align="left"><%= @organisms[nickname] %></td>
+  </tr>
+  <% end %>
 
 </table>
 
 <br />
 
-<% if ARCTURUS_LINK_OPTION == 0 then %>
-
-  <% form_for (:arcturus, { :url => { :controller => :assemblies ,
-                                      :action     => :forward    ,
-                                      :method     => :post       ,
-                                      :instance   => @instance   } ,
-                           :html => { :id => 'arcturus_bug' } }  ) do |f| %>
-
-    <%= f.error_messages %>
-
-    <table class="<%="highlight"%>" cellspacing="20">
-
-      <tr>
-        <td align="left">
-          <%= f.label 'select an organism' %>:
-        </td>
-        <td align="left">
-          <%= f.collection_select( :organism, @inventory, :to_s, :to_s, {}, {:onchange =>"this.form.submit();"} ) %>
-        </td>
-      </tr>
-
-    </table>
-
-  <% end %>
-
-<% end %>
-
-<br />
-
-<% if (@return_path && @return_path[0]) then 
-   urloptions = {}
-   urloptions[:controller] = :arcturus
-   urloptions[:action] = @return_path[0]
-   @returnview = @return_path[0]
-   urloptions[:id] = nil # to override any params[:id} !
-   if @return_path[1] then
-     urloptions[:id] = @return_path[1] 
-     @returnview = @return_path[1]
-   end %>
-  <table cellspacing="20">
-  <tr><td align="left">Back to :</td><td align="left" class="<%="highlight"%>">
-  <%= link_to "#{@returnview}", urloptions %>
-  </td></tr>
-  </table>
-<% end %>
