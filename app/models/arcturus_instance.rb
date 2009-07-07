@@ -1,31 +1,34 @@
 class ArcturusInstance
-
-  attr_accessor :instance_name
-  attr_accessor :group_name
-  attr_accessor :genus_name
-
-  def initialize
-    @organisms = []
+  def initialize(my_instance_name)
+    @instance_name = my_instance_name
+    build_inventory
   end
 
-  def add_organism_name (organism)
-    @organisms << organism   
+  def organisms
+    @organisms
   end
 
-  def inventory
+  def instance_name
+    @instance_name
+  end
+
+private
+
+  def build_inventory
+    filter = Net::LDAP::Filter.eq("objectClass", "javaNamingReference")
+    base = "cn=#{instance_name}," + LDAP_BASE
+
+    entries = LDAP.search(:base => base, :filter => filter)
+    unless (entries) then
+      raise "Unknown instance: #{@instance_name}"
+    end
+
+    @organisms = {}
+
+    entries.each do |entry|
+      @organisms[entry['cn'].first] = entry['description'].first
+    end
+
     @organisms.sort
   end
-
-  def selection_name
-    selection_name = "#{self.instance_name}" # force to be string (aot a symbol)
-    selection_name = "#{selection_name}-" + self.group_name if self.group_name
-    selection_name = "#{selection_name}-" + self.genus_name if self.genus_name
-    selection_name
-  end
-
-  def to_string
-    length = @organisms.length
-    puts "instance_name #{selection_name} has #{length} organisms"
-  end
- 
 end

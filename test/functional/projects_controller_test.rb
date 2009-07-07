@@ -1,6 +1,12 @@
 require 'test_helper'
 
 class ProjectsControllerTest < ActionController::TestCase
+  set_fixture_class :ASSEMBLY => Assembly,
+                    :PROJECT  => Project,
+                    :CONTIG   => Contig
+
+  fixtures :ASSEMBLY, :PROJECT, :CONTIG
+
   test "should get index" do
     get :index
     assert_response :success
