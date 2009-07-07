@@ -1,3 +1,42 @@
+<h1>Information for tag mapping <%= @tag_mapping.id %></h1>
 
-<%= link_to 'Edit', edit_tag_mapping_path(@tag_mapping) %> |
-<%= link_to 'Back', tag_mappings_path %>
+<table cellpadding="3">
+  <tr>
+    <td colspan="2"><strong>Tag Mapping</strong></td>
+  <tr>
+  <tr>
+    <td>Mapping ID</td>
+    <td><%= @tag_mapping.id %></td>
+  </tr>
+  <tr>
+    <td>Contig ID</td>
+    <td><%= @tag_mapping.contig_id %></td>
+  </tr>
+  <tr>
+    <td>Contig start position</td>
+    <td><%= @tag_mapping.cstart %></td>
+  </tr>
+  <tr>
+    <td>Contig end position</td>
+    <td><%= @tag_mapping.cfinal %></td>
+  </tr>
+  <tr>
+    <td>Strand</td>
+    <td><%= @tag_mapping.strand %></td>
+  </tr>
+  <tr>
+    <td colspan="2"><strong>Tag</strong></td>
+  <tr>
+  <tr>
+    <td>Tag type:</td>
+    <td><%=h @contig_tag.tagtype %></td>
+  </tr>
+  <tr>
+    <td>Systematic ID:</td>
+    <td><%=h @contig_tag.systematic_id %></td>
+  </tr>
+  <tr>
+    <td>Comment</td>
+    <td><%h= @contig_tag.tagcomment %></td>
+  </tr>
+</table>
