@@ -17,6 +17,7 @@ class TagMappingsController < ApplicationController
   # GET /tag_mappings/1.xml
   def show
     @tag_mapping = TagMapping.find(params[:id])
+    @contig_tag = @tag_mapping.tag
 
     respond_to do |format|
       format.html # show.html.erb
