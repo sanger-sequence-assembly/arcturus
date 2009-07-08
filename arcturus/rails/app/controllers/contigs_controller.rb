@@ -111,4 +111,14 @@ class ContigsController < ApplicationController
     end
   end
 
+  # SHOW PARENTS /contigs/1/parents
+  def parents
+    @contig = Contig.find(params[:id])
+    @parents = @contig.parents
+
+    respond_to do |format|
+      format.html
+      format.xml  { render :xml => @parents }
+    end
+  end
 end
