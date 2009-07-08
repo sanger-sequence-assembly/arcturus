@@ -75,10 +75,9 @@ class ProjectsController < ApplicationController
     respond_to do |format|
       if @project.save
         flash[:notice] = 'Project was successfully created.'
-        format.html { redirect_to( { :action => "show",
+        format.html { redirect_to( { :action => "index",
                                      :instance => params[:instance], 
-                                     :organism => params[:organism],
-                                     :id => @project}) }
+                                     :organism => params[:organism] }) }
         format.xml  { render :xml => @project, :status => :created, :location => @project }
       else
         format.html { render :action => "new" }
@@ -129,8 +128,8 @@ class ProjectsController < ApplicationController
     end
   end
 
-  # LIST CONTIGS /projects/list_contigs/1
-  def list_contigs
+  # LIST CONTIGS /projects/1/contigs
+  def contigs
     @project = Project.find(params[:id])
   end
 
@@ -139,7 +138,7 @@ class ProjectsController < ApplicationController
     @project = Project.find(params[:id])
   end 
 
-  def export_contigs
+  def export
     @project = Project.find(params[:id])
     @contigs = @project.current_contigs
 
