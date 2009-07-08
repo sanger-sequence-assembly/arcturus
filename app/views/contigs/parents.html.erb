@@ -1,6 +1,6 @@
 <%= stylesheet_link_tag "table_rows", :media => "all" %>
 
-<h1>Contigs for <%=h @project.name %>  </h1>
+<h1>Parents of contig <%= @contig.contig_id %>  </h1>
 
 <table cellpadding="3">
   <tr>
@@ -13,11 +13,9 @@
     <th align="center" colspan="4">Actions</th>
   </tr>
 
-<% @contigs = @project.current_contigs %>
-
 <% row_number = 0 %>
 
-<% @contigs.each do |@contig| %>
+<% @parents.each do |parent| %>
 <% 
   row_number += 1
   style = (row_number % 2 == 0) ? "table_row_even" : "table_row_odd"
@@ -25,40 +23,40 @@
 
   <tr class="<%= style %>">
     <td>
-      <%=h @contig.contig_id %>
+      <%=h parent.contig_id %>
     </td>
 
     <td>
-      <%=h @contig.gap4name %>
+      <%=h parent.gap4name %>
     </td>
 
     <td align="right">
-      <%=h @contig.length %>
+      <%=h parent.length %>
     </td>
 
     <td align="right">
-      <%=h @contig.nreads %>
+      <%=h parent.nreads %>
     </td>
 
     <td>
-      <%=h @contig.created.strftime("%Y-%m-%d %H:%M:%S") %>
+      <%=h parent.created.strftime("%Y-%m-%d %H:%M:%S") %>
     </td>
 
     <td>
-      <%=h @contig.updated.strftime("%Y-%m-%d %H:%M:%S") %>
+      <%=h parent.updated.strftime("%Y-%m-%d %H:%M:%S") %>
     </td>
 
     <td><%= link_to 'Show',  :instance => params[:instance],
                              :organism => params[:organism],
                              :controller => 'contigs',
                              :action => 'show',
-                             :id => @contig %></td>
+                             :id => parent %></td>
 
     <td>
       <%= 
          link_to 'List tags', :instance => params[:instance], :organism => params[:organism],
 		:controller => 'contigs',
-		:action => 'tags', :id => @contig
+		:action => 'tags', :id => parent
       %>
     </td>
  
@@ -66,7 +64,7 @@
       <%= 
          link_to 'Show sequence', :instance => params[:instance], :organism => params[:organism],
 		:controller => 'contigs',
-		:action => 'sequence', :id => @contig
+		:action => 'sequence', :id => parent
       %>
     </td>
  
@@ -74,7 +72,7 @@
       <%= 
          link_to 'Parents', :instance => params[:instance], :organism => params[:organism],
 		:controller => 'contigs',
-		:action => 'parents', :id => @contig
+		:action => 'parents', :id => parent
       %>
     </td>
   </tr>
