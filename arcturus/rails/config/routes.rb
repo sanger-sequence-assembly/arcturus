@@ -21,6 +21,8 @@ ActionController::Routing::Routes.draw do |map|
 
   map.resources :tag_mappings, :path_prefix => "/:instance/:organism"
 
+  map.resources :users, :path_prefix => "/:instance/:organism"
+
   map.connect "arcturus/:instance/:subclass", :controller => 'arcturus', :action => 'index'
   map.connect "arcturus/:instance", :controller => 'arcturus', :action => 'index'
 end
