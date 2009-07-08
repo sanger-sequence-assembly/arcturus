@@ -68,6 +68,7 @@ Mime::Type.register "text/plain", :FASTA
 
 if "irb" == $0
   ActiveRecord::Base.logger = Logger.new(STDOUT)
+  @r = ActionController::Routing::Routes
 end
 
 # control appearance of organism inventory form
