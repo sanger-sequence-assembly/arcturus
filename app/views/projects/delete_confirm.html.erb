@@ -1,12 +1,12 @@
 
 <h2>Confirm deletion of project <%= @project %> for database : <%= params['instance'] %> / <%= params['organism'] %> </h2>
 
-<% form_for :assembly, :url => {:controller => :projects, 
+<% form_for(:assembly, :url => {:controller => :projects, 
                                 :action => :destroy, 
                                 :id => @project, 
-                                :method => :post, 
                                 :instance => params['instance'], 
-                                :organism => params['organism']} do |f| %>
+                                :organism => params['organism']},
+                       :html => { :method => :delete }) do |f| %>
   <%= f.error_messages %>
 
   <br />

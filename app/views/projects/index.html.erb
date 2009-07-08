@@ -66,13 +66,13 @@
  
     <td>
       <%= 
-         link_to 'List contigs', :instance => params[:instance], :organism => params[:organism], :action => 'list_contigs', :id => project
+         link_to 'List contigs', :instance => params[:instance], :organism => params[:organism], :action => 'contigs', :id => project
       %>
     </td>
 
    <td>
       <%=
-         link_to 'Export contigs', :instance => params[:instance], :organism => params[:organism], :action => 'export_contigs', :id => project, :format => "text"
+         link_to 'Export contigs', :instance => params[:instance], :organism => params[:organism], :action => 'export', :id => project, :format => "text"
        %>
     </td>
 

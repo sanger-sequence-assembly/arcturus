@@ -5,29 +5,6 @@
     <%=h params['instance'] %> / <%=h params['organism'] %>
 </h2>
 
-
-<% if @currentprojects then %>
-    <table cellpadding=10>
-    <tr><th align='left'>Existing projects</th><th align='left'>name</th><th>assembly</th></tr>
-    <% @currentprojects.each do |p| %>
-    <tr><td>&nbsp</td><td><%=h p.name %></td><td> <%=h p.assembly %></td></tr>
-    <% end %>
-    </table>
-<% else %>
-    <h4>There are currently no projects defined 
-       <% if params['assembly'] then %> for assembly <%=h @assembly %>
-       <% end %>
-    </h4>
-<% end %>
-
-<br />
-
-<table cellpadding=10>
-  <tr>
-     <th> Define a  new project :</th>
-  </tr>
-</table>
-
 <% form_for :project, :url => {:controller => :projects, 
                                :method => :post, 
                                :action => :create,
@@ -36,7 +13,7 @@
   <%= f.error_messages %>
 
 
-  <table bgcolor='lightyellow' cellspacing="20">
+  <table cellspacing="3">
 
     <tr>
       <td align="left">

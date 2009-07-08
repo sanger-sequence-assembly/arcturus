@@ -84,7 +84,7 @@ class ContigsController < ApplicationController
   end
 
   # LIST TAGS /contigs/tags/1
-  def list_tags
+  def tags
     @contig = Contig.find(params[:id])
     @mappings = @contig.tag_mappings.sort {|x,y| x.cstart <=> y.cstart }
 
@@ -94,13 +94,13 @@ class ContigsController < ApplicationController
     end
   end
 
-  # NEW TAG /contigs/new_tag/1
-  def new_tag
+  # NEW TAG /contigs/add_tag/1
+  def add_tag
     @contig = Contig.find(params[:id])
   end
 
   # SHOW SEQUENCE /contigs/show_sequence/1
-  def show_sequence
+  def sequence
     @contig = Contig.find(params[:id])
 
     respond_to do |format|
