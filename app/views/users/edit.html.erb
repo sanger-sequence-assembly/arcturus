@@ -1,6 +1,11 @@
 <h1>Editing user</h1>
 
-<% form_for :user, :url => {:controller => :users, :action => :update, :method => :post, :instance => params['instance'], :organism => params['organism']} do |f| %>
+<% form_for(:user, :url => {:controller => :users, 
+                            :action => :update,
+                            :instance => params['instance'],
+                            :organism => params['organism']},
+                   :html => { :method => :put }
+           ) do |f| %>
   <%= f.error_messages %>
   <table>
     <tr>
