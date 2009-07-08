@@ -91,6 +91,8 @@ class ContigsController < ApplicationController
     respond_to do |format|
       format.html
       format.xml { render :xml => @mappings.to_xml(:include => :tag) }
+      format.json { render :layout => false,
+                    :json => @mappings.to_json(:include => :tag) }
     end
   end
 

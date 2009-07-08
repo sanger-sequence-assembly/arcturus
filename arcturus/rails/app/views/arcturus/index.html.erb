@@ -1,6 +1,8 @@
 <%= stylesheet_link_tag "table_rows", :media => "all" %>
 
-<h3>Arcturus instance <%= @instance_name %> has <%= @organisms.length %> organism databases </h3>
+<% display_name = @instance_name + (@subclass_name.nil? ? "" : "/#{@subclass_name}") %>
+
+<h3>Arcturus instance <%= display_name %> has <%= @organisms.length %> organism databases </h3>
 
 <br />
 

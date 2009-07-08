@@ -3,9 +3,10 @@ class ArcturusController < ApplicationController
 
   # GET /arcturus
   def index
-    @arcturus_instance = ArcturusInstance.new(params[:instance])
+    @arcturus_instance = ArcturusInstance.new(params[:instance], params[:subclass])
 
     @instance_name = params[:instance]
+    @subclass_name = params[:subclass]
 
     @organisms = @arcturus_instance.organisms
 
