@@ -13,11 +13,7 @@ class ContigTagsController < ApplicationController
   # GET /contig_tags/1
   # GET /contig_tags/1.xml
   def show
-    if params[:systematic_id]
-      @tag = ContigTag.find_by_systematic_id(params[:systematic_id])
-    else
-      @tag = ContigTag.find(params[:id])
-    end
+    @tag = ContigTag.find_by_systematic_id(params[:id]) || ContigTag.find(params[:id])
 
     if @tag.nil?
       redirect_to :action => :not_found,
@@ -50,7 +46,7 @@ class ContigTagsController < ApplicationController
 
   # GET /contig_tags/1/edit
   def edit
-    @contig_tag = ContigTag.find(params[:id])
+    @contig_tag = ContigTag.find_by_systematic_id(params[:id]) || ContigTag.find(params[:id])
   end
 
   # POST /contig_tags
@@ -73,7 +69,7 @@ class ContigTagsController < ApplicationController
   # PUT /contig_tags/1
   # PUT /contig_tags/1.xml
   def update
-    @contig_tag = ContigTag.find(params[:id])
+    @contig_tag = ContigTag.find_by_systematic_id(params[:id]) || ContigTag.find(params[:id])
 
     respond_to do |format|
       if @contig_tag.update_attributes(params[:contig_tag])
@@ -90,7 +86,7 @@ class ContigTagsController < ApplicationController
   # DELETE /contig_tags/1
   # DELETE /contig_tags/1.xml
   def destroy
-    @contig_tag = ContigTag.find(params[:id])
+    @contig_tag = ContigTag.find_by_systematic_id(params[:id]) || ContigTag.find(params[:id])
     @contig_tag.destroy
 
     respond_to do |format|
