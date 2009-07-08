@@ -131,6 +131,13 @@ class ProjectsController < ApplicationController
   # LIST CONTIGS /projects/1/contigs
   def contigs
     @project = Project.find(params[:id])
+    @contigs = @project.current_contigs
+    @summary = @project.current_contigs_summary
+
+    respond_to do |format|
+      format.html
+      format.xml { render :xml => @contigs }
+    end
   end
 
   # EXPORT CONTIGS /projects/export_contigs/1
