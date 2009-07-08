@@ -11,35 +11,38 @@ class Contig < ActiveRecord::Base
   has_many :tag_mappings
   has_many :tags, :through => :tag_mappings
 
-  def get_consensus
-    @query = "select sequence from CONSENSUS where contig_id = #{contig_id}"
-    @cseq = connection.select_all(@query).first
-    if ! @cseq.nil?
+  def get_consensus(depad=false)
+    query = "select sequence from CONSENSUS where contig_id = #{contig_id}"
+    cseq = connection.select_all(query).first
+    if ! cseq.nil?
       INFLATER.reset
-      @seq = INFLATER.inflate(@cseq['sequence'])
+      seq = INFLATER.inflate(cseq['sequence'])
       INFLATER.finish
-      @seq
+      if (depad)
+        seq.gsub!("-", "")
+      end
+      seq
     else
       nil
     end
   end
 
   def to_fasta(verbose=false)
-    @seq = get_consensus
-    @seqlen = @seq.length
-    @fasta = String.new
-    @fasta.concat(">contig#{contig_id}")
+    seq = get_consensus
+    seqlen = seq.length
+    fasta = String.new
+    fasta.concat(">contig#{contig_id}")
 
     if verbose
       cstr = created.strftime("%Y-%m-%d_%H:%M:%S")
-      @fasta.concat(" length=#{length} reads=#{nreads} created=#{cstr} project=#{project.name}")
+      fasta.concat(" length=#{length} reads=#{nreads} created=#{cstr} project=#{project.name}")
     end
 
-    @fasta.concat("\n")
-    0.step(@seq.length, 50) do |offset|
-      @fasta.concat(@seq.slice(offset, 50))
-      @fasta.concat("\n");
+    fasta.concat("\n")
+    0.step(seq.length, 50) do |offset|
+      fasta.concat(seq.slice(offset, 50))
+      fasta.concat("\n");
     end
-    @fasta
+    fasta
   end
 end

@@ -17,11 +17,11 @@ class Project < ArcturusDatabase
   end
  
   def current_contigs_summary
-    @query = "select sum(length) as total_length,count(*) as contig_count," +
+    query = "select sum(length) as total_length,count(*) as contig_count," +
       " max(length) as max_length,sum(nreads) as read_count," +
       " max(updated) as last_update from CURRENTCONTIGS " +
       " where project_id = #{project_id}"
-    connection.select_all(@query).first
+    connection.select_all(query).first
   end
 
   def current_contigs
@@ -29,10 +29,10 @@ class Project < ArcturusDatabase
   end
 
   def self.status_enumeration
-    @columns = connection.select_one("show columns from PROJECT like 'status'")
-    @enum = @columns['Type']
-    @enumlist = @enum.sub(/enum\(\'(.+)\'\)/,'\1')
-    @enumlist.split('\',\'')
+    columns = connection.select_one("show columns from PROJECT like 'status'")
+    enum = columns['Type']
+    enumlist = enum.sub(/enum\(\'(.+)\'\)/,'\1')
+    enumlist.split('\',\'')
   end 
 
 end
