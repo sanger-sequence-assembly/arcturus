@@ -53,7 +53,7 @@ class TagMappingsController < ApplicationController
     respond_to do |format|
       if (@tag_mapping.save!)
         flash[:notice] = 'TagMapping was successfully created.'
-        format.html { redirect_to({:controller => "contigs",:action => "list_tags", :instance => params[:instance], :organism => params[:organism], :id => @tag_mapping.contig_id}) }
+        format.html { redirect_to({:controller => "contigs",:action => "tags", :instance => params[:instance], :organism => params[:organism], :id => @tag_mapping.contig_id}) }
         format.xml  { head :ok }
       else
         format.html { render :action => "new" }
