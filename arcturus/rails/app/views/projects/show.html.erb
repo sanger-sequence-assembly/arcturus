@@ -108,7 +108,9 @@
                   :id => @project
 %> |
 <%= 
-  link_to 'Back', :back
+  link_to 'Back', :instance => params[:instance],
+                  :organism => params[:organism],
+                  :action => 'index'
 %> |
 
 <%=
