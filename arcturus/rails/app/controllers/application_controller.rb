@@ -13,48 +13,8 @@ class ApplicationController < ActionController::Base
 private
 
   def get_database_connection
-    @dbparams = lookup_database_parameters(params['instance'], params['organism'])
+    dbparams = DatabaseConnectionManager.get_database_parameters(params['instance'], params['organism'])
 
-    change_database_parameters_if_testing(params['instance'], @dbparams)
-
-    ActiveRecord::Base.establish_connection(@dbparams)
-  end
-
-  def lookup_database_parameters(instance, organism)
-    @filter = Net::LDAP::Filter.eq("cn", organism)
-    @base = "cn=#{instance}," + LDAP_BASE
-
-    @entry = LDAP.search(:base => @base, :filter => @filter).first
-
-    if (@entry.nil?)
-      raise "Unknown organism: #{organism}"
-    else
-      build_database_parameters(@entry['javareferenceaddress'])
-    end
-  end
-
-  def build_database_parameters(parameters)
-    @values = {}
-
-    parameters.each do |line|
-      @words = line.split "#"
-      @values[@words[2]] = @words[3]
-    end
-
-    {
-      :adapter  => 'mysql',
-      :host     => @values['serverName'],
-      :port     => @values['port'].to_i,
-      :database => @values['databaseName'],
-      :username => @values['user'],
-      :password => @values['password']
-    }
-  end
-
-  def change_database_parameters_if_testing(instance, dbparams)
-    if (instance == "pathogen" && RAILS_ENV != "production")
-      dbparams[:username] = MYSQL_READ_ONLY_USERNAME
-      dbparams[:password] = MYSQL_READ_ONLY_PASSWORD
-    end
+    ActiveRecord::Base.establish_connection(dbparams)
   end
 end
