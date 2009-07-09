@@ -12,7 +12,6 @@ class Project < ArcturusDatabase
 
   def owner=(user)
     new_owner = (user.nil? or user.kind_of? User) ? user : User.find(user)
-    puts "new_owner = #{new_owner.inspect}"
     write_attribute(:owner, new_owner)
   end
  

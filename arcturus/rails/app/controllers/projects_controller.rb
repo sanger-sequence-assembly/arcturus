@@ -95,7 +95,7 @@ class ProjectsController < ApplicationController
   def update
     @project = Project.find(params[:id])
 
-    if params[:project]['owner'] = 'nobody'
+    if params[:project]['owner'] == 'nobody'
       params[:project]['owner'] = nil
     end
 
