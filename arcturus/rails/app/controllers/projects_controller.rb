@@ -62,6 +62,10 @@ class ProjectsController < ApplicationController
 
     @users = User.find(:all, :order => "username")
 
+    nobody = User.new
+    nobody.username = 'nobody'
+    @users << nobody
+
     @status = Project.status_enumeration
   end
 
@@ -90,6 +94,10 @@ class ProjectsController < ApplicationController
   # PUT /projects/1.xml
   def update
     @project = Project.find(params[:id])
+
+    if params[:project]['owner'] = 'nobody'
+      params[:project]['owner'] = nil
+    end
 
     respond_to do |format|
       if @project.update_attributes(params[:project])
