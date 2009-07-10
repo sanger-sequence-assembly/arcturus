@@ -251,6 +251,7 @@ if ($iscurrent) {
         undef $project;
     }
     my $cids = $adb->getAncestorIDsForContigID($contig);
+#    my $cids = $adb->getFamilyIDsForContigID($contig,ancestors=>1);
     if ($cids && @$cids) {
         $cc = $contig;
         $contig = '';
