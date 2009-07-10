@@ -6,13 +6,13 @@ set SQLDIR=${MYDIR}/../sql
 if ( $# > 0 ) then
   set MYSQL_HOST=$1
 else
-  set MYSQL_HOST=mcs3a
+  set MYSQL_HOST=mcs6
 endif
 
 if ( $# > 1 ) then
   set MYSQL_PORT=$2
 else
-  set MYSQL_PORT=15001
+  set MYSQL_PORT=15003
 endif
 
 echo MySQL username:
