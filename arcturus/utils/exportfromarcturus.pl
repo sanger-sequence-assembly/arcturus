@@ -281,7 +281,7 @@ if ($scaffold) {
     $command .= " @ARGV" if @ARGV;
 }
 else { # standard project export
-    $command =~ s/contig/project/; # (temporary) change to (old) project-export script
+    $command =~ s/contig/project/ unless ($export_script =~ /new/); # (temporary) change to standard script
     $command .= "-project $projectname ";
     $command .= "-minerva " if $minerva;
     $command .= " @ARGV" if @ARGV;
