@@ -207,6 +207,8 @@ foreach my $fasta (@reads) {
         print STDOUT "Could not parse consensus file $fasta\n";
         next;
     }
+        
+    print STDOUT scalar(@$contigs) ." consensus read(s) read from $fasta\n";
 
 # make the contig content into a read
 
@@ -224,7 +226,8 @@ foreach my $fasta (@reads) {
             }
 	}
 
-        my $readname = $fasta; # default
+        my $readname = $contig->getContigName();
+        $readname = $fasta if (!$readname || $noextension); # default
         $readname =~ s/\.[^\.]+$// if ($readname =~ /^contig/); # consensus 
         $readname =~ s/\.[^\.]+$// if $noextension;
 
