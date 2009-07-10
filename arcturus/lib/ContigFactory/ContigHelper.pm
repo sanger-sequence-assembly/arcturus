@@ -501,6 +501,7 @@ sub deleteLowQualityBases {
 
     unless ($pads && @$pads) {
         $logger->special("No low quality data found in $contigname");
+        $logger->debug("No low quality data found in $contigname");
         return $contig, 1; # no low quality stuff found
     }
 
@@ -665,6 +666,41 @@ sub replaceLowQualityBases {
 #-----------------------------------------------------------------------------
 # removing reads from contigs
 #-----------------------------------------------------------------------------
+
+sub removeInvalidReadNames {
+# remove reads with name matching input filter pattern 
+# default: capillary readnames mangled by Newbler assembler
+    my $class  = shift;
+    my $contig = shift;
+    my %options = @_;
+
+    &verifyParameter($contig,'removeInvalidReadNames');
+
+    my $reads = $contig->getReads(1);
+
+    my @reads_to_be_removed;
+
+    unless (defined $options{exclude_filter}) {
+        $options{exclude_filter} = '\.[pq][12]k\.[\w\-]+'; # default
+    }
+    my $exclude_filter = $options{exclude_filter};
+
+    foreach my $read (@$reads) {
+        my $readname = $read->getReadName();
+        next unless ($readname =~ /$exclude_filter/);
+	push @reads_to_be_removed,$readname;
+    }
+
+my $logger = &verifyLogger('removeInvalidReadNames');
+$logger->debug("ENTER");
+$logger->warning("readnames to be removed:\n@reads_to_be_removed");
+
+    return $contig,"No reads removed" unless @reads_to_be_removed; # none found
+
+    delete $options{exclude_filter};
+
+    return $contig->removeNamedReads(\@reads_to_be_removed,%options);
+}
 
 sub removeNamedReads {
 # remove a list of reads from a contig
@@ -998,6 +1034,114 @@ $logger->warning("EXIT undoReadEdits: @_");
     return $contig;
 }
 
+sub restoreMaskedReads {
+# ad hoc method to restore the masked parts of sequence and quality of reads
+    my $class  = shift;
+    my $contig = shift;
+    my %options = @_;
+
+    &verifyParameter($contig,'restoreMaskedReads');
+
+    my $logger = &verifyLogger('restoreMaskedReads');
+
+    my $reads = $contig->getReads(1);
+
+    my $restored = 0;
+    foreach my $read (@$reads) {
+
+        my $version = $read->getVersion() || next;
+
+        my $readdna = $read->getSequence() || next;
+
+        my $read_left = 0;
+	my $read_right = length($readdna) + 1;
+
+        if ($readdna =~ /^([xn]+)/i) {
+            $read_left  += length($1); # last masked position left
+        }
+        if ($readdna =~ /([xn]+)$/i) {
+            $read_right -= length($1); # first masked position right
+        }
+        next unless ($read_left > 0 || $read_right < length($readdna) + 1);
+
+        my $base = $read->getOriginalVersion(); # i.e. read version 0
+
+        unless ($base) {
+            $logger->sever("Unable to retrieve original read; no databse connection?");
+            last;
+	}
+
+        my $readqlt = $read->getBaseQuality() || [];
+
+# now use the sequence of the original read to repair the current version 
+
+        my $basedna = $base->getSequence();
+        my $baseqlt = $base->getBaseQuality();
+
+# find the boundaries as found in the read in the version 0 dna
+
+        my ($base_left,$base_right);
+
+        my $marker = substr $readdna,$read_left,4; # first on the left
+        foreach my $shift (2, 1, -2, -1, 0) {
+            my $motif = substr $basedna,($read_left + $shift), 4;
+            $base_left = $read_left + $shift if ($motif eq $marker);
+        }
+
+        $marker = substr $readdna,($read_right - 5),4; # then on the right
+        foreach my $shift (-2, -1, 2, 1, 0) {
+            my $motif = substr $basedna,($read_right - 5 + $shift), 4;
+            $base_right = $read_right + $shift if ($motif eq $marker);
+        }
+
+        my $rlength = $read_right - $read_left - 1; # the length of the unmasked part of read
+        my $replacement = substr $readdna, $read_left, $rlength;
+        my @cenquality = splice @$readqlt, $read_left, $rlength;
+
+my $log;
+        unless (defined($base_left) && defined($base_right)) {
+# one or both boundaries could not be determined
+$logger->error("cannot determine boundaries on version 0"); 
+$logger->info("restoring read ".$read->getReadName()." version $version");
+$logger->info("cannot determine boundaries on version 0");
+$logger->info("read left $read_left , read right $read_right, rlength $rlength");
+$logger->fine("read DNA\n$readdna\nbaseDNA\n$basedna"); 
+$logger->flush();
+$base->writeToFasta(*STDOUT); 
+$read->writeToFasta(*STDOUT); 
+            my $change = length($basedna) - length($readdna); 
+$logger->info("change = $change");
+            if (defined($base_left)) {
+                $base_right = $read_right + $change;
+	    }
+            elsif (defined($base_left)) {
+                $base_left  = $read_left  - $change;
+	    }
+# infer from difference in read length, assuming the same start point 
+            else {
+                $base_left = $read_left;
+                $base_right = $read_right + $change;
+            }
+$logger->info("base left $base_left , base right $base_right");
+$log = 1;
+	}
+
+        my $blength = $base_right - $base_left - 1; # the length of the unmasked part of version 0
+
+        my $newsequence = substr $basedna,$base_left,$blength,$replacement;
+        my @newquality = splice @$baseqlt,$base_left,$blength,@cenquality;
+
+        $read->setSequence($basedna);
+        $read->setBaseQuality([@$baseqlt]) if @$baseqlt;
+
+$read->writeToFasta(*STDOUT) if $log; 
+
+        $restored++;
+    }
+
+    return $restored;
+}
+
 #-----------------------------------------------------------------------------
 
 sub extractEndRegion {
@@ -1312,8 +1456,6 @@ $logger->debug("pad at $i");
 
     my $mask = "$fwindow:$highqualitypadminimum:$minimum:$threshold:$symbols";
 
-#print STDERR "pads $pads  mask $mask\n";
-#    return $pads,$mask;
     return [($pads,$mask)]; # array reference
 }
 
