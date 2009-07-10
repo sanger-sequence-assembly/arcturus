@@ -8,6 +8,8 @@ use Mapping;
 
 use Logging;
 
+use Alignment;
+
 my $DEBUG;
 
 #----------------------------------------------------------------
@@ -24,6 +26,9 @@ my $filter;
 my $cleanup;
 my $clipcontig; # remove low quality data
 
+my $filterdomain = 0; # default use raw consensus sequence 
+my $ignorelock;
+
 my $verbose;
 my $confirm;
 my $debug;
@@ -34,7 +39,8 @@ my $caffile;
 my $logfile;
 
 my $validKeys  = "organism|o|instance|i|filename|fn|swprog|caf|breakmode|bm|"
-               . "clip|cleanup|contig|read|confirm|logfile|lf|verbose|debug|help";
+               . "clip|cleanup|contig|read|confirm|logfile|lf|filterdomain|fd|"
+               . "ignorelock|il|verbose|debug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -62,13 +68,23 @@ while (my $nextword = shift @ARGV) {
         $logfile   = shift @ARGV;
     }
 
-    $verbose    = 2            if ($nextword eq '-verbose');
+    if ($nextword eq '-fd' || $nextword eq '-filterdomain') {
+        $filterdomain = 1;
+    }
+
+    if ($nextword eq '-il' || $nextword eq '-ignorelock') {
+        $ignorelock = 1;
+    }
+
+    $verbose    = 1            if ($nextword eq '-verbose');
+
+    $verbose    = 2            if ($nextword eq '-info');
 
     $cleanup    = 1            if ($nextword eq '-cleanup');
 
     $clipcontig = 1            if ($nextword eq '-clip');
 
-    $verbose    = 2            if ($nextword eq '-debug');
+    $verbose    = 1            if ($nextword eq '-debug');
     $debug      = 1            if ($nextword eq '-debug');
 
     $caffile    = shift @ARGV  if ($nextword eq '-caf');
@@ -90,7 +106,14 @@ while (my $nextword = shift @ARGV) {
 # use forking if Smith=-Waterman alignment is to be used
 #----------------------------------------------------------------
 
+my $maxlimit;
+my $minlimit;
+
 if ($swprog) {
+
+    $maxlimit = 25000;
+    $maxlimit = 40000;
+#    $minlimit = 3000;
 
     die "\"$swprog\" is not an executable program"
         unless (-x $swprog);
@@ -130,6 +153,7 @@ my $logger = new Logging('STDOUT');
 $logger->setStandardFilter($verbose) if $verbose; # set fine reporting level
 $logger->setBlock('debug',unblock=>1) if $debug;
 $logger->setSpecialStream($logfile,append=>1) if $logfile;
+$logger->debug("DEBUG active");
 
 #----------------------------------------------------------------
 # get the database connection
@@ -240,9 +264,9 @@ foreach my $contigname (sort keys %$contigreadhash) {
 
     $logger->warning("Processing contig $contigname",preskip=>1);
 
-    my $bacendreads = $contigreadhash->{$contigname};
+    my $placedreads = $contigreadhash->{$contigname};
 
-    unless (ref($bacendreads) eq 'ARRAY') {
+    unless (ref($placedreads) eq 'ARRAY') {
         $logger->severe("Invalid data structure for contig $contigname");
 	next;
     }
@@ -253,10 +277,10 @@ foreach my $contigname (sort keys %$contigreadhash) {
 # already assembled (meaning that the contig has been processed earlier)
 
     my $newread = 0;
-    foreach my $bacreadinfo (@$bacendreads) {
+    foreach my $placedreadinfo (@$placedreads) {
 
-        my ($name,$strand,$cstart,$cfinal) = @$bacreadinfo;
-        $logger->info("bacreadinfo $name,$strand,$cstart,$cfinal");
+        my ($name,$strand,$cstart,$cfinal) = @$placedreadinfo;
+        $logger->info("placedreadinfo $name,$strand,$cstart,$cfinal");
         next if $tobediscarded->{$name};
 
         if ($adb->isUnassembledRead(readname=>$name)) {
@@ -314,8 +338,13 @@ foreach my $contigname (sort keys %$contigreadhash) {
 
     my @lockinfo = $adb->getLockedStatusForContigID($contig_id);
     unless ($lockinfo[0] == 0) {
-        $logger->severe("the project of contig $contigname is locked");
-        next;
+        $logger->severe("the project of contig $contigname is locked ($lockinfo[5] $lockinfo[1])");
+        foreach my $placedreadinfo (@$placedreads) {
+            my ($name,$strand,$cstart,$cfinal) = @$placedreadinfo;
+            my $length = $cfinal - $cstart + 1;
+            $logger->fine("trying to place: $name,$strand,$cstart,$cfinal  ($length)");
+	}
+        next unless $ignorelock;
     }
 
 # test the project status
@@ -338,18 +367,54 @@ foreach my $contigname (sort keys %$contigreadhash) {
     $logger->info("Getting consensus");
 
     my $consensus = $arcturuscontig->getSequence();
+    my $contiglength = length($consensus);
+    $logger->warning("unfiltered contig consensus length : $contiglength");
 
     my $padmapping;
     if ($clipcontig) {
-	$logger->info("Removing low quality from consensus");
+	$logger->warning("Removing low quality from consensus");
         my ($clncontig,$sts) = $arcturuscontig->deleteLowQualityBases(exportaschild=>1);
         my $mappings = $clncontig->getContigToContigMappings();
+        if ($mappings && @$mappings) {
+            $padmapping = $mappings->[0]->inverse(); # from filtered (x) to raw (y)
+        }
+	else {
+	    $filterdomain = 0;
+    	    $logger->fine("No low quality data found for contig $contig_id");
+            next unless $sts; # bad conditions unless 1 or 0.0
+	}
 
-        $padmapping = $mappings->[0];
-	$logger->fine($padmapping->toString());
+	if ($filterdomain) { # match on the filtered sequence
+            my $newconsensus = $clncontig->getSequence();
+            if ($consensus eq $newconsensus) {
+                $filterdomain = 0; # no change
+	    }
+	    else {
+                $logger->warning("filtered consensus sequence is used");
+                $consensus = $newconsensus;
+                $contiglength = length($consensus);
+	    }
+	}
+	$logger->fine($padmapping->toString()) if $padmapping;
+    }
+
+    $logger->warning("length contig consensus sequence used in alignment : $contiglength");
+
+    if ($consensus =~ s/\-/N/g) {
+        $logger->warning("Replaced '-' symbols in consensus sequence");
     }
 
 # ------------- check reads and mappings
+
+# add the currently existing mappings and reads by delayed loading
+
+    if ($confirm || $CAF || $cleanup) {
+        $logger->warning("Getting existing mappings for $contigname ... patience!");
+        $arcturuscontig->getMappings(1);
+
+        $logger->warning("Getting assembled reads for $contigname ... patience!");
+        $arcturuscontig->getReads(1);
+    }
 
 # remove one-base mappings, if any
 
@@ -360,37 +425,33 @@ foreach my $contigname (sort keys %$contigreadhash) {
         $arcturuscontig = $newcontig if $newcontig;
     }
 
-# add the currently existing mappings and consensus by delayed loading
-
-    if ($confirm || $CAF) {
-        $logger->warning("Getting existing mappings for $contigname ... patience!");
-        $arcturuscontig->getMappings(1);
-
-        $logger->warning("Getting assembled reads for $contigname ... patience!");
-        $arcturuscontig->getReads(1);
-    }
-
 # run through the reads and create a Tag object for each
 
-    $logger->warning(scalar(@$bacendreads)." new reads specified for $contigname");
+    $logger->warning(scalar(@$placedreads)." new reads specified for $contigname");
 
     my $readhash = {};
     my $readscore = {};
     my $readmapping = {};
-    my $placedreads = 0;
-    foreach my $bacreadinfo (@$bacendreads) {
+    my $assembledreads = 0;
+    foreach my $placedreadinfo (@$placedreads) {
 
-        my ($name,$strand,$cstart,$cfinal) = @$bacreadinfo;
-        $logger->info("bacreadinfo $name,$strand,$cstart,$cfinal");
+        my ($name,$strand,$cstart,$cfinal) = @$placedreadinfo;
+        $logger->warning("placing read : $name,$strand,$cstart,$cfinal",preskip=>1);
 
-        if ($padmapping) {
+        if ($padmapping && !$filterdomain) {
             my ($intervals,$transform) = $padmapping->transform($cstart,$cfinal);
-             $logger->fine("cstart cfinal   $cstart  $cfinal"); 
-            ($cstart,$cfinal) = $transform->getMappedRange();
-#            ($cstart,$cfinal) = $transform->getContigRange();
-             $logger->info("cstart cfinal   $cstart  $cfinal"); 
-#            ($cstart,$cfinal) = $transform->getContigRange();
-	}
+            $logger->info("xmatch range   $cstart  $cfinal"); 
+
+            my ($cmstart,$cmfinal) = $transform->getMappedRange();
+            $logger->info("mapped range $cmstart  $cmfinal");
+            $cstart = $cmstart; $cfinal = $cmfinal;
+ 	}
+
+        my $extend = int(($cfinal-$cstart)/2);
+        $extend = 1000 if ($extend > 1000);
+        $extend = 100  if ($extend < 100);
+        $cstart -= $extend;  $cstart = 1 if ($cstart < 1);
+        $cfinal += $extend;  $cfinal = $contiglength if ($cfinal > $contiglength);
         
 # get the read from the database
 
@@ -419,17 +480,10 @@ foreach my $contigname (sort keys %$contigreadhash) {
 
 # assemble the substrings and the corresponding mappings
 
-$DEBUG = 0 if  $filter;
-#$DEBUG = 1 if ($filter && $read->getReadName() =~ /$filter/);
-
         my $cslength = $cfinal - $cstart + 1;
         my $csubstring = substr $consensus,$cstart-1,$cslength;
         my $tocmapping = new Mapping($contigname);
         $tocmapping->putSegment(1,$cslength,$cstart,$cfinal);
-
-$logger->warning( "contig $cstart   $cfinal   $cslength ") if $DEBUG;
-$logger->warning( $tocmapping->toString() )                if $DEBUG;
-$logger->warning( "contig sequence $csubstring")           if $DEBUG;
 
         my $rslength = $lqr - $lql + 1;
         my $rsubstring = substr $sequence,$lql-1,$rslength;
@@ -445,10 +499,6 @@ $logger->warning( "contig sequence $csubstring")           if $DEBUG;
             $fmrmapping->putSegment($lqr,$lql,1,$rslength);
 	}
 
-$logger->warning( "read $name   $lql  $lqr  $lgt")         if $DEBUG;
-$logger->warning( $fmrmapping->toString() )                if $DEBUG;
-$logger->warning( "read sequence $rsubstring")             if $DEBUG;
-
         my $rlength = length($rsubstring);
         my $clength = length($csubstring);
 
@@ -456,26 +506,49 @@ $logger->warning( "read sequence $rsubstring")             if $DEBUG;
 
         if ($swprog) {
 
-           ($mapping,$score) = &SmithWatermanAlignment($csubstring,$rsubstring);
+            if (defined($minlimit) && ($rlength < $minlimit || $clength < $minlimit)) {
+	        $logger->severe("Failed read placement (length) : "
+                              ."($name,$strand,$cstart,$cfinal)");
+                $logger->warning("Length underflow: r:$rlength c:$clength   ( < $minlimit)");
+		$logger->flush();
+		next;
+	    }
+
+#            if (defined($maxlimit) && ($rlength > $maxlimit || $clength > $maxlimit)) {
+#	        $logger->severe("Failed read placement (length) : "
+#                              ."($name,$strand,$cstart,$cfinal)");
+#                $logger->warning("Length overflow: r:$rlength c:$clength ( > $minlimit)");
+#		$logger->flush();
+#		next;
+#	    }
+
+
+           ($mapping,$score) = &SWAlignment($csubstring,$rsubstring,limit => $maxlimit);
+#           ($mapping,$score) = &SmithWatermanAlignment($csubstring,$rsubstring);
 
 	    if ($mapping) {
-                $logger->debug(" mapping $mapping, score $score ");
+                $logger->fine(" mapping $mapping, score $score ");
                 $mapping->setMappingName("SW");
-                $logger->debug($mapping->toString(Xdomain=>$csubstring,
-                                                  Ydomain=>$rsubstring));
+                $logger->fine($mapping->toString(Xdomain=>$csubstring,
+                                                 Ydomain=>$rsubstring));
             }
             else {
-	        $logger->severe("Failed read placement : "
+	        $logger->severe("Failed read placement (SW) : "
                               ."($name,$strand,$cstart,$cfinal)");
-	        $logger->warning("score $score for lengths: r: $rlength  c:$clength\n$rsubstring\n$csubstring");
+	        $logger->warning("score $score for lengths: r: $rlength  c:$clength");
+		next;
+	        $logger->warning("read\n$rsubstring");
+	        $logger->warning("contig substring\n$csubstring");
+		$logger->flush();
 	        next;
 	    }
 
             if (&mappingrange($mapping) <= 50) {
 		$logger->warning("Low mapping range (r: $rlength  c: $clength)");
                 $logger->warning($mapping->toString(Xdomain=>$csubstring,Ydomain=>$rsubstring));
+                next;
             }
- 	    $placedreads++;
+ 	    $assembledreads++;
         }
 	else {
             $logger->error("No alignment method specified");
@@ -492,12 +565,14 @@ $logger->warning( "read sequence $rsubstring")             if $DEBUG;
 
         my $r2cmapping = $fmrmapping->multiply($mapping,debug=>0);
         $r2cmapping = $r2cmapping->multiply($tocmapping,debug=>0);
+# here we have to correct for the usage of filtered consensus
+        $r2cmapping = $r2cmapping->multiply($padmapping) if ($filterdomain && $padmapping);
 # it's the inverse of this one we need (to get the Assembled_from order right) 
         $r2cmapping = $r2cmapping->inverse();
         $r2cmapping->setMappingName($name);
 
-        $logger->debug($r2cmapping->toString(Xdomain=>$sequence,
-                                             Ydomain=>$consensus));
+        $logger->fine($r2cmapping->toString(Xdomain=>$sequence,
+                                            Ydomain=>$arcturuscontig->getSequence()));
 
         $readmapping->{$name} = $r2cmapping; 
 
@@ -510,8 +585,8 @@ $logger->warning( "read sequence $rsubstring")             if $DEBUG;
 
 # here the mappings have been determined; add them (and reads) to contig
 
-    if ($placedreads) {
-	$logger->warning("$placedreads new reads placed for contig $contigname");
+    if ($assembledreads) {
+	$logger->warning("$assembledreads new reads placed for contig $contigname");
     }
     else {
 	$logger->warning("No new reads placed for contig $contigname",skip=>1);
@@ -571,6 +646,44 @@ $adb->disconnect();
 exit 0;
 
 #------------------------------------------------------------------------
+
+sub SWAlignment {
+    my ($in_sequence,$outsequence,%options) = @_;
+    
+    my $limit  = $options{limit}  || 20000;
+#    my $offset = $options{offset} || 1000;
+
+#    my ($mapping,$scoring);
+   
+    my $ilength = length($in_sequence);
+    my $olength = length($outsequence);
+
+    if ($ilength <= $limit && $olength <= $limit) {
+        return &SmithWatermanAlignment($in_sequence,$outsequence);
+    }
+
+    $logger->warning("Alignment used");
+
+    my %aoptions = (banded           => 1,
+                    coaligned        => 1,
+#                    offsetlowerbound => -$offset,
+#                    offsetupperbound => $offset
+		    );
+
+    Alignment->setLogger($logger);
+
+# note the different order of input sequences 
+
+    my $mapping = Alignment->correlate($outsequence,undef,$in_sequence,undef,%aoptions);
+
+    $logger->info($mapping->toString()) if $mapping;
+
+    return $mapping, 1 if $mapping;
+
+    $logger->warning("Failed to establish alignment");
+
+    return undef;
+}
 
 sub SmithWatermanAlignment {
 # uses ADH's C programme
@@ -678,7 +791,9 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-contig\t\tprocess only the given contig (ID)\n";
     print STDERR "-cleanup\t\tremove possible single-base mappings\n";
-    print STDERR "-read\t\t(debug mode) show details for given read\n";
+    print STDERR "-read\t\t(test mode) show details for given read\n";
+    print STDERR "\n";
+    print STDERR "-fd\t\t(filterdomain) do the SW alignment on the filtered consensus\n";
     print STDERR "\n";
     print STDERR "-caf\t\toutput as caf file\n";
     print STDERR "\n";
