@@ -195,8 +195,8 @@ if ($unassembled) {
 my @items = ('read_id','readname','seq_id','version',
              'template','ligation','insertsize','clone',
              'chemistry','SCFchemistry','strand','primer','aspeddate',
-             'basecaller','lqleft','lqright','slength','sequence','shash',
-             'quality','qhash','align-to-SCF','traceserver','pstatus');
+             'basecaller','lqleft','lqright','slength','qlength','sequence',
+             'shash','quality','qhash','align-to-SCF','traceserver','pstatus');
 
 if (@reads) {
     $adb->getTagsForReads([@reads]) unless $notags;
@@ -330,6 +330,7 @@ sub list {
     if (defined($sequence)) {
         $sequence =~ s/(.{60})/$1$break              /g;
         $L{sequence} = $sequence;
+        $L{slength} = length($sequence);
     }
 
     my $quality    = $read->getBaseQuality;
@@ -338,6 +339,7 @@ sub list {
 # output in lines of 20 numbers
         my $nl = 25;
 	my @bq = @{$quality};
+        $L{qlength} = scalar(@bq);
 	while (my $n = scalar(@bq)) {
             my $m = ($n > ($nl-1)) ? ($nl-1) : $n-1;
             $L{quality} .= $break.'              ' if $L{quality};
