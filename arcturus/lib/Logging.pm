@@ -34,8 +34,8 @@ sub new {
         my $stream = {};
         $stream->{handle} = 0;  # for the e.g. file handle
         $stream->{device} = 0;  # for the device name
-        $stream->{blocked} = 0 if ($i < 3); # for the blocked status
-        $stream->{blocked} = 1 if ($i >= 3); # default debug is blocked
+        $stream->{blocked} = 0 if ($i <  2); # for the blocked status
+        $stream->{blocked} = 1 if ($i >= 2); # default debug,special is blocked
         $stream->{method} = 0;
         $stream->{stamp} = 0;
         push @streams,$stream;       
@@ -274,7 +274,7 @@ sub getPrefix {
 my %streams = (standard => 0, error => 1, special => 2, debug => 3);
 
 sub setBlock {
-# block or unblock an output stream, EXCEPT when 'unblock' option is given 
+# block or unblock an output stream; block EXCEPT when 'unblock' option is given 
     my $this = shift;
     my $stream = shift;
     my %options = @_;
