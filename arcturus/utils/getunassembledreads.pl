@@ -38,6 +38,7 @@ my $namelike;
 my $namenotlike;
 my $excludelist;
 my $includelist;
+my $excludefilter;
 my $status;
 
 my $threshold;  # only with clipmethod
@@ -53,8 +54,8 @@ my $validKeys  = "organism|o|instance|i|"
                . "assembly|a|ligation|l|ligationname|ln|ligationcomplement|lc|"
                . "caf|fasta|fastq|aspedbefore|ab|aspedafter|aa|"
                . "includesingleton|is|blocksize|bs|selectmethod|sm|namelike|nl|"
-               . "namenotlike|nnl|excludelist|elincludelist|il|fofn|"
-               . "|mask|notags|all|nofile|count|"
+               . "namenotlike|nnl|excludelist|el|includelist|il|fofn|"
+               . "excludefilter|ef|mask|notags|all|nofile|count|"
                . "clipmethod|cm|threshold|th|minimumqualityrange|mqr|"
                . "status|nostatus|limit|"
                . "test|info|verbose|debug|log|help|h";
@@ -101,6 +102,12 @@ while (my $nextword = shift @ARGV) {
 
     if ($nextword eq '-fofn' || $nextword eq '-il' || $nextword eq '-includelist') {
         $includelist  = shift @ARGV;
+    }
+
+    if ($nextword eq '-ef' || $nextword eq '-excludefilter') {
+        $excludefilter = shift @ARGV;
+        $excludefilter = '%.[pq][12][kl].%-%' if ($excludefilter eq 'standard');
+        $excludefilter = qw($excludefilter);
     }
 
 # selection on assembly 
@@ -192,7 +199,7 @@ $logger->setBlock('debug',unblock=>1) if $debug;
 # get the database connection
 #----------------------------------------------------------------
 
-if ($organism eq 'default' || $instance eq 'default') {
+if ($organism && $organism eq 'default' || $instance && $instance eq 'default') {
     undef $organism;
     undef $instance;
 }
@@ -398,6 +405,11 @@ while (my $remainder = scalar(@$readids)) {
             $excluded++;
             next;
         }
+        if ($excludefilter && $readname =~ /$excludefilter/) {
+            print STDERR "read $readname excluded (filter)\n";
+            $excluded++;
+            next;
+        }
         if (defined($clipmethod) || defined($threshold) || $minimumrange) {
             $clipmethod = 0 unless defined($clipmethod);
             unless ($read->qualityClip(clipmethod=>$clipmethod,
@@ -600,9 +612,10 @@ sub showUsage {
     print STDOUT "-all\t\toverrides all other selection (except excludelist &\n";
     print STDOUT "\t\tstatus); exports reads 1 to number provided \n";
     print STDOUT "\n";
-    print STDOUT "-excludelist\tfile of readnames to be excluded\n";
-    print STDOUT "\n";
     print STDOUT "-fofn\t\t(il,includelist) file of readnames to be included\n";
+    print STDOUT "-el\t\t(excludelist) file of readnames to be excluded\n";
+    print STDOUT "-ef\t\t(excludefilter) regexp to filter readnames; use 'standard'\n";
+    print STDOUT "\t\tto filter out capillary read names mangled by Newbler assembler\n";
     print STDOUT "\n";
     print STDOUT "-blocksize\t(default 50000) for blocked execution\n";
     print STDOUT "\n";
