@@ -1060,9 +1060,9 @@ sub writeToCaf {
 # dump all reads, in frugal mode destroy read after it has been written
 
     unless ($options{noreads}) {
-# if no reads, use delayed loading
+# if there are no reads, use delayed loading
         my $reads = $this->getReads(1); 
-# in frugal mode we bunch the reads in blocks to improve speed (and reduce memory) 
+# in frugal mode we bunch the reads in blocks to improve speed (and reduce memory)
 	if (my $blocksize = $this->{frugal}) {
             $blocksize = 100 if ($blocksize < 100); # minimum
             my $logger = &verifyLogger('writeToCaf');
@@ -1669,10 +1669,23 @@ sub removeShortReads {
 
 sub removeNamedReads {
     my $this = shift;
-    my $reads = shift; # array ref
+    my $reads = shift; # array ref with list of reads to remove
     my %options = @_; 
     &verifyKeys('removeNamedReads',\%options,'new');
     return ContigHelper->removeNamedReads($this,$reads,%options);
+}
+
+sub removeInvalidReadNames {
+    my $this = shift;
+    my %options = @_; 
+    &verifyKeys('removeInvalidReadNames',\%options,'new','exclude_filter');
+    return ContigHelper->removeInvalidReadNames($this,%options);
+}
+
+sub restoreMaskedReads {
+    my $this = shift;
+    my %options = @_; 
+    return ContigHelper->restoreMaskedReads($this,%options);
 }
 
 sub undoReadEdits {
