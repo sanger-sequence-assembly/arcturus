@@ -32,20 +32,24 @@ my ($contig,$testread,$caffile,$confirm); # assembler params
 
 my ($fuzz, $partial, $nosingle, $ftest); # crossmatch output filtering
 
+my $filterdomain; # read placement
+
 my ($renew,$verbose,$debug); # control
+
+$renew = 1; # default always renew
 
 #----------------------------------------------------------------
 # parse command line parameters
 #----------------------------------------------------------------
 
 my $validKeys  = "organism|o|instance|i|"
-               . "project|p|assembly|a|fopn|lock|"  # contig selection & export
+               . "project|p|assembly|a|fopn|lock|ignore|ip|"  # contig selection & export
                . "namelike|nl|namenotlike|nnl|aspedbefore|ab|aspedafter|aa|"
                . "nomasksequence|nms|" # read selection & export
                . "minmatch|mm|minscore|ms|masklevel|ml|" # crossmatch control
-               . "fuzz|partial|filtertest|ft|multiplematchesonly|mmo|" # cm output filter
+               . "fuzz|partial|filtertest|ft|multiplematchesonly|mmo|fd|filterdomain|nfd|" # cm output filter
                . "contig|read|caf|" # test options and output
-               . "refresh|confirm|verbose|info|debug|help";
+               . "norefresh|nrf|confirm|verbose|info|debug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -78,7 +82,11 @@ while (my $nextword = shift @ARGV) {
 
     $fopn          = shift @ARGV  if ($nextword eq '-fopn');
 
-    $ignore        = shift @ARGV  if ($nextword eq '-ignore');
+    if ($nextword eq '-ip'  || $nextword eq '-ignore') {
+        $ignoreproject = shift @ARGV;
+        $ignore = ','.$ignoreproject;
+    }  
+
 
 # unassembled reads selection
 
@@ -104,7 +112,9 @@ while (my $nextword = shift @ARGV) {
 
 # renew (build from scratch) option
 
-    $renew         = 1            if ($nextword eq '-refresh');
+    if ($nextword eq '-nrf' || $nextword eq '-norefresh') {
+        $renew       = 0;
+    }  
 
 # crossmatch parameters
 
@@ -132,6 +142,11 @@ while (my $nextword = shift @ARGV) {
     if ($nextword eq '-multiplematchesonly' || $nextword eq '-mmo') {
         $nosingle  = 1;
     }          
+
+    if ($nextword eq '-filterdomain'        || $nextword eq '-fd') {
+        $filterdomain = 1;
+    }
+    $filterdomain  = 0 if ($nextword eq '-nfd');
   
 # test options
 
@@ -211,7 +226,7 @@ unless ( -f $contigfasta && !$renew) {
     $command   .= "-project $project "       if $project;
     $command   .= "-ignore $ignore "         if $ignore;
     $command   .= "-fopn $fopn "             if $fopn;
-    $command   .= "-lock"                    if $lock;
+    $command   .= "-lock "                   if $lock;
     $command   .= "-quality $contigquality " if $nomask;
     $command   .= "-verbose"                 if $verbose;
 
@@ -277,7 +292,6 @@ unless ((-f $xmatchfilter && ! -z $xmatchfilter) && !$renew && !$ftest) {
 
     &mySystem("rm -f $xmatchfilter") if (-f $xmatchfilter);
 
-#    my $command = "/nfs/team81/ejz/arcturus/development/utils/xmatch-filter.pl "
     my $command = "$arcturus_root/utils/xmatch-filter "
     	        . "-in  $xmatchoutput "
                 . "-out $xmatchfilter ";
@@ -306,9 +320,8 @@ my $swprog = "$arcturus_root/test/smithwaterman.x";
 
 if (-f $xmatchfilter) {
 
-    my $logfile = "contigloader.log";
+#my $arcturus_root = "$ENV{ARC_DEV_ROOT}";
 
-#    my $command = "/nfs/team81/ejz/arcturus/development/utils/directed-read-assembler.pl "
     my $command = "$arcturus_root/utils/directed-read-assembler "
                 . "-o $organism -i $instance "
                 . "-filename $xmatchfilter -swprog $swprog "
@@ -317,16 +330,19 @@ if (-f $xmatchfilter) {
     $command   .= "-contig $contig "   if $contig;
     $command   .= "-read $testread "   if $testread;
 #    $command   .= "-multiple "         if $nosingle; # to be developed
+    $command   .= "-filterdomain "     if $filterdomain;
+    $command   .= "-ignorelock "       if $lock;
     $command   .= "-confirm "          if $confirm;
     $command   .= "-verbose "          if $verbose;
-    $command   .= "-lf $logfile"       if $logfile;
+    $command   .= "-debug "            if $debug;
+#    $command   .= "-lf $logfile"       if $logfile;
 
     $logger->warning("assembling reads into contigs",ss=>1);
     $logger->info($command,skip=>1);
 
     exit 1 if &mySystem($command);
 
-    $logger->warning("to load new contigs : repeat with '-confirm'") unless $confirm;
+    $logger->warning("to load new contigs : repeat with '[-nrf] -confirm'") unless $confirm;
 }
 else {
     $logger->severe("can't run assembler: missing filtered cross match output");
@@ -399,9 +415,10 @@ sub showUsage {
     }
     print STDERR "OPTIONAL PARAMETERS for contig selection:\n";
     print STDERR "\n";
-    print STDERR "-project\t(p:ALL) project(s) of which contigs are to be used\n";
+    print STDERR "-project\t(p:ALL) comma-separated list of project(s) of which contigs \n"
+               .          "\t\t are to be used (can contain '%' wildcard) \n";
     print STDERR "-assembly\t(a:1) assembly, required in case of ambiguity\n";
-    print STDERR "-ignore\t\t(:PROBLEMS) comma-separated list of projects to ignore\n";
+    print STDERR "-ignore\t\t(ip:PROBLEMS) c-s list of projects to ignore\n";
     print STDERR "-fopn\t\tfile of project names\n";
     print STDERR "-lock\t\tAcquire lock on project(s); ignore already locked ones\n";
     print STDERR "\n";
@@ -414,6 +431,7 @@ sub showUsage {
     print STDERR "-nomasksequence\t(nms) do not mask low quality read sequence\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS for crossmatch control (re: man cross_match):\n";
+    print STDERR "\n";
     print STDERR "-minmatch\t(mm:50)\n";
     print STDERR "-minscore\t(ms:100)\n";
     print STDERR "-masklevel\t(ml:100) 0, 100 or 101\n";
@@ -425,13 +443,20 @@ sub showUsage {
     print STDERR "-partial\taccept partial matches of reads at end of contigs\n";
 #    print STDERR "-mmo\t\t(multiplematchesonly) select reads having more than one match\n";
     print STDERR "\n";
+    unless ($filterdomain) {
+        print STDERR "OPTIONAL PARAMETERS for placing the reads:\n";
+        print STDERR "\n";
+        print STDERR "-fd\t\t(filterdomain) use the filtered consensus to find matches;\n"
+                   . "\t\t else use consensus is\n";
+        print STDERR "\n";
+    }
     print STDERR "OPTIONAL PARAMETERS for loading new contigs:\n";
     print STDERR "\n";
     print STDERR "-confirm\tto actually enter the new contigs into the database\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS for output control and testing:\n";
     print STDERR "\n";
-    print STDERR "-refresh\tforces rebuild of all intermediate results\n";
+    print STDERR "-nrf\t\t(norefresh) skip rebuild of all intermediate results\n";
     print STDERR "-verbose\t\n";
     print STDERR "\n";
     print STDERR "-ft\t\t(filtertest) set to 1,2 to list results of filtering and abort\n";
