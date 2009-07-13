@@ -16,7 +16,7 @@ my ($organism,$instance);
 
 my ($project,$assembly,$templateproject,$templateassembly, $ignore,$lock); # arcturus contig data
 
-$project = 'all'; # default
+$templateproject = 'all'; # default
 $ignore  = 'PROBLEMS';
 
 my ($nomask,$namelike,$namenotlike,$aspedbefore,$aspedafter); # read data
@@ -203,6 +203,8 @@ if ($templateproject !~ /\,/) {
 }
 
 my $arcturus_root = "/software/arcturus";
+
+$logger->flush();
 
 #------------------------------------------------------------------------------
 # 1 : export the projects to be tested
