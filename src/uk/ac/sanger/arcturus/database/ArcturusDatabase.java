@@ -302,6 +302,8 @@ public interface ArcturusDatabase {
 
 	public Set<Project> getProjectsForOwner(Person owner)
 			throws SQLException;
+	
+	public Set<Project>getBinProjects() throws SQLException;
 
 	public void refreshProject(Project project) throws SQLException;
 
