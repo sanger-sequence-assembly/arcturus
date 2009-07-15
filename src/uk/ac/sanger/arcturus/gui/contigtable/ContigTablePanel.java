@@ -239,7 +239,8 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 		
 		Person me = adb.findMe();
 
-		Set mypset = null;
+		Set<Project> mypset = null;
+		
 		try {
 			if (adb.isCoordinator())
 				mypset = adb.getAllProjects();
@@ -250,15 +251,13 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 		}
 
 		if (mypset != null && !mypset.isEmpty()) {
-			
-			Project[] myProjects = (Project[]) mypset.toArray(new Project[0]);
+			SortedSet<Project> myProjects = new TreeSet<Project>(new ProjectComparator());
+			myProjects.addAll(mypset);
 
-			Arrays.sort(myProjects, new ProjectComparator());
-
-			for (int i = 0; i < myProjects.length; i++)
-				if (!myProjects[i].isBin()) {
-					ContigTransferAction action = new ContigTransferAction(table, myProjects[i]);
-					action.setEnabled(myProjects[i].isActive());
+			for (Project project : myProjects)
+				if (!project.isBin()) {
+					ContigTransferAction action = new ContigTransferAction(table, project);
+					action.setEnabled(project.isActive());
 					xferMenu.add(action);
 				}
 			
@@ -284,11 +283,8 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 
 	}
 
-	class ProjectComparator implements Comparator {
-		public int compare(Object o1, Object o2) {
-			Project p1 = (Project) o1;
-			Project p2 = (Project) o2;
-
+	class ProjectComparator implements Comparator<Project> {
+		public int compare(Project p1, Project p2) {
 			return p1.getName().compareTo(p2.getName());
 		}
 
