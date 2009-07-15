@@ -262,17 +262,18 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 					xferMenu.add(action);
 				}
 			
-			Project bin = null;
+			Set<Project> bin = null;
 
 			try {
-				bin = adb.getProjectByName(null, "BIN");
+				bin = adb.getBinProjects();
 			} catch (SQLException sqle) {
 				Arcturus.logWarning("Error whilst finding the BIN project", sqle);
 			}
 
 			if (bin != null) {
 				xferMenu.addSeparator();
-				xferMenu.add(new ContigTransferAction(table, bin));
+				for (Project project : bin)
+					xferMenu.add(new ContigTransferAction(table, project));
 			}
 			
 			if (xferMenu.getMenuComponentCount() > 40) {	        

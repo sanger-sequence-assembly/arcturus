@@ -287,6 +287,21 @@ public class ProjectManager extends AbstractManager {
 
 		return set;
 	}
+	
+	public Set<Project> getBinProjects() throws SQLException {
+		preload();
+		
+		HashSet<Project> set = new HashSet<Project>();
+
+		for (Iterator iter = hashByID.values().iterator(); iter.hasNext();) {
+			Project project = (Project) iter.next();
+
+			if (project.getName().endsWith("BIN"))
+				set.add(project);
+		}
+
+		return set;		
+	}
 
 	public void refreshProject(Project project) throws SQLException {
 		int id = project.getID();

@@ -681,6 +681,11 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		return projectManager.getProjectsForOwner(owner);
 	}
 
+	public synchronized Set<Project> getBinProjects()
+			throws SQLException {
+		return projectManager.getBinProjects();
+	}
+
 	public synchronized void refreshProject(Project project)
 			throws SQLException {
 		if (logger != null && logger.isLoggable(Level.FINE))
