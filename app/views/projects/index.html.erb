@@ -10,7 +10,7 @@
     <th align="right">No. of contigs</th>
     <th align="right">Max. length</th>
     <th align="right">No. of reads</th>
-    <th align="center">Last updated</th>
+    <th align="center">Last<br>updated</th>
     <th align="center">Owner</th>
     <th align="center" colspan="3">Actions</th>
   </tr>
@@ -87,12 +87,9 @@
                           :organism => params[:organism],
                           :assembly => params[:assembly_id],
                           :action => 'new'
-%>
+%> | 
 
-<br />
+<%= link_to 'To assembly', :instance => params[:instance], 
+                           :organism => params[:organism], 
+                           :controller => 'assemblies' %>
 
-<% if @for_assembly > 0 then %>
-<%= link_to 'Back to assembly', :instance => params[:instance], 
-                               :organism => params[:organism], 
-                               :controller => 'assemblies' %>
-<%end %>
