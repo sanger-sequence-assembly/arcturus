@@ -1,0 +1,98 @@
+
+<h2>Confirm deletion of assembly <%= @assembly %> for database : <%= params['instance'] %> / <%= params['organism'] %> </h2>
+
+<% form_for :assembly, :url => {:controller => :assemblies, 
+                                :action => :destroy, 
+                                :id => @assembly, 
+                                :method => :post, 
+                                :instance => params['instance'], 
+                                :organism => params['organism']} do |f| %>
+  <%= f.error_messages %>
+
+  <br />
+
+  <table bgcolor='lightyellow' cellspacing="10">
+
+  <tr>
+
+    <td align = "left">
+      <b>Assembly name:</b>
+    </td>
+    <td>
+      <%=h @assembly.name %>
+    </td>
+
+  </tr>
+
+  <tr>
+
+    <td align = "left">
+      <b>Assembly ID:</b>
+    </td>
+    <td>
+      <%=h @assembly.id %>
+    </td>
+
+  </tr>
+  <tr>
+
+    <td align = "left">
+      <b>Created by:</b>
+    </td>
+    <td>
+      <%=h @assembly.creator %>
+    </td>
+    <td align = "right">
+      <b>on:</b>
+    </td>
+    <td>
+      <%=h @assembly.created %>
+    </td>
+
+  </tr>
+
+  <tr>
+
+    <td align = "left">
+      <b>Status:</b>
+    </td>
+    <td>
+      <%=h @assembly.progress %>
+    </td>
+
+  </tr>
+
+  <tr>
+
+    <td align = "left">
+      <b>Comment:</b>
+    </td>
+    <td>
+      <%=h @assembly.comment %>
+    </td>
+
+  </tr>
+
+  </table>
+
+  <br />
+
+  <table cellspacing="10">
+
+  <tr>
+    <td align="left" bgcolor='yellow'><b>Confirm:</b></td>
+    <td align="left" bgcolor='red'> <%= f.submit 'DELETE' %> </td>
+  </tr>
+
+  </table>
+
+<% end %>
+
+
+  <table cellspacing="10">
+  <tr><td align="left" bgcolor='lightblue'>
+  <%= link_to 'Back to assembly overview', :instance => params[:instance], 
+                                           :organism => params[:organism], 
+                                           :action => 'index' %>
+  </td></tr>
+  </table>

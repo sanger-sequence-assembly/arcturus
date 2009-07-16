@@ -1,0 +1,36 @@
+<%= stylesheet_link_tag "table_rows", :media => "all" %>
+
+<% display_name = @instance_name + (@subclass_name.nil? ? "" : "/#{@subclass_name}") %>
+
+<h3>Arcturus instance <%= display_name %> has <%= @organisms.length %> organism databases </h3>
+
+<br />
+
+<table cellspacing="3">
+  <tr>
+    <th align="left">Nickname</th>
+    <th align="left">Description</th>
+  </tr>
+
+  <% row_number = 0 %>
+
+  <% @organisms.keys.sort.each do |nickname| %>
+    <% 
+      row_number += 1
+      style = (row_number % 2 == 0) ? "table_row_even" : "table_row_odd"
+    %>
+  <tr class="<%= style %>">
+    <td>
+      <%= 
+         link_to nickname, :instance => @instance_name, :organism => nickname, :controller => 'projects', :action => 'index'
+      %>
+    </td>
+
+   <td align="left"><%= @organisms[nickname] %></td>
+  </tr>
+  <% end %>
+
+</table>
+
+<br />
+

@@ -1,0 +1,148 @@
+
+<h2>Assembly <%=h @assembly %></h2>
+      
+<% @project = @assembly.projects_summary %>
+
+<% @pcount = @project['project_count'] %> 
+
+<table cellspacing="10">
+
+  <tr>
+
+    <td align = "left">
+      <b>Assembly name:</b>
+    </td> 
+    <td>
+      <%=h @assembly.name %>
+    </td>
+
+  </tr>
+
+  <tr>
+
+    <td align = "left">
+      <b>Assembly ID:</b>
+    </td> 
+    <td>
+      <%=h @assembly.id %>
+    </td>
+
+  </tr>
+
+
+  <tr>
+
+    <td align = "left">
+      <b>Chromosome:</b>
+    </td> 
+    <td>
+      <%=h @assembly.chromosome %>
+    </td>
+
+  </tr>
+
+
+  <tr>
+
+    <td align = "left">
+      <b>Origin:</b>
+    </td> 
+    <td>
+      <%=h @assembly.origin %>
+    </td>
+
+  </tr>
+
+  <tr>
+
+    <td align = "left">
+      <b>Size (Mbase):</b>
+    </td> 
+    <td>
+      <%=h @assembly.size %>
+    </td>
+
+  </tr>
+
+  <tr>
+
+    <td align = "left">
+      <b>Created by:</b>
+    </td> 
+    <td>
+      <%=h @assembly.creator %>
+    </td>
+    <td align = "right">
+      <b>on:</b>
+    </td> 
+    <td>
+      <%=h @assembly.created %>
+    </td>
+
+  </tr>
+
+  <tr>
+
+    <td align = "left">
+      <b>Status:</b>
+    </td> 
+    <td>
+      <%=h @assembly.progress %>
+    </td>
+
+  </tr>
+
+  <tr>
+
+    <td align = "left">
+      <b>Comment:</b>
+    </td> 
+    <td>
+      <%=h @assembly.comment %>
+    </td>
+
+  </tr>
+
+
+
+  <tr>
+
+    <td align = "left">
+      <b>Number of Projects:</b>
+    </td> 
+    <td align = "left">
+      <%= @pcount %>
+    </td>
+
+  </tr>
+
+</table>
+
+
+
+  <table cellspacing="20">
+
+  <tr><td align="center" bgcolor='lightblue'>
+  <%= link_to 'Back to assembly overview', :instance => params[:instance],
+                                           :organism => params[:organism],
+                                           :action => 'index' %>
+  </td></tr>
+
+  <tr><td align="center" bgcolor='orange'>
+  <%= link_to 'Edit assembly',             :instance => params[:instance],
+                                           :organism => params[:organism],
+                                           :action => 'edit',
+                                           :id => @assembly %>
+  </td></tr>
+
+  <% if @pcount == "0" %>
+
+    <tr><td align="center" bgcolor='pink'>
+    <%= link_to 'Remove assembly',         :instance => params[:instance],
+                                           :organism => params[:organism],
+                                           :action => 'delete_confirm',
+                                           :id => @assembly %>
+    </td></tr>
+  <% end %>
+
+  </table>

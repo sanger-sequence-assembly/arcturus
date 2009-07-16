@@ -1,0 +1,112 @@
+<h2>Create a new project for 
+    <% if params['assembly'] then %>
+       assembly <%=h @assembly %>
+    <%end %>
+    <%=h params['instance'] %> / <%=h params['organism'] %>
+</h2>
+
+<% form_for :project, :url => {:controller => :projects, 
+                               :method => :post, 
+                               :action => :create,
+                               :instance => params['instance'],
+                               :organism => params['organism']} do |f| %>
+  <%= f.error_messages %>
+
+
+  <table cellspacing="3">
+
+    <tr>
+      <td align="left">
+        <%= f.label :project_name %>:
+      </td>
+      <td align="left">
+        <%= f.text_field :name %>
+      </td>
+    </tr>
+
+
+    <% if params['assembly'] then %>
+        <%= f.hidden_field(:assembly, :value => params['assembly']) %> 
+    <% else %>
+
+      <tr>
+        <td>
+          <%= f.label :assembly, "Assembly" %>:
+        </td>
+        <td>
+           <%= f.collection_select(:assembly_id, @assemblies, :assembly_id, :name) %>
+        </td>
+      </tr>
+    <% end  %>
+
+
+    <tr>
+      <td align="left">
+        <%= f.label :owner %>:
+      </td>
+      <td align="left">
+        <%= f.collection_select(:owner, @users, :id, :full_name, {:prompt => true}) %>
+      </td>
+    </tr>
+
+
+    <tr>
+      <td align="left">
+        <%= f.label :gap4_directory %>:
+      </td>
+      <td align="left">
+        <%= f.text_field :directory, :size => 32, :maxlength => 256 %>
+      </td>
+    </tr>
+
+
+    <tr>
+      <td align="left">
+        <%= f.label :status %>:
+      </td>
+     <td align="left">
+        <%= f.collection_select(:status, @status, :to_s, :to_s ) %>
+      </td>
+    </tr>
+
+
+    <tr>
+      <td align="left">
+        <%= f.label :comment %>:
+      </td>
+      <td align="right">
+        <%= f.text_field :comment, :size => 32, :maxlength => 256 %>
+      </td>
+    </tr>
+
+  </table>
+
+  <br />
+
+  <table cellspacing="20">
+
+  <tr><td align="left" bgcolor='orange'> <%= f.submit 'Create this project' %> </td></tr>
+
+  </table>
+
+<% end %>
+
+  <table cellspacing="20">
+  <tr><td align="left" bgcolor='lightblue'>
+    <% @linkhash = { :instance => params[:instance],
+                     :organism => params[:organism],
+                     :action => 'index'}
+       if params['assembly'] then 
+         @linkhash[:assembly_id] = params['assembly']
+       end 
+     %>
+
+    <%= link_to 'Go back to project overview', @linkhash %>
+
+  </td></tr>
+  </table>
+
+
+  </table>
+
+<p>

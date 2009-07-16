@@ -1,0 +1,44 @@
+<h1>Editing user</h1>
+
+<% form_for(:user, :url => {:controller => :users, 
+                            :action => :update,
+                            :instance => params['instance'],
+                            :organism => params['organism']},
+                   :html => { :method => :put }
+           ) do |f| %>
+  <%= f.error_messages %>
+  <table>
+    <tr>
+      <td>
+        Username:
+      </td>
+      <td>
+        <%= @user.username %>
+      </td>
+    </tr>
+
+    <tr>
+      <td>
+        <%= f.label :role, "Role" %>:
+      </td>
+      <td>
+        <%= 
+          f.select(:role, @roles)
+         %>
+      </td>
+    </tr>
+  </table>
+
+  <%= f.hidden_field(:username) %>
+
+  <p>
+    <%= f.submit 'Update' %>
+  </p>
+<% end %>
+
+<%=
+#   link_to 'Show', @user
+%> |
+<%=
+#   link_to 'Back', users_path
+%>

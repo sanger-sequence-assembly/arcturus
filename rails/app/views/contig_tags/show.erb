@@ -1,0 +1,23 @@
+<%=
+@xml = Builder::XmlMarkup.new
+
+@xml.ContigTag do
+  @xml.TagID(@tag.tag_id)
+  @xml.TagType(@tag.tagtype)
+  @xml.SystematicID(@tag.systematic_id)
+
+  unless @tag.tagcomment.nil?
+    @xml.TagComment(@tag.tagcomment)
+  end
+
+  @mappings.each do |@mapping|
+    @xml.TagMapping do
+      @xml.MappingID(@mapping.id)
+      @xml.ContigID(@mapping.contig_id)
+      @xml.ContigStartPosition(@mapping.cstart)
+      @xml.ContigEndPosition(@mapping.cfinal)
+      @xml.Strand(@mapping.strand)
+    end
+  end
+end
+%>

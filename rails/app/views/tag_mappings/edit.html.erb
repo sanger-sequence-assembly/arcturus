@@ -1,0 +1,12 @@
+<h1>Editing tag_mapping</h1>
+
+<% form_for(@tag_mapping) do |f| %>
+  <%= f.error_messages %>
+
+  <p>
+    <%= f.submit 'Update' %>
+  </p>
+<% end %>
+
+<%= link_to 'Show', @tag_mapping %> |
+<%= link_to 'Back', tag_mappings_path %>

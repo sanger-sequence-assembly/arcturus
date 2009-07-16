@@ -1,0 +1,84 @@
+<%= stylesheet_link_tag "table_rows", :media => "all" %>
+
+<h1>Contigs for <%=h @project.name %>  </h1>
+
+<table cellpadding="3">
+  <tr>
+    <th align="left">ID</th>
+    <th align="left">Gap4 name</th>
+    <th align="right">Length</th>
+    <th align="right">No. of reads</th>
+    <th align="center">Created</th>
+    <th align="center">Last updated</th>
+    <th align="center" colspan="4">Actions</th>
+  </tr>
+
+<% row_number = 0 %>
+
+<% @contigs.each do |@contig| %>
+<% 
+  row_number += 1
+  style = (row_number % 2 == 0) ? "table_row_even" : "table_row_odd"
+%>
+
+  <tr class="<%= style %>">
+    <td>
+      <%=h @contig.contig_id %>
+    </td>
+
+    <td>
+      <%=h @contig.gap4name %>
+    </td>
+
+    <td align="right">
+      <%=h @contig.length %>
+    </td>
+
+    <td align="right">
+      <%=h @contig.nreads %>
+    </td>
+
+    <td>
+      <%=h @contig.created.strftime("%Y-%m-%d %H:%M:%S") %>
+    </td>
+
+    <td>
+      <%=h @contig.updated.strftime("%Y-%m-%d %H:%M:%S") %>
+    </td>
+
+    <td><%= link_to 'Show',  :instance => params[:instance],
+                             :organism => params[:organism],
+                             :controller => 'contigs',
+                             :action => 'show',
+                             :id => @contig %></td>
+
+    <td>
+      <%= 
+         link_to 'List tags', :instance => params[:instance], :organism => params[:organism],
+		:controller => 'contigs',
+		:action => 'tags', :id => @contig
+      %>
+    </td>
+ 
+    <td>
+      <%= 
+         link_to 'Show sequence', :instance => params[:instance], :organism => params[:organism],
+		:controller => 'contigs',
+		:action => 'sequence', :id => @contig
+      %>
+    </td>
+ 
+    <td>
+      <%= 
+         link_to 'Parents', :instance => params[:instance], :organism => params[:organism],
+		:controller => 'contigs',
+		:action => 'parents', :id => @contig
+      %>
+    </td>
+  </tr>
+<% end %>
+</table>
+
+<hr />
+
+<%= link_to 'Back', :back %>

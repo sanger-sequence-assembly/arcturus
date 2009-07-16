@@ -1,0 +1,67 @@
+#!/usr/local/bin/perl
+
+$babelroot = '/nfs/pathdb/arcturus/mysql/data';
+$pcs3root  = '/nfs/pathdb2/arcturus/mysql/data';
+
+&dataStats('babel', $babelroot);
+print "\n";
+&dataStats('pcs3',  $pcs3root);
+
+exit(0);
+
+sub dataStats {
+    my $cluster = shift;
+    my $rootdir = shift;
+
+    die "No cluster name specified" unless $cluster;
+    die "No root directory namespecified" unless $rootdir;
+
+    die "Unable to opendir($rootdir)" unless opendir(DIR, $rootdir);
+
+    my $filename;
+
+    my @allinstances = readdir(DIR);
+
+    closedir(DIR);
+
+    foreach $instance (sort @allinstances) {
+	next unless ($instance =~ /^[a-z]+/);
+	my $fullname = "$rootdir/$instance";
+	next unless -d $fullname;
+
+	if (opendir(SUBDIR, $fullname)) {
+	    my @alldatabases = readdir(SUBDIR);
+	    closedir(SUBDIR);
+
+	    foreach $database (sort @alldatabases) {
+		my $databasedir = "$fullname/$database";
+		next unless -d $databasedir;
+		next if ($database =~ /^\./);
+
+		if (opendir(DBDIR, $databasedir)) {
+		    my @allfiles = readdir(DBDIR);
+		    closedir(DBDIR);
+
+		    my $nfiles = 0;
+		    my $nbytes = 0;
+	    
+		    my $subfile;
+
+		    foreach $subfile (@allfiles) {
+			next unless ($subfile =~ /^\w+\.\w{3}/);
+			my @statdata = stat("$databasedir/$subfile");
+			$nfiles += 1;
+			$nbytes += $statdata[7];
+		    }
+
+		    printf "%-10s %-16s %-16s  %4d files  %10d bytes\n",
+		    $cluster, $instance, $database, $nfiles, $nbytes;
+		} else {
+		    print STDERR "+++ Unable to open database directory $databasedir ... skipping.\n";
+		}
+	    }
+	} else {
+	    print STDERR "*** Unable to open instance directory $fullname ... skipping.\n";
+	}
+    }
+}

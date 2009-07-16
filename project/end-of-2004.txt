@@ -1,0 +1,92 @@
+ARCTURUS END-OF-YEAR REVIEW
+
+The new Arcturus project has now been running for nearly a year.
+I thought it would be a good time to look back on what we have
+achieved.
+
+This time last year, the Arcturus project was stalled. It had
+lost direction and momentum, and it was unlikely that it would
+ever deliver a usable product.
+
+I raised these concerns with PSU management at a meeting in
+December 2003, and I recommended that work on Arcturus should
+begin again from scratch.
+
+I presented a detailed set of proposals which would form the
+foundation of a new Arcturus project:
+
+* We should adopt more formal software engineering methods
+  instead of an ad hoc approach to software development. This
+  would allow us to maintain better control of the project and
+  to monitor its progress more effectively.
+
+* We should recognise that Arcturus is a large and complex
+  software system, similar in scope to Ensembl, but without
+  Ensembl's level of resources. I recommended an incremental
+  development strategy which would allow the system to be
+  developed and released in stages.
+
+  The first release would be the core system and a simple but
+  functional user interface, which would provide all of the
+  essential features for the finishing teams.
+
+* We should base the design of the system around the objects
+  which it is meant to handle (reads, contigs, assemblies, etc.)
+  and the relationships between them.
+
+* We should focus on the needs of the users of the system,
+  especially the  finishing teams. We should ask them what
+  they want the system to do, and we should consult with them
+  regularly throughout the project to make sure that their
+  needs are driving what we do.
+
+* We should hold review meetings every two to three months.
+  The review team should include representatives of the
+  finishing teams, PSU management and the software developers.
+
+WHERE WE ARE NOW
+
+We are halfway through the 18-month development timetable for 
+the first release of Arcturus. Most aspects of the project are
+on schedule.
+
+We already have a preliminary assembly pipeline which can run
+incremental assemblies using the Arcturus databases.
+
+We have recently released a simple user interface for viewing
+assemblies and groups of contigs.
+
+We have demonstrated the usefulness of even a half-completed
+core system by calculating scaffolds and super-scaffolds for
+projects such as EIMER.
+
+MUCH REMAINS TO BE DONE
+
+The core system is still under development. At present, it
+can manage reads and contigs. We are currently adding tag
+handling. The next task will be to complete the work on
+projects, which are the Arcturus equivalent of split Gap4
+databases.
+
+We have identified some problems in integrating Arcturus with
+Gap4, but we are confident that we will be able to resolve
+these early in the new year, with help from Rob and James.
+
+We will continue to develop the user interface in close
+consultation with the finishing teams, and this work will
+benefit from experience gained from an Open University course
+on the design of effective user interfaces.
+
+THINGS ARE LOOKING GOOD
+
+The project has been noticed outside the PSU. There is even
+talk of using it to manage large non-PSU projects.
+
+The extensive experience which we have gained in using MySQL
+has also been recognised outside the PSU. The DBA team often
+ask our advice when faced with tricky MySQL questions.
+
+The new Arcturus project has made better progress in nine
+months than its predecessor did in almost three years, and
+the first release is on course to be delivered on schedule
+in autumn 2005.

@@ -1,0 +1,19 @@
+.table__row_even {
+  background-color: #ffffff;
+  }
+
+.table_row_odd {
+  background-color: #ccccee;
+}
+
+.table_cell_odd {
+  background-color: #ffffff;
+}
+
+.table_cell_even {
+  background-color: #ccccee;
+}
+
+.highlight {
+  background-color: #ffffcc;
+}

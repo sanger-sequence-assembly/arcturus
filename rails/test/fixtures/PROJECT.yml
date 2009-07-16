@@ -1,0 +1,13 @@
+default_project:
+  project_id:   1
+  name:         'default_project'
+  assembly_id:  1
+  created:      '2009-01-01'
+  creator:      'adh'
+
+bin:
+  project_id:   2
+  name:         'BIN'
+  assembly_id:  1
+  created:      '2009-01-01'
+  creator:      'arcturus'

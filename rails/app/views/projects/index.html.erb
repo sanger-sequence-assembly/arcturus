@@ -1,0 +1,98 @@
+<%= stylesheet_link_tag "table_rows", :media => "all" %>
+
+<h2>Projects for <%=h params['instance'] %> / <%=h params['organism'] %> </h2>
+
+<table cellpadding="3">
+  <tr>
+    <th align="left">Name</th>
+    <th align="left">Assembly</th>
+    <th align="right">Total length</th>
+    <th align="right">No. of contigs</th>
+    <th align="right">Max. length</th>
+    <th align="right">No. of reads</th>
+    <th align="center">Last updated</th>
+    <th align="center">Owner</th>
+    <th align="center" colspan="3">Actions</th>
+  </tr>
+
+<% @row_number = 0 %>
+
+<% @projects.each do |project| %>
+<% 
+  @row_number += 1
+  @style = (@row_number % 2 == 0) ? "table_row_even" : "table_row_odd"
+%>
+
+  <tr class="<%= @style %>">
+    <td>
+      <%=h project.name %>
+    </td>
+
+    <td>
+      <%=h project.assembly.name %>
+    </td>
+
+    <% @summary = project.current_contigs_summary %>
+
+    <td align="right">
+      <%=h @summary['total_length'] %>
+    </td>
+
+    <td align="right">
+      <%=h @summary['contig_count'] %>
+    </td>
+
+    <td align="right">
+      <%=h @summary['max_length'] %>
+    </td>
+
+    <td align="right">
+      <%=h @summary['read_count'] %>
+    </td>
+
+    <td>
+      <%=h @summary['last_update'] %>
+    </td>
+
+    <td align="center">
+      <%=h project.owner.nil? ? '' : project.owner.full_name %>
+    </td>
+
+    <td>
+      <%= 
+         link_to 'Show', :instance => params[:instance], :organism => params[:organism], :action => 'show', :id => project
+      %>
+    </td>
+ 
+    <td>
+      <%= 
+         link_to 'List contigs', :instance => params[:instance], :organism => params[:organism], :action => 'contigs', :id => project
+      %>
+    </td>
+
+   <td>
+      <%=
+         link_to 'Export contigs', :instance => params[:instance], :organism => params[:organism], :action => 'export', :id => project, :format => "text"
+       %>
+    </td>
+
+  </tr>
+<% end %>
+</table>
+
+<br />
+
+<%=
+   link_to 'New project', :instance => params[:instance],
+                          :organism => params[:organism],
+                          :assembly => params[:assembly_id],
+                          :action => 'new'
+%>
+
+<br />
+
+<% if @for_assembly > 0 then %>
+<%= link_to 'Back to assembly', :instance => params[:instance], 
+                               :organism => params[:organism], 
+                               :controller => 'assemblies' %>
+<%end %>

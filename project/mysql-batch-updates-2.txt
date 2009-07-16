@@ -1,0 +1,71 @@
+Date: Tue, 27 May 2008 09:32:14 +0100
+From: David Harper <adh@sanger.ac.uk>
+To: Tim Cutts <tjrc@sanger.ac.uk>
+CC: MySQL mailing list <mysql@sanger.ac.uk>
+Subject: Re: Batch updates in Perl and Java
+
+Hello Tim,
+
+> I think an additional test you could perform that would be
+> interesting  would be to run *several* of these simultaneously on
+> multiple client  nodes, writing to the same table.  My prediction is
+> that you will see  MyISAM get *dramatically* slower because of
+> locking issues, whereas  InnoDB will scale better (essentially,
+> MyISAM should take twice as  long with two clients than it does with
+> one, because of table locking)
+
+Here are the results of that test.  I ran 16 parallel Java clients using the batch system on the seq1 cluster, all trying to insert 100,000 rows into a server running on the pcs4 cluster.
+
+The client program and table specification are slightly different to those used in my previous test: the seq_id column is now auto_increment and the client program allows the database server to fill in that value, but the client is still sending two blobs of 500-600 bytes in each row.
+
+As before, the client program uses Statement.addBatch to build a batch of 5000 inserts before calling Statement.executeBatch to send them to the server.
+
+Here are the average wall-clock times per client, in seconds, as reported by time(1).  To determine how well the system scales, I also give the wall-clock time for a single client.  The single-client test was run several times in succession to even out any variation due to network load, host processor load, phase of the Moon and so on.
+
+The server host was idle during these tests, apart from the MySQL or PostgreSQL server, and the hosts running the clients were also quiet apart from the client jobs, so the figures should give a fair indication of server performance.
+
+               Single client     16 parallel clients    Factor
+----------------------------------------------------------------
+MyISAM              41                  240               6
+
+InnoDB             320                 5795              18
+
+PostgreSQL          21                  215              10
+
+There are several surprises, not least the fact that -- counter to Tim's prediction -- MyISAM not only scales significantly better than InnoDB, but that it performs over 20 times better than InnoDB in absolute terms, both in the single-client and multiple-client cases.
+
+I'll confess to being a fan of MyISAM, but these results astonished even me, so I had a look at the documentation regarding InnoDB tuning:
+
+http://dev.mysql.com/doc/refman/5.0/en/innodb-tuning.html
+
+It advises that one should wrap several changes into a single transaction, since the InnoDB storage engine has to flush the log to disk at each transaction commit.
+
+I modified the client program to add an option to disable auto-commit and call Connection.commit after each Statement.executeBatch.
+
+Obviously, this has no effect on MyISAM tables, which are non-transactional, but it does indeed improve the performance of InnoDB.
+
+In the table below, times are given in the form AAA/BBB where AAA is the average wall-clock time per client for 16 parallel clients and BBB is the corresponding figure for a single client.
+
+Batch, no Tx:  batches of 5000 inserts in auto-commit mode
+Batch, with Tx:  batches of 5000 inserts, each batch is a transaction
+No batch, with Tx:  5000 inserts per transaction, but no batch update
+
+                Batch, no Tx     Batch, with Tx    No batch, with Tx
+----------------------------------------------------------------------
+MyISAM             240/41             N/A                 N/A
+
+InnoDB            5795/320          470/50              480/51
+
+PostgreSQL         215/21           173/15              177/37
+
+Clearly, as far as InnoDB is concerned, the real performance gain is obtained by wrapping multiple inserts into a single transaction. There's no significant gain in using batch inserts.
+
+This leads me to think that the MySQL JDBC driver doesn't build multiple-row insert statements from batch updates, but sends them as a series of single-row inserts.
+
+That seems to be supported by watching the statements being executed by each client thread using "show processlist" -- even with clients operating in batch update mode, I was seeing single-row inserts, not the multiple-row inserts which MySQL .
+
+Bundling multiple inserts into transactions also benefits PostgreSQL, but as you'll have noticed, it beats MySQL by a factor of 2 or better in all of the scenarios.  Maybe we're *all* betting on the wrong horse :-)
+
+Cheers
+
+David 
