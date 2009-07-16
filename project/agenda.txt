@@ -1,0 +1,11 @@
+Agenda for the Arcturus review meeting of 11 December 2003
+
+1. Terms of reference for the meeting
+
+2. Review of the origin and history of the project
+
+3. The current state of Arcturus
+
+4. Towards a software engineering framework
+
+5. Discussion

@@ -1,0 +1,130 @@
+<html>
+<head>
+<title>The Oligo Finder</title>
+</head>
+<body bgcolor="#ffffee">
+<h1>The Oligo Finder</h1>
+<p>
+In the <strong>Projects</strong> tab, select the <strong>Project</strong>
+menu:
+</p>
+<center>
+<img src="screenshots/projects5.png" width="689" height="251" />
+</center>
+<p>
+When you select the <strong>Find oligos</strong> option,
+Minerva displays a new tab:
+</p>
+<center>
+<img src="screenshots/oligofinder1.png" width="785" height="646" />
+</center>
+<p>
+The oligo finder enables you to search Arcturus for one or more oligo
+sequences.
+</p>
+<p>
+Minerva can search through the contig consensus sequences in one
+or more projects.  It can also search through the unassembled reads.
+</p>
+<p>
+This can be a lengthy operation, so Minerva uses progress bars to
+allow you to monitor the completion of the search.
+</p>
+
+<h2>Specifying the oligos</h2>
+<p>
+Oligos are entered, one per line, into the <strong>Oligos to search for</strong>
+box.  You can enter the oligo sequence alone, or a name followed by a sequence.
+Minerva will automatically assign a name to each anonymous oligo.
+</p>
+<p>
+Oligo sequences should contain only the four bases A, C, G and T.  Minerva
+does not allow you to include pads in oligo sequences.
+</p>
+<p>You can also import a set of oligos from a file using the <strong>Open file of
+oligos</strong> menu option:
+</p>
+<center>
+<img src="screenshots/oligofinder4.png" width="785" height="590" />
+</center>
+
+
+<h2>Choosing which contigs to search</h2>
+<p>
+Minerva displays a list of projects to the right of the <strong>Oligos to search 
+for</strong> box.  It will search the contigs in all of the projects that you
+select.
+</p>
+<p>
+For convenience, you can use the <strong>All projects</strong> check-box to
+select all of the projects.  In this mode, Minerva will search all of the
+current contigs.
+</p>
+
+<h2>Searching the unassembled reads</h2>
+<p>
+You may also wish to search the unassembled reads.  Use the <strong>Scan
+free reads</strong> check-box to tell Minerva to do this.
+</p>
+
+<h2>Preparing to search</h2>
+<p>
+The picture below shows the oligo finder ready to search all contigs
+and all free reads for three oligo sequences.
+</p>
+<center>
+<img src="screenshots/oligofinder2.png" width="798" height="710" />
+</center>
+<p>
+When the <strong>Find oligos</strong> button is pressed,
+Minerva searches through the contigs, then through the free reads.
+When the search is complete, the results are displayed in the
+<strong>Information</strong> box:
+</p>
+<center>
+<img src="screenshots/oligofinder3.png" width="798" height="854" />
+</center>
+<p>
+Here are the contents of the <strong>Information</strong> box in full:
+</p>
+<blockquote>
+<pre><code>
+Searching for oligos:
+
+ANON.1 : CGTATGATGTTTATGGGCTTGCCTCTGGGTAGGACAAC
+ANON.2 : GTTTATTGTTGGAAGTGGTTTTGTGAATTGTTAAA
+ANON.3 : GGCTCTAACGTTTTTTTCCCGCCAGATCGGAAAAACGTTC
+
+
+Making a list of free reads.  This may take some time.  Please be patient.
+
+Starting oligo search in 14,107,524 bp of contig consensus sequence
+Finished.
+
+
+Oligo ANON.1 matches once
+    CONTIG 3115 (cpara1120e04.p1k, 140,438 bp, in CPARA1) from 135,119 in forward direction.
+
+
+Oligo ANON.2 matches once
+    CONTIG 3446 (cpara1070f12.q1k, 2,543,011 bp, in CPARA1) from 948,435 in forward direction.
+
+
+Oligo ANON.3 matches once
+    CONTIG 3447 (cpara_FOS_6l18.q1kpIBR, 362,574 bp, in CPARA1) from 115,598 in forward direction.
+
+Starting oligo search in 8,167 free reads
+Finished.
+</code></pre>
+</blockquote>
+<p>
+In this example, there were matches in three contigs, but no matches to any
+of the free reads.
+</p>
+<hr />
+[<a href="readfinder.html">PREV: The Read Finder</a>]
+[<a href="importreads.html">NEXT: The Read Importer</a>]
+[<a href="index.html">HOME: Back to the first page</a>]
+<hr />
+</body>
+</html>

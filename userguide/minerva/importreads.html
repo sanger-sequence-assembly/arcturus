@@ -1,0 +1,128 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <title>The Read Importer</title>
+</head>
+<body bgcolor="#ffffee">
+<h1>The Read Importer</h1>
+<p>
+In the <strong>Projects</strong> tab, choose a project and then select
+the
+<strong>Project</strong> menu:
+</p>
+<center>
+<img src="screenshots/importreads1.png" height="250" width="770"></center>
+<p>
+When you select the <strong>Import reads into project</strong> option,
+Minerva displays a new tab:
+</p>
+<center>
+<img src="screenshots/importreads2.png" height="529" width="785"></center>
+<p>
+The read importer enables you to assign one or more unassembled reads
+to a project. Each read is converted into a single-read contig, and
+the contig is added to the project.
+</p>
+<h2>Specifying the reads</h2>
+<p>
+Read names are entered, one per line, into the <strong>Reads to import</strong>
+box. Wildcards are <strong>not</strong> permitted.
+</p>
+<p>
+Wildcards are <strong>not</strong> permitted. Each read name must
+identify a
+single read.
+</p>
+<p>
+You can also import a list of read names from a file using the <strong>Open
+file of read names</strong> menu option:
+</p>
+<center>
+<img src="screenshots/importreads3.png" height="529" width="785"></center>
+<h2>Specifying the project</h2>
+<p>
+Minerva displays a list of projects to the right of the <strong>Reads
+to
+import</strong> box. Use this list to select the project where you want
+Minerva to put the reads.
+</p>
+<h2>Importing the reads</h2>
+<p>
+When you press the <strong>Import reads</strong> button, Minerva will
+attempt to import each read in the list into the project you have
+specified.
+</p>
+<p>
+An import will fail if the read has not been loaded into Arcturus, or
+if the read is already in a current contig. This includes single-read
+contigs, so you cannot use the read importer to move single-read
+contigs
+from one project to another.
+</p>
+<p>
+Each read is processed separately. If one read cannot be imported,
+Minerva
+will report the reason, and proceed to try to import the next read in
+the
+list.
+</p>
+<p></p>
+<h2>Reporting the results</h2>
+<p>
+Minerva reports the result of each attempted import in the <strong>Information</strong>
+box. The example below shows the display after four reads have been
+successfully
+imported into a project:
+</p>
+<center>
+<img src="screenshots/importreads4.png" height="527" width="756"></center>
+<p>
+The next example shows the display after the failure to import two
+reads. One was already
+in a contig.
+</p>
+<p>
+The other was not known to Arcturus, perhaps because its name was
+mis-spelled
+or because it had not yet been loaded into Arcturus. The <a
+ href="readfinder.html">Read
+Finder</a> may be helpful in resolving this type of problem.
+</p>
+<center>
+<img src="screenshots/importreads5.png" height="527" width="756"></center>
+<h2>Updating the Project List and Contig List tables</h2>
+<p>
+When Minerva imports a set of reads into a project as single-read
+contigs,
+it does not update the project list or contig list tables to show the
+new contigs. A future version of Minerva will update these tables
+automatically, but for the present, you will need to refresh the tables
+manually.
+</p>
+<p>
+The quickest way to refresh the project list or contig list tables
+is to press the <strong>F5</strong> key whilst viewing the table.<br>
+</p>
+<h2>Help!&nbsp; Minerva says that my read doesn't exist!</h2>
+Sometimes, when you use the read importer to import a set of reads
+which have just been asped, Minerva will tell you that you reads can't
+be found.<br>
+<br>
+This is because Arcturus only checks for newly-asped reads every two
+hours, and if the reads have only just been asped, they won't yet be in
+Arcturus.<br>
+<br>
+The read loader runs every two hours during the week.&nbsp; The first
+run starts at 8 a.m. and the last run starts at 4 p.m.&nbsp; Each run
+takes about half an hour, depending on how many new reads have come
+through for all of the sequencing projects that are currently managed
+by Arcturus.<br>
+<br>
+<p></p>
+<hr>
+[<a href="oligofinder.html">PREV: The Oligo Finder</a>]
+[<a href="contigtransfer.html">NEXT: Contig Transfers</a>]
+[<a href="index.html">HOME: Back to the first page</a>]
+<hr>
+</body>
+</html>

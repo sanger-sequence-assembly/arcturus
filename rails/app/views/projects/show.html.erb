@@ -1,0 +1,122 @@
+<h2>Information for project <%=h @project.name %></h2>
+
+<table cellpadding="3">
+
+  <tr>
+    <td colspan="2" align="left">
+      <em>Project properties</em>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Name:</td>
+    <td>
+      <%=h @project.name %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Assembly:</td>
+    <td>
+      <%=h @project.assembly.name %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Gap4 directory:</td>
+    <td>
+      <%=h @project.directory %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Created:</td>
+    <td>
+      <%=h @project.created %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Updated:</td>
+    <td>
+      <%=h @project.updated %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Owner:</td>
+    <td>
+      <%=h @project.owner.nil? ? '' : @project.owner.full_name %>
+    </td>
+  </tr>
+
+  <tr>
+    <td colspan="2" align="left">&nbsp;</td>
+  </tr>
+
+  <tr>
+    <td colspan="2" align="left">
+      <em>Contig properties</em>
+    </td>
+  </tr>
+
+  <% @summary = @project.current_contigs_summary %>
+
+  <tr>
+    <td>Total length</td>
+    <td>
+      <%=h @summary['total_length'] %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Number of contigs</td>
+    <td>
+      <%=h @summary['contig_count'] %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Maximum length</td>
+    <td>
+      <%=h @summary['max_length'] %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Number of reads</td>
+    <td>
+      <%=h @summary['read_count'] %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Last updated</td>
+    <td>
+      <%=h @summary['last_update'] %>
+    </td>
+  </tr>
+
+</table>
+
+<hr />
+
+<%=
+  link_to 'Edit', :instance => params[:instance],
+                  :organism => params[:organism],
+                  :action => 'edit',
+                  :id => @project
+%> |
+<%= 
+  link_to 'Back', :instance => params[:instance],
+                  :organism => params[:organism],
+                  :action => 'index'
+%> |
+
+<%=
+  link_to 'Destroy', :instance => params[:instance],
+                     :organism => params[:organism],
+                     :action => 'delete_confirm',
+                     :confirm => "Are you sure?",
+                     :id => @project
+%>
