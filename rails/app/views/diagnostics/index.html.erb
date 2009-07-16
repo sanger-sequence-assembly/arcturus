@@ -74,3 +74,13 @@
 <% end %>
 
 </table>
+
+<h2>Cookies</h2>
+
+<ul>
+
+<% cookies.each do |key, value| %>
+<li><strong><%= key %></strong> : <%= value.inspect %></li>
+<% end %>
+
+</ul>
