@@ -7,6 +7,10 @@ class DiagnosticsController < ApplicationController
       @connection_pools.merge pot.connection_handler.connection_pools.values.to_set
     end
 
+    @my_host = request.host
+    @my_port = request.port
+    @my_host_with_port = request.host_with_port
+
     respond_to do |format|
       format.html # index.html.erb
     end
