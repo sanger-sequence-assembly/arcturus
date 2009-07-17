@@ -10,7 +10,7 @@
     <th align="right">No. of reads</th>
     <th align="center">Created</th>
     <th align="center">Last updated</th>
-    <th align="center" colspan="4">Actions</th>
+    <th align="center" colspan="3">Actions</th>
   </tr>
 
 <% row_number = 0 %>
@@ -23,7 +23,13 @@
 
   <tr class="<%= style %>">
     <td>
-      <%=h @contig.contig_id %>
+      <%=
+        link_to @contig.contig_id,  :instance => params[:instance],
+                                    :organism => params[:organism],
+                                    :controller => 'contigs',
+                                    :action => 'show',
+                                    :id => @contig
+      %>
     </td>
 
     <td>
@@ -45,12 +51,6 @@
     <td>
       <%=h @contig.updated.strftime("%Y-%m-%d %H:%M:%S") %>
     </td>
-
-    <td><%= link_to 'Show',  :instance => params[:instance],
-                             :organism => params[:organism],
-                             :controller => 'contigs',
-                             :action => 'show',
-                             :id => @contig %></td>
 
     <td>
       <%= 
@@ -81,4 +81,8 @@
 
 <hr />
 
-<%= link_to 'Back', :back %>
+<%= link_to 'Projects', :instance => params[:instance],
+                        :organism => params[:organism],
+                        :controller => 'projects',
+                        :action => 'index'
+%>
