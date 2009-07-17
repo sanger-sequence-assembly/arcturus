@@ -2,7 +2,7 @@
 
 <h1>Diagnostics for <%= params[:instance] %> / <%= params[:organism] %></h1>
 
-<h2>Query parameters</h2>
+<h2>Request parameters</h2>
 
 <table cellpadding="3">
   <tr>
@@ -26,11 +26,41 @@
   </tr>
 </table>
 
-<h2>Object types</h2>
+<h2>Ruby objects</h2>
+
+<h3>Controller</h3>
+
+<table cellpadding="3">
+  <tr>
+    <th align="left">Class</th>
+    <th align="left">Class ID</th>
+  </tr>
+
+  <% row_number = 0 %>
+
+  <% cls = @my_class
+     begin %>
+
+  <% 
+    row_number += 1
+    style = (row_number % 2 == 0) ? "table_row_even" : "table_row_odd"
+  %>
+
+  <tr class="<%= style %>">
+    <td><%= cls.name %></td>
+    <td><%= cls.object_id %></td>
+  </tr>
+  <% cls = cls.superclass
+     end until cls.nil? %>
+
+</table>
+
+<h3>Data objects</h3>
 
 <table cellpadding="3">
   <tr>
     <th align="left">Object type</th>
+    <th align="left">Object class ID</th>
     <th align="left">Connection handler ID</th>
     <th align="left">Connection pool hash ID</th>
     <th align="left">Connection pool IDs</th>
@@ -47,6 +77,10 @@
   <tr class="<%= style %>">
     <td>
       <%=h object_type.name %>
+    </td>
+
+    <td>
+      <%=h object_type.object_id %>
     </td>
 
     <td>

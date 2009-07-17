@@ -11,6 +11,8 @@ class DiagnosticsController < ApplicationController
     @my_port = request.port
     @my_host_with_port = request.host_with_port
 
+    @my_class= self.class
+
     respond_to do |format|
       format.html # index.html.erb
     end
