@@ -10,9 +10,9 @@
     <th align="right">No. of contigs</th>
     <th align="right">Max. length</th>
     <th align="right">No. of reads</th>
-    <th align="center">Last<br>updated</th>
+    <th align="center">Last updated</th>
     <th align="center">Owner</th>
-    <th align="center" colspan="3">Actions</th>
+    <th align="center" colspan="2">Actions</th>
   </tr>
 
 <% @row_number = 0 %>
@@ -25,11 +25,22 @@
 
   <tr class="<%= @style %>">
     <td>
-      <%=h project.name %>
+      <%=
+        link_to project.name, :instance => params[:instance],
+                              :organism => params[:organism],
+                              :action => 'show',
+                              :id => project
+      %>
     </td>
 
     <td>
-      <%=h project.assembly.name %>
+      <%=
+        link_to project.assembly.name, :instance => params[:instance],
+                                       :organism => params[:organism],
+                                       :controller => 'assemblies',
+                                       :action => 'show',
+                                       :id => project.assembly
+      %>
     </td>
 
     <% @summary = project.current_contigs_summary %>
@@ -57,12 +68,6 @@
     <td align="center">
       <%=h project.owner.nil? ? '' : project.owner.full_name %>
     </td>
-
-    <td>
-      <%= 
-         link_to 'Show', :instance => params[:instance], :organism => params[:organism], :action => 'show', :id => project
-      %>
-    </td>
  
     <td>
       <%= 
@@ -87,9 +92,4 @@
                           :organism => params[:organism],
                           :assembly => params[:assembly_id],
                           :action => 'new'
-%> | 
-
-<%= link_to 'To assembly', :instance => params[:instance], 
-                           :organism => params[:organism], 
-                           :controller => 'assemblies' %>
-
+%>
