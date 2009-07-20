@@ -29,11 +29,13 @@ private
   def find_user_from_cookie
     logger.debug "Invoked ApplicationController.find_user_from_cookie"
 
-    return false unless cookies[:auth_key]
+    auth_cookie = get_authentication_cookie
 
-    logger.debug "cookies[auth_key] is " + cookies[:auth_key]
+    return false unless auth_cookie
 
-    sess = Session.find_by_auth_key(cookies[:auth_key])
+    logger.debug "cookies[" + get_cookie_name + "] is " + auth_cookie
+
+    sess = Session.find_by_auth_key(auth_cookie)
 
     if sess.nil?
       logger.debug "Failed to find a match to the cookie"
@@ -43,6 +45,25 @@ private
       session[:user] = sess.username
       true
     end
+  end
+
+  def get_cookie_name
+    AUTHENTICATION_COOKIE + "_" + request.port.to_s
+  end
+
+  def get_authentication_cookie
+    cookie_name = get_cookie_name
+    cookies[cookie_name]
+  end
+
+  def set_authentication_cookie(value)
+    cookie_name = get_cookie_name
+    cookies[cookie_name] = value
+  end
+
+  def delete_authentication_cookie
+    cookie_name = get_cookie_name
+    cookies.delete cookie_name
   end
 
   def find_user_from_api_key
