@@ -7,15 +7,21 @@ class SessionsController < ApplicationController
     if AuthenticationManager.authenticate(params[:username], params[:password])
       initialise_session(params[:username])
  
-      redirect_to :controller => 'arcturus', :action => 'index', :instance => 'test'
+      if session[:return_to].nil?
+        redirect_to :controller => 'arcturus', :action => 'index', :instance => 'test'
+      else
+        new_url = session[:return_to]
+        session.delete :return_to
+        redirect_to new_url
+      end
     else
       redirect_to :controller => 'sessions', :action => 'access_denied'
     end
   end
 
   def logout
-    session.clear
-    cookies.clear
+    cookies.delete :auth_key
+    reset_session
   end
 
   def access_denied

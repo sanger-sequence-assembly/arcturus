@@ -20,7 +20,7 @@ private
   end
 
   def login_required
-    login_from_session || login_from_cookie || authenticate_user
+    login_from_session || login_from_cookie || login_from_api_key || authenticate_user
   end
 
   def login_from_session
@@ -36,7 +36,7 @@ private
 
     logger.debug "cookies[auth_key] is " + cookies[:auth_key]
 
-    sess = Session.find_by_auth_token(cookies[:auth_key])
+    sess = Session.find_by_auth_key(cookies[:auth_key])
 
     if sess.nil?
       logger.debug "Failed to find a match to the cookie"
@@ -48,8 +48,27 @@ private
     end
   end
 
+  def login_from_api_key
+    logger.debug "Invoked ApplicationController.login_from_api_key"
+
+    return false unless params[:api_key]
+
+    logger.debug "params[api_key] is " + params[:api_key]
+
+    sess = Session.find_by_api_key(params[:api_key])
+
+    if sess.nil?
+      logger.debug "Failed to find a match to the API key"
+      false
+    else
+      logger.debug "Found session : " + sess.inspect
+      session[:user] = sess.username
+      true
+    end
+  end
+
   def authenticate_user
-    logger.debug "Invoked ApplicationController.authenticate_user"
-    nil
+    session[:return_to] = request.request_uri
+    redirect_to :controller => 'sessions', :action => 'login'
   end
 end
