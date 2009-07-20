@@ -20,7 +20,7 @@ class SessionsController < ApplicationController
   end
 
   def logout
-    cookies.delete :auth_key
+    delete_authentication_cookie
     reset_session
   end
 
@@ -37,7 +37,7 @@ private
      sess.auth_key = Digest::SHA1.hexdigest(Time.now.to_s + sess.username)[1..32]
      sess.auth_key_expires = 2.days.from_now
      sess.save
-     cookies[:auth_key] = { :value => sess.auth_key, :expires => sess.auth_key_expires }
+     set_authentication_cookie({ :value => sess.auth_key, :expires => sess.auth_key_expires })
      session[:user] = username
   end
 end
