@@ -85,38 +85,6 @@ private
     end
   end
 
-  def find_user_from_sso
-    logger.debug "Invoked ApplicationController.find_user_from_sso"
-
-    sso_cookie = cookies[SSO_COOKIE_NAME]
-
-    return false unless sso_cookie
-
-    logger.debug "cookie[#{SSO_COOKIE_NAME}] is " + sso_cookie
-
-    res = nil
-
-    begin
-      response = Net::HTTP.post_form(URI.parse(VERIFY_LOGIN_URL), {'cookie' => sso_cookie })
-      res = response.body
-    rescue SocketError
-      logger.info "Authentication service is down #{VERIFY_LOGIN_URL} cookie: #{sso_cookie}"
-    end
-
-    logger.debug "Response body: #{res}"
-
-    result = ActiveSupport::JSON.decode(res)
-
-    logger.debug "Decoded response body: " + result.inspect
-
-    if result && result["valid"] == 1 && result["username"]
-      session[:user] = result["username"]
-      true
-    else
-      false
-    end
-  end
-
   def force_user_login
     session[:return_to] = request.request_uri
     redirect_to :controller => 'sessions', :action => 'login'
