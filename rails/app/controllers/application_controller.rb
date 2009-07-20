@@ -17,7 +17,7 @@ private
   end
 
   def login_required
-    find_user_from_session || find_user_from_cookie || find_user_from_api_key || force_user_login
+    find_user_from_session || find_user_from_cookie || find_user_from_api_key || find_user_from_sso || force_user_login
   end
 
   def find_user_from_session
@@ -48,7 +48,7 @@ private
   end
 
   def get_cookie_name
-    AUTHENTICATION_COOKIE + "_" + request.port.to_s
+    ARCTURUS_COOKIE_NAME + "_" + request.port.to_s
   end
 
   def get_authentication_cookie
@@ -82,6 +82,38 @@ private
       logger.debug "Found session : " + sess.inspect
       session[:user] = sess.username
       true
+    end
+  end
+
+  def find_user_from_sso
+    logger.debug "Invoked ApplicationController.find_user_from_sso"
+
+    sso_cookie = cookies[SSO_COOKIE_NAME]
+
+    return false unless sso_cookie
+
+    logger.debug "cookie[#{SSO_COOKIE_NAME}] is " + sso_cookie
+
+    res = nil
+
+    begin
+      response = Net::HTTP.post_form(URI.parse(VERIFY_LOGIN_URL), {'cookie' => sso_cookie })
+      res = response.body
+    rescue SocketError
+      logger.info "Authentication service is down #{VERIFY_LOGIN_URL} cookie: #{sso_cookie}"
+    end
+
+    logger.debug "Response body: #{res}"
+
+    result = ActiveSupport::JSON.decode(res)
+
+    logger.debug "Decoded response body: " + result.inspect
+
+    if result && result["valid"] == 1 && result["username"]
+      session[:user] = result["username"]
+      true
+    else
+      false
     end
   end
 
