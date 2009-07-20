@@ -17,7 +17,7 @@ private
   end
 
   def login_required
-    find_user_from_session || find_user_from_cookie || find_user_from_api_key || find_user_from_sso || force_user_login
+    find_user_from_session || find_user_from_cookie || find_user_from_api_key || force_user_login
   end
 
   def find_user_from_session
