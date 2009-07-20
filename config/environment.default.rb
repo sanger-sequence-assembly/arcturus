@@ -58,6 +58,12 @@ MYSQL_READ_ONLY_PASSWORD = "LookButDontTouch"
 
 ARCTURUS_DEV_INSTANCE = "test"
 
+ARCTURUS_COOKIE_NAME = 'arcturus_auth_key'
+
+VERIFY_LOGIN_URL = "https://intweb.sanger.ac.uk/cgi-bin/utils/verify_login"
+
+SSO_COOKIE_NAME = "WTSISignOn"
+
 require 'zlib'
 
 INFLATER =  Zlib::Inflate.new
