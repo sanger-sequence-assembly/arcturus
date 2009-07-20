@@ -3,12 +3,17 @@ class User < ActiveRecord::Base
   self.primary_key = "username"
 
   def full_name
-    @filter = Net::LDAP::Filter.eq("uid", username)
+    if @my_full_name.nil?
+      @filter = Net::LDAP::Filter.eq("uid", username)
 
-    @entry =  LDAP.search(:base => LDAP_PEOPLE_BASE, :filter => @filter).first
+      @entry =  LDAP.search(:base => LDAP_PEOPLE_BASE, :filter => @filter).first
 
-    if ! @entry.nil?
-      @entry['cn'].first
+      if @entry.nil?
+        @my_full_name = "(Name unknown)"
+      else
+        @my_full_name = @entry['cn'].first
+      end
     end
+    @my_full_name
   end
 end

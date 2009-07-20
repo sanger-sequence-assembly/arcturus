@@ -44,12 +44,14 @@ end
 
 LDAP_HOST = "ldap.internal.sanger.ac.uk"
 LDAP_PORT = 389
+LDAP_SECURE_PORT = 636
 LDAP_BASE = "cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk"
 LDAP_PEOPLE_BASE = "ou=people,dc=sanger,dc=ac,dc=uk"
 
 require 'net/ldap'
 
 LDAP = Net::LDAP.new(:host => LDAP_HOST, :port => LDAP_PORT, :base => LDAP_BASE)
+LDAP_PEOPLE = Net::LDAP.new(:host => LDAP_HOST, :port => LDAP_SECURE_PORT, :encryption => :simple_tls, :base => LDAP_PEOPLE_BASE)
 
 MYSQL_READ_ONLY_USERNAME = "readonly"
 MYSQL_READ_ONLY_PASSWORD = "LookButDontTouch"
