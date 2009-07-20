@@ -20,17 +20,17 @@ private
   end
 
   def login_required
-    login_from_session || login_from_cookie || login_from_api_key || authenticate_user
+    find_user_from_session || find_user_from_cookie || find_user_from_api_key || force_user_login
   end
 
-  def login_from_session
-    logger.debug "Invoked ApplicationController.login_from_session"
+  def find_user_from_session
+    logger.debug "Invoked ApplicationController.find_user_from_session"
     logger.debug "session[user] is " + (session[:user].nil? ? "undefined" : session[:user])
     !session[:user].nil?
   end
 
-  def login_from_cookie
-    logger.debug "Invoked ApplicationController.login_from_cookie"
+  def find_user_from_cookie
+    logger.debug "Invoked ApplicationController.find_user_from_cookie"
 
     return false unless cookies[:auth_key]
 
@@ -48,8 +48,8 @@ private
     end
   end
 
-  def login_from_api_key
-    logger.debug "Invoked ApplicationController.login_from_api_key"
+  def find_user_from_api_key
+    logger.debug "Invoked ApplicationController.find_user_from_api_key"
 
     return false unless params[:api_key]
 
@@ -67,7 +67,7 @@ private
     end
   end
 
-  def authenticate_user
+  def force_user_login
     session[:return_to] = request.request_uri
     redirect_to :controller => 'sessions', :action => 'login'
   end
