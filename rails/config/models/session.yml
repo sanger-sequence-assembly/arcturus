@@ -1,0 +1,12 @@
+development:
+  instance: arcturus
+  database: test
+
+test:
+  instance: arcturus
+  database: test
+
+production:
+  instance: arcturus
+  database: arcturus
+
