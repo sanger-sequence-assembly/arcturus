@@ -11,10 +11,12 @@ class DatabaseConnectionManager
 
   @readonly_password = config['readonly_password']
 
-  def self.get_database_parameters(instance, organism)
+  def self.get_database_parameters(instance, organism, safemode = true)
     dbparams = lookup_database_parameters(instance, organism)
 
-    change_database_parameters_if_testing(instance, dbparams)
+    if safemode
+      change_database_parameters_if_testing(instance, dbparams)
+    end
 
     dbparams
   end
