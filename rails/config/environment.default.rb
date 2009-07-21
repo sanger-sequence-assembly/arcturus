@@ -42,32 +42,6 @@ Rails::Initializer.run do |config|
   # config.i18n.default_locale = :de
 end
 
-LDAP_HOST = "ldap.internal.sanger.ac.uk"
-LDAP_PORT = 389
-LDAP_SECURE_PORT = 636
-LDAP_BASE = "cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk"
-LDAP_PEOPLE_BASE = "ou=people,dc=sanger,dc=ac,dc=uk"
-
-require 'net/ldap'
-
-LDAP = Net::LDAP.new(:host => LDAP_HOST, :port => LDAP_PORT, :base => LDAP_BASE)
-LDAP_PEOPLE = Net::LDAP.new(:host => LDAP_HOST, :port => LDAP_SECURE_PORT, :encryption => :simple_tls, :base => LDAP_PEOPLE_BASE)
-
-MYSQL_READ_ONLY_USERNAME = "readonly"
-MYSQL_READ_ONLY_PASSWORD = "LookButDontTouch"
-
-ARCTURUS_DEV_INSTANCE = "test"
-
-ARCTURUS_COOKIE_NAME = 'arcturus_auth_key'
-
-VERIFY_LOGIN_URL = "https://intweb.sanger.ac.uk/cgi-bin/utils/verify_login"
-
-SSO_COOKIE_NAME = "WTSISignOn"
-
-require 'zlib'
-
-INFLATER =  Zlib::Inflate.new
-
 Mime::Type.register "text/plain", :FASTA
 
 # Useful debugging tip from 
@@ -78,7 +52,3 @@ if "irb" == $0
   ActiveRecord::Base.logger = Logger.new(STDOUT)
   @r = ActionController::Routing::Routes
 end
-
-# control appearance of organism inventory form
-
-ARCTURUS_LINK_OPTION = 1 # (alternatively 0)

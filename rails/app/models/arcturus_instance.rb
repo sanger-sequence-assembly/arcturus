@@ -20,24 +20,7 @@ class ArcturusInstance
 private
 
   def build_inventory
-    filter = Net::LDAP::Filter.eq("objectClass", "javaNamingReference")
-    base = "cn=#{@instance_name}," + LDAP_BASE
-
-    unless @subclass_name.nil?
-      base = "cn=#{@subclass_name}," + base
-    end
-
-    entries = LDAP.search(:base => base, :filter => filter)
-    unless (entries) then
-      display_name = @subclass_name.nil? ? @instance_name :"#{@instance_name}/#{@subclass_name}"
-      raise "Unknown instance: #{display_name}"
-    end
-
-    @organisms = {}
-
-    entries.each do |entry|
-      @organisms[entry['cn'].first] = entry['description'].first
-    end
+    @organisms = DatabaseConnectionManager.enumerate_entries(@instance_name, @subclass_name)
 
     @organisms.sort
   end

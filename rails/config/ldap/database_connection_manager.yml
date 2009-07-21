@@ -1,0 +1,6 @@
+host: ldap
+port: 10389
+base: cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk
+readonly_username: readonly
+readonly_password: LookButDontTouch
+

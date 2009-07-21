@@ -1,0 +1,4 @@
+host: ldap
+port: 10636
+base: ou=people,dc=sanger,dc=ac,dc=uk
+
