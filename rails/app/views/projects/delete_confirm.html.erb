@@ -62,22 +62,15 @@
 
   <br />
 
-  <table cellspacing="10">
-
-  <tr>
-    <td align="left" bgcolor='yellow'><b>Confirm:</b></td>
-    <td align="left" bgcolor='red'> <%= f.submit 'DELETE' %> </td>
-  </tr>
+  <%= f.submit 'DELETE' %>
 
   </table>
 
 <% end %>
 
+<br />
 
-  <table cellspacing="10">
-  <tr><td align="left" bgcolor='lightblue'>
-  <%= link_to 'Back to project overview', :instance => params[:instance], 
-                                          :organism => params[:organism], 
-                                          :action => 'index' %>
-  </td></tr>
-  </table>
+<%= link_to 'Back to project overview', :instance => params[:instance], 
+                                        :organism => params[:organism], 
+                                        :action => 'index' %>
+
