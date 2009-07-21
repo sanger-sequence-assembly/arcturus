@@ -1,3 +1,5 @@
+require 'zlib'
+
 class Contig < ActiveRecord::Base
   set_table_name 'CONTIG'
   self.primary_key = "contig_id"
@@ -11,13 +13,15 @@ class Contig < ActiveRecord::Base
   has_many :tag_mappings
   has_many :tags, :through => :tag_mappings
 
+  @inflater = Zlib::Inflate.new
+
   def get_consensus(depad=false)
     query = "select sequence from CONSENSUS where contig_id = #{contig_id}"
     cseq = connection.select_all(query).first
     if ! cseq.nil?
-      INFLATER.reset
-      seq = INFLATER.inflate(cseq['sequence'])
-      INFLATER.finish
+      @inflater.reset
+      seq = @inflater.inflate(cseq['sequence'])
+      @inflater.finish
       if (depad)
         seq.gsub!("-", "")
       end

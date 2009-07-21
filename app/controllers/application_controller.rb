@@ -8,6 +8,8 @@ class ApplicationController < ActionController::Base
   before_filter :login_required
   before_filter :get_database_connection
 
+  ARCTURUS_COOKIE_NAME = 'arcturus_auth_key'
+
 private
 
   def get_database_connection
