@@ -71,19 +71,14 @@
 
   <br />
 
-  <table cellspacing="20">
-
-  <tr><td align="left" bgcolor='orange'> <%= f.submit 'Update' %> </td></tr>
-
-  </table>
+  <%= f.submit 'Update' %> 
 
 <% end %>
 
-<table cellspacing="20">
-<tr><td align="left" bgcolor='lightblue'>
+<hr />
+
 <%= link_to 'Back to project overview', :instance => params[:instance],
                                         :organism => params[:organism],
                                         :action => 'index' %>
-</td></tr>
-</table>
+
 
