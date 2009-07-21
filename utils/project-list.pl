@@ -20,10 +20,11 @@ my $contig;
 my $generation = 'current';
 my $verbose;
 my $longwriteup;
+my $shortwriteup;
 my $includeempty;
 
 my $validKeys  = "organism|instance|project|assembly|contig|"
-               . "full|long|verbose|help";
+               . "full|long|short|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -51,6 +52,9 @@ while (my $nextword = shift @ARGV) {
     $contig       = shift @ARGV  if ($nextword eq '-contig');
 
     $longwriteup  = 1            if ($nextword eq '-long');
+
+    $longwriteup  = 0            if ($nextword eq '-short');
+    $shortwriteup = 1            if ($nextword eq '-short');
 
     $verbose      = 1            if ($nextword eq '-verbose');
 
@@ -165,7 +169,7 @@ foreach my $project (@projects) {
     $maxnamelen = $pnamelen if ($pnamelen > $maxnamelen);
 }
 
-if (@projects && !$longwriteup) {
+if (@projects && !$longwriteup && !$shortwriteup) {
     print STDOUT "\nProject inventory for database $organism "
                . "on instance $instance";
     print STDOUT "(assembly $assembly) " if defined($assembly);
@@ -173,22 +177,30 @@ if (@projects && !$longwriteup) {
     print STDOUT ":\n\n";
 
     my $format = "%4s %2s %-" . $maxnamelen . "s %7s %8s %9s %9s  %-8s %6s %-24s\n\n";
-
     printf STDOUT $format,'nr','as','name','contigs','reads',
-    'sequence','largest','owner','locked','comment';
+                          'sequence','largest','owner','locked','comment';
 }
 
-my $format = "%4d %2d %-" . $maxnamelen . "s %7d %8d %9d %9d  %-8s %6s %-24s\n";
+my $standardformat = "%4d %2d %-" . $maxnamelen . "s %7d %8d %9d %9d  %-8s %6s %-24s\n";
+my $shortformat    = "%4d\t%-"     . $maxnamelen . "s\t%-24s\n";
 
 foreach $project (@projects) {
     next if ($project->getProjectName() eq 'the bin' && !$project->getNumberOfContigs());
 
-    if ($longwriteup) {
-	print STDOUT $project->toStringLong(); 
-    } else {
+    if ($shortwriteup) {
+	my $pd = $projectdata{$project};
+        printf STDOUT $shortformat ,
+	$pd->{'id'},
+	$pd->{'name'},
+       ($pd->{'directory'} || '');
+    }
+    elsif ($longwriteup) {
+	print STDOUT $project->toStringLong();
+    }
+    else {
 	my $pd = $projectdata{$project};
 
-	printf STDOUT $format,
+	printf STDOUT $standardformat,
 	$pd->{'id'},
 	$pd->{'assembly_id'},
 	$pd->{'name'},
@@ -197,10 +209,10 @@ foreach $project (@projects) {
 	$pd->{'total_sequence_length'},
 	$pd->{'largest_contig_length'},
 	$pd->{'owner'} || 'unknown',
-	($pd->{'locked'} ? 'LOCKED' : 'free'),
+       ($pd->{'locked'} ? 'LOCKED' : 'free'),
 	$pd->{'status'} || 'unknown',
 	$pd->{'comment'} || '';
-    } 
+    }
 }
 print STDOUT "\n";
 
@@ -209,7 +221,7 @@ my $hangingprojectids = $adb->getHangingProjectIDs();
 if ($hangingprojectids && @$hangingprojectids) {
     print STDOUT "WARNING: there are hanging project IDs (referenced in"
                . " CONTIG but not in PROJECT):\n @$hangingprojectids\n\n";
-} 
+}
 
 $adb->disconnect();
 
@@ -239,6 +251,7 @@ sub showUsage {
     print STDERR "LIST OPTIONS:\n";
     print STDERR "\n";
     print STDERR "-long\t\t(no value) for long write up\n";
+    print STDERR "-short\t\t(no value) for name and directory only\n";
     print STDERR "-full\t\t(no value) to include empty projects\n";
     print STDERR "-verbose\t(no value) \n";
     print STDERR "\n";
