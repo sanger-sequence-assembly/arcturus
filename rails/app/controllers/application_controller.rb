@@ -25,7 +25,7 @@ private
   def find_user_from_session
     logger.debug "Invoked ApplicationController.find_user_from_session"
     logger.debug "session[user] is " + (session[:user].nil? ? "undefined" : session[:user])
-    !session[:user].nil?
+    session[:user]
   end
 
   def find_user_from_cookie
@@ -33,7 +33,7 @@ private
 
     auth_cookie = get_authentication_cookie
 
-    return false unless auth_cookie
+    return nil unless auth_cookie
 
     logger.debug "cookies[" + get_cookie_name + "] is " + auth_cookie
 
@@ -41,11 +41,10 @@ private
 
     if sess.nil?
       logger.debug "Failed to find a match to the cookie"
-      false
+      nil
     else
       logger.debug "Found session : " + sess.inspect
       session[:user] = sess.username
-      true
     end
   end
 
@@ -71,7 +70,7 @@ private
   def find_user_from_api_key
     logger.debug "Invoked ApplicationController.find_user_from_api_key"
 
-    return false unless params[:api_key]
+    return nil unless params[:api_key]
 
     logger.debug "params[api_key] is " + params[:api_key]
 
@@ -79,11 +78,10 @@ private
 
     if sess.nil?
       logger.debug "Failed to find a match to the API key"
-      false
+      nil
     else
       logger.debug "Found session : " + sess.inspect
       session[:user] = sess.username
-      true
     end
   end
 
