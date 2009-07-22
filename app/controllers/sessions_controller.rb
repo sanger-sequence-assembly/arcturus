@@ -27,7 +27,21 @@ class SessionsController < ApplicationController
   def access_denied
     respond_to do |format|
       format.html
-     end
+    end
+  end
+
+  def profile
+    username = find_user_from_session || find_user_from_cookie || find_user_from_api_key
+
+    @my_session = username.nil? ? nil : Session.find_by_username(username)
+
+    if @my_session
+      respond_to do |format|
+        format.html
+      end
+    else
+      force_user_login
+    end
   end
 
 private

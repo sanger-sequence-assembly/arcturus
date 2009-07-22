@@ -9,7 +9,7 @@
                                 :organism => params['organism']} do |f| %>
   <%= f.error_messages %>
 
-  <table bgcolor='lightyellow' cellspacing="20">
+  <table cellspacing="3">
 
     <tr>
       <td align="left">
@@ -76,21 +76,13 @@
 
   </table>
 
-  <br />
-
-  <table cellspacing="20">
-
-  <tr><td align="left" bgcolor='orange'> <%= f.submit 'Update' %> </td></tr>
-
-  </table>
+<%= f.submit 'Update' %> </td></tr>
 
 <% end %>
 
-  <table cellspacing="20">
-  <tr><td align="left" bgcolor='lightblue'>
-  <%= link_to 'Back to assembly overview', :instance => params[:instance], 
-                                           :organism => params[:organism], 
-                                           :action => 'index' %>
-  </td></tr>
-  </table>
+<hr />
+
+<%= link_to 'Back to assembly overview', :instance => params[:instance], 
+                                         :organism => params[:organism], 
+                                         :action => 'index' %>
 

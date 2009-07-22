@@ -118,31 +118,19 @@
 
 </table>
 
+<%= link_to 'Assemblies', :instance => params[:instance],
+                          :organism => params[:organism],
+                          :action => 'index' %>
 
+| <%= link_to 'Edit', :instance => params[:instance],
+                      :organism => params[:organism],
+                      :action => 'edit',
+                      :id => @assembly %>
 
-  <table cellspacing="20">
+<% if @pcount == "0" %>
 
-  <tr><td align="center" bgcolor='lightblue'>
-  <%= link_to 'Back to assembly overview', :instance => params[:instance],
-                                           :organism => params[:organism],
-                                           :action => 'index' %>
-  </td></tr>
-
-  <tr><td align="center" bgcolor='orange'>
-  <%= link_to 'Edit assembly',             :instance => params[:instance],
-                                           :organism => params[:organism],
-                                           :action => 'edit',
-                                           :id => @assembly %>
-  </td></tr>
-
-  <% if @pcount == "0" %>
-
-    <tr><td align="center" bgcolor='pink'>
-    <%= link_to 'Remove assembly',         :instance => params[:instance],
-                                           :organism => params[:organism],
-                                           :action => 'delete_confirm',
-                                           :id => @assembly %>
-    </td></tr>
-  <% end %>
-
-  </table>
+| <%= link_to 'Delete', :instance => params[:instance],
+                        :organism => params[:organism],
+                        :action => 'delete_confirm',
+                        :id => @assembly %>
+<% end %>
