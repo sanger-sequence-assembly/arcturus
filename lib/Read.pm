@@ -526,6 +526,8 @@ sub maskDNA {
     my $qr  = shift; # low quality right
     my $sym = shift; # replacement symbol
 
+    $qr = $ql + 2 if ($qr <= $ql + 1); # protection to leave at least 1
+
     my ($part1, $part2, $part3);
 
     $part1 = substr($dna,0,$ql);
