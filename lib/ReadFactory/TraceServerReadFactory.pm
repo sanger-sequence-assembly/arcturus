@@ -69,6 +69,8 @@ sub getReadNamesToLoad {
 
     my $tsgroup = $ts->get_group($group, $this->{'status'});
 
+    die "Group $group, $this->{'status'} not in trace server" unless defined($tsgroup);
+
     my $grit = $tsgroup->get_iterator(1);
 
     my $minreadid = $this->{minreadid};
