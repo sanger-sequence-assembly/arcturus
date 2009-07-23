@@ -35,4 +35,11 @@ class ActiveSupport::TestCase
   fixtures :all
 
   # Add more helper methods to be used by all tests here...
+
+  set_fixture_class :CONTIGTAG   => ContigTag,
+                    :TAG2CONTIG  => TagMapping,
+                    :ASSEMBLY    => Assembly,
+                    :PROJECT     => Project,
+                    :CONTIG      => Contig
+
 end

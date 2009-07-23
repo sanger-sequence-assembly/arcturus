@@ -1,9 +1,6 @@
 require 'test_helper'
 
 class ProjectTest < ActiveSupport::TestCase
-  set_fixture_class :ASSEMBLY => Assembly,
-                    :PROJECT  => Project
-
   fixtures :ASSEMBLY, :PROJECT
 
   def setup
