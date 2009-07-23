@@ -12,7 +12,7 @@
     <th align="right">Total no. of contigs</th>
     <th align="right">Total no. of reads</th>
     <th align="right">Total length</th>
-    <th align="center" colspan="3">Actions</th>
+    <th align="center" colspan="2">Actions</th>
   </tr>
 
   <% row_number = 0 %>
@@ -25,7 +25,10 @@
 
     <tr class="<%= style %>">
       <td align="left">
-        <%=h assembly.name %>
+        <%= link_to assembly.name, :instance => params[:instance], 
+                                   :organism => params[:organism], 
+                                   :action => 'show',
+                                   :id => assembly %>
       </td>
 
       <% @summary = assembly.current_contigs_summary %>
@@ -48,18 +51,11 @@
       </td>
 
       <td>
-        <%= link_to 'Details', :instance => params[:instance], 
-                               :organism => params[:organism], 
-                               :action => 'show',
-                               :id => assembly %>
-      </td>
-
-      <td>
-        <%= link_to 'Projects', :controller => 'projects',
-                                :action => 'index',
+        <%= link_to 'Projects', :controller => 'assemblies',
+                                :action => 'projects',
                                 :instance => params[:instance], 
                                 :organism => params[:organism], 
-                                :assembly_id => assembly %>
+                                :id => assembly %>
       </td>
 
       <td>
