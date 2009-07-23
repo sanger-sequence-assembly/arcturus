@@ -1194,6 +1194,7 @@ sub getProjectIDforReadName {
 # return hash of project ID(s) keyed on contig ID for input readname
     my $this = shift;
     my $readname = shift;
+    my %options = @_;
 
     my $query = "select distinct CONTIG.contig_id,CONTIG.project_id"
               . "  from READINFO,SEQ2READ,MAPPING,CONTIG"
@@ -1202,7 +1203,7 @@ sub getProjectIDforReadName {
               . "   and SEQ2READ.read_id = READINFO.read_id"
 	      . "   and READINFO.readname = ?"
 	      . " order by contig_id DESC";
-#   $query   .= " limit 1" if $options{current};
+    $query   .= " limit 1" if $options{mostrecent};
 
     my $dbh = $this->getConnection();
 
