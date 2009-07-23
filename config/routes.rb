@@ -5,7 +5,9 @@ ActionController::Routing::Routes.draw do |map|
   map.connect "profile", :controller => 'sessions', :action => 'profile'
 
   map.resources :assemblies,
-                  :path_prefix => "/:instance/:organism"
+                  :path_prefix => "/:instance/:organism",
+                  :member => { :projects => :get
+                             }
 
   map.resources :projects,
                   :path_prefix => "/:instance/:organism",

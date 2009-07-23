@@ -9,7 +9,7 @@
 
   <tr>
 
-    <td align = "left">
+    <td align="left">
       <b>Assembly name:</b>
     </td> 
     <td>
@@ -20,7 +20,7 @@
 
   <tr>
 
-    <td align = "left">
+    <td align="left">
       <b>Assembly ID:</b>
     </td> 
     <td>
@@ -32,7 +32,7 @@
 
   <tr>
 
-    <td align = "left">
+    <td align="left">
       <b>Chromosome:</b>
     </td> 
     <td>
@@ -44,7 +44,7 @@
 
   <tr>
 
-    <td align = "left">
+    <td align="left">
       <b>Origin:</b>
     </td> 
     <td>
@@ -55,7 +55,7 @@
 
   <tr>
 
-    <td align = "left">
+    <td align="left">
       <b>Size (Mbase):</b>
     </td> 
     <td>
@@ -66,14 +66,17 @@
 
   <tr>
 
-    <td align = "left">
+    <td align="left">
       <b>Created by:</b>
     </td> 
     <td>
       <%=h @assembly.creator %>
     </td>
-    <td align = "right">
-      <b>on:</b>
+  </tr>
+
+  <tr>
+    <td align="left">
+      <b>Created on:</b>
     </td> 
     <td>
       <%=h @assembly.created %>
@@ -83,7 +86,7 @@
 
   <tr>
 
-    <td align = "left">
+    <td align="left">
       <b>Status:</b>
     </td> 
     <td>
@@ -94,7 +97,7 @@
 
   <tr>
 
-    <td align = "left">
+    <td align="left">
       <b>Comment:</b>
     </td> 
     <td>
@@ -107,10 +110,10 @@
 
   <tr>
 
-    <td align = "left">
+    <td align="left">
       <b>Number of Projects:</b>
     </td> 
-    <td align = "left">
+    <td align="left">
       <%= @pcount %>
     </td>
 
@@ -129,8 +132,12 @@
 
 <% if @pcount == "0" %>
 
-| <%= link_to 'Delete', :instance => params[:instance],
-                        :organism => params[:organism],
-                        :action => 'delete_confirm',
-                        :id => @assembly %>
+| <%= link_to 'Delete', {:instance => params[:instance],
+                         :organism => params[:organism],
+                         :action => 'destroy',
+                         :id => @assembly},
+                        {:method => :delete,
+                         :confirm => "You are about to delete this assembly." +
+                                     "\nAre you sure that you really want to do this?"}
+  %>
 <% end %>
