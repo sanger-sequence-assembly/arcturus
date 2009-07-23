@@ -1,45 +1,31 @@
 require 'test_helper'
 
 class SessionsControllerTest < ActionController::TestCase
-  test "should get index" do
-    get :index
+  fixtures :sessions
+
+  test "profile without login" do
+    get :profile
+    assert_redirected_to :action => 'login'
+  end
+
+  test "bad password" do
+    post :login, :username => 'fred', :password => 'ThisIsNotMyPassword'
+    assert_redirected_to :action => 'access_denied'
+  end
+
+  test "profile via auth_key" do
+    fred = Session.find_by_username('fred')
+    @request.cookies["arcturus_auth_key_test"] = fred.auth_key
+    get :profile
     assert_response :success
-    assert_not_nil assigns(:sessions)
+    assert_template 'profile'
   end
 
-  test "should get new" do
-    get :new
+  test "profile via api_key" do
+    fred = Session.find_by_username('fred')
+    api_key = fred.api_key
+    get :profile, :api_key => api_key
     assert_response :success
-  end
-
-  test "should create session" do
-    assert_difference('Session.count') do
-      post :create, :session => { }
-    end
-
-    assert_redirected_to session_path(assigns(:session))
-  end
-
-  test "should show session" do
-    get :show, :id => sessions(:one).to_param
-    assert_response :success
-  end
-
-  test "should get edit" do
-    get :edit, :id => sessions(:one).to_param
-    assert_response :success
-  end
-
-  test "should update session" do
-    put :update, :id => sessions(:one).to_param, :session => { }
-    assert_redirected_to session_path(assigns(:session))
-  end
-
-  test "should destroy session" do
-    assert_difference('Session.count', -1) do
-      delete :destroy, :id => sessions(:one).to_param
-    end
-
-    assert_redirected_to sessions_path
+    assert_template 'profile'
   end
 end
