@@ -1,7 +1,6 @@
 require 'test_helper'
 
 class AssemblyTest < ActiveSupport::TestCase
-  set_fixture_class :ASSEMBLY => Assembly
   fixtures :ASSEMBLY
 
   test "find default assembly" do

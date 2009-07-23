@@ -48,11 +48,14 @@ private
 
   def initialise_session(username)
     sess = Session.find_or_create_by_username(username)
-    sess.auth_key = Digest::SHA1.hexdigest(Time.now.to_s + sess.username)[1..32]
-    sess.auth_key_expires = 2.days.from_now
+
+    if sess.auth_key.nil?
+      sess.auth_key = Digest::SHA1.hexdigest(Time.now.to_s + sess.username)[1..32]
+      sess.auth_key_expires = 2.days.from_now
+    end
 
     if sess.api_key.nil?
-      sess.api_key =  sess.auth_key
+      sess.api_key = Digest::SHA1.hexdigest(Time.now.to_s + sess.object_id.to_s)[1..32]
       sess.api_key_expires = 2.years.from_now
     end
 
