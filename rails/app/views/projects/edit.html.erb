@@ -26,7 +26,8 @@
         <%= f.label :assembly, "Assembly" %>:
       </td>
       <td align="left">
-        <%= f.collection_select(:assembly_id, @assemblies, :assembly_id, :name) %>
+        <%= f.collection_select(:assembly_id, @assemblies, :assembly_id, :name,
+               {:selected => @project.assembly.name }) %>
       </td>
     </tr>
 
@@ -36,7 +37,8 @@
         <%= f.label :owner %>:
       </td>
       <td align="left">
-        <%= f.collection_select(:owner, @users, :id, :full_name, {:prompt => true}) %>
+        <%= f.collection_select(:owner, @users, :id, :full_name,
+               {:selected => @project.owner.nil? ? "nobody" : @project.owner.username }) %>
       </td>
     </tr>
 
@@ -77,8 +79,9 @@
 
 <hr />
 
-<%= link_to 'Back to project overview', :instance => params[:instance],
-                                        :organism => params[:organism],
-                                        :action => 'index' %>
+<%= link_to 'Projects', :instance => params[:instance],
+                        :organism => params[:organism],
+                        :action => 'index'
+%>
 
 
