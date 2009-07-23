@@ -48,7 +48,7 @@ class AssembliesController < ApplicationController
   def create
     @assembly = Assembly.new(params[:assembly])
 
-    @assembly.creator = current_user
+    @assembly.creator = session[:user]
 
     respond_to do |format|
       if @assembly.save
@@ -87,10 +87,6 @@ class AssembliesController < ApplicationController
   # DELETE /assemblies/1
   # DELETE /assemblies/1.xml
 
-  def delete_confirm
-    @assembly = Assembly.find(params[:id])
-  end
-
   def destroy
     @assembly = Assembly.find(params[:id])
     @assembly.destroy
@@ -103,16 +99,12 @@ class AssembliesController < ApplicationController
     end
   end
 
-  def forward
-# catch assembly and
-    organismhash = params[:arcturus]
-    organism = organismhash[:organism]
+  # LIST PROJECTS /assemblies/1/projects
 
-puts params.inspect
-    redirect_to :controller => :assemblies,
-                :instance => params[:instance],
-                :organism => organism,
-                :action => 'index',
-                :id => @assembly
+  def projects
+    redirect_to :instance => params[:instance],
+                :organism => params[:organism],
+                :controller => 'projects',
+                :assembly_id => params[:id]
   end
 end

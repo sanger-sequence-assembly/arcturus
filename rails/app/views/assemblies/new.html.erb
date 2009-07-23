@@ -10,7 +10,7 @@
 
   <br />
 
-  <table bgcolor='lightyellow' cellspacing="20">
+  <table cellspacing="5">
 
     <tr>
       <td align="left">
@@ -59,20 +59,13 @@
 
   </table>
 
-  <br />
-
-  <table cellspacing="20">
-
-  <tr><td align="left" bgcolor='orange'> <%= f.submit 'Add this assembly' %> </td></tr>
-
-  </table>
+  <%= f.submit 'Add this assembly' %>
 
 <% end %>
 
-  <table cellspacing="20">
-  <tr><td align="left" bgcolor='lightblue'>
-  <%= link_to 'Go back to assembly overview', :instance => params[:instance], 
-                                              :organism => params[:organism], 
-                                              :action => 'index' %>
-  </td></tr>
-  </table>
+<hr />
+
+<%= link_to 'Assemblies', :instance => params[:instance], 
+                          :organism => params[:organism], 
+                          :action => 'index'
+%>
