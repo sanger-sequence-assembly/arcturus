@@ -1046,10 +1046,10 @@ sub restoreMaskedReads {
 
     my $reads = $contig->getReads(1);
 
+    my $adb = $contig->getArcturusDatabase() || return 0; # no database handle
+
     my $restored = 0;
     foreach my $read (@$reads) {
-
-        my $version = $read->getVersion() || next;
 
         my $readdna = $read->getSequence() || next;
 
@@ -1062,9 +1062,10 @@ sub restoreMaskedReads {
         if ($readdna =~ /([xn]+)$/i) {
             $read_right -= length($1); # first masked position right
         }
+
         next unless ($read_left > 0 || $read_right < length($readdna) + 1);
 
-        my $base = $read->getOriginalVersion(); # i.e. read version 0
+        my $base = $adb->getRead(readname => $read->getReadName(), version => 0);
 
         unless ($base) {
             $logger->sever("Unable to retrieve original read; no databse connection?");
@@ -1072,11 +1073,13 @@ sub restoreMaskedReads {
 	}
 
         my $readqlt = $read->getBaseQuality() || [];
+        my @readqlt = @$readqlt; # make local copy
 
 # now use the sequence of the original read to repair the current version 
 
         my $basedna = $base->getSequence();
         my $baseqlt = $base->getBaseQuality();
+        my @baseqlt = @$baseqlt; # make local copy
 
 # find the boundaries as found in the read in the version 0 dna
 
@@ -1096,13 +1099,14 @@ sub restoreMaskedReads {
 
         my $rlength = $read_right - $read_left - 1; # the length of the unmasked part of read
         my $replacement = substr $readdna, $read_left, $rlength;
-        my @cenquality = splice @$readqlt, $read_left, $rlength;
+        my @cenquality  = splice @readqlt, $read_left, $rlength;
 
 my $log;
         unless (defined($base_left) && defined($base_right)) {
+$logger->info("procesing read $read");
 # one or both boundaries could not be determined
 $logger->error("cannot determine boundaries on version 0"); 
-$logger->info("restoring read ".$read->getReadName()." version $version");
+$logger->info("restoring read ".$read->getReadName());
 $logger->info("cannot determine boundaries on version 0");
 $logger->info("read left $read_left , read right $read_right, rlength $rlength");
 $logger->fine("read DNA\n$readdna\nbaseDNA\n$basedna"); 
@@ -1128,13 +1132,11 @@ $log = 1;
 
         my $blength = $base_right - $base_left - 1; # the length of the unmasked part of version 0
 
-        my $newsequence = substr $basedna,$base_left,$blength,$replacement;
-        my @newquality = splice @$baseqlt,$base_left,$blength,@cenquality;
+        substr $basedna,$base_left,$blength,$replacement;
+        splice @baseqlt,$base_left,$blength,@cenquality;
 
         $read->setSequence($basedna);
-        $read->setBaseQuality([@$baseqlt]) if @$baseqlt;
-
-$read->writeToFasta(*STDOUT) if $log; 
+        $read->setBaseQuality([@baseqlt]);
 
         $restored++;
     }
