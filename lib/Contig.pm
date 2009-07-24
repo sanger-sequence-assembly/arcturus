@@ -531,7 +531,8 @@ sub addRead {
 sub hasReads {
 # returns true if this Contig has reads
     my $this = shift;
-    return $this->getReads() ? 1 : 0;
+    my $reads = $this->getReads(shift);
+    return $reads ? scalar(@$reads) : 0;
 }
 
 # read-to-contig mappings
@@ -557,7 +558,8 @@ sub addMapping {
 sub hasMappings {
 # returns true if this Contig has (read-to-contig) mappings
     my $this = shift;
-    return $this->getMappings(shift) ? 1 : 0;
+    my $mappings = $this->getMappings(shift);
+    return $mappings ? scalar(@$mappings) : 0;
 }
 
 # contig tags
@@ -595,7 +597,8 @@ sub addTag {
 sub hasTags {
 # returns true if this Contig has tags
     my $this = shift;
-    return $this->getTags(shift) ? 1 : 0;
+    my $tags = $this->getTags(shift);
+    return $tags ? scalar(@$tags) : 0;
 }
 
 # contig-to-parent mappings
@@ -619,7 +622,9 @@ sub addContigToContigMapping {
 
 sub hasContigToContigMappings {
 # returns true if this Contig has contig-to-contig mappings
-    return &getContigToContigMappings(@_) ? 1 : 0;
+    my $this = shift;
+    my $mappings = $this->getContigToContigMappings(shift);
+    return $mappings ? scalar(@$mappings) : 0;
 }
 
 # parent contig instances
