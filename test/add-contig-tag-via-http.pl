@@ -7,6 +7,9 @@ use LWP;
 my $nextword;
 my $instance;
 my $organism;
+my $host;
+my $port;
+
 my $contig_id;
 my $tagtype;
 my $systematic_id;
@@ -18,12 +21,8 @@ while ($nextword = shift @ARGV) {
     $instance      = shift @ARGV if ($nextword eq '-instance');
     $organism      = shift @ARGV if ($nextword eq '-organism');
 
-    $contig_id     = shift @ARGV if ($nextword eq '-contig_id');
-    $tagtype       = shift @ARGV if ($nextword eq '-tagtype');
-    $systematic_id = shift @ARGV if ($nextword eq '-systematic_id');
-    $cstart        = shift @ARGV if ($nextword eq '-cstart');
-    $cfinal        = shift @ARGV if ($nextword eq '-cfinal');
-    $strand        = shift @ARGV if ($nextword eq '-strand');
+    $host          = shift @ARGV if ($nextword eq '-host');
+    $port          = shift @ARGV if ($nextword eq '-port');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -31,32 +30,45 @@ while ($nextword = shift @ARGV) {
     }
 }
 
-unless (defined($instance) && defined($organism) && defined($contig_id)
-	&& defined($tagtype) && defined($systematic_id) && defined($cstart)
-	&& defined($cfinal) && defined($strand)) {
+unless (defined($instance) && defined($organism) && defined($host)
+	&& defined($port)) {
     &showUsage("One or more mandatory parameters missing");
     exit(1);
 }
 
+my $api_key = $ENV{'ARCTURUS_API_KEY'};
+
+die "You must set the environment variable ARCTURUS_API_KEY to your API key"
+    unless defined($api_key);
+
 my $browser = LWP::UserAgent->new;
 
-my $url = "http://psd-dev.internal.sanger.ac.uk:15005/$instance/$organism/tag_mappings/create";
+my $url = "http://$host:$port/$instance/$organism/tag_mappings";
 
-my $parameters = [
-		  'contig_id' => $contig_id,
-		  'tag_mapping[cstart]' => $cstart,
-		  'tag_mapping[cfinal]' => $cfinal,
-		  'tag_mapping[strand]' => $strand,
-		  'contig_tag[tagtype]' => $tagtype,
-		  'contig_tag[systematic_id]' => $systematic_id
-		  ];
+print STDERR "URL: $url\n";
 
-my $response = $browser->post($url, Accept => 'text/xml', Content => $parameters);
+while (my $line = <STDIN>) {
+    chop $line;
 
-die "Error: ", $response->status_line
-    unless $response->is_success;
+    my ($contig_id,$tagtype,$systematic_id,$cstart,$cfinal,$strand) = split(/,/, $line);
 
-print $response->content;
+    my $parameters = [
+		      'api_key' => $api_key,
+		      'contig_id' => $contig_id,
+		      'tag_mapping[cstart]' => $cstart,
+		      'tag_mapping[cfinal]' => $cfinal,
+		      'tag_mapping[strand]' => $strand,
+		      'contig_tag[tagtype]' => $tagtype,
+		      'contig_tag[systematic_id]' => $systematic_id
+		      ];
+
+    my $response = $browser->post($url, Accept => 'text/xml', Content => $parameters);
+
+    die "Error processing tag $systematic_id (contig $contig_id $cstart:$cfinal) : " . $response->status_line
+	unless $response->is_success;
+
+    print STDERR "Tag $systematic_id (contig $contig_id $cstart:$cfinal) added OK\n";
+}
 
 exit(0);
 
@@ -68,10 +80,6 @@ sub showUsage {
 
     print STDERR "\n";
 
-    print STDERR "-contig_id\t\tID of the contig\n";
-    print STDERR "-tagtype\t\tTag type\n";
-    print STDERR "-systematic_id\t\tSystematic ID of the tag\n";
-    print STDERR "-cstart\t\t\tStart position of the tag on the contig\n";
-    print STDERR "-cfinal\t\t\tEnd position of the tag on the contig\n";
-    print STDERR "-strand\t\t\tStrand on which the tag lies [F,R or U]\n";
+    print STDERR "-host\t\t\tHostname of web service\n";
+    print STDERR "-port\t\t\tPort number of web service\n";
 }
