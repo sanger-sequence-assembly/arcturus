@@ -42,6 +42,8 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 
 	protected boolean oneProject;
 	
+	protected final ProjectComparator comparator = new ProjectComparator();
+	
 	public ContigTablePanel(Project[] projects, MinervaTabbedPane parent) {
 		super(new BorderLayout(), parent, projects[0].getArcturusDatabase());
 		
@@ -250,8 +252,9 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 			Arcturus.logWarning("Error whilst enumerating my projects", sqle);
 		}
 
+		SortedSet<Project> myProjects = new TreeSet<Project>(comparator);
+		
 		if (mypset != null && !mypset.isEmpty()) {
-			SortedSet<Project> myProjects = new TreeSet<Project>(new ProjectComparator());
 			myProjects.addAll(mypset);
 
 			for (Project project : myProjects)
@@ -270,8 +273,10 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 			}
 
 			if (bin != null) {
+				myProjects.clear();
+				myProjects.addAll(bin);
 				xferMenu.addSeparator();
-				for (Project project : bin)
+				for (Project project : myProjects)
 					xferMenu.add(new ContigTransferAction(table, project));
 			}
 			
