@@ -57,7 +57,10 @@ class ContigTagsController < ApplicationController
     respond_to do |format|
       if @contig_tag.save
         flash[:notice] = 'ContigTag was successfully created.'
-        format.html { redirect_to(@contig_tag) }
+        format.html { redirect_to :action => :show,
+                                  :instance => params[:instance],
+                                  :organism => params[:organism],
+                                  :id => @contig_tag }
         format.xml  { render :xml => @contig_tag, :status => :created, :location => @contig_tag }
       else
         format.html { render :action => "new" }
