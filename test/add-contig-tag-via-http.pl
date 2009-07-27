@@ -10,6 +10,8 @@ my $organism;
 my $host;
 my $port;
 
+my $verbose = 0;
+
 my $contig_id;
 my $tagtype;
 my $systematic_id;
@@ -23,6 +25,8 @@ while ($nextword = shift @ARGV) {
 
     $host          = shift @ARGV if ($nextword eq '-host');
     $port          = shift @ARGV if ($nextword eq '-port');
+
+    $verbose       = 1 if ($nextword eq '-verbose');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -67,7 +71,7 @@ while (my $line = <STDIN>) {
     die "Error processing tag $systematic_id (contig $contig_id $cstart:$cfinal) : " . $response->status_line
 	unless $response->is_success;
 
-    print STDERR "Tag $systematic_id (contig $contig_id $cstart:$cfinal) added OK\n";
+    print STDERR "Tag $systematic_id (contig $contig_id $cstart:$cfinal) added OK\n" if $verbose;
 }
 
 exit(0);
@@ -82,4 +86,9 @@ sub showUsage {
 
     print STDERR "-host\t\t\tHostname of web service\n";
     print STDERR "-port\t\t\tPort number of web service\n";
+
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "\n";
+    print STDERR "-verbose\t\tReport progress on stderr\n";
 }
