@@ -81,7 +81,7 @@ private
   end
 
   def self.change_database_parameters_if_testing(instance, dbparams)
-    if (!dbparams.nil? && instance != "test" && RAILS_ENV != "production")     
+    if (!dbparams.nil? && !instance.start_with?("test") && RAILS_ENV != "production")     
       dbparams[:username] = @readonly_username
       dbparams[:password] = @readonly_password
     end
