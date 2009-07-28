@@ -32,12 +32,17 @@
 
     <tr>
       <td>Tag type:</td>
-      <td><%= ff.text_field :tagtype %></td>
+      <td><%= ff.text_field :tagtype, :maxlength => 4 %></td>
     </tr>
 
     <tr>
       <td>Systematic ID:</td>
       <td><%= ff.text_field :systematic_id %></td>
+    </tr>
+
+    <tr>
+      <td>Comment:</td>
+      <td><%= ff.text_field :tagcomment %></td>
     </tr>
     <% end %>
   </table>

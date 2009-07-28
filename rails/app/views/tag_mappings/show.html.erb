@@ -40,3 +40,12 @@
     <td><%h= @contig_tag.tagcomment %></td>
   </tr>
 </table>
+
+<hr />
+
+<%=
+  link_to 'Edit', :instance => params[:instance],
+                  :organism => params[:organism],
+                  :action => 'edit',
+                  :id => @tag_mapping
+%>

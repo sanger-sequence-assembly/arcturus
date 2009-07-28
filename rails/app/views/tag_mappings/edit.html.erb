@@ -1,12 +1,33 @@
 <h1>Editing tag_mapping</h1>
 
-<% form_for(@tag_mapping) do |f| %>
+<% form_for(:tag_mapping, :url => {:controller => :tag_mappings,
+                                   :action => :update,
+                                   :id => @tag_mapping,
+                                   :instance => params['instance'],
+                                   :organism => params['organism']},
+                          :html => { :method => :put}) do |f| %>
   <%= f.error_messages %>
+  <table>
+    <tr>
+      <td colspan="2"><b>Tag position</b></td>
+    </tr>
 
+    <tr>
+      <td>Start position:</td>
+      <td><%= f.text_field :cstart, :value => @tag_mapping.cstart %></td>
+    </tr>
+
+    <tr>
+      <td>End position:</td>
+      <td><%= f.text_field :cfinal, :value => @tag_mapping.cfinal %></td>
+    </tr>
+
+    <tr>
+      <td>Strand:</td>
+      <td><%= f.select :strand, %w{ F R U }, :value => @tag_mapping.strand %></td>
+    </tr>
+  </table>
   <p>
     <%= f.submit 'Update' %>
   </p>
 <% end %>
-
-<%= link_to 'Show', @tag_mapping %> |
-<%= link_to 'Back', tag_mappings_path %>

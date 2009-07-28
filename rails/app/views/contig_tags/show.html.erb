@@ -1,4 +1,4 @@
-<h1>Current location of tag <%=h params['id'] %>  </h1>
+<h1>Contig tag <%=h params['id'] %>  </h1>
 
 <table cellpadding="3">
   <tr>
@@ -10,11 +10,12 @@
     <td><%=h @tag['systematic_id'] %></td>
   </tr>
   <tr>
-    <td>Comment</td>
+    <td>Comment:</td>
     <td><%h= @tag['tagcomment'] %></td>
   </tr>
 </table>
 
+<% if @mappings.length > 0 %>
 <table cellpadding="3">
   <tr>
     <th align="left">Mapping ID</th>
@@ -48,5 +49,11 @@
   </tr>
 <% end %>
 </table>
+
+<% else %>
+<p>
+This tag is not in any current contig.
+</p>
+<% end %>
 
 <br />

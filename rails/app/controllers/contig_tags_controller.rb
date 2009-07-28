@@ -57,7 +57,10 @@ class ContigTagsController < ApplicationController
     respond_to do |format|
       if @contig_tag.save
         flash[:notice] = 'ContigTag was successfully created.'
-        format.html { redirect_to(@contig_tag) }
+        format.html { redirect_to :action => :show,
+                                  :instance => params[:instance],
+                                  :organism => params[:organism],
+                                  :id => @contig_tag }
         format.xml  { render :xml => @contig_tag, :status => :created, :location => @contig_tag }
       else
         format.html { render :action => "new" }
@@ -105,6 +108,26 @@ class ContigTagsController < ApplicationController
       format.html
       format.xml { head :not_found }
     end
+  end
+
+  # SEARCH /contig_tags/search/pattern
+  def search
+      pattern = params[:pattern].gsub('*', '%')
+
+      @mappings = TagMapping.find(:all,
+                    :joins => ",CONTIGTAG,CURRENTCONTIGS", 
+                    :conditions => ["CONTIGTAG.systematic_id like :pattern" +
+                                    " and CONTIGTAG.tag_id=TAG2CONTIG.tag_id" +
+                                    " and TAG2CONTIG.contig_id=CURRENTCONTIGS.contig_id",
+                                    {:pattern => pattern}])
+
+      @mappings.sort! { |a,b| a.tag.systematic_id <=> b.tag.systematic_id }
+
+      respond_to do |format|
+        format.html # search.html.erb
+        format.xml  { render :xml => @mappings.to_xml(:include => :tag) }
+        format.json { render :layout => false, :json => @mappings.to_json(:include => :tag) }
+      end
   end
 
 end
