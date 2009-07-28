@@ -24,7 +24,11 @@ ActionController::Routing::Routes.draw do |map|
                                :parents => :get
                              }
 
-  map.resources :contig_tags, :path_prefix => "/:instance/:organism"
+  map.resources :contig_tags,
+                  :path_prefix => "/:instance/:organism"
+
+  map.connect "/:instance/:organism/contig_tags/search/:pattern", :controller => 'contig_tags',
+    :action => 'search'
 
   map.resources :tag_mappings, :path_prefix => "/:instance/:organism"
 

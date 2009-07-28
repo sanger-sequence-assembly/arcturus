@@ -21,7 +21,7 @@ class TagMappingsController < ApplicationController
 
     respond_to do |format|
       format.html # show.html.erb
-      format.xml  { render :xml => @tag_mapping }
+      format.xml  { render :xml => @tag_mapping.to_xml(:include => :tag) }
     end
   end
 
@@ -70,7 +70,11 @@ class TagMappingsController < ApplicationController
     respond_to do |format|
       if @tag_mapping.update_attributes(params[:tag_mapping])
         flash[:notice] = 'TagMapping was successfully updated.'
-        format.html { redirect_to(@tag_mapping) }
+        format.html { redirect_to :controller => "tag_mappings",
+                                  :action => "show",
+                                  :instance => params[:instance],
+                                  :organism => params[:organism],
+                                  :id => @tag_mapping }
         format.xml  { head :ok }
       else
         format.html { render :action => "edit" }
