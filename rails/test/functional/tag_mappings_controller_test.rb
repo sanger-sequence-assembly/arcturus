@@ -7,9 +7,6 @@ class TagMappingsControllerTest < ActionController::TestCase
     @fred = sessions(:fred)
     @api_key = @fred.api_key
     @mapping = TAG2CONTIG(:default_mapping)
-    puts @mapping.inspect
-    @sacrificial_mapping = TAG2CONTIG(:sacrificial_mapping)
-    puts @sacrificial_mapping.inspect
   end
 
   test "should create tag mapping" do
@@ -42,6 +39,8 @@ class TagMappingsControllerTest < ActionController::TestCase
   end
 
   test "should delete tag mapping" do
+    @sacrificial_mapping = TAG2CONTIG(:sacrificial_mapping)
+
     assert_difference('TagMapping.count', -1) do
       delete :destroy, :instance => 'testing',
                        :organism => 'TESTDB_ADH',
