@@ -24,18 +24,28 @@ class TagMappingsControllerTest < ActionController::TestCase
 		    :contig_tag => {:tagtype => 'FTST',
 		                    :systematic_id => 'FTST_000001'}
     end
+
+    assert_response :redirect
   end
 
   test "should update tag mapping" do
+    id = @mapping.id
+
     put :update, :instance => 'testing',
                  :organism => 'TESTDB_ADH',
                  :api_key => @api_key,
                  :id => @mapping.id,
-                 :tag_mapping => {:id => @mapping.id,
-                                  :cstart => 1,
-                                  :cfinal => 150,
-                                  :strand => 'F',
+                 :tag_mapping => {:id => id,
+                                  :cstart => @mapping.cstart,
+                                  :cfinal => 150,    # 100 in fixtures file
+                                  :strand => @mapping.strand,
                                   :contig_id => @mapping.contig_id}
+
+    assert_response :redirect
+
+    altered_mapping = TagMapping.find(id)
+    assert_not_nil(altered_mapping)
+    assert_equal(altered_mapping.cfinal, 150)
   end
 
   test "should delete tag mapping" do
@@ -47,6 +57,8 @@ class TagMappingsControllerTest < ActionController::TestCase
                        :api_key => @api_key,
                        :id => @sacrificial_mapping.id
     end
+
+    assert_response :redirect
   end
 
 end
