@@ -13,4 +13,13 @@ class ContigTagTest < ActiveSupport::TestCase
     assert_equal tag.tagtype, "DFLT"
   end
 
+  test "Insert a new tag" do
+    assert_difference('ContigTag.count') do
+      tag = ContigTag.new
+      tag.tagtype = 'TEST'
+      tag.systematic_id = 'TEST0004'
+      tag.save!
+    end
+  end
+
 end
