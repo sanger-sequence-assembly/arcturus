@@ -16,6 +16,12 @@ class TagMappingTest < ActiveSupport::TestCase
     assert_equal(@default_tag.id, @default_mapping.tag.id)
   end
 
+  test "invalid with missing attributes" do
+    mapping = TagMapping.new
+
+    assert !mapping.valid?
+  end
+
   test "create tag mapping" do
     mapping = TagMapping.new
     mapping.contig = @default_contig

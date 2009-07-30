@@ -26,6 +26,16 @@ class ContigTest < ActiveSupport::TestCase
     assert !contig.save
   end
 
+  test "invalid with missing attributes" do
+    contig = Contig.new
+
+    assert !contig.valid?
+
+    assert contig.errors.invalid?(:project)
+    assert contig.errors.invalid?(:length)
+    assert contig.errors.invalid?(:nreads)
+  end
+
   test "set project to bin" do
     contig = Contig.find_by_gap4name('default_contig')
     assert_not_nil(contig)
