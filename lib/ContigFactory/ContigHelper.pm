@@ -177,7 +177,8 @@ $logger->severe("ex/import-level=$level  isEdited=".$read->isEdited());
     my $mappings = $contig->getMappings();
     @$mappings = sort { $a->getContigStart() <=> $b->getContigStart() } @$mappings;
 
-    my ($dummy,$farend) = $mappings->[0]->getContigRange();
+    my ($dummy,$farend);
+   ($dummy,$farend) = $mappings->[0]->getContigRange() if $mappings->[0];
     for (my $i = 1 ; $i < scalar(@$mappings) ; $i++) {
         my @current = $mappings->[$i]->getContigRange();
         unless ($current[0] <= $farend) { # i.e. if there is overlap
@@ -247,10 +248,11 @@ $logger->debug("pass $pass");
 # and to determine the reads at either end
         my ($minspanonleft, $minspanonright);
         my $name = $contig->getContigName() || 0;
-        if (my $mappings = $contig->getMappings()) {
+        if ($contig->hasMappings()) {
             my $init = 0;
             $numberofnames = 0;
             $totalreadcover = 0;
+            my $mappings = $contig->getMappings();
             foreach my $mapping (@$mappings) {
                 my $readname = $mapping->getMappingName();
 # find begin/end of contig range cover by this mapping
@@ -336,6 +338,7 @@ $logger->debug("pass $pass");
             }
             elsif ($isShifted) {
 # this should never occur, indicative of corrupted data/code in Mapping/Segment
+                $logger = &verifyLogger("statistics");
                 $logger->error("Invalid condition detected in contig $name");
                 return 0;
             }
@@ -703,24 +706,24 @@ $logger->warning("readnames to be removed:\n@reads_to_be_removed");
 }
 
 sub removeNamedReads {
-# remove a list of reads from a contig
+# remove a list of readnames from a contig
     my $class  = shift;
     my $contig = shift;
-    my $reads = shift;
+    my $readnames = shift;
     my %options = @_;
 
     &verifyParameter($contig,'removeNamedReads');
 
 # test for a read name/id or an array
 
-    &verifyParameter($reads,'removeNamedReads','ARRAY') if ref($reads);
+    &verifyParameter($readnames,'removeNamedReads','ARRAY') if ref($readnames);
 
 my $logger = &verifyLogger('removeNamedReads');
 $logger->debug("ENTER");
 
     $contig = $contig->copy() if $options{new};
 
-    my ($count,$parity,$total) = &removereads($contig,$reads);
+    my ($count,$parity,$total) = &removereads($contig,$readnames);
 
     unless ($total) {
         return undef,"No reads to be deleted specified";
@@ -736,9 +739,9 @@ $logger->debug("ENTER");
     
 # test actual count against input read specification
     
-    unless ($count > 0 && $count == 3*$total || $options{force}) {
+    unless ($count > 0 && $count == 3*$total) {
         return undef,"No reads deleted from input contig ($status)" unless $count;
-        return undef,"Badly configured input contig or returned contig ($status)";
+        return undef,"Not all reads deleted from input contig ($status)";
     }
 
     return $contig,"OK ($status)";
@@ -1101,7 +1104,6 @@ sub restoreMaskedReads {
         my $replacement = substr $readdna, $read_left, $rlength;
         my @cenquality  = splice @readqlt, $read_left, $rlength;
 
-my $log;
         unless (defined($base_left) && defined($base_right)) {
 $logger->info("procesing read $read");
 # one or both boundaries could not be determined
@@ -1111,8 +1113,6 @@ $logger->info("cannot determine boundaries on version 0");
 $logger->info("read left $read_left , read right $read_right, rlength $rlength");
 $logger->fine("read DNA\n$readdna\nbaseDNA\n$basedna"); 
 $logger->flush();
-$base->writeToFasta(*STDOUT); 
-$read->writeToFasta(*STDOUT); 
             my $change = length($basedna) - length($readdna); 
 $logger->info("change = $change");
             if (defined($base_left)) {
@@ -1127,7 +1127,6 @@ $logger->info("change = $change");
                 $base_right = $read_right + $change;
             }
 $logger->info("base left $base_left , base right $base_right");
-$log = 1;
 	}
 
         my $blength = $base_right - $base_left - 1; # the length of the unmasked part of version 0
@@ -1707,7 +1706,7 @@ sub removereads {
     &verifyPrivate($contig,"removereads");
 
     my $logger = &verifyLogger("removereads");
-    $logger->debug("ENTER: $readrf");
+$logger->debug("ENTER: $readrf");
 
 # get the readname hash
 
@@ -1719,6 +1718,7 @@ sub removereads {
         foreach my $identifier (@$readrf) {
             $readidhash->{$identifier}++;
         }
+	$logger->info(scalar(keys %$readidhash)." reads to be removed");
     }
     else {
         $readidhash->{$readrf}++;
@@ -1731,27 +1731,37 @@ sub removereads {
     my $total = scalar(keys %$readidhash);
 
     my $reads = $contig->getReads(1);
-    for (my $i = 0 ; $i < scalar(@$reads) ; $i++) {
-        next unless ($readidhash->{$reads->[$i]->getReadName()}
-             or      $readidhash->{$reads->[$i]->getReadID()});
-        delete $readidhash->{$reads->[$i]->getReadID()}; # remove read ID
-        $readidhash->{$reads->[$i]->getSequenceID()}++;  # and replace by sequence ID
-        splice @$reads,$i,1;
+
+    my $n = 0;
+    my $readsqhash = {};
+    while ($n < scalar(@$reads)) {
+        unless ($readidhash->{$reads->[$n]->getReadName()}
+	    or  $readidhash->{$reads->[$n]->getReadID()}) {
+            $n++;
+            next;
+	}
+        $readsqhash->{$reads->[$n]->getSequenceID()}++;  # register sequence ID
+        my $removed = splice @$reads,$n,1;
+        $logger->info("read ".$removed->getReadName()." ($n) removed");
         $contig->setNumberOfReads(scalar(@$reads));
         $splicecount += 2;
         $parity++;
-        $logger->warning("read ".$reads->[$i]->getReadName()." ($i) removed");
     }
             
     my $mapps = $contig->getMappings(1);
-    for (my $i = 0 ; $i < scalar(@$mapps) ; $i++) {
-        next unless ($readidhash->{$mapps->[$i]->getMappingName()}
-             or      $readidhash->{$mapps->[$i]->getSequenceID()});
-        splice @$mapps,$i,1;
+
+    my $i = 0;
+    while ($i < scalar(@$mapps)) {
+        unless ($readidhash->{$mapps->[$i]->getMappingName()}
+	    or  $readsqhash->{$mapps->[$i]->getSequenceID()}) {
+	    $i++;
+	    next;
+	}
+        my $removed = splice @$mapps,$i,1;
+        $logger->info("mapping ".$removed->getMappingName()." ($i) removed");
         $splicecount++;
         $parity--;
         next unless $logger;
-        $logger->warning("mapping ".$mapps->[$i]->getMappingName()." ($i) removed");
     }
 
     return $splicecount,$parity,$total;
