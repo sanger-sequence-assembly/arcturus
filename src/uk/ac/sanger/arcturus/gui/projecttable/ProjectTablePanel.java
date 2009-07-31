@@ -38,6 +38,8 @@ public class ProjectTablePanel extends MinervaPanel implements
 	protected MinervaAbstractAction actionCreateNewProject;
 
 	protected final NewProjectPanel panelNewProject;
+	
+	private final static boolean allowBinImport = Arcturus.getBoolean("project.allowbinimport");
 
 	public ProjectTablePanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
 		super(new BorderLayout(), parent, adb);
@@ -130,7 +132,7 @@ public class ProjectTablePanel extends MinervaPanel implements
 		int rowcount = table.getSelectedRowCount();
 
 		actionExportToGap4.setEnabled(rowcount == 1);
-		actionImportFromGap4.setEnabled(rowcount == 1);
+		actionImportFromGap4.setEnabled(false);
 		actionExportForAssembly.setEnabled(rowcount == 1);
 
 		actionViewProject.setEnabled(rowcount > 0);
@@ -138,6 +140,8 @@ public class ProjectTablePanel extends MinervaPanel implements
 		if (rowcount == 1) {
 			ProjectProxy proxy = table.getSelectedProject();
 			Project project = proxy.getProject();
+
+			actionImportFromGap4.setEnabled(!project.isBin() || allowBinImport);
 
 			boolean canRetire = false;
 

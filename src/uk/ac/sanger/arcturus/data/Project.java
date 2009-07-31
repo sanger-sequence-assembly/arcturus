@@ -165,7 +165,7 @@ public class Project extends Core {
 	}
 
 	public boolean isBin() {
-		return name.equalsIgnoreCase("BIN");
+		return name.endsWith("BIN");
 	}
 
 	public Date getUpdated() {

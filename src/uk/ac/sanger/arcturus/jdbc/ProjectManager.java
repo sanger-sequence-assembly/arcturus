@@ -296,7 +296,7 @@ public class ProjectManager extends AbstractManager {
 		for (Iterator iter = hashByID.values().iterator(); iter.hasNext();) {
 			Project project = (Project) iter.next();
 
-			if (project.getName().endsWith("BIN"))
+			if (project.isBin())
 				set.add(project);
 		}
 
