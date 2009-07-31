@@ -215,6 +215,12 @@ public class Arcturus {
 	public static String getProperty(String key) {
 		return arcturusProps.getProperty(key);
 	}
+	
+	public static boolean getBoolean(String key) {
+		String value = arcturusProps.getProperty(key);
+		
+		return value != null && value.equalsIgnoreCase("true");
+	}
 
 	public static String getDefaultInstance() {
 		String instance = getProperty("arcturus.instance");
