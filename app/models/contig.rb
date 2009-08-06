@@ -53,4 +53,11 @@ class Contig < ActiveRecord::Base
   def parents
     Contig.find_by_sql("select * from CONTIG where contig_id in (select parent_id from C2CMAPPING where contig_id = #{contig_id}) order by contig_id desc")
   end
+
+private
+
+  def validate
+    errors.add(:length, "must be a positive number") unless length > 0;
+    errors.add(:nreads, "must be a positive number") unless nreads > 0;
+  end
 end

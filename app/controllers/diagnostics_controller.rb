@@ -1,6 +1,6 @@
 class DiagnosticsController < ApplicationController
   def index
-    @primary_object_types = [ Assembly, Contig, Project, ContigTag, TagMapping ]
+    @primary_object_types = [ Assembly, Contig, Project, ContigTag, TagMapping, Session, User ]
     @connection_pools = Set.new
 
     @primary_object_types.each do |pot|
