@@ -1,0 +1,8 @@
+--- 
+cwd: /software/arcturus/webapp/training/current/
+log_file: log/mongrel.log
+port: 15001
+daemon: true
+environment: production
+pid_file: log/mongrel.pid
+servers: 5

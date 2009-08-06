@@ -10,6 +10,12 @@ class TagMappingTest < ActiveSupport::TestCase
     @test_tag_3      = CONTIGTAG(:test_tag_3)
   end
 
+  test "invalid with missing attributes" do
+    mapping = TagMapping.new
+
+    assert !mapping.valid?
+  end
+
   test "create tag mapping" do
     mapping = TagMapping.new
     mapping.contig = @default_contig

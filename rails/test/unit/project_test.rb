@@ -30,4 +30,13 @@ class ProjectTest < ActiveSupport::TestCase
 
     assert !project.save
   end
+
+  test "invalid with missing attributes" do
+    project = Project.new
+
+    assert !project.valid?
+
+    assert project.errors.invalid?(:name)
+    assert project.errors.invalid?(:assembly)
+  end
 end
