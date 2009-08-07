@@ -499,7 +499,7 @@ sub getUsersAndRoles {
 	die "DBI->connect failed";
     }
 
-    my $query = "select username,role from USER";
+    my $query = "select username,default_role from USER";
 
     my $sth = $dbh->prepare($query);
     &db_die("prepare($query) failed");
