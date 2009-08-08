@@ -36,6 +36,11 @@ class SessionsController < ApplicationController
     @my_session = username.nil? ? nil : Session.find_by_username(username)
 
     if @my_session
+      user = params['organism'] ? User.find_by_username(username) : nil
+      @role = user.nil? ? nil : user.role
+
+      @title = params['organism'] ? "My profile for " + params['organism'] : "My profile"
+
       respond_to do |format|
         format.html
       end

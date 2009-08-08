@@ -20,6 +20,13 @@ private
 
   def login_required
     find_user_from_session || find_user_from_cookie || find_user_from_api_key || force_user_login
+
+    begin
+      @me = User.find(session[:user])
+    rescue ActiveRecord::RecordNotFound
+      @me = User.new
+      @me.username = session[:user]
+    end
   end
 
   def find_user_from_session

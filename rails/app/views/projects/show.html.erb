@@ -44,6 +44,13 @@
   </tr>
 
   <tr>
+    <td>Status:</td>
+    <td>
+      <%=h @project.status %>
+    </td>
+  </tr>
+
+  <tr>
     <td>Owner:</td>
     <td>
       <%=h @project.owner.nil? ? '' : @project.owner.full_name %>
@@ -101,22 +108,31 @@
 
 <hr />
 
+<% if @me.has_administrator_role? || @me.has_manager_role? %>
 <%=
   link_to 'Edit', :instance => params[:instance],
                   :organism => params[:organism],
                   :action => 'edit',
                   :id => @project
-%> |
+%>
+<% else %>
+Edit
+<% end %>
+|
 <%= 
   link_to 'Back', :instance => params[:instance],
                   :organism => params[:organism],
                   :action => 'index'
-%> |
-
-<%=
-  link_to 'Destroy', :instance => params[:instance],
-                     :organism => params[:organism],
-                     :action => 'delete_confirm',
-                     :confirm => "Are you sure?",
-                     :id => @project
 %>
+|
+<% if @me.has_administrator_role? || @me.has_manager_role? %>
+<%=
+  link_to 'Destroy', {:instance => params[:instance],
+                      :organism => params[:organism],
+                      :id => @project},
+                      :confirm => "Are you sure?",
+                      :method => :delete
+%>
+<% else %>
+Destroy
+<% end %>

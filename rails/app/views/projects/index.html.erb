@@ -85,11 +85,15 @@
 <% end %>
 </table>
 
-<br />
+<hr />
 
+<% if @me.has_administrator_role? || @me.has_manager_role? || @me.has_finisher_role? %>
 <%=
    link_to 'New project', :instance => params[:instance],
                           :organism => params[:organism],
                           :assembly => params[:assembly_id],
                           :action => 'new'
 %>
+<% else %>
+New project
+<% end %>

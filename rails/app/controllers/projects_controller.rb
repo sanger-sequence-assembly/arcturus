@@ -3,7 +3,6 @@ class ProjectsController < ApplicationController
   # GET /projects.xml
 
   def index
-
     @for_assembly = 0
     if params[:assembly_id] then
        @projects = Project.find(:all,
@@ -45,6 +44,10 @@ class ProjectsController < ApplicationController
     @project = Project.new
 
     @users = User.find(:all, :order => "username")
+
+    nobody = User.new
+    nobody.username = 'nobody'
+    @users << nobody
 
     @status = Project.status_enumeration
 
@@ -146,50 +149,6 @@ class ProjectsController < ApplicationController
       format.html
       format.xml { render :xml => @contigs }
     end
-  end
-
-  # EXPORT CONTIGS /projects/export_contigs/1
-  def export_contigs_confirm
-    @project = Project.find(params[:id])
-  end 
-
-  def export
-    @project = Project.find(params[:id])
-    @contigs = @project.current_contigs
-
-    respond_to do |format|
-      format.html
-      format.text
-    end
-  end
-
-  def export_contigs_to_file
-    @project = Project.find(params[:id])
-    @contigs = @project.current_contigs
-    @fastafile = params[:file]
-
-    respond_to do |format|
-      format.html
-    end
-
-    file = File.open(@fastafile, modestring="w")
-    
-    @contigs.each do |c| 
-       file.write(c.to_fasta)
-    end
- 
-    file.close
-  end
-
-protected
-
-  def users_extended
-    @users = User.find(:all, :order => "username")
-# and add an empty user up front
-    @empty_user = User.new()
-    @empty_user.username = nil
-    @users.unshift(@empty_user);
-    @users
   end
 
 end
