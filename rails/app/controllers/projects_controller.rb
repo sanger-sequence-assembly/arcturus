@@ -81,7 +81,7 @@ class ProjectsController < ApplicationController
 
     respond_to do |format|
       if @project.save
-        flash[:notice] = 'Project was successfully created.'
+        flash[:notice] = "Project #{@project.name} was successfully created."
         format.html { redirect_to( { :action => "index",
                                      :instance => params[:instance], 
                                      :organism => params[:organism] }) }

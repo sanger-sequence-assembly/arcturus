@@ -69,13 +69,6 @@ div#bannerLogout {
   padding-right: 2px;
 }
 
-div#flash {
-  height: 10px;
-  width: 100%;
-  font: 10px/10px "Arial-Bold", sans-serif;
-  color: green;
-}
-
 div#columns {
   background: #99ccff;
 }
@@ -87,6 +80,10 @@ div#sidebar {
   background: #99ccff;
 }
 
+div#flash {
+  color: green;
+}
+
 div#content {
   margin-left: 12em;
   height:100%;
@@ -96,6 +93,3 @@ div#content {
   padding-bottom: 1em;
 }
 
-div.navlink {
-  
-}

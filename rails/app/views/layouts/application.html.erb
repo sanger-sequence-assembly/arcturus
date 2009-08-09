@@ -11,21 +11,22 @@
 
 <div id="banner">
   <div id="bannerTitle">
-    Arcturus
+    Arcturus <% if params['instance'] %> <%= ": #{params['instance']}" %> <% end %>
   </div>
-  <div id="flash">
-    <%= flash[:notice] %>
+  <div id="bannerLogout">
+    <%= link_to "Logout", :controller => 'sessions', :action => 'logout' %>
   </div>
-    <div id="bannerLogout">
-      <%= link_to "Logout", :controller => 'sessions', :action => 'logout' %>
-    </div>
 </div>
 
 <div id="columns">
   <div id="sidebar">
+    This is where the navigation links will go.
   </div>
 
   <div id="content">
+    <div id="flash">
+      <%= flash[:notice] %>
+    </div>
     <%= yield :layout %>
   </div>
 </div>
