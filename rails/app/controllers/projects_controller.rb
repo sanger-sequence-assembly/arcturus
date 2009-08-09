@@ -119,10 +119,6 @@ class ProjectsController < ApplicationController
 
   # DELETE /projects/1
   # DELETE /projects/1.xml
-  def delete_confirm
-    @project = Project.find(params[:id])
-  end      
-
   def destroy
     @project = Project.find(params[:id])
 
@@ -147,8 +143,20 @@ class ProjectsController < ApplicationController
 
     respond_to do |format|
       format.html
+      format.text
       format.xml { render :xml => @contigs }
     end
   end
 
+  # EXPORT CONTIGS /projects/1/export
+  def export
+    @project = Project.find(params[:id])
+    @contigs = @project.current_contigs
+
+    respond_to do |format|
+      format.html
+      format.text
+      format.xml { render :xml => @contigs }
+    end
+  end
 end

@@ -1,0 +1,33 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+       "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <meta http-equiv="content-type" content="text/html;charset=UTF-8" />
+  <title>Arcturus: <%= controller.controller_name.capitalize %></title>
+  <%= stylesheet_link_tag 'application' %>
+</head>
+<body>
+
+<div id="banner">
+  <div id="bannerTitle">
+    Arcturus
+  </div>
+  <div id="flash">
+    <%= flash[:notice] %>
+  </div>
+    <div id="bannerLogout">
+      <%= link_to "Logout", :controller => 'sessions', :action => 'logout' %>
+    </div>
+</div>
+
+<div id="columns">
+  <div id="sidebar">
+  </div>
+
+  <div id="content">
+    <%= yield :layout %>
+  </div>
+</div>
+</body>
+</html>

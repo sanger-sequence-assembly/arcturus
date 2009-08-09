@@ -14,8 +14,7 @@ ActionController::Routing::Routes.draw do |map|
   map.resources :projects,
                   :path_prefix => "/:instance/:organism",
                   :member => { :contigs => :get,
-                               :export => :get,
-                               :delete_confirm => :get
+                               :export => :get
                              }
 
   map.resources :contigs,
