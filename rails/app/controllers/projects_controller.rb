@@ -43,11 +43,7 @@ class ProjectsController < ApplicationController
 
     @project = Project.new
 
-    @users = User.find(:all, :order => "username")
-
-    nobody = User.new
-    nobody.username = 'nobody'
-    @users << nobody
+    @users = user_list_for_owner
 
     @status = Project.status_enumeration
 
@@ -63,11 +59,7 @@ class ProjectsController < ApplicationController
 
     @assemblies = Assembly.current_assemblies
 
-    @users = User.find(:all, :order => "username")
-
-    nobody = User.new
-    nobody.username = 'nobody'
-    @users << nobody
+    @users = user_list_for_owner
 
     @status = Project.status_enumeration
   end
@@ -158,5 +150,19 @@ class ProjectsController < ApplicationController
       format.text
       format.xml { render :xml => @contigs }
     end
+  end
+
+private
+
+  def user_list_for_owner
+    users = User.find(:all)
+
+    users.sort! { |a,b| a.family_name <=> b.family_name || a.given_name <=> b.given_name }
+
+    nobody = User.new
+    nobody.username = 'nobody'
+    users << nobody
+
+    users
   end
 end
