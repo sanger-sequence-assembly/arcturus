@@ -6,6 +6,17 @@
   <meta http-equiv="content-type" content="text/html;charset=UTF-8" />
   <title>Arcturus: <%= controller.controller_name.capitalize %></title>
   <%= stylesheet_link_tag 'application' %>
+  <style type="text/css">
+    <% if RAILS_ENV == 'development' %>
+      div#banner { background: #ff9900;}
+      div#columns { background: #ff9900;}
+      div#sidebar { background: #ff9900;}
+    <% elsif RAILS_ENV == 'test' %>
+      div#banner { background: #33ff66;}
+      div#columns { background: #33ff66;}
+      div#sidebar { background: #33ff66;}
+    <% end %>
+  </style>
 </head>
 <body>
 
