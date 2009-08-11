@@ -18,17 +18,23 @@ my $organism;
 my $instance;
 my $contig;
 my $verbose;
-my $confirm;
+my $debug;
+my $commit;
 my $focn;
+my $caf;
 my $group;
 my $minimum = 2;
 my $readid;
-my $force = 0;
+my $asped;
+my $limit = 1;
 
-my $validKeys  = "organism|instance|contig|focn|fofn|current|cc|"
-               . "lowqualityreads|lqr|shortreads|sr|minimum|deletereads|dr|"
+my $contamination;
+
+my $validKeys  = "organism|o|instance|i|contig|focn|fofn|current|cc|"
+               . "lowqualityreads|lqr|shortreads|sr|minimum|deletereads|dr|aspedbefore|ab|"
 #               . "username|password|"
-               . "force|confirm|verbose|help";
+               . "contamination|status|caf|"
+               . "limit|commit|info|verbose|debug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -38,13 +44,17 @@ while (my $nextword = shift @ARGV) {
                                                                          
 # the next die statement prevents redefinition when used with e.g. a wrapper script
 
-    die "You can't re-define instance" if ($instance && $nextword eq '-instance');
- 
-    $instance     = shift @ARGV  if ($nextword eq '-instance');
+    if ($nextword eq '-i' || $nextword eq '-instance') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define instance" if $instance;
+        $instance = shift @ARGV;
+    }
 
-    die "You can't re-define organism" if ($organism && $nextword eq '-organism');
-      
-    $organism     = shift @ARGV  if ($nextword eq '-organism');
+    if ($nextword eq '-o' || $nextword eq '-organism') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define organism" if $organism;
+        $organism  = shift @ARGV;
+    }
 
     $contig       = shift @ARGV  if ($nextword eq '-contig');
     $contig       = 'current'    if ($nextword eq '-current');
@@ -53,24 +63,41 @@ while (my $nextword = shift @ARGV) {
     $focn         = shift @ARGV  if ($nextword eq '-focn');
     $focn         = shift @ARGV  if ($nextword eq '-fofn');
 
-    if ($nextword eq '-shortreads' || $nextword eq '-sr') {
+    $caf          = shift @ARGV  if ($nextword eq '-caf');
+
+    if ($nextword eq '-sr'  || $nextword eq '-shortreads') {
         $group    = 1;
     }
-    if ($nextword eq '-lowqualityreads' || $nextword eq '-lqr') {
+    if ($nextword eq '-lqr' || $nextword eq '-lowqualityreads') {
         $group    = 2;
     }
-    if ($nextword eq '-deletereads' || $nextword eq '-dr') {
+    if ($nextword eq '-dr'  || $nextword eq '-deletereads') {
         $readid   = shift @ARGV;
         $group    = 3;
     }
+    if ($nextword eq '-ab'  || $nextword eq '-aspedbefore') {
+        $asped    = shift @ARGV;
+        $group    = 4;
+    }
 
-    $minimum      = shift @ARGV  if ($nextword eq '-minimum');
 
-    $verbose      = 1            if ($nextword eq '-verbose');
+    if ($nextword eq '-status'  || $nextword eq '-contamination') {
+        $contamination = 1            if ($nextword eq '-contamination');
+        $contamination = shift @ARGV  if ($nextword eq '-status');
+        $group    = 5;
+    }
 
-    $confirm      = 1            if ($nextword eq '-confirm');
+    $limit         = shift @ARGV  if ($nextword eq '-limit');
 
-    $force        = 1            if ($nextword eq '-force');
+    $minimum       = shift @ARGV  if ($nextword eq '-minimum');
+
+    $verbose       = 1            if ($nextword eq '-verbose');
+
+    $verbose       = 2            if ($nextword eq '-info');
+
+    $debug         = 1            if ($nextword eq '-debug');
+
+    $commit        = 1            if ($nextword eq '-commit');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -81,7 +108,11 @@ while (my $nextword = shift @ARGV) {
                                                                                
 my $logger = new Logging();
  
-$logger->setStandardFilter(0) if $verbose; # set reporting level
+$logger->setStandardFilter($verbose) if $verbose; # set reporting level
+
+$logger->setBlock('debug',unblock=>1) if $debug;
+
+$logger->setSpecialStream('problemcontigs.lis',list=>1);
 
 Contig->setLogger($logger);
  
@@ -89,20 +120,27 @@ Contig->setLogger($logger);
 # get the database connection
 #----------------------------------------------------------------
 
-&showUsage("Missing organism database") unless $organism;
-
-&showUsage("Missing database instance") unless $instance;
-
 &showUsage("Missing contig identifier or focn") unless ($contig || $focn);
 
 &showUsage("Missing read group specification") unless $group;
 
+if ($organism && $organism eq 'default' ||
+    $instance && $instance eq 'default') {
+    undef $organism;
+    undef $instance;
+}
+
 my $adb = new ArcturusDatabase (-instance => $instance,
-		                -organism => $organism);
+                                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-    &showUsage("Invalid organism '$organism' on server '$instance'");
+
+    &showUsage("Missing organism database") unless $organism;
+
+    &showUsage("Missing database instance") unless $instance;
+
+    &showUsage("Organism '$organism' not found on server '$instance'");
 }
 
 $adb->setLogger($logger);
@@ -117,7 +155,7 @@ $logger->info("Database $URL opened succesfully");
 
 my $cids;
 
-if ($contig eq 'current') {
+if ($contig && $contig eq 'current') {
     $cids = $adb->getCurrentContigIDs();
 }
 else {
@@ -126,13 +164,23 @@ else {
 
 &showUsage("No valid contig identifier provided") unless @$cids;
 
+
+my $CAF;
+if ($caf) {
+    $CAF = new FileHandle($caf,'w');
+    unless ($CAF) {
+	$logger->severe("Failed to open caf file $caf");
+        exit 1;
+    }
+}
+
 #----------------------------------------------------------------
 # MAIN
 #----------------------------------------------------------------
 
 my %loadoptions = (noload=>1,setprojectby=>'readcount');
 
-$loadoptions{noload} = 0 if $confirm;
+$loadoptions{noload} = 0 if $commit;
 
 foreach my $identifier (@$cids) {
 
@@ -191,16 +239,23 @@ foreach my $identifier (@$cids) {
         $contig = $contig->removeLowQualityReads();
     }
     elsif ($group == 3) {
-        my %option = (force => $force);
-        my @reads = split /\D/,$readid;        
-       ($contig,$msg) = $contig->deleteReads([@reads],%option);
+        my @reads = split /\,/,$readid;
+        $logger->info("reads to be removed: @reads");       
+       ($contig,$msg) = $contig->removeNamedReads([@reads]);
         $logger->info("contig status returned: $msg");
     }
     elsif ($group == 4) {
+       ($contig,$msg) = &removeaspedbeforereads($contig,$asped);
+    }
+    elsif ($group == 5) {
+       ($contig,$msg) = &removefailedreads($contig,$contamination);
+    }
+    elsif ($group == 6) {
         $contig = $contig->undoReadEdits();
     }
 
     unless ($contig) {
+        $msg = 'no further info available';
         $logger->severe("No valid contig returned for $identifier: $msg");
         next;
     }
@@ -209,18 +264,35 @@ foreach my $identifier (@$cids) {
 
     $logger->info("Testing/loading contig $contig");
 
+    unless ($contig->isValid(forimport=>1)) {
+        $logger->special($contig->getContigID());
+        $logger->warning("bad contig $contig after processing :");
+        $logger->warning($contig->{status});
+        $contig->writeToCaf($CAF) if $CAF;
+        last unless --$limit;
+	next;
+    }
+
    (my $added,$msg) = $adb->putContig($contig, $projects->[0], %loadoptions);
 
     if ($added) {
-	$logger->warning("Contig added $added : $msg");
+        if ($loadoptions{noload}) {
+   	    $logger->warning("Contig tested but not added : $msg");
+	}
+	else {
+   	    $logger->warning("Contig added $added : $msg");
+	}
     }
     elsif ($loadoptions{noload}) {
 	$logger->warning("Contig tested but not added : $msg");
-        $logger->warning("To load this contig: repeat with '-confirm'");
+        $logger->warning("To load this contig: repeat with '-commit'");
     }
     else {
         $logger->severe("Failed to add contig : $msg");
+# record empty contigs: they should be deleted or moved?
     }
+
+    last unless --$limit;
 }
 
 $adb->disconnect();
@@ -230,6 +302,65 @@ exit 0;
 #------------------------------------------------------------------------
 # read a list of names from a file and return an array
 #------------------------------------------------------------------------
+
+sub removeaspedbeforereads {
+    my $contig = shift;
+    my $asped = shift;
+
+    $logger->warning( "removing asped before $asped reads "
+                    . $contig->getContigName() . " with " 
+                    . $contig->getNumberOfReads() . " reads");
+
+    $asped =~ s/\D//g;
+
+    my $reads = $contig->getReads(1);
+    my @toberemoved;
+    foreach my $read (@$reads) {
+        my $aspdate = $read->getAspedDate() || 0; # or on special log?
+        $aspdate =~ s/\D//g;
+        next unless ($aspdate && $aspdate < $asped);
+        $logger->warning( "remove ".$read->getReadName()." $aspdate  ($asped)" );
+        push @toberemoved,$read->getReadName();        
+    }
+
+#    return 0,"no reads were removed" unless @toberemoved;
+    return $contig,"no reads were removed" unless @toberemoved;
+
+    my ($status,$msg) = $contig->removeNamedReads([@toberemoved]); # force?
+    $logger->warning("contig status returned: $msg");
+    return $status,$msg; # undef for failure
+}
+
+sub removefailedreads {
+    my $contig = shift;
+    my $status = shift;
+
+    $logger->warning( "removing reads with status >= $status "
+                    . $contig->getContigName() . " with " 
+                    . $contig->getNumberOfReads() . " reads");
+
+    my %statushash = (PASS => 1            , QUAL => 2,
+                      SVEC => 3            , CONT => 4,
+                      'CONT BIG1' => 5     , 'CONT BIG1 QUAL' => 6,
+                      'CONT BIG1 SVEC' => 7, 'CONT BIG1' => 8); 
+
+    my $reads = $contig->getReads(1);
+    my @toberemoved;
+    foreach my $read (@$reads) {
+        my $processstatus = $read->getProcessStatus() || 0;
+        my $readstatus = $statushash{$processstatus} || $processstatus;
+        next unless ($readstatus && $readstatus >= $status);
+
+        $logger->warning( "remove ".$read->getReadName()." '$processstatus',$readstatus  ($status)" );
+        push @toberemoved,$read->getReadName();        
+    }
+
+    return $contig,"no reads were removed" unless @toberemoved;
+
+    my ($returncontig,$msg) = $contig->removeNamedReads([@toberemoved]); # force?
+    $logger->warning("contig status returned: $msg");
+    return $returncontig,$msg; # undef for failure
+}
 
 sub getNamesFromFile {
     my $file = shift; # file name
@@ -337,12 +468,16 @@ sub showUsage {
     print STDERR "-deletereads\t(dr) remove read or comma-separated list of reads\n";
     print STDERR "-shortreads\t(sr) remove reads with short mapping length\n";
     print STDERR "-lqr\t\t(lowqualityreads) as it says \n";
+    print STDERR "-ab\t\t(asped before) reads asped before a certain date\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
+    print STDERR "-caf\t\tfile for output of problem contigs (split)\n";
+    print STDERR "-limit\t\tnumber of contigs to process from input list\n";
+    print STDERR "\n";
     print STDERR "-minimum\tminimum short read length required (with shortreads)\n";
     print STDERR "\n";
-    print STDERR "-confirm\t(no value) \n";
+    print STDERR "-commit\t\t(no value) \n";
     print STDERR "-verbose\t(no value) \n";
     print STDERR "\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
