@@ -116,7 +116,6 @@ sub testContig {
                         $logger->severe("Missing DNA or BaseQuality in Read "
                                         .$read->getReadName);
 $logger->severe("ex/import-level=$level  isEdited=".$read->isEdited());
-#$logger->severe($read->writeToCaf(*STDOUT));
                         $success = 0 unless ($read->getReadName() =~ /con/);
 		    }
                 }
@@ -134,6 +133,7 @@ $logger->severe("ex/import-level=$level  isEdited=".$read->isEdited());
     if ($contig->hasMappings()) {
         my $success = 1;
 	my $mappings = $contig->getMappings();
+        my @problemreads;
         foreach my $mapping (@$mappings) {
 # get the identifier: for export sequence ID; for import readname
             if ($mapping->hasSegments) {
@@ -142,8 +142,9 @@ $logger->severe("ex/import-level=$level  isEdited=".$read->isEdited());
 # is ID among the identifiers? if so delete the key from the has
                 if (!defined($ID) || !$identifier{$ID}) {
 		    $ID = 'undefined' unless defined($ID);
-                    $logger->severe("Missing Read for Mapping ".
-                                 $mapping->getMappingName." ($ID)");
+                    my $readname = $mapping->getMappingName();
+                    $logger->severe("Missing Read for Mapping $readname ($ID)");
+                    push @problemreads,$readname;
                     $success = 0;
                 }
                 delete $identifier{$ID}; # delete the key
@@ -152,9 +153,16 @@ $logger->severe("ex/import-level=$level  isEdited=".$read->isEdited());
                 $logger->severe("Mapping ".$mapping->getMappingName().
                             " for Contig ".$contig->getContigName().
                             " has no Segments");
+                push @problemreads,$mapping->getMappingName();
                 $success = 0;
             }
             $contig->{status} = "Invalid or incomplete Mapping(s)" unless $success;
+        }
+        unless ($success || !$options{repair}) {
+            $logger->warning("problem reads to be removed: @problemreads");
+            $contig->removeNamedReads(\@problemreads);
+            $options{repair} = 0; # inhibit looping
+            return $this->testContig($contig,%options); # try again
         }
         return 0 unless $success;
     } 
@@ -1699,14 +1707,13 @@ for my $ntag (@$newtags) {print STDOUT "split tag ".$ntag->writeToCaf();}
 }
 
 sub removereads {
-# remove named reads from the Read and Mapping stock
+# private helper method: remove named reads from the Read and Mapping stock
     my $contig = shift;
     my $readrf = shift; # readid, array-ref or hash
 
     &verifyPrivate($contig,"removereads");
 
     my $logger = &verifyLogger("removereads");
-$logger->debug("ENTER: $readrf");
 
 # get the readname hash
 
@@ -1736,24 +1743,29 @@ $logger->debug("ENTER: $readrf");
     my $readsqhash = {};
     while ($n < scalar(@$reads)) {
         unless ($readidhash->{$reads->[$n]->getReadName()}
-	    or  $readidhash->{$reads->[$n]->getReadID()}) {
+	    ||  $readidhash->{$reads->[$n]->getReadID()}) {
             $n++;
             next;
 	}
-        $readsqhash->{$reads->[$n]->getSequenceID()}++;  # register sequence ID
+        $readsqhash->{$reads->[$n]->getSequenceID() || 'none'}++;  # register sequence ID
         my $removed = splice @$reads,$n,1;
         $logger->info("read ".$removed->getReadName()." ($n) removed");
         $contig->setNumberOfReads(scalar(@$reads));
         $splicecount += 2;
         $parity++;
     }
+
+# reset the number of reads
+
+    $contig->setNumberOfReads(undef);
+    $contig->getNumberOfReads();
             
     my $mapps = $contig->getMappings(1);
 
     my $i = 0;
     while ($i < scalar(@$mapps)) {
         unless ($readidhash->{$mapps->[$i]->getMappingName()}
-	    or  $readsqhash->{$mapps->[$i]->getSequenceID()}) {
+	    ||  $readsqhash->{$mapps->[$i]->getSequenceID() || 0}) {
 	    $i++;
 	    next;
 	}
@@ -1761,7 +1773,6 @@ $logger->debug("ENTER: $readrf");
         $logger->info("mapping ".$removed->getMappingName()." ($i) removed");
         $splicecount++;
         $parity--;
-        next unless $logger;
     }
 
     return $splicecount,$parity,$total;
@@ -3664,14 +3675,14 @@ sub remapFinishingTags {
         next if ($excludetag && $tagtype =~ /\b$excludetag\b/i);
         next if ($includetag && $tagtype !~ /\b$includetag\b/i);
 
-        my $id = $ptag->getID();
+        my $id = $ptag->getID() || 0;
 
         my $newtag;
         foreach my $p2tmapping (@$maps) {
             my $tptags = $ptag->remap($p2tmapping,nosplit=>'collapse',tracksegments=>3);
             next unless ($tptags && @$tptags);
             foreach my $tptag (@$tptags) {
-                $tptag->setParentTagID($id);
+                $tptag->setParentTagID($id) if $id;
                 push @rtags, $tptag;
                 $newtag++;
 	    }
