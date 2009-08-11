@@ -832,7 +832,7 @@ sub writeToCaf {
 
     $this->writeDNA($FILE,"DNA : ",@_); # specifying the CAF marker
 
-    $this->writeBaseQuality($FILE,"BaseQuality : ");
+    $this->writeBaseQuality($FILE,"BaseQuality : ",@_);
 }
 
 sub writeCafSequence {
@@ -968,7 +968,7 @@ sub writeDNA {
     my $marker = shift;
     my %options = @_;
 
-# optionally takes 'qualitymask=>'N' to mask out low quality data
+# optionally takes 'qualitymask=>'x' to mask out low quality data
 
     $marker = ">" unless defined($marker); # default FASTA format
 
@@ -990,13 +990,14 @@ sub writeBaseQuality {
     my $this   = shift;
     my $FILE   = shift; # obligatory
     my $marker = shift;
-    my %options = @_; # fastq
+    my %options = @_; # fastq,mask
 
     $marker = '>' unless defined($marker); # default FASTA format
 
-# the quality data go into a separt
+# the quality data go into a separate
 
     my $fastq = $options{fastq} || 0;
+    my $phrap = $options{mask} ? 1 : 0; # proxy for export for phrap assembler
 
     if (my $quality = $this->getBaseQuality()) {
 # output in lines of 25 numbers (caf/fasta) or 60 (fastq)
@@ -1010,6 +1011,7 @@ sub writeBaseQuality {
             my $m = $i + $increment - 1;
             $m = $n if ($m > $n);
             my @qslice = @$quality[$i..$m];
+            &truncateBaseQuality(@qslice) if $phrap;
 	    &encodePhredScore(@qslice) if $fastq;
 	    print $FILE join($joinspace,@qslice);
 	    print $FILE "\n" unless $fastq;
@@ -1022,6 +1024,13 @@ sub encodePhredScore {
 # private helper method: translate phred score into ASCII character
     foreach my $q (@_) {   
         $q = chr( ($q <= 93 ? $q : 93) + 33); # truncates quality at 93
+    }
+}
+
+sub truncateBaseQuality {
+# private helper method: truncate possible phrap score 100 to 99 
+    foreach my $q (@_) {   
+        $q = 99 if ($q > 99);
     }
 }
 
@@ -1073,12 +1082,12 @@ sub qualityClip {
 
 # analyse returned range
 
-    my $qualityrange = $QR - $QL + 1;
+    my $qualityrange = ($QR || 0) - ($QL ||0) + 1;
     my $minimumrange = $options{minimumrange} || 32;
         
     if ($qualityrange >= $minimumrange) {
-        $this->setLowQualityLeft($QL);
-        $this->setLowQualityRight($QR);
+        $this->setLowQualityLeft($QL)  if defined($QL);
+        $this->setLowQualityRight($QR) if defined($QR);
         return $qualityrange;
     }
     else {
