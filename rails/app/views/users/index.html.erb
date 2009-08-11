@@ -7,7 +7,7 @@
     <th align="left">Role</th>
   </tr>
 
-<% link_action = @me.has_administrator_role? || @me.has_manager_role? ? 'edit' : 'show' %>
+<% link_action = @me.can_edit_user? ? 'edit' : 'show' %>
 
 <% @users.each do |user| %>
   <tr>
@@ -25,7 +25,7 @@
 
 <br />
 
-<% if @me.has_administrator_role? || @me.has_manager_role? %>
+<% if @me.can_create_user? %>
 
 <%= link_to 'New user', :instance => params[:instance], :organism => params[:organism], :action => 'new' %>
 

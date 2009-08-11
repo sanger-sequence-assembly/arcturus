@@ -108,7 +108,7 @@
 
 <hr />
 
-<% if @me.has_administrator_role? || @me.has_manager_role? %>
+<% if @me.can_edit_project? %>
 <%=
   link_to 'Edit', :instance => params[:instance],
                   :organism => params[:organism],
@@ -125,7 +125,7 @@ Edit
                   :action => 'index'
 %>
 |
-<% if @me.has_administrator_role? || @me.has_manager_role? %>
+<% if @me.can_delete_project? %>
 <%=
   link_to 'Destroy', {:instance => params[:instance],
                       :organism => params[:organism],

@@ -54,6 +54,21 @@
                                       {:class => 'sidebarlink'}
          %>
       </p>
+    <% end %>
+
+    <% if params['organism'] && !@me.nil? && @me.can_edit_user? %>
+      <h3>Users</h3>
+      <p><%= link_to "User list", {:controller => 'users', 
+                                      :action => 'index', 
+                                      :instance => params['instance'],
+                                      :organism => params['organism']},
+                                      {:class => 'sidebarlink'}
+         %>
+      </p>
+    <% end %>
+
+    <h3>Session</h3>
+    <% if params['organism'] %>
       <p><%= link_to "My session", {:controller => 'sessions', 
                                     :action => 'profile', 
                                     :instance => params['instance'],
@@ -62,11 +77,10 @@
          %>
       </p>
     <% end %>
-
-    <h3>Session</h3>
       <p><%= link_to "Logout", {:controller => 'sessions', 
                                 :action => 'logout'},
-                               {:class => 'sidebarlink'}
+                               {:confirm => "Are you sure?",
+                                :class => 'sidebarlink'}
          %>
       </p>
   </div>

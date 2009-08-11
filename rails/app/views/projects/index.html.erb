@@ -87,7 +87,7 @@
 
 <hr />
 
-<% if @me.has_administrator_role? || @me.has_manager_role? || @me.has_finisher_role? %>
+<% if @me.can_create_project? %>
 <%=
    link_to 'New project', :instance => params[:instance],
                           :organism => params[:organism],

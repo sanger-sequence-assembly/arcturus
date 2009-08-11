@@ -10,6 +10,10 @@ class User < ActiveRecord::Base
 
   @@base = config['base']
 
+#
+# Methods to retrieve the user's name
+#
+
   def full_name
     if @my_full_name.nil?
       execute_ldap_lookup
@@ -31,6 +35,10 @@ class User < ActiveRecord::Base
     @my_family_name
   end
 
+#
+# These are the roles which are known to Arcturus
+#
+
   @@manager_roles = ['coordinator', 'team leader'].freeze
 
   @@administrator_roles = ['administrator'].freeze
@@ -42,6 +50,10 @@ class User < ActiveRecord::Base
   @@all_roles = @@manager_roles | @@administrator_roles | @@finisher_roles | @@annotator_roles | [ "none" ]
   @@all_roles.sort!
   @@all_roles.freeze
+
+#
+# Methods to test whether a user belongs to a given role
+#
 
   def has_finisher_role?
     @@finisher_roles.include?(role)
@@ -61,6 +73,34 @@ class User < ActiveRecord::Base
 
   def self.all_roles
     @@all_roles
+  end
+
+#
+# Methods to determine whether a user can perform a given operation
+#
+
+  def can_create_project?
+    has_finisher_role? || has_manager_role? || has_administrator_role?
+  end
+
+  def can_edit_project?
+    has_manager_role? || has_administrator_role?
+  end
+
+  def can_delete_project?
+    has_administrator_role?
+  end
+
+  def can_add_tag?
+    has_finisher_role? || has_manager_role? || has_administrator_role? || has_annotator_role?
+  end
+
+  def can_create_user?
+    has_manager_role? || has_administrator_role?
+  end
+
+  def can_edit_user?
+    has_manager_role? || has_administrator_role?
   end
 
 protected
