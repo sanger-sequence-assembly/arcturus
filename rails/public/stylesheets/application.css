@@ -78,6 +78,7 @@ div#sidebar {
   width: 10em;
   height: 100%;
   background: #99ccff;
+  padding-left: 1em;
 }
 
 div#flash {
@@ -91,5 +92,13 @@ div#content {
   background: white;
   padding-left: 1em;
   padding-bottom: 1em;
+}
+
+a.sidebarlink {
+  color: black;
+}
+
+a.sidebarlink:visited {
+  color: green;
 }
 

@@ -24,14 +24,51 @@
   <div id="bannerTitle">
     Arcturus <% if params['instance'] %> <%= ": #{params['instance']}" %> <% end %>
   </div>
-  <div id="bannerLogout">
-    <%= link_to "Logout", :controller => 'sessions', :action => 'logout' %>
-  </div>
 </div>
 
 <div id="columns">
   <div id="sidebar">
-    This is where the navigation links will go.
+    <% if params['instance'] %>
+      <h3>ORGANISMS</h3>
+      <p><%= link_to "Organism list", {:controller => 'arcturus', 
+                                       :action => 'index', 
+                                       :instance => params['instance']},
+                                      {:class => 'sidebarlink'}
+         %>
+      </p>
+    <% end %>
+
+    <% if params['organism'] %>
+      <h3><%= params['organism'] %></h3>
+      <p><%= link_to "Project list", {:controller => 'projects', 
+                                      :action => 'index', 
+                                      :instance => params['instance'],
+                                      :organism => params['organism']},
+                                      {:class => 'sidebarlink'}
+         %>
+      </p>
+      <p><%= link_to "Assembly list", {:controller => 'assemblies', 
+                                       :action => 'index', 
+                                       :instance => params['instance'],
+                                       :organism => params['organism']},
+                                      {:class => 'sidebarlink'}
+         %>
+      </p>
+      <p><%= link_to "My session", {:controller => 'sessions', 
+                                    :action => 'profile', 
+                                    :instance => params['instance'],
+                                    :organism => params['organism']},
+                                   {:class => 'sidebarlink'}
+         %>
+      </p>
+    <% end %>
+
+    <h3>Session</h3>
+      <p><%= link_to "Logout", {:controller => 'sessions', 
+                                :action => 'logout'},
+                               {:class => 'sidebarlink'}
+         %>
+      </p>
   </div>
 
   <div id="content">
