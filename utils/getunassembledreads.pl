@@ -189,11 +189,15 @@ while (my $nextword = shift @ARGV) {
 # open file handle for output via a Reporter module
 #----------------------------------------------------------------
 
-my $logger = new Logging($logfile);
+my $logger = new Logging();
 
 $logger->setStandardFilter($loglevel) if defined $loglevel; # reporting level
 
+$logger->stderr2stdout() if defined $loglevel;
+
 $logger->setBlock('debug',unblock=>1) if $debug;
+
+$logger->setSpecialStream($logfile,list=>1) if $logfile;
 
 #----------------------------------------------------------------
 # get the database connection
@@ -317,11 +321,13 @@ if ($excludelist) {
 }
 
 my %includehash;
-if ($excludelist) {
+if ($includelist) {
     my $namelist = &getNamesFromFile($includelist);
     foreach my $name (@$namelist) {
+        $logger->warning("duplicate read name $name on file $includelist") if $includehash{$name};
         $includehash{$name}++;
     }
+    $logger->warning(scalar(keys %includehash)." readnames to include");
 }
 
 $logger->info("Getting read IDs for unassembled reads");
@@ -368,6 +374,8 @@ my $excluded  = 0;
 
 while (my $remainder = scalar(@$readids)) {
 
+    $logger->flush();
+
     $blocksize = $remainder if ($blocksize > $remainder);
 
     my @readblock = splice (@$readids,0,$blocksize);
@@ -393,20 +401,23 @@ while (my $remainder = scalar(@$readids)) {
 
     $threshold = 1 if (defined($threshold) && $threshold < 1);
 
+    my $exported = 0;
     foreach my $read (@$reads) {
         my $readname = $read->getReadName();
+        $logger->special($readname);
+
         if ($includelist && !$includehash{$readname}) {
-            print STDERR "read $readname not in include list\n";
+            $logger->error("read $readname not in include list");
             $excluded++;
             next;
         }
         if ($excludelist && $excludehash{$readname}) {
-            print STDERR "read $readname excluded\n";
+            $logger->error("read $readname excluded");
             $excluded++;
             next;
         }
         if ($excludefilter && $readname =~ /$excludefilter/) {
-            print STDERR "read $readname excluded (filter)\n";
+            $logger->error("read $readname excluded (filter)");
             $excluded++;
             next;
         }
@@ -415,7 +426,7 @@ while (my $remainder = scalar(@$readids)) {
             unless ($read->qualityClip(clipmethod=>$clipmethod,
                                        threshold=>$threshold,
 				       minimum=>$minimumrange)) {
-                print STDERR "read $readname discarded after clipping\n";
+                $logger->error("read $readname discarded after clipping");
                 $discarded++;
                 next;
 	    }
@@ -424,9 +435,9 @@ while (my $remainder = scalar(@$readids)) {
         my $s = $read->getSequence();
         my $q = $read->getBaseQuality();
         unless ($s && $q && length($s) == scalar(@$q)) {
-            print STDERR "read $readname discarded because of conflicting "
-                       . "sequence lengths : DNA ".length($s)
-                       . "  q: ".scalar(@$q)."\n";
+            $logger->error("read $readname discarded because of conflicting "
+                         . "sequence lengths : DNA ".length($s)
+                         . "  q: ".scalar(@$q));
             $discarded++;
             next;
 	}
@@ -435,18 +446,28 @@ while (my $remainder = scalar(@$readids)) {
         $read->writeToFasta($FAS,$QLT,qualitymask=>$mask) if $FAS;
         $read->writeToFastq($FAQ,qualitymask=>$mask)      if $FAQ;
 
+        $exported++;
+        delete $includehash{$readname} if ($includelist);
+
         next unless ($mask && $QMASK);
 # export the quality range for the read if masking is used
         my $lql = $read->getLowQualityLeft();
         my $lqr = $read->getLowQualityRight();
-#print STDERR "writing to mask list $readname,$lql,$lqr \n";
         print $QMASK "$readname $lql $lqr\n";
     }
+    $logger->info("$exported reads written");
     undef @$reads;
 }
     
-print STDERR "$discarded reads ignored\n" if $discarded;
-print STDERR "$excluded reads excluded\n" if $excluded;
+$logger->error("$discarded reads ignored") if $discarded;
+$logger->error("$excluded reads excluded") if $excluded;
+
+if ($includelist && scalar(keys %includehash)) {
+    $logger->warning(scalar(keys %includehash)." specified reads not exported");
+    foreach my $readname (keys %includehash) {
+	$logger->info("$readname not a free read ?");
+    }
+}
 
 $adb->disconnect();
 
@@ -470,10 +491,13 @@ sub getNamesFromFile {
     &showUsage("Can't access $file for reading") unless $FILE;
 
     my @list;
-    while (defined (my $name = <$FILE>)) {
-        $name =~ s/^\s+|\s+$//g;
-        push @list, $name;
+    while (defined (my $record = <$FILE>)) {
+        $record =~ s/^\s+|\s+$//g;
+        my @names = split /\s+/,$record;
+        push @list, $names[0];
     }
+
+    $logger->info(scalar(@list)." names read from file $file");
 
     return [@list];
 }
@@ -486,6 +510,7 @@ sub testsection {
     @$readids = sort {$a <=> $b} @$readids;
 # assembled reads ?
     my $notfree = 0;
+    $logger->warning("Testing ".scalar(@$readids)." reads found");
     foreach my $readid (@$readids) {
         my $isfree = $adb->isUnassembledRead('read_id',$readid);
         next if $isfree;
@@ -500,11 +525,13 @@ sub testsection {
         $logger->error("duplicate read ID $readids->[$i]");
     }
 # testing against FREEREADS table
-    $logger->info("testing against FREEREADS view");
+    $logger->warning("testing against FREEREADS view");
     $logger->monitor('getIDsOfFreeReads',timing=>1);
+    $logger->flush();
     my $freereads = $adb->getIDsOfFreeReads(%options);
     $logger->monitor('getIDsOfFreeReads',timing=>1);
-    $logger->info("found ".scalar(@$freereads)." reads");
+    $logger->warning("found ".scalar(@$freereads)." reads");
+    $logger->flush();
  
     my $inventory = {};
     foreach my $readid (@$readids) {
