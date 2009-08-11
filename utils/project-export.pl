@@ -42,6 +42,8 @@ my $clipthreshold;
 my $endregiontrim;
 my $endregiononly;
 my $clipsymbol;
+my $filter_reads;
+my $restore_reads;
 my $gap4name;
 my $preview;
 my $append = 0;
@@ -50,7 +52,8 @@ my $validKeys  = "organism|o|instance|i|project|p|assembly|a|"
                . "fopn|fofn|ignore|scaffold|"
                . "caf|maf|fasta|quality|lock|minNX|minerva|"
                . "minimum|min|maximum|max|singletons|readsonly|"
-               . "mask|symbol|shrink|"
+#               . "mask|symbol|shrink|ref|readexcludefilter|"
+               . "mask|symbol|shrink|filterreads|fr|restorereads|rr|"
                . "qualityclip|qc|qclipthreshold|qct|qclipsymbol|qcs|"
                . "endregiontrim|ert|endregiononly|ero|gap4name|g4n|padded|"
                . "preview|confirm|batch|verbose|debug|help|h|test|append";
@@ -163,6 +166,20 @@ while (my $nextword = shift @ARGV) {
     if ($nextword eq '-max' || $nextword eq '-maximum') {
 	$maximum = shift @ARGV;
     }
+
+    if ($nextword eq '-restorereads' || $nextword eq '-rr') {
+        $restore_reads = 1;
+    }
+
+    if ($nextword eq '-filterreads' || $nextword eq '-fr') {
+        $filter_reads = 1;
+    }
+
+#    if ($nextword eq '-ref' || $nextword eq '-readexcludefilter') {
+#        $excludefilter = shift @ARGV;
+#        $excludefilter = '%.[pq][12][kl].%-%' if ($excludefilter eq 'standard');
+#        $excludefilter = qw($excludefilter);
+#    }
 
     $gap4name    = 1            if ($nextword eq '-gap4name');
     $gap4name    = 1            if ($nextword eq '-g4n');
@@ -389,6 +406,8 @@ if (defined($caffile)) {
     if ($readsonly) { # overrides singleton option
         $exportoptions{readsonly} = 1;
     }
+    $exportoptions{restore_masked_reads} = 1 if $restore_reads; 
+    $exportoptions{remove_invalid_read_names} = 1 if $filter_reads; 
 }
 elsif (defined($fastafile)) {
     $exportoptions{readsonly} = 1 if $readsonly;
@@ -606,6 +625,9 @@ sub showUsage {
                . "\t\tto size '2*mask+shrink'; shrink values smaller than mask length\n"
                . "\t\twill be reset to 'mask'\n";
     print STDERR "\n";
+    print STDOUT "-ref\t\t(readexcludefilter) regexp to filter readnames; use 'standard'\n";
+    print STDOUT "\t\tto filter out capillary read names mangled by Newbler assembler\n";
+    print STDOUT "\n";
     print STDERR "-minNX\t\treplace runs of at least minNX 'N's by 'X'-es\n";
     print STDERR "\n";
 #    print STDERR "-padded\t\t(no value) export padded consensus sequence only\n";
