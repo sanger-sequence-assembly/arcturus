@@ -23,7 +23,9 @@ my $organism;
 
 # the data source
 
-my $caffilename;            # must be specified
+my $caffilename;  # must be specified
+
+my $outfilename;  # may be specified
 
 # filter for mixed assembly capilary reads
 
@@ -36,11 +38,13 @@ my $progress = 1;
 my $loglevel;             
 my $logfile;
 
+my $caf;
+
 my $debug = 0;
 
 #------------------------------------------------------------------------------
 
-my $validkeys  = "organism|o|instance|i|caf|"
+my $validkeys  = "organism|o|instance|i|caf|out|"
                . "log|verbose|info|debug|noprogress|help|h";
 
 #------------------------------------------------------------------------------
@@ -71,6 +75,11 @@ while (my $nextword = shift @ARGV) {
 
     if ($nextword eq '-caf') {
         $caffilename  = shift @ARGV; # specify input file
+    }
+# output specification
+
+    if ($nextword eq '-out') {
+        $outfilename  = shift @ARGV; # specify file for caf output
     }
 
 # reporting
@@ -146,6 +155,17 @@ $adb->setLogger($logger);
 ContigFactory->setLogger($logger);
 
 Contig->setLogger($logger);
+
+#------------------------------------------------------------------------------
+# output, if specified
+#------------------------------------------------------------------------------
+
+my $CAF;
+if ($outfilename) {
+    $CAF = new FileHandle($outfilename,'w');
+}
+
+$CAF = *STDOUT unless $CAF;
 
 #------------------------------------------------------------------------------
 # scan the file and make an inventory of objects
@@ -232,8 +252,10 @@ foreach my $contigname (@contignames) {
 
     $logger->error("restored reads : $restored");
 
-    $contig->writeToCaf(*STDOUT);
+    $contig->writeToCaf($CAF);
 }
+
+close $CAF if $outfilename;
 
 $adb->disconnect();
 
