@@ -25,7 +25,7 @@ my ($delayed,$batch,$subdir,$superuser); my ($babel,$pcs3);
 my ($verbose,$confirm,$debug,$minerva);
 
 my $validKeys  = "organism|o|instance|i|alias|"
-               . "project|p|assembly|a|fopn|fofn|gap4name|"
+               . "project|p|assembly|a|fopn|fofn|gap4name|version|"
                . "import|export|script|noperl|problem|passon|po|"
                . "batch|nobatch|delayed|subdir|sd|r|superuser|su|"
                . "verbose|debug|minerva|confirm|submit|help|h";
@@ -66,6 +66,8 @@ while (my $nextword = shift @ARGV) {
     $fopn         = shift @ARGV    if ($nextword eq '-fofn');
 
     $gap4name     = shift @ARGV    if ($nextword eq '-gap4name');
+
+    $version      = shift @ARGV    if ($nextword eq '-version');
 
     $problem      = shift @ARGV    if ($nextword eq '-problem');
 
@@ -339,13 +341,13 @@ foreach my $project (@projects) {
             $command .= "$utilsdir/exportfromarcturus.pl "  if ($utilsdir =~ /ejz/); # test
             $command .= "-i $instance -o $organism ";
             $command .= "-p $project "; # or scaffold? mutually exclusive + test
-            $command .= "-s $script "    if $script;
-            $command .= "-db $gap4name " if $gap4name; # (if scaffold in wrapper script)
-            $command .= "-v $version " if $version;
-            $command .= "-su " if $superuser;
+            $command .= "-script $script "   if $script;
+            $command .= "-db $gap4name "     if $gap4name; # (if scaffold in wrapper script)
+            $command .= "-v $version "       if $version;
+            $command .= "-su "               if $superuser;
             $command .= "-rundir $currentpwd ";
-            $command .= "-debug " if $debug;
-            $command .= "-minerva " if $minerva;
+            $command .= "-debug "            if $debug;
+            $command .= "-minerva "          if $minerva;
 	    $command .= " @ARGV" if @ARGV; # passed on to export script
         }
         else {
@@ -539,6 +541,8 @@ sub showUsage {
     print STDERR "-fopn\t\t(fofn) file of project identifiers\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "\n";
+    print STDERR "-version\tof gap4 data base to be imported/exported\n";
     print STDERR "\n";
     print STDERR "-confirm\tstart execution / submit as batch job\n";
     print STDERR "-perl\t\t(TESTING) use perl script\n";
