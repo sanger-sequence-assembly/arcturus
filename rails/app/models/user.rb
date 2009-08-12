@@ -91,7 +91,15 @@ class User < ActiveRecord::Base
     has_administrator_role?
   end
 
-  def can_add_tag?
+  def can_create_tag?
+    has_finisher_role? || has_manager_role? || has_administrator_role? || has_annotator_role?
+  end
+
+  def can_edit_tag?
+    has_finisher_role? || has_manager_role? || has_administrator_role? || has_annotator_role?
+  end
+
+  def can_delete_tag?
     has_finisher_role? || has_manager_role? || has_administrator_role? || has_annotator_role?
   end
 
