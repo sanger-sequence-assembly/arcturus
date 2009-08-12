@@ -5,8 +5,8 @@ class ApplicationController < ActionController::Base
   # Scrub sensitive parameters from your log
   filter_parameter_logging :password
 
-  before_filter :login_required
   before_filter :get_database_connection
+  before_filter :login_required
 
   ARCTURUS_COOKIE_NAME = 'arcturus_auth_key_' + RAILS_ENV
 
