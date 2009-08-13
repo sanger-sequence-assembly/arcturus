@@ -3,11 +3,11 @@
 use strict;
 use TraceServer;
 
-my $terse = 0;
+my $terse = 1;
 
-if (scalar(@ARGV) > 0 && $ARGV[0] eq '-terse') {
+if (scalar(@ARGV) > 0 && $ARGV[0] eq '-full') {
     shift @ARGV;
-    $terse = 1;
+    $terse = 0;
 }
 
 # Connect
