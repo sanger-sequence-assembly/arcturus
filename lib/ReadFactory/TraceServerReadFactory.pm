@@ -200,6 +200,8 @@ sub getReadByName {
 	    $read->setPrimer("Custom");
 	    my $junk;
 	    ($template, $junk) = split(/\./, $readname);
+	} elsif ($srctype eq 'pool') {
+	    $clone = $srcname;
 	}
     }
 
