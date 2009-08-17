@@ -102,9 +102,14 @@ class AssembliesController < ApplicationController
   # LIST PROJECTS /assemblies/1/projects
 
   def projects
-    redirect_to :instance => params[:instance],
-                :organism => params[:organism],
-                :controller => 'projects',
-                :assembly_id => params[:id]
+    @projects = Project.find(:all,
+                             :conditions => "assembly_id = #{params[:id]}")
+
+    @assembly_id = params[:id];
+
+    respond_to do |format|
+      format.html { render :template => 'projects/index' }
+      format.xml  { render :template => 'projects/index', :xml => @projects }
+    end
   end
 end

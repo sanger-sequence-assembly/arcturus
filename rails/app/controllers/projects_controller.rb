@@ -3,14 +3,7 @@ class ProjectsController < ApplicationController
   # GET /projects.xml
 
   def index
-    @for_assembly = 0
-    if params[:assembly_id] then
-       @projects = Project.find(:all,
-                                :conditions => "assembly_id = #{params[:assembly_id]}")
-       @for_assembly = 1
-    else
-       @projects = Project.all
-    end
+    @projects = Project.all
 
     respond_to do |format|
       format.html # index.html.erb
