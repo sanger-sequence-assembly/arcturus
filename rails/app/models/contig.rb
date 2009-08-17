@@ -31,15 +31,16 @@ class Contig < ActiveRecord::Base
     end
   end
 
-  def to_fasta(verbose=false)
-    seq = get_consensus
+  def to_fasta(depad=false, verbose=false)
+    seq = get_consensus(depad)
     seqlen = seq.length
     fasta = String.new
     fasta.concat(">contig#{contig_id}")
+    pad_state = depad ? 'depadded' : 'padded'
 
     if verbose
       cstr = created.strftime("%Y-%m-%d_%H:%M:%S")
-      fasta.concat(" length=#{length} reads=#{nreads} created=#{cstr} project=#{project.name}")
+      fasta.concat(" length=#{seqlen} #{pad_state} reads=#{nreads} created=#{cstr} project=#{project.name}")
     end
 
     fasta.concat("\n")
