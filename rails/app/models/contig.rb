@@ -55,6 +55,26 @@ class Contig < ActiveRecord::Base
     Contig.find_by_sql("select * from CONTIG where contig_id in (select parent_id from C2CMAPPING where contig_id = #{contig_id}) order by contig_id desc")
   end
 
+  def depadded_to_padded_mapping
+    seq = get_consensus(false)
+
+    padchar = "-"[0]
+
+    pads = Array.new(seq.length) { |i| seq[i] == padchar ? nil : 0 }
+
+    d = 0
+
+    pads.each_index do |i|
+      if pads[i].nil?
+        d += 1
+      else
+        pads[i] = d
+      end
+    end
+
+    pads.delete_if { |i| i.nil? }
+  end
+
 private
 
   def validate

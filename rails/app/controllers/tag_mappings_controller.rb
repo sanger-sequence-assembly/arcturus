@@ -55,6 +55,10 @@ class TagMappingsController < ApplicationController
     @tag_mapping.tag = @contig_tag
     @tag_mapping.contig_id = params['contig_id']
 
+    if !params['depadded'].nil?
+      @tag_mapping.map_depadded_position_to_padded
+    end
+
     respond_to do |format|
       if (@tag_mapping.save!)
         flash[:notice] = 'TagMapping was successfully created.'

@@ -10,6 +10,14 @@ class TagMapping < ActiveRecord::Base
   validates_numericality_of :cfinal, :only_integer => true
   validates_inclusion_of :strand, :in => %w{ F R U }
 
+  def map_depadded_position_to_padded
+    contig = Contig.find(contig_id)
+    mapping = contig.depadded_to_padded_mapping
+
+    self.cstart = cstart + mapping[cstart - 1]
+    self.cfinal = cfinal + mapping[cfinal - 1]
+  end
+
 protected
 
   def validate
