@@ -9,12 +9,14 @@ use strict;
 
 use DBI;
 use DataSource;
+use Compress::Zlib;
 
 my $instance;
 my $organism;
 my $minlen = 5000;
 my $tagtype = 'RNDM';
 my $howmany;
+my $depadded = 0;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -25,6 +27,8 @@ while (my $nextword = shift @ARGV) {
     $tagtype = shift @ARGV if ($nextword eq '-tagtype');
 
     $howmany = shift @ARGV if ($nextword eq '-howmany');
+
+    $depadded = 1 if ($nextword eq '-depadded');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -49,7 +53,15 @@ unless (defined($dbh)) {
     die "getConnection failed";
 }
 
-my $query = "select contig_id,length from CURRENTCONTIGS where length >= ?";
+my $fields = "CC.contig_id,CC.length";
+
+$fields .= ",CS.sequence" if $depadded;
+
+my $tables = "CURRENTCONTIGS CC";
+
+$tables .= " left join CONSENSUS CS using(contig_id)" if $depadded;
+
+my $query = "select $fields from $tables where CC.length >= ?";
 
 my $sth = $dbh->prepare($query);
 &db_die("prepare($query) failed");
@@ -59,7 +71,13 @@ $sth->execute($minlen);
 
 my @contiginfo = ();
 
-while (my ($contig_id, $ctglen) = $sth->fetchrow_array()) {
+while (my ($contig_id, $ctglen, $sequence) = $sth->fetchrow_array()) {
+    if ($depadded) {
+	$sequence = uncompress($sequence);
+	$sequence =~ s/\-//g;
+	$ctglen = length($sequence);
+    }
+
     push @contiginfo, [$contig_id, $ctglen];
 }
 
@@ -103,4 +121,5 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -minlen\t\tMinimum contig length [default: 5000]\n";
     print STDERR "    -tagtype\t\tTag type [default: RNDM]\n";
+    print STDERR "    -depadded\t\tGenerate tag positions on depadded sequence\n";
 }

@@ -9,6 +9,7 @@ my $instance;
 my $organism;
 my $host;
 my $port;
+my $depadded = 0;
 
 my $verbose = 0;
 
@@ -27,6 +28,7 @@ while ($nextword = shift @ARGV) {
     $port          = shift @ARGV if ($nextword eq '-port');
 
     $verbose       = 1 if ($nextword eq '-verbose');
+    $depadded      = 1 if ($nextword eq '-depadded');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -66,6 +68,8 @@ while (my $line = <STDIN>) {
 		      'contig_tag[systematic_id]' => $systematic_id
 		      ];
 
+    push @{$parameters}, 'depadded' => 1 if $depadded;
+
     my $response = $browser->post($url, Accept => 'text/xml', Content => $parameters);
 
     die "Error processing tag $systematic_id (contig $contig_id $cstart:$cfinal) : " . $response->status_line
@@ -90,5 +94,6 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
+    print STDERR "-depadded\t\tTag positions are on depadded sequences\n";
     print STDERR "-verbose\t\tReport progress on stderr\n";
 }
