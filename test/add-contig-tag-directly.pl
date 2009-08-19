@@ -98,20 +98,20 @@ while (my $line = <STDIN>) {
 	&db_die("insert contig tag ($tagtype, $systematic_id) failed");
 
 	$tag_id = $dbh->{'mysql_insertid'};
-
-	if ($depadded) {
-	    $depadded_to_padded = &get_depadded_to_padded_offsets($sth_get_consensus, $contig_id)
-		unless ($contig_id == $last_contig_id);
-
-	    $cstart += $depadded_to_padded->[$cstart - 1];
-	    $cfinal += $depadded_to_padded->[$cfinal - 1];
-
-	    $last_contig_id = $contig_id;
-	}
-
-	$sth_insert_tag_mapping->execute($tag_id,$contig_id,$cstart,$cfinal,$strand);
-	&db_die("insert tag mapping ($tag_id,$contig_id,$cstart,$cfinal,$strand) failed");
     }
+
+    if ($depadded) {
+	$depadded_to_padded = &get_depadded_to_padded_offsets($sth_get_consensus, $contig_id)
+	    unless ($contig_id == $last_contig_id);
+	
+	$cstart += $depadded_to_padded->[$cstart - 1];
+	$cfinal += $depadded_to_padded->[$cfinal - 1];
+	
+	$last_contig_id = $contig_id;
+    }
+    
+    $sth_insert_tag_mapping->execute($tag_id,$contig_id,$cstart,$cfinal,$strand);
+    &db_die("insert tag mapping ($tag_id,$contig_id,$cstart,$cfinal,$strand) failed");
 
     print STDERR "Tag $systematic_id (contig $contig_id $cstart:$cfinal) added OK\n" if $verbose;
 }
