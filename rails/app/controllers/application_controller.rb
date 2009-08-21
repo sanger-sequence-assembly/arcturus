@@ -5,8 +5,8 @@ class ApplicationController < ActionController::Base
   # Scrub sensitive parameters from your log
   filter_parameter_logging :password
 
-  before_filter :login_required
   before_filter :get_database_connection
+  before_filter :login_required
 
   ARCTURUS_COOKIE_NAME = 'arcturus_auth_key_' + RAILS_ENV
 
@@ -20,6 +20,13 @@ private
 
   def login_required
     find_user_from_session || find_user_from_cookie || find_user_from_api_key || force_user_login
+
+    begin
+      @me = User.find(session[:user])
+    rescue ActiveRecord::RecordNotFound
+      @me = User.new
+      @me.username = session[:user]
+    end
   end
 
   def find_user_from_session

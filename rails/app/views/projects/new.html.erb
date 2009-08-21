@@ -83,30 +83,14 @@
 
   <br />
 
-  <table cellspacing="20">
-
-  <tr><td align="left" bgcolor='orange'> <%= f.submit 'Create this project' %> </td></tr>
-
-  </table>
+<%= f.submit 'Create this project' %> 
 
 <% end %>
 
-  <table cellspacing="20">
-  <tr><td align="left" bgcolor='lightblue'>
-    <% @linkhash = { :instance => params[:instance],
-                     :organism => params[:organism],
-                     :action => 'index'}
-       if params['assembly'] then 
-         @linkhash[:assembly_id] = params['assembly']
-       end 
-     %>
+<hr />
 
-    <%= link_to 'Go back to project overview', @linkhash %>
-
-  </td></tr>
-  </table>
-
-
-  </table>
-
-<p>
+<%= link_to 'Projects', 
+        :instance => params[:instance],
+        :organism => params[:organism],
+        :action => 'index'
+%>

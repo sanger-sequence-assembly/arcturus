@@ -105,9 +105,11 @@ class ContigsController < ApplicationController
   def sequence
     @contig = Contig.find(params[:id])
 
+    @depad = !params[:depad].nil? && params[:depad] == 'true'
+
     respond_to do |format|
       format.html
-      format.text  { render :text => @contig.to_fasta(true) }
+      format.text  { render :text => @contig.to_fasta(@depad, true) }
     end
   end
 

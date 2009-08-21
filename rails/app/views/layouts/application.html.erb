@@ -1,0 +1,96 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+       "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <meta http-equiv="content-type" content="text/html;charset=UTF-8" />
+  <title>Arcturus: <%= controller.controller_name.capitalize %></title>
+  <%= stylesheet_link_tag 'application' %>
+  <style type="text/css">
+    <% if RAILS_ENV == 'development' %>
+      div#banner { background: #ff9900;}
+      div#columns { background: #ff9900;}
+      div#sidebar { background: #ff9900;}
+    <% elsif RAILS_ENV == 'test' %>
+      div#banner { background: #33ff66;}
+      div#columns { background: #33ff66;}
+      div#sidebar { background: #33ff66;}
+    <% end %>
+  </style>
+</head>
+<body>
+
+<div id="banner">
+  <div id="bannerTitle">
+    Arcturus <% if params['instance'] %> <%= ": #{params['instance']}" %> <% end %>
+  </div>
+</div>
+
+<div id="columns">
+  <div id="sidebar">
+    <% if params['instance'] %>
+      <h3>ORGANISMS</h3>
+      <p><%= link_to "Organism list", {:controller => 'arcturus', 
+                                       :action => 'index', 
+                                       :instance => params['instance']},
+                                      {:class => 'sidebarlink'}
+         %>
+      </p>
+    <% end %>
+
+    <% if params['organism'] %>
+      <h3><%= params['organism'] %></h3>
+      <p><%= link_to "Project list", {:controller => 'projects', 
+                                      :action => 'index', 
+                                      :instance => params['instance'],
+                                      :organism => params['organism']},
+                                      {:class => 'sidebarlink'}
+         %>
+      </p>
+      <p><%= link_to "Assembly list", {:controller => 'assemblies', 
+                                       :action => 'index', 
+                                       :instance => params['instance'],
+                                       :organism => params['organism']},
+                                      {:class => 'sidebarlink'}
+         %>
+      </p>
+    <% end %>
+
+    <% if params['organism'] && !@me.nil? && @me.can_edit_user? %>
+      <h3>Users</h3>
+      <p><%= link_to "User list", {:controller => 'users', 
+                                      :action => 'index', 
+                                      :instance => params['instance'],
+                                      :organism => params['organism']},
+                                      {:class => 'sidebarlink'}
+         %>
+      </p>
+    <% end %>
+
+    <h3>Session</h3>
+    <% if params['organism'] %>
+      <p><%= link_to "My session", {:controller => 'sessions', 
+                                    :action => 'profile', 
+                                    :instance => params['instance'],
+                                    :organism => params['organism']},
+                                   {:class => 'sidebarlink'}
+         %>
+      </p>
+    <% end %>
+      <p><%= link_to "Logout", {:controller => 'sessions', 
+                                :action => 'logout'},
+                               {:confirm => "Are you sure?",
+                                :class => 'sidebarlink'}
+         %>
+      </p>
+  </div>
+
+  <div id="content">
+    <div id="flash">
+      <%= flash[:notice] %>
+    </div>
+    <%= yield :layout %>
+  </div>
+</div>
+</body>
+</html>

@@ -31,15 +31,16 @@ class Contig < ActiveRecord::Base
     end
   end
 
-  def to_fasta(verbose=false)
-    seq = get_consensus
+  def to_fasta(depad=false, verbose=false)
+    seq = get_consensus(depad)
     seqlen = seq.length
     fasta = String.new
     fasta.concat(">contig#{contig_id}")
+    pad_state = depad ? 'depadded' : 'padded'
 
     if verbose
       cstr = created.strftime("%Y-%m-%d_%H:%M:%S")
-      fasta.concat(" length=#{length} reads=#{nreads} created=#{cstr} project=#{project.name}")
+      fasta.concat(" length=#{seqlen} #{pad_state} reads=#{nreads} created=#{cstr} project=#{project.name}")
     end
 
     fasta.concat("\n")
@@ -52,6 +53,26 @@ class Contig < ActiveRecord::Base
 
   def parents
     Contig.find_by_sql("select * from CONTIG where contig_id in (select parent_id from C2CMAPPING where contig_id = #{contig_id}) order by contig_id desc")
+  end
+
+  def depadded_to_padded_mapping
+    seq = get_consensus(false)
+
+    padchar = "-"[0]
+
+    pads = Array.new(seq.length) { |i| seq[i] == padchar ? nil : 0 }
+
+    d = 0
+
+    pads.each_index do |i|
+      if pads[i].nil?
+        d += 1
+      else
+        pads[i] = d
+      end
+    end
+
+    pads.delete_if { |i| i.nil? }
   end
 
 private

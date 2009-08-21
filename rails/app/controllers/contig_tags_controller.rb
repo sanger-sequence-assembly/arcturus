@@ -52,6 +52,11 @@ class ContigTagsController < ApplicationController
   # POST /contig_tags
   # POST /contig_tags.xml
   def create
+    unless @me.can_create_tag?
+      render :text => "You are not authorised to create tags", :status => :unauthorized
+      return
+    end
+
     @contig_tag = ContigTag.new(params[:contig_tag])
 
     respond_to do |format|
@@ -72,6 +77,11 @@ class ContigTagsController < ApplicationController
   # PUT /contig_tags/1
   # PUT /contig_tags/1.xml
   def update
+    unless @me.can_edit_tag?
+      render :text => "You are not authorised to create tags", :status => :unauthorized
+      return
+    end
+
     @contig_tag = ContigTag.find_by_systematic_id(params[:id]) || ContigTag.find(params[:id])
 
     respond_to do |format|
@@ -89,6 +99,11 @@ class ContigTagsController < ApplicationController
   # DELETE /contig_tags/1
   # DELETE /contig_tags/1.xml
   def destroy
+    unless @me.can_delete_tag?
+      render :text => "You are not authorised to delete tags", :status => :unauthorized
+      return
+    end
+
     @contig_tag = ContigTag.find_by_systematic_id(params[:id]) || ContigTag.find(params[:id])
     @contig_tag.destroy
 
