@@ -44,11 +44,20 @@ class TagMappingsController < ApplicationController
   # POST /tag_mappings
   # POST /tag_mappings.xml
   def create
+    unless @me.can_create_tag?
+      render :text => "You are not authorised to create tags", :status => :unauthorized
+      return
+    end
+
     @contig_tag = ContigTag.find_or_create_by_systematic_id_and_tagtype(params[:contig_tag])
 
     @tag_mapping = TagMapping.new(params[:tag_mapping])
     @tag_mapping.tag = @contig_tag
     @tag_mapping.contig_id = params['contig_id']
+
+    if !params['depadded'].nil?
+      @tag_mapping.map_depadded_position_to_padded
+    end
 
     respond_to do |format|
       if (@tag_mapping.save!)
@@ -65,6 +74,11 @@ class TagMappingsController < ApplicationController
   # PUT /tag_mappings/1
   # PUT /tag_mappings/1.xml
   def update
+    unless @me.can_edit_tag?
+      render :text => "You are not authorised to create tags", :status => :unauthorized
+      return
+    end
+
     @tag_mapping = TagMapping.find(params[:id])
 
     respond_to do |format|
@@ -86,6 +100,11 @@ class TagMappingsController < ApplicationController
   # DELETE /tag_mappings/1
   # DELETE /tag_mappings/1.xml
   def destroy
+    unless @me.can_delete_tag?
+      render :text => "You are not authorised to delete tags", :status => :unauthorized
+      return
+    end
+
     @tag_mapping = TagMapping.find(params[:id])
     @tag_mapping.destroy
 

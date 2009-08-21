@@ -2,7 +2,8 @@ ActionController::Routing::Routes.draw do |map|
   map.connect "login", :controller => 'sessions', :action => 'login'
   map.connect "logout", :controller => 'sessions', :action => 'logout'
   map.connect "access_denied", :controller => 'sessions', :action => 'access_denied'
-  map.connect "profile", :controller => 'sessions', :action => 'profile'
+
+  map.connect "/:instance/:organism/profile", :controller => 'sessions', :action => 'profile'
 
   map.resources :assemblies,
                   :path_prefix => "/:instance/:organism",
@@ -12,8 +13,7 @@ ActionController::Routing::Routes.draw do |map|
   map.resources :projects,
                   :path_prefix => "/:instance/:organism",
                   :member => { :contigs => :get,
-                               :export => :get,
-                               :delete_confirm => :get
+                               :export => :get
                              }
 
   map.resources :contigs,

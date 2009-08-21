@@ -28,6 +28,7 @@
       <%=
         link_to project.name, :instance => params[:instance],
                               :organism => params[:organism],
+                              :controller => 'projects',
                               :action => 'show',
                               :id => project
       %>
@@ -71,13 +72,23 @@
  
     <td>
       <%= 
-         link_to 'List contigs', :instance => params[:instance], :organism => params[:organism], :action => 'contigs', :id => project
+         link_to 'List contigs', :instance => params[:instance],
+                                 :organism => params[:organism],
+                                 :controller => 'projects',
+                                 :action => 'contigs',
+                                 :id => project
       %>
     </td>
 
    <td>
       <%=
-         link_to 'Export contigs', :instance => params[:instance], :organism => params[:organism], :action => 'export', :id => project, :format => "text"
+         link_to 'Export contigs', :instance => params[:instance],
+                                   :organism => params[:organism],
+                                   :controller => 'projects',
+                                   :action => 'export',
+                                   :id => project,
+                                   :format => "text",
+                                   :depad => 'true'
        %>
     </td>
 
@@ -85,11 +96,16 @@
 <% end %>
 </table>
 
-<br />
+<hr />
 
+<% if @me.can_create_project? %>
 <%=
    link_to 'New project', :instance => params[:instance],
                           :organism => params[:organism],
-                          :assembly => params[:assembly_id],
+                          :controller => 'projects',
+                          :assembly => @assembly_id,
                           :action => 'new'
 %>
+<% else %>
+New project
+<% end %>

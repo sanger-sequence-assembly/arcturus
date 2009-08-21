@@ -2,7 +2,9 @@ class UsersController < ApplicationController
   # GET /users
   # GET /users.xml
   def index
-    @users = User.all
+    @users = User.find(:all, :conditions => "role is null or role != 'assembler'")
+
+    @users.sort! { |a,b| a.family_name <=> b.family_name || a.given_name <=> b.given_name }
 
     respond_to do |format|
       format.html # index.html.erb
@@ -26,7 +28,7 @@ class UsersController < ApplicationController
   def new
     @user = User.new
 
-    @roles = [ 'finisher', 'coordinator', 'team leader', 'administrator' ]
+    @roles = User.all_roles
 
     respond_to do |format|
       format.html # new.html.erb
@@ -38,7 +40,13 @@ class UsersController < ApplicationController
   def edit
     @user = User.find(params[:id])
 
-    @roles = [ 'finisher', 'coordinator', 'team leader', 'administrator' ]
+    @roles = User.all_roles
+
+    respond_to do |format|
+      format.html # edit.html.erb
+      format.xml  { render :xml => @user }
+    end
+
   end
 
   # POST /users
@@ -46,10 +54,12 @@ class UsersController < ApplicationController
   def create
     @user = User.new
     @user.username = params[:user]['username']
-    @user.role = params[:user]['role']
+
+    new_role = params[:user]['role']
+    @user.role = new_role == 'none' ? nil : new_role
 
     respond_to do |format|
-      if @user.save
+      if @user.save!
         flash[:notice] = 'User was successfully created.'
         format.html { redirect_to({:action => "show", :instance => params[:instance], :organism => params[:organism], :id => @user}) }
         format.xml  { render :xml => @user, :status => :created, :location => @user }
@@ -64,6 +74,10 @@ class UsersController < ApplicationController
   # PUT /users/1.xml
   def update
     @user = User.find(params[:user]['username'])
+
+    if params[:user]['role'] == 'none'
+      params[:user]['role'] = nil
+    end
 
     respond_to do |format|
       if @user.update_attributes(params[:user])

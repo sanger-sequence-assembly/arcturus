@@ -1,4 +1,4 @@
-<h1>My Profile</h1>
+<h1><%= @title %></h1>
 
 <table cellpadding="5">
 
@@ -11,6 +11,14 @@
     <td>Username</td>
     <td><%= @my_session.username %></td>
   </tr>
+
+<% if params['organism'] %>
+  <tr>
+    <td>Role</td>
+    <td><%= @role.nil? ? "[NONE]" : @role %></td>
+  </tr>
+  
+<% end %>
 
   <tr>
     <td>API key</td>

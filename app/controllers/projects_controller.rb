@@ -3,15 +3,7 @@ class ProjectsController < ApplicationController
   # GET /projects.xml
 
   def index
-
-    @for_assembly = 0
-    if params[:assembly_id] then
-       @projects = Project.find(:all,
-                                :conditions => "assembly_id = #{params[:assembly_id]}")
-       @for_assembly = 1
-    else
-       @projects = Project.all
-    end
+    @projects = Project.all
 
     respond_to do |format|
       format.html # index.html.erb
@@ -44,7 +36,7 @@ class ProjectsController < ApplicationController
 
     @project = Project.new
 
-    @users = User.find(:all, :order => "username")
+    @users = user_list_for_owner
 
     @status = Project.status_enumeration
 
@@ -60,11 +52,7 @@ class ProjectsController < ApplicationController
 
     @assemblies = Assembly.current_assemblies
 
-    @users = User.find(:all, :order => "username")
-
-    nobody = User.new
-    nobody.username = 'nobody'
-    @users << nobody
+    @users = user_list_for_owner
 
     @status = Project.status_enumeration
   end
@@ -78,7 +66,7 @@ class ProjectsController < ApplicationController
 
     respond_to do |format|
       if @project.save
-        flash[:notice] = 'Project was successfully created.'
+        flash[:notice] = "Project #{@project.name} was successfully created."
         format.html { redirect_to( { :action => "index",
                                      :instance => params[:instance], 
                                      :organism => params[:organism] }) }
@@ -116,10 +104,6 @@ class ProjectsController < ApplicationController
 
   # DELETE /projects/1
   # DELETE /projects/1.xml
-  def delete_confirm
-    @project = Project.find(params[:id])
-  end      
-
   def destroy
     @project = Project.find(params[:id])
 
@@ -144,52 +128,36 @@ class ProjectsController < ApplicationController
 
     respond_to do |format|
       format.html
+      format.text
       format.xml { render :xml => @contigs }
     end
   end
 
-  # EXPORT CONTIGS /projects/export_contigs/1
-  def export_contigs_confirm
-    @project = Project.find(params[:id])
-  end 
-
+  # EXPORT CONTIGS /projects/1/export
   def export
     @project = Project.find(params[:id])
     @contigs = @project.current_contigs
 
+    @depad = !params[:depad].nil? && params[:depad] == 'true'
+
     respond_to do |format|
       format.html
       format.text
+      format.xml { render :xml => @contigs }
     end
   end
 
-  def export_contigs_to_file
-    @project = Project.find(params[:id])
-    @contigs = @project.current_contigs
-    @fastafile = params[:file]
+private
 
-    respond_to do |format|
-      format.html
-    end
+  def user_list_for_owner
+    users = User.find(:all)
 
-    file = File.open(@fastafile, modestring="w")
-    
-    @contigs.each do |c| 
-       file.write(c.to_fasta)
-    end
- 
-    file.close
+    users.sort! { |a,b| a.family_name <=> b.family_name || a.given_name <=> b.given_name }
+
+    nobody = User.new
+    nobody.username = 'nobody'
+    users << nobody
+
+    users
   end
-
-protected
-
-  def users_extended
-    @users = User.find(:all, :order => "username")
-# and add an empty user up front
-    @empty_user = User.new()
-    @empty_user.username = nil
-    @users.unshift(@empty_user);
-    @users
-  end
-
 end
