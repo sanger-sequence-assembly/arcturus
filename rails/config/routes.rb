@@ -3,7 +3,6 @@ ActionController::Routing::Routes.draw do |map|
   map.connect "logout", :controller => 'sessions', :action => 'logout'
   map.connect "access_denied", :controller => 'sessions', :action => 'access_denied'
 
-  map.connect "profile", :controller => 'sessions', :action => 'profile'
   map.connect "/:instance/:organism/profile", :controller => 'sessions', :action => 'profile'
 
   map.resources :assemblies,

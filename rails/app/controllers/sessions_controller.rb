@@ -1,6 +1,6 @@
 class SessionsController < ApplicationController
-  skip_before_filter :login_required
-  skip_before_filter :get_database_connection
+  skip_before_filter :login_required, :only => :login
+  skip_before_filter :get_database_connection, :only => [:login, :logout]
 
   def login
     return unless request.post?
