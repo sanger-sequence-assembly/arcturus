@@ -441,8 +441,6 @@ public class ReadCAFWriter {
 					System.in));
 
 			while (true) {
-				System.out.print(">");
-
 				String line = reader.readLine();
 
 				if (line == null)
