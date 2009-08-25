@@ -28,7 +28,8 @@ class ContigTagsController < ApplicationController
 
       respond_to do |format|
         format.html # find.html.erb
-        format.xml  # find.erb
+        format.xml  { render :xml => @mappings.to_xml(:include => :tag) }
+        format.json { render :layout => false, :json => @mappings.to_json(:include => :tag) }
       end
     end
   end
