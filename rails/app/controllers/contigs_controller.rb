@@ -10,6 +10,17 @@ class ContigsController < ApplicationController
     end
   end
 
+  # GET /contigs/current
+  def current
+    @contigs = Contig.current_contigs(params[:minlen])
+
+    respond_to do |format|
+      format.html { render :template => 'contigs/index.html' }
+      format.json { render :layout => false, :json => @contigs.to_json }
+      format.xml  { render :xml => @contigs }
+    end
+  end
+
   # GET /contigs/1
   # GET /contigs/1.xml
   def show
