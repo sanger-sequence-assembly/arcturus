@@ -113,6 +113,19 @@ class ContigsController < ApplicationController
     end
   end
 
+  # EXPORT CURRENT CONTIGS /contigs/export
+  def export
+    @contigs = Contig.current_contigs(params[:minlen])
+
+    @depad = !params[:depadded].nil? && params[:depadded] == 'true'
+
+    respond_to do |format|
+      format.html { render :template => 'projects/export.html' }
+      format.text { render :template => 'projects/export.text' }
+      format.xml { render :xml => @contigs }
+    end
+  end
+
   # SHOW PARENTS /contigs/1/parents
   def parents
     @contig = Contig.find(params[:id])

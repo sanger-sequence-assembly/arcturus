@@ -14,6 +14,11 @@ class Contig < ActiveRecord::Base
   has_many :tags, :through => :tag_mappings
 
   @@inflater = Zlib::Inflate.new
+
+  def self.current_contigs(minlen = 0)
+    minlen = minlen.to_i
+    Contig.find_by_sql("select * from CONTIG where contig_id in (select contig_id from CURRENTCONTIGS where length > #{minlen})")
+  end
  
   def get_consensus(depad=false)
     query = "select sequence from CONSENSUS where contig_id = #{contig_id}"

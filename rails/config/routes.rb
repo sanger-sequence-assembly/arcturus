@@ -16,12 +16,16 @@ ActionController::Routing::Routes.draw do |map|
                                :export => :get
                              }
 
+  map.connect "/:instance/:organism/contigs/export", :controller => 'contigs', :action => 'export'
+  map.connect "/:instance/:organism/contigs/export.:format", :controller => 'contigs', :action => 'export'
+
   map.resources :contigs,
                   :path_prefix => "/:instance/:organism",
                   :member => { :tags => :get,
                                :add_tag => :get,
                                :sequence => :get,
-                               :parents => :get
+                               :parents => :get,
+                               :export => :get
                              }
 
   map.resources :contig_tags,
