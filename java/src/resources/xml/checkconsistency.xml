@@ -56,12 +56,15 @@
 		</description>
 		
 		<query>
-			select readname,hits from DUPLICATEREADS left join READINFO
-			using(read_id)
+		        select R.readname,DR.hits,CC.contig_id,P.name,CC.length,CC.nreads,CC.created,M.cstart,M.cfinish,M.direction
+		        from DUPLICATEREADS DR left join (READINFO R,SEQ2READ SR,MAPPING M,CURRENTCONTIGS CC,PROJECT P)
+		        on (DR.read_id=R.read_id)
+		        where R.read_id=SR.read_id and SR.seq_id=M.seq_id and M.contig_id=CC.contig_id and CC.project_id=P.project_id
+		        order by DR.read_id asc,CC.contig_id asc
 		</query>
 		
 		<format>
-			Read {0} appears {1,number,#} times
+			Read {0} appears {1,number,#} times and is in current contig {2,number,#} ({3}, {4,number,#} bp, {5,number,#} reads, created at {6,time} on {6,date}) from {7,number,#} to {8,number,#} in {9} sense
 		</format>
 	</test>
 
