@@ -47,7 +47,7 @@ unless (defined($organism) &&
 
 my $ds = new DataSource(-instance => $instance, -organism => $organism);
 
-my $dbh = $ds->getConnection({RaiseError => 1, PrintError => 1});
+my $dbh = $ds->getConnection(-options => {RaiseError => 1, PrintError => 1});
 
 unless (defined($dbh)) {
     print STDERR "Failed to connect to DataSource(instance=$instance, organism=$organism)\n";
