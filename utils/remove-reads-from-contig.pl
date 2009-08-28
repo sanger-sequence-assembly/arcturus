@@ -68,6 +68,14 @@ my $new_contig_id = &copyContig($dbh, $old_contig_id);
 
 &removeSelectedSequences($dbh, $new_contig_id, $seqids);
 
+unless (&confirmContigIntegrity($dbh, $new_contig_id)) {
+    &report("\n*****\n*****\n***** The new contig contains one or more zero-depth regions\n*****");
+    &report("***** ROLLING BACK CHANGES\n*****\n*****");
+    $dbh->rollback();
+    $dbh->disconnect();
+    exit(1);
+}
+
 my ($left,$right) = &determineNewContigExtents($dbh, $new_contig_id);
 
 &adjustMappings($dbh, $new_contig_id, $left) if ($left > 1);
@@ -226,6 +234,34 @@ sub removeSelectedSequences {
     }
 
     $sth->finish();
+}
+
+sub confirmContigIntegrity {
+    my $dbh = shift;
+    my $new_contig_id = shift;
+
+    &report("=== confirmContigIntegrity($new_contig_id) ===");
+
+    my $query = "SELECT cstart,cfinish from MAPPING where contig_id = ? order by cstart asc";
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute($new_contig_id);
+
+    my $right = -1;
+
+    my $gaps = 0;
+
+    while (my ($cstart,$cfinish) = $sth->fetchrow_array()) {
+	if ($right > 0 && $cstart > $right) {
+	    $gaps++;
+	    &report("\t***** Gap from " . ($right + 1) . " to " . ($cstart - 1) . " *****");
+	}
+
+	$right = $cfinish if ($cfinish > $right);
+    }
+
+    return $gaps == 0;
 }
 
 sub determineNewContigExtents {
