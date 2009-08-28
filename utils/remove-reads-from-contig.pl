@@ -91,6 +91,7 @@ my $new_contig_length = 1 + $right - $left;
 if ($commit) {
     &report("### COMMITTING CHANGES ###");
     $dbh->commit() or die $dbh->errstr;
+    &report("\n#####\n#####\n##### The new contig $new_contig_id replaces contig $old_contig_id\n#####\n#####");
 } else {
     &report("### ROLLING BACK CHANGES ###");
     $dbh->rollback() or die $dbh->errstr;
