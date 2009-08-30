@@ -547,5 +547,7 @@ sub showUsage {
     print STDERR "    -organism\t\tName of organism\n";
     print STDERR "\n";
     print STDERR "    -contig\t\tID of contig\n";
+    print STDERR "\n";
     print STDERR "    -readnames\t\tComma-separated list of readnames to be removed\n";
+    print STDERR "\t\t\t(Names may include wildcards)\n";
 }
