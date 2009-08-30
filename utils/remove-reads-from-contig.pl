@@ -97,11 +97,11 @@ my $new_contig_length = 1 + $right - $left;
 &fixNewContigRecord($dbh, $new_contig_id);
 
 if ($commit) {
-    &report("### COMMITTING CHANGES ###");
+    &report("##### COMMITTING CHANGES #####");
     $dbh->commit() or die $dbh->errstr;
     &report("\n#####\n#####\n##### The new contig $new_contig_id replaces contig $old_contig_id\n#####\n#####");
 } else {
-    &report("### ROLLING BACK CHANGES ###");
+    &report("##### ROLLING BACK CHANGES #####");
     $dbh->rollback() or die $dbh->errstr;
 }
 
@@ -151,23 +151,29 @@ sub getSequenceIDsForReadnames {
 
     my $seqids = [];
 
-    my $query = "select M.seq_id" .
+    my $query = "select R.readname,M.seq_id" .
 	" from MAPPING M,SEQ2READ SR,READINFO R" .
 	" where M.contig_id = ? and M.seq_id = SR.seq_id and SR.read_id = R.read_id" .
-	" and R.readname = ?";
+	" and R.readname like ?";
 
     my $sth = $dbh->prepare($query);
 
-    foreach my $readname (split(/,/, $readnames)) {
-	$sth->execute($old_contig_id, $readname);
+    foreach my $readnamelike (split(/,/, $readnames)) {
+	$readnamelike =~ tr/*/%/;
 
-	my ($seqid) = $sth->fetchrow_array();
+	$sth->execute($old_contig_id, $readnamelike);
 
-	die "Read $readname is not in contig $old_contig_id" unless defined($seqid);
+	my $hits = 0;
 
-	push @{$seqids}, $seqid;
+	while (my ($readname,$seqid) = $sth->fetchrow_array()) {
+	    push @{$seqids}, $seqid;
 
-	&report("\tRead $readname --> sequence $seqid");
+	    &report("\tRead $readname --> sequence $seqid");
+
+	    $hits++;
+	}
+
+	die "Read $readnamelike is not in contig $old_contig_id" unless $hits;
     }
 
     $sth->finish();
@@ -369,6 +375,8 @@ sub copyTagMappings {
     my $rc = $sth->execute($new_contig_id, $old_contig_id);
 
     $sth->finish();
+
+    $rc = "no" unless $rc > 0;
 
     &report("\tInserted $rc new rows into TAG2CONTIG");
 }
