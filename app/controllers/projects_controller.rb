@@ -138,7 +138,7 @@ class ProjectsController < ApplicationController
     @project = Project.find(params[:id])
     @contigs = @project.current_contigs
 
-    @depad = !params[:depad].nil? && params[:depad] == 'true'
+    @depad = !params[:depadded].nil? && params[:depadded] == 'true'
 
     respond_to do |format|
       format.html
