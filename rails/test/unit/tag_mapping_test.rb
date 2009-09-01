@@ -8,6 +8,12 @@ class TagMappingTest < ActiveSupport::TestCase
     @default_tag     = CONTIGTAG(:default_tag)
     @test_tag_2      = CONTIGTAG(:test_tag_2)
     @test_tag_3      = CONTIGTAG(:test_tag_3)
+    @default_mapping  = TAG2CONTIG(:default_mapping)
+    @sacrificial_mapping = TAG2CONTIG(:sacrificial_mapping)
+  end
+
+  test "internal consistency" do
+    assert_equal(@default_tag.id, @default_mapping.tag.id)
   end
 
   test "invalid with missing attributes" do

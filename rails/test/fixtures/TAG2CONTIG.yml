@@ -5,3 +5,13 @@ default_mapping:
   cstart:           1
   cfinal:           100
   strand:           "F"
+  comment:          "default mapping"
+
+sacrificial_mapping:
+  id:               2
+  contig_id:        1
+  tag_id:           2
+  cstart:           101
+  cfinal:           200
+  strand:           "F"
+  comment:          "sacrificial mapping"
