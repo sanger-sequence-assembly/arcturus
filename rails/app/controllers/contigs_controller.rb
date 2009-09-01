@@ -10,6 +10,17 @@ class ContigsController < ApplicationController
     end
   end
 
+  # GET /contigs/current
+  def current
+    @contigs = Contig.current_contigs(params[:minlen])
+
+    respond_to do |format|
+      format.html { render :template => 'contigs/index.html' }
+      format.json { render :layout => false, :json => @contigs.to_json }
+      format.xml  { render :xml => @contigs }
+    end
+  end
+
   # GET /contigs/1
   # GET /contigs/1.xml
   def show
@@ -110,6 +121,19 @@ class ContigsController < ApplicationController
     respond_to do |format|
       format.html
       format.text  { render :text => @contig.to_fasta(@depad, true) }
+    end
+  end
+
+  # EXPORT CURRENT CONTIGS /contigs/export
+  def export
+    @contigs = Contig.current_contigs(params[:minlen])
+
+    @depad = !params[:depadded].nil? && params[:depadded] == 'true'
+
+    respond_to do |format|
+      format.html { render :template => 'projects/export.html' }
+      format.text { render :template => 'projects/export.text' }
+      format.xml { render :xml => @contigs }
     end
   end
 
