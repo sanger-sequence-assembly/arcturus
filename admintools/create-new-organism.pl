@@ -510,7 +510,7 @@ sub getUsersAndRoles {
     my $list = [];
 
     while (my ($user, $role) =  $sth->fetchrow_array()) {
-	push @{$list}, [$user, $role];
+	push @{$list}, [$user, $role] if defined($role);
     }
  
     $sth->finish();
