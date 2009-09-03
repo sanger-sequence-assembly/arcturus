@@ -37,8 +37,8 @@ fi
 echo -n "Enter MySQL instance [arcp,hlmp,arct] > "
 read node
 
-echo -n "Enter template database name > "
-read template
+#echo -n "Enter template database name > "
+#read template
 
 echo -n "Enter Group/Genus (e.g. Bacteria/Clostridium) > "
 read subdir
@@ -55,7 +55,7 @@ echo "Arcturus instance     $instance"
 echo "Organism name         $organism"
 echo "Repository location   $reposdir"
 echo "MySQL instance        $node"
-echo "Template database     $template"
+#echo "Template database     $template"
 echo "LDAP sub-directory    $subdir"
 echo "Description           $description"
 
@@ -80,7 +80,6 @@ ${SCRIPT_HOME}/create-new-organism.pl \
     -instance $instance \
     -organism $organism \
     -node $node \
-    -template $template \
     -ldapurl ${LDAP_URL} \
     -rootdn ${LDAP_ROOT_DN} \
     -ldapuser ${LDAP_USER} \

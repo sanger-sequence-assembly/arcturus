@@ -78,11 +78,6 @@ unless (defined($instance) && defined($organism) && defined($dbnode)
     exit(1);
 }
 
-unless (defined($template) || $nocreatedatabase  || $skipdbsteps) {
-    &showUsage("You must specify either -template DBNAME or -nocreatedatabase or -skipdbsteps");
-    exit(1);
-}
-
 unless (defined($dbname)) {
     $dbname = $organism;
     $dbname =~ tr/\-/_/;
@@ -123,7 +118,7 @@ my $dbpass = $dsb->getAttribute("password");
 unless ($skipdbsteps) {
     my $users_and_roles = &getUsersAndRoles($dsa);
  
-    my $dbh = $dsb->getConnection(-options => {RaiseError => 1, PrintError => 1});
+    my $dbh = $dsb->getConnection(-options => {RaiseError => 0, PrintError => 1});
     
     unless (defined($dbh)) {
 	print STDERR "Failed to connect to MySQL node \"$dbnode\" as Arcturus DBA user\n";
@@ -131,7 +126,9 @@ unless ($skipdbsteps) {
 	exit(3);
     }
     
-    unless ($nocreatedatabase) { 
+    unless ($nocreatedatabase) {
+	$template = &deduceTemplateDatabase($dbh) unless defined($template);
+
 	my $query = "select table_name from information_schema.tables where table_schema = '" . $template .
 	    "' and table_type = 'BASE TABLE'";
 	
@@ -489,10 +486,31 @@ sub getPassword {
     return $password;
 }
 
+sub deduceTemplateDatabase {
+    my $dbh = shift;
+
+    print STDERR "### Finding a template database ...";
+
+    my $query = "select table_schema from information_schema.tables" .
+	" where table_name = ? order by create_time desc limit 1";
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute('READINFO');
+
+    my ($template) = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    print STDERR " $template\n\n";
+
+    return $template;
+}
+
 sub getUsersAndRoles {
     my ($ds, $junk) = @_;
 
-    my $dbh = $ds->getConnection(-options => {RaiseError => 1, PrintError => 1});
+    my $dbh = $ds->getConnection(-options => {RaiseError => 0, PrintError => 1});
 
     unless (defined($dbh)) {
 	print STDERR "Unable to connect to database to fetch list of users and roles\n";
@@ -564,7 +582,10 @@ sub createForeignKeyConstraints {
 
 	 ["TAG2CONTIG","tag_id","CONTIGTAG","tag_id","CASCADE"],
 
-	 ["SCAFFOLD","type_id","SCAFFOLDTYPE","type_id"]
+	 ["SCAFFOLD","type_id","SCAFFOLDTYPE","type_id"],
+
+	 ["CONTIGPADDING","contig_id","CONTIG","contig_id","CASCADE"],
+	 ["PAD","pad_list_id","CONTIGPADDING","pad_list_id","CASCADE"]
 	 ];
 
     print STDERR "### Creating foreign key constraints for InnoDB tables ...\n";
@@ -583,7 +604,7 @@ sub createForeignKeyConstraints {
 	print STDERR "Executing: $query\n";
 
 	$dbh->do($query);
-	&db_die("Failed to execute query \"$query\"");
+	&db_report("Failed to execute query \"$query\"");
     }
 
     print STDERR "OK.\n";
@@ -594,6 +615,12 @@ sub db_die {
     return unless $DBI::err;
     print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
     exit(99);
+}
+
+sub db_report {
+    my $msg = shift;
+    return unless $DBI::err;
+    print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
 }
 
 sub showUsage {
@@ -616,11 +643,9 @@ sub showUsage {
     print STDERR "    -subdir\t\tSub-directory of LDAP tree (e.g. bacteria/Salmonella)\n";
     print STDERR "\n";
     print STDERR "    -description\tDescription for LDAP entry\n";
-    print STDERR "\n";
-    print STDERR "    -template\t\tMySQL database to use as template\n";
-    print STDERR "\t\t\t[Unless -nocreatedatabase or -skipdbsteps has been specified]";
     print STDERR "\n\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "    -template\t\tMySQL database to use as template\n";
     print STDERR "    -db\t\t\tMySQL database to create (default: organism name)\n";
     print STDERR "    -projects\t\tProjects to add to the database\n";
     print STDERR "    -nocreatedatabase\tDatabase already exists, do not create it\n";
