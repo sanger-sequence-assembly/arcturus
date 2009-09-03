@@ -11,10 +11,13 @@ use DataSource;
 my $nextword;
 my $instance;
 my $organism;
+my $verbose = 0;
 
 while ($nextword = shift @ARGV) {
     $instance      = shift @ARGV if ($nextword eq '-instance');
     $organism      = shift @ARGV if ($nextword eq '-organism');
+
+    $verbose       = 1 if ($nextword eq '-verbose');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -68,8 +71,15 @@ my $sth_new_pad = $dbh->prepare($query);
 
 $sth->execute();
 
+my $all_pads = 0;
+my $all_contigs = 0;
+my $all_seqlen = 0;
+
 while (my ($contig_id, $pad_list_id, $sequence) = $sth->fetchrow_array()) {
     $sequence = uncompress($sequence);
+
+    $all_contigs++;
+    $all_seqlen += length($sequence);
 
     my @pads = ();
 
@@ -87,25 +97,25 @@ while (my ($contig_id, $pad_list_id, $sequence) = $sth->fetchrow_array()) {
 
     my $npads = scalar(@pads);
 
-    if ($npads > 0) {
-	$dbh->begin_work();
+    $dbh->begin_work();
 
-	if (defined($pad_list_id)) {
-	    $sth_delete->execute($contig_id, $pad_list_id);
-	}
-
-	$sth_new_padding->execute($contig_id);
-
-	$pad_list_id = $dbh->{'mysql_insertid'};
-
-	foreach $position (@pads) {
-	    $sth_new_pad->execute($pad_list_id, $position);
-	}
-
-	$dbh->commit();
-
-	print STDERR "Found $npads pads in contig $contig_id\n";
+    if (defined($pad_list_id)) {
+	$sth_delete->execute($contig_id, $pad_list_id);
     }
+
+    $sth_new_padding->execute($contig_id);
+
+    $pad_list_id = $dbh->{'mysql_insertid'};
+
+    foreach $position (@pads) {
+	$sth_new_pad->execute($pad_list_id, $position);
+    }
+
+    $dbh->commit();
+
+    print STDERR "Found $npads pads in contig $contig_id\n" if ($verbose && $npads > 0);
+
+    $all_pads += $npads;
 }
 
 $dbh->disconnect();
@@ -114,6 +124,8 @@ $sth->finish();
 $sth_delete->finish();
 $sth_new_padding->finish();
 $sth_new_pad->finish();
+
+print "Found $all_pads pads in $all_contigs contigs from $all_seqlen bp of consensus\n";
 
 exit(0);
 
