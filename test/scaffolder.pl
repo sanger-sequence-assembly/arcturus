@@ -644,7 +644,7 @@ if ($xmlfile) {
 
     print $xmlfh "<?xml version='1.0' encoding='utf-8'?>\n";
     print $xmlfh "\n";
-    print $xmlfh "<!DOCTYPE assembly SYSTEM \"assembly.dtd\">\n";
+    &generateDTD($xmlfh);
     print $xmlfh "\n";
 
     my $ticks = time;
@@ -901,6 +901,81 @@ if ($xmlfh) {
 }
 
 exit(0);
+
+sub generateDTD {
+    my $fh = shift;
+
+    print $fh <<END_OF_DTD;
+<!DOCTYPE assembly [
+<!ELEMENT assembly (superscaffold*) >
+
+<!ATTLIST assembly
+            instance    CDATA       #REQUIRED
+            organism    CDATA       #REQUIRED
+            date        CDATA       #REQUIRED
+>
+
+<!ELEMENT superscaffold (scaffold, (superbridge+,scaffold)*) >
+
+<!ATTLIST superscaffold
+            id      CDATA       #REQUIRED
+            size    CDATA       #REQUIRED
+>
+
+<!ELEMENT scaffold (contig, (gap,contig)*) >
+
+<!ATTLIST scaffold
+            id      CDATA       #REQUIRED
+            sense   (F|R)       #REQUIRED
+>
+
+<!ELEMENT contig EMPTY>
+
+<!ATTLIST contig
+            id      CDATA       #REQUIRED
+            name    CDATA       #IMPLIED
+            size    CDATA       #REQUIRED
+            project CDATA       #REQUIRED
+            sense   (F|R)       #REQUIRED
+>
+
+<!ELEMENT gap (bridge+)>
+
+<!ATTLIST gap
+            size    CDATA       #REQUIRED
+>
+
+<!ELEMENT bridge (link+)>
+
+<!ATTLIST bridge
+            template CDATA      #REQUIRED
+            name     CDATA      #IMPLIED
+            silow    CDATA      #REQUIRED
+            sihigh   CDATA      #REQUIRED
+            gapsize  CDATA      #REQUIRED
+>
+
+<!ELEMENT superbridge (link+)>
+
+<!ATTLIST superbridge
+            template CDATA      #REQUIRED
+            name     CDATA      #IMPLIED
+            silow    CDATA      #REQUIRED
+            sihigh   CDATA      #REQUIRED
+>
+
+<!ELEMENT link EMPTY>
+
+<!ATTLIST link
+            contig   CDATA      #REQUIRED
+            read     CDATA      #REQUIRED
+            cstart   CDATA      #REQUIRED
+            cfinish  CDATA      #REQUIRED
+            sense    (F|R)      #REQUIRED
+>
+]>
+END_OF_DTD
+}
 
 sub FindNextSuperBridge {
     my ($bridges, $minscore, $usedscaffolds, $junk) = @_;
