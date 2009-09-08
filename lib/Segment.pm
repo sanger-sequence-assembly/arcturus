@@ -128,6 +128,18 @@ sub applyLinearTransform {
     return 1; # correct termination
 }
 
+sub modify {
+# change left or right end position of segment 
+    my $this = shift;
+    my $item = shift;      # end to be changed R or L
+    my $value = shift;     # new value
+    my $mid = shift || ''; # mapping identifier
+
+    return &error('modify') unless ($mid eq $this->[4]);
+
+    $this->[($item eq 'L' ? 2 : 3)] = $value;
+}
+
 sub error {
 # signal error inmethod call and terminate execution
     my $method = shift;
