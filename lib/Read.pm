@@ -24,7 +24,7 @@ sub new {
  
     $this->setReadName($readname) if defined($readname);
 
-    $this->{padstatus} = 'Unpadded'; # default padstatus
+    $this->setPaddingStatus(0); # default unpadded
 
     return $this;
 }
@@ -68,6 +68,12 @@ sub setDataSource {
     unless ($this->{SOURCE} && $this->{SOURCE} eq $source) {
         die "Invalid object passed: $source" if $this->{SOURCE};
     } 
+}
+
+sub setPaddingStatus {
+# specify true for padded; padstatus is only used in listing
+    my $this = shift;
+    $this->{padstatus} = ((shift) ? 'P' : 'Unp').'added';
 }
 
 #------------------------------------------------------------------------------
@@ -176,6 +182,20 @@ sub getAlignToTraceMapping {
     }
 
     return $mapping;
+}
+
+sub putAlignToTraceMapping {
+# import the trace-to-read mappings from a Mapping object
+    my $this = shift;
+    my $attm = shift;
+
+    undef $this->{alignToTrace};
+
+    my $segments = $attm->getSegments();
+    foreach my $segment (@$segments) {
+        my @segment = $segment->getSegment();
+        $this->addAlignToTrace([@segment]);
+    }
 }
 
 sub isEdited {
@@ -818,7 +838,7 @@ sub writeToCaf {
 # write this read in caf format (unpadded) to FILE handle
     my $this = shift;
     my $FILE = shift; # obligatory output file handle
-#    my %options = @_;
+    my %options = @_;
 
 # optionally takes 'qualitymask=>'x' to mask low quality data
 
@@ -939,7 +959,7 @@ sub writeToFasta {
 
     $this->writeDNA($DFILE,">",%options);
 
-    $this->writeBaseQuality($QFILE,">") if defined $QFILE;
+    $this->writeBaseQuality($QFILE,">",%options) if defined $QFILE;
 }
 
 sub writeToFastq {
@@ -956,7 +976,7 @@ sub writeToFastq {
 	print $FILE "@"."$this->{readname}\n$dna\n";
     }
 
-    $this->writeBaseQuality($FILE,"+",fastq=>1,nonewline=>1);
+    $this->writeBaseQuality($FILE,"+",fastq=>1,nonewline=>1,%options);
 }
 
 # private methods
@@ -997,7 +1017,7 @@ sub writeBaseQuality {
 # the quality data go into a separate
 
     my $fastq = $options{fastq} || 0;
-    my $phrap = $options{mask} ? 1 : 0; # proxy for export for phrap assembler
+    my $phrap = $options{qualitymask} ? 1 : 0; # proxy for export for phrap assembler
 
     if (my $quality = $this->getBaseQuality()) {
 # output in lines of 25 numbers (caf/fasta) or 60 (fastq)
