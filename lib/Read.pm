@@ -24,7 +24,7 @@ sub new {
  
     $this->setReadName($readname) if defined($readname);
 
-    $this->setPaddingStatus(0); # default unpadded
+    $this->setPadStatus(0); # default unpadded
 
     return $this;
 }
@@ -68,12 +68,6 @@ sub setDataSource {
     unless ($this->{SOURCE} && $this->{SOURCE} eq $source) {
         die "Invalid object passed: $source" if $this->{SOURCE};
     } 
-}
-
-sub setPaddingStatus {
-# specify true for padded; padstatus is only used in listing
-    my $this = shift;
-    $this->{padstatus} = ((shift) ? 'P' : 'Unp').'added';
 }
 
 #------------------------------------------------------------------------------
@@ -248,6 +242,22 @@ sub newisEdited {
 # return true if the number of alignments > 1, else false
     my $mapping = newgetAlignToTrace();
     return ($mapping->hasSegments() > 1) ? 1 : 0;
+}
+
+#-------------------------------------------------------------------
+# pad status
+#-------------------------------------------------------------------
+
+
+sub setPadStatus {
+# specify true for padded; padstatus is only used in listing
+    my $this = shift;
+    $this->{padstatus} = ((shift) ? 'P' : 'Unp').'added';
+}
+
+sub isPadded {
+    my $this = shift;
+    return $this->{padstatus} eq 'Padded' ? 1 : 0;  
 }
 
 #-------------------------------------------------------------------
