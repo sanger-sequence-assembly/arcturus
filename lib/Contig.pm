@@ -28,6 +28,8 @@ sub new {
 
     $this->setContigName($contigname) if $contigname;
 
+    $this->setPadStatus(0); # to have it defined
+
     return $this;
 }
 
@@ -1092,7 +1094,7 @@ sub writeToCaf {
 
 # write the overall maps for for the contig ("assembled from")
 
-    print $FILE "\nSequence : $contigname\nIs_contig\nUnpadded\n";
+    print $FILE "\nSequence : $contigname\nIs_contig\n$this->{padstatus}\n";
 
     my $mappings = $this->getMappings(1); # if no maps, use delayed loading
     foreach my $mapping (@$mappings) {
@@ -1721,19 +1723,24 @@ sub disassemble {
 sub toPadded {
     my $this = shift;
     return $this if $this->isPadded();
-    return ContigHelper->pad($this);
+    return ContigHelper->pad($this,@_);
 }
 
-sub toUnPadded {
+sub toUnpadded {
     my $this = shift;
     return $this unless $this->isPadded();
-    return ContigHelper->depad($this);
+    return ContigHelper->depad($this,@_);
+}
+
+sub setPadStatus {
+    my $this = shift;
+    $this->{padstatus} = ((shift) ? "P" : "Unp")."added";
 }
 
 sub isPadded {
 # return 0 for unpadded (default) or true for padded
     my $this = shift;
-    return $this->{ispadded} || 0;
+    return $this->{padstatus} eq "Padded" ? 1 : 0;
 }
 
 #-------------------------------------------------------------------    
