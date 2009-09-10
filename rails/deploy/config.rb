@@ -9,7 +9,10 @@ set :user, 'arcturus'
 set :group, 'psg'
 set :password, proc { Capistrano::CLI.password_prompt('Password for arcturus:') }
 
-role :app, "psd-dev.internal.sanger.ac.uk"
+role :app, "psd1a.internal.sanger.ac.uk"
+#role :app, "psd-dev.internal.sanger.ac.uk"
+
+role :frontend, "psd-dev.internal.sanger.ac.uk"
 
 set :repository_base, "svn+ssh://svn.internal.sanger.ac.uk/repos/svn/arcturus"
 
@@ -50,11 +53,11 @@ namespace :deploy do
     run "mongrel_rails cluster::stop -C #{shared_path}/config/mongrel_cluster.yml"
   end
 
-  task :start_nginx, :roles => :app do
+  task :start_nginx, :roles => :frontend do
     run "#{reverse_proxy} -c #{shared_path}/config/nginx.conf"
   end
 
-  task :stop_nginx, :roles => :app do
+  task :stop_nginx, :roles => :frontend do
     fp = File.open("#{shared_path}/log/nginx.pid", "r")
     pid = fp.readline
     pid.chomp!
