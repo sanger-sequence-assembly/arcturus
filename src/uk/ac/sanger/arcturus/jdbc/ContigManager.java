@@ -321,9 +321,35 @@ public class ContigManager extends AbstractManager {
 	void registerNewContig(Contig contig) {
 		hashByID.put(new Integer(contig.getID()), contig);
 	}
+	
+	private void updateBasicContigData(Contig contig) throws SQLException {
+		if (contig == null)
+			return;
+		
+		pstmtContigData.setInt(1, contig.getID());
+
+		ResultSet rs = pstmtContigData.executeQuery();
+
+		if (rs.next()) {
+			java.util.Date updated = rs.getTimestamp(5);
+			int project_id = rs.getInt(6);
+
+			Project project = adb.getProjectByID(project_id);
+			
+			contig.setUpdated(updated);
+			contig.setProject(project);
+		}
+		
+		rs.close();
+	}
 
 	public void updateContig(Contig contig, int options) throws SQLException,
 			DataFormatException {
+		if (options == ArcturusDatabase.CONTIG_BASIC_DATA) {
+			updateBasicContigData(contig);
+			return;
+		}
+		
 		int contig_id = contig.getID();
 
 		if ((options & ArcturusDatabase.CONTIG_MAPPING_RELATED_DATA) != 0) {
