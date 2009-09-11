@@ -4,5 +4,5 @@ log_file: /psg/run/training/arcturus/log/mongrel.log
 port: 15001
 daemon: true
 environment: production
-pid_file: /psg/run/training/arcturus/log/mongrel.pid
+pid_file: /psg/run/training/arcturus/pid/mongrel.pid
 servers: 5
