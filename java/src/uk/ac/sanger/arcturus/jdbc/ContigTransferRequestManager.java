@@ -319,6 +319,13 @@ public class ContigTransferRequestManager {
 	protected ContigTransferRequest realCreateContigTransferRequest(
 			Person requester, Contig contig, Project toProject)
 			throws ContigTransferRequestException, SQLException {
+		try {
+			adb.updateContig(contig, ArcturusDatabase.CONTIG_BASIC_DATA);
+		}
+		catch (DataFormatException dfe) {
+			// This will never happen.
+		}
+		
 		pstmtInsertNewRequest.setInt(1, contig.getID());
 		pstmtInsertNewRequest.setInt(2, contig.getProject().getID());
 		pstmtInsertNewRequest.setInt(3, toProject.getID());
