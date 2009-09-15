@@ -824,6 +824,27 @@ sub writeToEMBL {
     return $string;
 }
 
+sub writeToBaf {
+# write tag to FILE in Baf format
+    my $this = shift;
+    my $FILE = shift;
+
+    my $tagtype = $this->getType();
+
+    print $FILE "AN $tagtype\n";
+
+    unless ($tagtype eq 'NOTE') {
+        my $hostclass = $this->getHostClass() || '';
+        print $FILE ($hostclass eq 'Contig' ? "\@LO " : "LO ").$this->getPositionLeft()."\n";
+        print $FILE "LL ".$this->getSpan()."\n";
+    }
+
+    my $tagcomment = $this->getTagComment();
+    print $FILE "TX $tagcomment\n" if $tagcomment;
+
+    print $FILE "\n"; # close object
+}
+
 sub dump {
 # listing poption for debugging purposes
     my $tag = shift;
