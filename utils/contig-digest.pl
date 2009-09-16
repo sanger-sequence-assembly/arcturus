@@ -186,7 +186,7 @@ sub showUsage {
     print STDERR "    -include\t\tInclude contigs in these projects\n";
     print STDERR "    -exclude\t\tExclude contigs in these projects\n";
     print STDERR "\n";
-    print STDERR "    -positions\tList positions of digest sites\n";
+    print STDERR "    -positions\t\tList positions of digest sites instead of fragment sizes\n";
 }
 
 sub getProjectIDs {
