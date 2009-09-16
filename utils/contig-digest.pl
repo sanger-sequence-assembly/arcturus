@@ -115,8 +115,6 @@ $sth = $dbh->prepare($query);
 $sth->execute();
 &db_die("execute($query) failed");
 
-my $deltapos = 1 + int(length($digest)/2);
-
 $digest = transformDigest($digest);
 
 study($digest);
@@ -146,8 +144,7 @@ while(my @ary = $sth->fetchrow_array()) {
 
     if ($positions) {
 	for my $pos (@{$sites}) {
-	    $pos += $deltapos;
-	    print "$contigid\t$pos\n";
+	    print "$contigid\t", ($pos + 1), "\n";
 	}
     } else {
 	if ($num_sites > 1) {
