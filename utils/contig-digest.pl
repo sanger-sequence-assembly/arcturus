@@ -21,10 +21,10 @@ my $minlen;
 my $verbose;
 my $fastafile;
 my $contigids;
-my $totseqlen;
 my $pinclude;
 my $pexclude;
 my $digest;
+my $positions = 0;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -41,6 +41,8 @@ while (my $nextword = shift @ARGV) {
     $pexclude = shift @ARGV if ($nextword eq '-exclude');
 
     $digest = shift @ARGV if ($nextword eq '-digest');
+
+    $positions = 1 if ($nextword eq '-positions');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -113,7 +115,11 @@ $sth = $dbh->prepare($query);
 $sth->execute();
 &db_die("execute($query) failed");
 
-$totseqlen = 0;
+my $deltapos = 1 + int(length($digest)/2);
+
+$digest = transformDigest($digest);
+
+study($digest);
 
 while(my @ary = $sth->fetchrow_array()) {
     my ($contigid, $contiglength,$compressedsequence) = @ary;
@@ -128,7 +134,7 @@ while(my @ary = $sth->fetchrow_array()) {
 	exit(2);
     }
 
-    my $sequence = uncompress($compressedsequence);
+    my $sequence = uc(uncompress($compressedsequence));
 
     $sequence =~ s/[NnXx\*\-]//g;
 
@@ -138,11 +144,18 @@ while(my @ary = $sth->fetchrow_array()) {
 
     my $num_sites = scalar(@{$sites});
 
-    if ($num_sites > 1) {
-	for (my $i = 0; $i < $num_sites - 1; $i++) {
-	    my $fragment_size = $sites->[$i + 1] - $sites->[$i];
-	    next unless ($fragment_size  > 0);
-	    print "$contigid\t$fragment_size\n";
+    if ($positions) {
+	for my $pos (@{$sites}) {
+	    $pos += $deltapos;
+	    print "$contigid\t$pos\n";
+	}
+    } else {
+	if ($num_sites > 1) {
+	    for (my $i = 0; $i < $num_sites - 1; $i++) {
+		my $fragment_size = $sites->[$i + 1] - $sites->[$i];
+		next unless ($fragment_size  > 0);
+		print "$contigid\t$fragment_size\n";
+	    }
 	}
     }
 }
@@ -172,6 +185,8 @@ sub showUsage {
     print STDERR "    -contigs\t\tComma-separated list of contig IDs [implies -minlen 0]\n";
     print STDERR "    -include\t\tInclude contigs in these projects\n";
     print STDERR "    -exclude\t\tExclude contigs in these projects\n";
+    print STDERR "\n";
+    print STDERR "    -positions\tList positions of digest sites\n";
 }
 
 sub getProjectIDs {
@@ -196,17 +211,49 @@ sub getProjectIDs {
     return $projectlist;
 }
 
+sub transformDigest {
+    my $digest = shift;
+
+    $digest = uc($digest);
+
+    # IUPAC-IUB/GCG ambiguity codes taken from:
+    #
+    # http://wwwold.hgu.mrc.ac.uk/Softdata/Misc/ambcode.html
+
+    my %ambiguity = (
+		     'M' => '[AC]',
+		     'R' => '[AG]',
+		     'W' => '[AT]',
+		     'S' => '[CG]',
+		     'Y' => '[CT]',
+		     'K' => '[GT]',
+
+		     'V' => '[ACG]',
+		     'H' => '[ACT]',
+		     'D' => '[AGT]',
+		     'B' => '[CGT]',
+
+		     'X' => '[ACGT]',
+		     'N' => '[ACGT]'
+		     );
+
+    foreach my $ambg (keys %ambiguity) {
+	my $value = $ambiguity{$ambg};
+
+	$digest =~ s/$ambg/$value/g;
+    }
+
+    return $digest;
+}
+
 sub digestSequence {
     my $sequence = shift;
     my $digest = shift;
 
     my $sites = [];
 
-    my $offset = 0;
-
-    while (($offset = index($sequence, $digest, $offset)) >= 0) {
-	push @{$sites}, $offset;
-	$offset += length($digest);
+    while ($sequence =~ /$digest/g) {
+	push @{$sites}, $-[0];
     }
 
     return $sites;
