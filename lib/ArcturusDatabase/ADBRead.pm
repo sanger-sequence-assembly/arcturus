@@ -1224,7 +1224,7 @@ sub getUnassembledReads {
         $query    .=  join(" and ", @constraint) if @constraint;
         $query    .= " and " if (@constraint && @$contigids);
         $query    .= "read_id not in (select distinct SEQ2READ.read_id "
-                   . "  from SEQ2READ join MAPPING using (seq_id)"
+                   . "  from SEQ2READ left join MAPPING using (seq_id)"
 	           . " where MAPPING.contig_id in ("
                    . join(",",@$contigids)."))" if @$contigids;
         $query    .= " limit $limit" if $limit;
@@ -1245,7 +1245,7 @@ sub getUnassembledReads {
 # step 2: find read IDs in contigs, using a join on SEQ2READ and MAPPING
 
     my $query = "select distinct SEQ2READ.read_id "
-	      . "  from SEQ2READ join MAPPING using (seq_id)"
+	      . "  from SEQ2READ left join MAPPING using (seq_id)"
               . " where MAPPING.contig_id in (".join(",",@$contigids).")"
               . " order by read_id";
 
@@ -1299,7 +1299,7 @@ sub getUnassembledReads {
                 last unless ($remainder > 0);
                 $query .= " limit $remainder";
 	    }
- 
+
             $sth = $dbh->prepare($query);
 
             $sth->execute() || &queryFailed($query) && exit;
@@ -2309,8 +2309,18 @@ sub putRead {
 
         return 0,"no changes specified for read $readname" unless keys %$updatehash;
 
+        if ($updatehash->{ligation} && $ligation_id && $template_id) {
+            $query = "update TEMPLATE set ligation_id = $ligation_id where template_id = $template_id";
+            $sth = $dbh->prepare($query);
+            $rc = $sth->execute();
+            unless (defined($rc) && $rc == 1) {
+                print STDOUT "failed to update TEMPLATE table\n$query\nDBI::errstr=$DBI::errstrupdate:\n";
+                exit unless defined($rc);
+	    }
+        }
+
         $query  = "update READINFO set ";
-        $query .= " asped='".    $read->getAspedData()."'," if $updatehash->{date};
+        $query .= " asped='".    $read->getAspedDate()."'," if $updatehash->{asped};
         $query .= " template_id=$template_id,"              if $updatehash->{template};
         $query .= " strand='".   $read->getStrand()   ."'," if $updatehash->{strand};
         $query .= " chemistry='".$read->getChemistry()."'," if $updatehash->{chemistry};
@@ -2321,10 +2331,13 @@ sub putRead {
         $query .= " where readname = '$readname' limit 1";
 
         $sth = $dbh->prepare($query);
-#print STDOUT "updateRead: $query\n";
         $rc = $sth->execute();
 
         return 1,"done $readname" if (defined($rc) && $rc == 1);
+# print a diagnostic message
+        print STDOUT "failed to update READINFO table\n$query\nDBI::errstr=$DBI::errstrupdate:\n";
+        my @hkeys = keys %$updatehash; print STDOUT "@hkeys\n";
+        exit unless defined($rc); # abort if query error, else return
 
         return 0,"failed to update core data in READINFO table; DBI::errstr=$DBI::errstr";
    }
@@ -2392,7 +2405,7 @@ sub updateRead {
 # compare the read items 
 
     my @attributes = ('AspedDate','Template','Strand','Chemistry',
-                      'Primer','BaseCaller','ProcessStatus'); # Comment ?
+                      'Primer','BaseCaller','ProcessStatus','Ligation'); # Comment ?
     push @attributes , ('BaseQuality','Sequence');
 
     my $updatehash;
@@ -3557,7 +3570,7 @@ sub putTagsForReads {
 # bulk insertion of tag data
     my $this = shift;
     my $reads = shift; # array of Read instances
-    my %options = @_; # autoload=> , synchronise=> , ignorenameofpattern=>
+    my %options = @_; # autoload=> , synchronise=> , ignorenameofpattern=> , donotretire=>[list]
 
     &verifyParameter($reads,'putTagsForReads','ARRAY');
 
@@ -3700,10 +3713,20 @@ sub putTagsForReads {
     if ($options{synchronise}) {
 # existing tags also in the input list are marked as to be ignored
         $logger->info("synchronise active") if @$existingtags;
+# set up for tag type filter, if any
+        $options{donotretire} = 'AFOL,OLIG' unless defined $options{donotretire};
+        my $donotretire = $options{donotretire};
+        $donotretire =~ s/\W+/|/g if $donotretire; # replace separator(s) by '|' symbol
         foreach my $etag (@$existingtags) {
             next if $ignore->{$etag};
 # this existing tags was not found amongst the input tags: check retire status
             next if ($etag->getComment() eq 'Is_deprecated');
+# apply tagtype filter, if any
+            my $tagtype = $etag->getType();
+            if ($tagtype =~ /\^${donotretire}\b$/) {
+                $logger->warning("$tagtype read tag will not be retired");
+		next;
+	    }
 # ok, retire the tag
             $logger->info("retireReadTag: ".$etag->writeToCaf());
 	    next if $options{noload}; # testmode
