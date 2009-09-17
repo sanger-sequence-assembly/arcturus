@@ -30,3 +30,5 @@ jobplacer.command=/software/arcturus/utils/find_a_host.csh
 scaffoldbuilder.puclimit=15000
 
 project.allowbinimport=false
+
+oligofinder.useRegex=true
