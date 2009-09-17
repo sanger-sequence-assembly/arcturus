@@ -989,6 +989,72 @@ sub writeToFastq {
     $this->writeBaseQuality($FILE,"+",fastq=>1,nonewline=>1,%options);
 }
 
+sub writeToBaf {
+# write this read in BAF format to FILE handle
+    my $this  = shift;
+    my $FILE = shift; # obligatory, filehandle for DNA output
+    my $mapping = shift; # the contig-to-read mapping
+    my %options = @_;  # qualitymask=>x, notags=>
+
+    my $rd = $this->getReadName();
+
+    unless ($this->isPadded()) {
+        print STDERR "Read $rd must be padded to write to BAF";
+        exit;
+    }
+
+    print $FILE "RD=$rd\n";
+    my $dr = $mapping->getAlignment();
+    print $FILE "DR=$dr\n";
+    my ($ap,$af) = $mapping->getContigRange();
+    print $FILE "AP=$ap\n";
+
+    my ($ql,$qr) = $mapping->getMappedRange(); # on the read
+    print $FILE "QL=$ql\n";
+    print $FILE "QR=$qr\n";
+# TO BE COMPLETED: PR SI SS
+    if (my $li = $this->getLigation()) {
+#	print $FILE "SO=$li\n";
+    }
+    if (my $tn = $this->getTemplate()) {
+	print $FILE "TN=$tn\n";
+    }
+    if (my $tr = $this->getTraceArchiveIdentifier()) {
+	print $FILE "TR=$tr\n";
+    }
+    if (my $is = $this->getInsertSize()) {
+        my $si = ($is->[1] + $is->[0]) / 2;
+#        print $FILE "SI=$si\n";
+        my $ss = ($is->[1] - $is->[0]) / 2;
+#        print $FILE "SS=$ss\n";
+    }
+# align to trace mapping in "cigar" format
+    my $attm = $this->getAlignToTraceMapping();
+    my $al = $attm->runlengthEncode(composite=>1);
+    unless (defined($al)) {
+	print STDERR "invalid align-to-trace mapping in read $rd\n";
+    }
+    print $FILE "AL=$al\n" if $al;
+    my $sq = $this->getSequence(%options);
+    print $FILE "SQ=$sq\n";
+    my $fq = $this->getBaseQuality();
+    my @fq = @$fq; # make a local copy
+    &encodePhredScore(@fq);
+    print $FILE "FQ=".join('',@fq)."\n";
+    
+
+    print $FILE "\n"; # close object
+
+# add tags, if any
+
+    if (!$options{notags} && $this->hasTags(1)) {
+	my $tags = $this->getTags();
+	foreach my $tag (@$tags) {
+            $tag->writeToBaf($FILE);
+	}
+    }
+}
+
 # private methods
 
 sub writeDNA {
