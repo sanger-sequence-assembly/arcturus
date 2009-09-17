@@ -829,18 +829,21 @@ sub writeToBaf {
     my $this = shift;
     my $FILE = shift;
 
-    my $tagtype = $this->getType();
+# get tag info as for Caf output
 
-    print $FILE "AN $tagtype\n";
+    my $string = $this->writeToCaf(0,@_);
 
-    unless ($tagtype eq 'NOTE') {
+    if ($string =~ s/^Tag\s(\w+)\s+//) {
+        print $FILE "AN $1\n";
+    }
+    if ($string =~ s/^(\d+)\s+(\d+)\s+//) {
         my $hostclass = $this->getHostClass() || '';
-        print $FILE ($hostclass eq 'Contig' ? "\@LO " : "LO ").$this->getPositionLeft()."\n";
+#        print $FILE ($hostclass eq 'Contig' ? "\@LO " : "LO ").$1."\n"; # conforms to specs
+        print $FILE "LO $1\n";
         print $FILE "LL ".$this->getSpan()."\n";
     }
 
-    my $tagcomment = $this->getTagComment();
-    print $FILE "TX $tagcomment\n" if $tagcomment;
+    print $FILE "TX $string" if $string;
 
     print $FILE "\n"; # close object
 }
