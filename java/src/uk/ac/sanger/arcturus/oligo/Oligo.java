@@ -1,7 +1,11 @@
 package uk.ac.sanger.arcturus.oligo;
 
+import java.util.regex.Pattern;
+
 public class Oligo implements Comparable {
 	private static int counter = 0;
+	
+	private static final String SPACES = "[\\-]*";
 	
 	private String name;
 	private String sequence;
@@ -9,16 +13,21 @@ public class Oligo implements Comparable {
 	private int hash = -1;
 	private int revhash = -1;
 	
+	private boolean palindrome = false;
+	
+	private Pattern fwdPattern;
+	private Pattern revPattern;
+	
 	public Oligo(String name, String sequence) {
 		this.name = name;
 		this.sequence = sequence.toUpperCase();
 		revsequence = reverseComplement(sequence);
+		
+		palindrome = sequence.equalsIgnoreCase(revsequence);
 	}
 	
 	public Oligo(String sequence) {
-		name = "ANON." + (++counter);
-		this.sequence = sequence.toUpperCase();
-		revsequence = reverseComplement(sequence);
+		this("ANON." + (++counter), sequence);
 	}
 	
 	public String getName() { return name; }
@@ -36,6 +45,40 @@ public class Oligo implements Comparable {
 	public int getReverseHash() { return revhash; }
 	
 	public int getLength() { return sequence.length(); }
+	
+	public boolean isPalindrome() {
+		return palindrome;
+	}
+	
+	public Pattern getForwardPattern() {
+		if (fwdPattern == null)
+			fwdPattern = preparePattern(sequence);
+		
+		return fwdPattern;
+	}
+	
+	public Pattern getReversePattern() {
+		if (revPattern == null && !palindrome)
+			revPattern = preparePattern(revsequence);
+		
+		return revPattern;
+	}
+	
+	private Pattern preparePattern(String seq) {
+		StringBuilder sb = new StringBuilder();
+		
+		sb.append("(");
+		sb.append(seq.charAt(0));
+		
+		for (int i = 1; i < seq.length(); i++) {
+			sb.append(SPACES);
+			sb.append(seq.charAt(i));
+		}
+		
+		sb.append(")");
+		
+		return Pattern.compile(sb.toString());
+	}
 	
 	private String reverseComplement(String str) {
 		int strlen = str.length();

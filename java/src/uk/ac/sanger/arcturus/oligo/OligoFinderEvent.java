@@ -34,6 +34,13 @@ public class OligoFinderEvent {
 		this.sequence = sequence;
 	}
 	
+	public void setEvent(int type, Oligo oligo, int value, boolean forward) {
+		this.type = type;
+		this.oligo = oligo;
+		this.value = value;
+		this.forward = forward;
+	}
+
 	public OligoFinder getSource() { return source; }
 	
 	public int getType() { return type; }
@@ -58,6 +65,10 @@ public class OligoFinderEvent {
 	
 	public DNASequence getDNASequence() {
 		return sequence;
+	}
+	
+	protected void setDNASequence(DNASequence sequence) {
+		this.sequence = sequence;
 	}
 	
 	public int getValue() { return value; }
