@@ -9,8 +9,13 @@ import java.util.*;
 import java.util.zip.*;
 import java.io.UnsupportedEncodingException;
 
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
+
 public class OligoFinder {
 	public static final int HASHSIZE = 10;
+
+	private static final boolean useRegex = Arcturus.getBoolean("oligofinder.useRegex");
 
 	private ArcturusDatabase adb;
 	private Connection conn = null;
@@ -124,6 +129,8 @@ public class OligoFinder {
 	public synchronized int findMatches(Oligo[] oligos, Contig[] contigs,
 			boolean searchFreeReads, boolean useCachedFreeReads)
 			throws SQLException {
+		System.err.println("Using " + (useRegex ? "regex" : "hashing") + " engine");
+		
 		int found = 0;
 		Task task = null;
 
@@ -168,7 +175,8 @@ public class OligoFinder {
 
 					task.join();
 				} catch (InterruptedException e) {
-					Arcturus.logWarning(
+					Arcturus
+							.logWarning(
 									"Interrupted whilst waiting for free-read eumerator to complete",
 									e);
 				}
@@ -215,7 +223,6 @@ public class OligoFinder {
 		}
 
 		String sequence = null;
-		int sequencelen = 0;
 
 		if (dnaSequence instanceof Contig) {
 			Contig contig = (Contig) dnaSequence;
@@ -225,14 +232,60 @@ public class OligoFinder {
 			sequence = getReadSequence(read.getID());
 		}
 
-		if (sequence == null)
-			return 0;
+		if (sequence != null) {
+			event.setDNASequence(dnaSequence);
+			
+			found += useRegex ? findMatchesByRegex(oligos, sequence) : findMatchesByHash(oligos, sequence);
+		}
 
+		int sequencelen = sequence == null ? 0 : sequence.length();
+
+		if (listener != null) {
+			event.setEvent(OligoFinderEvent.FINISH_SEQUENCE, null,
+					sequencelen, false);
+			listener.oligoFinderUpdate(event);
+		}
+
+		return found;
+	}
+	
+	private int findMatchesByRegex(Oligo[] oligos, String sequence) {
+		int hits = 0;
+		
+		for (Oligo oligo : oligos) {
+			hits += findRegexMatch(oligo, true, sequence);
+			
+			if (!oligo.isPalindrome())
+				hits += findRegexMatch(oligo, false, sequence);
+		}
+		
+		return hits;
+	}
+	
+	private int findRegexMatch(Oligo oligo, boolean forward, String sequence) {
+		int hits = 0;
+		
+		Pattern pattern = forward ? oligo.getForwardPattern() : oligo.getReversePattern();
+		
+		Matcher matcher = pattern.matcher(sequence);
+		
+		while (matcher.find()) {
+			int offset = matcher.start();
+			reportMatch(oligo, offset, forward);
+			hits++;
+		}
+		
+		return hits;
+	}
+
+	private int findMatchesByHash(Oligo[] oligos, String sequence) {
+		int hits = 0;
+		
 		int start_pos = 0;
 		int end_pos = 0;
 		int bases_in_hash = 0;
 		int hash = 0;
-		sequencelen = sequence.length();
+		int sequencelen = sequence.length();
 
 		for (start_pos = 0; start_pos < sequencelen - hashsize + 1; start_pos++) {
 			char c = sequence.charAt(start_pos);
@@ -250,8 +303,7 @@ public class OligoFinder {
 				}
 
 				if (bases_in_hash == hashsize)
-					processHashMatch(oligos, dnaSequence, sequence, start_pos,
-							hash);
+					hits += processHashMatch(oligos, sequence, start_pos, hash);
 
 				bases_in_hash--;
 			}
@@ -265,17 +317,13 @@ public class OligoFinder {
 			}
 		}
 
-		if (listener != null) {
-			event.setEvent(OligoFinderEvent.FINISH_SEQUENCE, null, dnaSequence,
-					sequencelen, false);
-			listener.oligoFinderUpdate(event);
-		}
-
-		return found;
+		return hits;
 	}
 
-	private void processHashMatch(Oligo[] oligos, DNASequence dnaSequence,
+	private int processHashMatch(Oligo[] oligos,
 			String sequence, int start_pos, int hash) {
+		int hits = 0;
+		
 		for (int i = 0; i < oligos.length; i++) {
 			if (oligos[i] == null)
 				continue;
@@ -283,38 +331,51 @@ public class OligoFinder {
 			if (hash == oligos[i].getHash()) {
 				if (listener != null) {
 					event.setEvent(OligoFinderEvent.HASH_MATCH, oligos[i],
-							dnaSequence, start_pos, true);
+							start_pos, true);
 					listener.oligoFinderUpdate(event);
 				}
 
-				testSequenceMatch(oligos[i], true, dnaSequence, sequence,
-						start_pos);
+				if (testSequenceMatch(oligos[i], true, sequence,
+						start_pos))
+					hits++;
 			}
 
 			if (hash == oligos[i].getReverseHash()) {
 				if (listener != null) {
 					event.setEvent(OligoFinderEvent.HASH_MATCH, oligos[i],
-							dnaSequence, start_pos, false);
+							start_pos, false);
 					listener.oligoFinderUpdate(event);
 				}
 
-				testSequenceMatch(oligos[i], false, dnaSequence, sequence,
-						start_pos);
+				if (testSequenceMatch(oligos[i], false, sequence,
+						start_pos))
+					hits++;
 			}
 		}
+		
+		return hits;
 	}
 
-	private void testSequenceMatch(Oligo oligo, boolean forward,
-			DNASequence dnaSequence, String sequence, int offset) {
+	private boolean testSequenceMatch(Oligo oligo, boolean forward,
+			String sequence, int offset) {
 		String oligoseq = forward ? oligo.getSequence() : oligo
 				.getReverseSequence();
+		
+		boolean match = comparePaddedSequence(oligoseq, sequence, offset);
 
-		if (listener != null
-				&& comparePaddedSequence(oligoseq, sequence, offset)) {
-			event.setEvent(OligoFinderEvent.FOUND_MATCH, oligo, dnaSequence,
+		if (match)
+			reportMatch(oligo, offset, forward);
+				
+		return match;
+	}
+	
+	private void reportMatch(Oligo oligo, int offset, boolean forward) {
+		if (listener != null) {
+			event.setEvent(OligoFinderEvent.FOUND_MATCH, oligo,
 					offset, forward);
 			listener.oligoFinderUpdate(event);
 		}
+
 	}
 
 	private boolean comparePaddedSequence(String oligoseq, String sequence,
@@ -345,7 +406,8 @@ public class OligoFinder {
 	}
 
 	public int findMatches(Oligo[] oligos, Project[] projects,
-			boolean searchFreeReads, boolean useCachedFreeReads) throws SQLException {
+			boolean searchFreeReads, boolean useCachedFreeReads)
+			throws SQLException {
 		Contig[] contigs = getContigsForProjects(projects);
 
 		return findMatches(oligos, contigs, searchFreeReads, useCachedFreeReads);
@@ -364,8 +426,11 @@ public class OligoFinder {
 	private void prepareOligos(Oligo[] oligos) {
 		for (int i = 0; i < oligos.length; i++) {
 			if (oligos[i] != null) {
-				oligos[i].setHash(hash(oligos[i].getSequence()));
-				oligos[i].setReverseHash(hash(oligos[i].getReverseSequence()));
+				if (!useRegex) {
+					oligos[i].setHash(hash(oligos[i].getSequence()));
+					oligos[i].setReverseHash(hash(oligos[i]
+							.getReverseSequence()));
+				}
 			}
 		}
 	}
