@@ -1142,7 +1142,7 @@ sub writeToCaf {
 }
 
 sub writeToFasta {
-# write DNA of this read in FASTA format to FILE handle
+# write DNA of this contig in FASTA format to FILE handle
     my $this  = shift;
     my $DFILE = shift; # obligatory, filehandle for DNA output
     my $QFILE = shift; # optional, ibid for Quality Data
@@ -1266,7 +1266,7 @@ sub writeBaseQuality {
     }
 
     if (!$QFILE) {
-        priont STDERR "Missing file handle for Quality Data\n";
+        print STDERR "Missing file handle for Quality Data\n";
         return 1; # error status
     }
     elsif (my $quality = $this->getBaseQuality()) {
@@ -1531,6 +1531,86 @@ sub writeToEMBL {
     return 0 unless $QFILE;
 
 # Quality printout to be completed
+}
+
+sub writeToBaf {
+# write contig and reads to file in BAF format
+    my $this = shift;
+    my $FILE = shift; # obligatory file handle
+    my %options = @_;
+
+    my @validoptionkeys = ('consensus',   # include consensus sequence
+                           'noreads',     # don't export reads, only contig
+                           'readsonly',   # only export reads
+                           'qualitymask', # if readsonly: mask low quality read sequence
+                           'gap4name',    # 
+                           'notags');     # don't export tags
+
+    &verifyKeys('writeToBaf',\%options,@validoptionkeys);
+
+    return "Missing file handle for Baf output" unless $FILE;
+
+# write contig items
+
+    my $contigname = $this->getContigName();
+
+    unless ($this->isPadded()) {
+        print STDERR "Contig $contigname must be padded to write to BAF\n";
+        exit;
+    }
+
+    $contigname .= " ".$this->getGap4Name() if $options{gap4name};
+
+    print $FILE "CO=$contigname\n";
+    print $FILE "LN=".$this->getConsensusLength()."\n";
+
+    if ($options{consensus}) {
+        print $FILE "SQ=".$this->getSequence()."\n";
+        my $basequality = $this->getBaseQuality();
+        my @basequality = @$basequality;
+        &encodePhredScore(@basequality);
+	print $FILE join('',@basequality) . "\n";
+    }
+
+    print $FILE "\n"; # close object
+
+# write contig tags
+
+    if (!$options{notags} && $this->hasTags(1)) {
+        my $tags = $this->getTags();
+        foreach my $tag (@$tags) {
+	    $tag->writeToBaf($FILE);
+	}
+    }
+    
+# write reads and the mappings 
+
+    my $mappinghash = {};
+    my $mappings = $this->getMappings(1);
+    foreach my $mapping (@$mappings) {
+        $mappinghash->{$mapping->getMappingName()} = $mapping;
+    }
+
+    my $reads = $this->getReads(1);
+
+# sort reads on type,source,vector ?
+
+    foreach my $read (@$reads) {
+        my $readname = $read->getReadName(); 
+        my $mapping = $mappinghash->{$readname};
+        unless ($mapping) {
+	    print STDERR "Missing mapping for read $readname\n";
+            next;
+	}
+	$read->writeToBaf($FILE,$mapping,%options);
+    }
+}
+
+sub encodePhredScore {
+# private helper method: translate phred score into ASCII character
+    foreach my $q (@_) {   
+        $q = chr( ($q <= 93 ? $q : 93) + 33); # truncates quality at 93
+    }
 }
 
 #-------------------------------------------------------------------    
