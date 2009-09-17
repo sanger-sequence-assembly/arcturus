@@ -175,7 +175,7 @@ sub showUsage {
     print STDERR "    -instance\t\tName of instance\n";
     print STDERR "    -organism\t\tName of organism\n";
     print STDERR "\n";
-    print STDERR "    -digest\t\tRestriction digest sequence\n";
+    print STDERR "    -digest\t\tComma-separated list of restriction digest sequences\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -minlen\t\tMinimum length for contigs [default: 1000]\n";
@@ -212,6 +212,8 @@ sub transformDigest {
     my $digest = shift;
 
     $digest = uc($digest);
+
+    $digest =~ s/,/|/g;
 
     # IUPAC-IUB/GCG ambiguity codes taken from:
     #
