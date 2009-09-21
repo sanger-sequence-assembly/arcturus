@@ -38,6 +38,7 @@ my $seqfilenum;
 my $totseqlen;
 my $pinclude;
 my $pexclude;
+my $projectprefix = 0;
 my $usegapname = 0;
 my $ends = 0;
 my $padmapfile;
@@ -77,6 +78,8 @@ while (my $nextword = shift @ARGV) {
     $padmapfile = shift @ARGV if ($nextword eq '-padmap');
 
     $usegapname = 1 if ($nextword eq '-usegap4name');
+
+    $projectprefix = 1 if ($nextword eq '-projectprefix');
 
     $ascaf = 1 if ($nextword eq '-ascaf');
 
@@ -135,9 +138,11 @@ $sth->execute();
 &db_die("execute($query) failed");
 
 my $projectname2id;
+my $projectid2name;
 
 while (my ($projid,$projname) = $sth->fetchrow_array()) {
     $projectname2id->{$projname} = $projid;
+    $projectid2name->{$projid} = $projname;
 }
 
 $sth->finish();
@@ -147,7 +152,7 @@ $pexclude = &getProjectIDs($pexclude, $projectname2id) if defined($pexclude);
 
 $minlen = 1000 unless (defined($minlen) || defined($contigids));
 
-my $fields = "gap4name,C.contig_id,C.length,sequence" . ($ascaf ? ",quality" : "");
+my $fields = "gap4name,project_id,C.contig_id,C.length,sequence" . ($ascaf ? ",quality" : "");
 my $tables = (defined($contigids) || $allcontigs ? "CONTIG" : "CURRENTCONTIGS") .
     " C left join CONSENSUS CS using(contig_id)";
 
@@ -179,7 +184,9 @@ $sth->execute();
 $totseqlen = 0;
 
 while(my @ary = $sth->fetchrow_array()) {
-    my ($gap4name, $contigid, $contiglength,$compressedsequence, $compressedquality) = @ary;
+    my ($gap4name, $projectid, $contigid, $contiglength,$compressedsequence, $compressedquality) = @ary;
+
+    my $projectname = $projectid2name->{$projectid};
 
     unless (defined($compressedsequence)) {
 	print STDERR "WARNING: Some contigs have no consensus sequence.\n";
@@ -200,8 +207,10 @@ while(my @ary = $sth->fetchrow_array()) {
 	length($sequence),"\n";
     }
 
-    my $contigname = $usegapname && defined($gap4name) ?
-	$gap4name : $instance . "_" . $organism . "_contig_" . $contigid;
+    my $contigname = $projectprefix ? $projectname . "_contig_" . $contigid : 
+	$instance . "_" . $organism . "_contig_" . $contigid;
+
+    $contigname = $gap4name if ($usegapname && defined($gap4name));
 
     if (defined($padfh)) {
 	my $mappings = &padMap($sequence, '*');
