@@ -637,15 +637,15 @@ foreach my $keya (sort keys %{$baclinks}) {
 print "\n\n----------------------------------------------------------------------\n\n";
 print "SUPER-SCAFFOLDS\n\n";
 
-my $xmlfh;
+my $xmldata = 0;
 
 if ($xmlfile) {
-    $xmlfh = new FileHandle($xmlfile, "w");
+    $xmldata = [];
 
-    print $xmlfh "<?xml version='1.0' encoding='utf-8'?>\n";
-    print $xmlfh "\n";
-    &generateDTD($xmlfh);
-    print $xmlfh "\n";
+    push @{$xmldata}, "<?xml version='1.0' encoding='utf-8'?>\n";
+    push @{$xmldata}, "\n";
+    &generateDTD($xmldata);
+    push @{$xmldata}, "\n";
 
     my $ticks = time;
     my @now = localtime($ticks);
@@ -653,7 +653,7 @@ if ($xmlfile) {
 			  1900+$now[5], 1+$now[4], $now[3],
 			  $now[2], $now[1], $now[0]);
 
-    print $xmlfh "<assembly instance=\"$instance\" organism=\"$organism\" date=\"$thedate\" >\n";
+    push @{$xmldata}, "<assembly instance=\"$instance\" organism=\"$organism\" date=\"$thedate\" >\n";
 }
 
 my $scaffoldtosuperscaffold = {};
@@ -774,8 +774,8 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 	print "Saved as project $newproject\n\n";
     }
 
-    if ($xmlfh && $totbp >= $minprojectsize && $contigcount > 1) {
-	print $xmlfh "\t<superscaffold id=\"$seedscaffoldid\" size=\"$totbp\" >\n";
+    if ($xmldata && $totbp >= $minprojectsize && $contigcount > 1) {
+	push @{$xmldata}, "\t<superscaffold id=\"$seedscaffoldid\" size=\"$totbp\" >\n";
 
 	my $isScaffold = 1;
 
@@ -785,7 +785,7 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 
 		$scaffold = $scaffoldfromid{$scaffoldid};
 
-		print $xmlfh "\t\t<scaffold id=\"$scaffoldid\" sense=\"$sense\" >\n";
+		push @{$xmldata}, "\t\t<scaffold id=\"$scaffoldid\" sense=\"$sense\" >\n";
 
 		my $isContig = 1;
 
@@ -802,18 +802,18 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 
 			$projid = $projectid2name->{$projid} if $shownames;
 
-			print $xmlfh "\t\t\t<contig id=\"$contigid\" $contigname size=\"$ctglen\"" .
+			push @{$xmldata}, "\t\t\t<contig id=\"$contigid\" $contigname size=\"$ctglen\"" .
 			    " project=\"$projid\" sense=\"$sense\" />\n";
 		    } else {
 			my ($gapsize, $bridges) = @{$entry};
-			print $xmlfh "\t\t\t<gap size=\"$gapsize\">\n";
+			push @{$xmldata}, "\t\t\t<gap size=\"$gapsize\">\n";
 			foreach my $bridge (@{$bridges}) {
 			    my ($template_id, $gapsize, $insertsize, $linka, $linkb) = @{$bridge};
 			    my ($silow, $sihigh) = @{$insertsize};
 
 			    #$template_id = $templatenames{$template_id} if $shownames;
 			    
-			    print $xmlfh "\t\t\t\t<bridge template=\"$template_id\"" .
+			    push @{$xmldata}, "\t\t\t\t<bridge template=\"$template_id\"" .
 				" silow=\"$silow\" sihigh=\"$sihigh\" gapsize=\"$gapsize\">\n";
 			    
 			    my ($link_contig, $link_read, $link_cstart, $link_cfinish, $link_direction) = @{$linka};
@@ -824,7 +824,7 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 
 			    #$link_contig = $contigname->{$link_contig} if $shownames;
 
-			    print $xmlfh "\t\t\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
+			    push @{$xmldata}, "\t\t\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
 				" cstart=\"$link_cstart\" cfinish=\"$link_cfinish\" sense=\"$link_direction\" />\n";
 			    			    
 			    my ($link_contig, $link_read, $link_cstart, $link_cfinish, $link_direction) = @{$linkb};
@@ -835,18 +835,18 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 
 			    #$link_contig = $contigname->{$link_contig} if $shownames;
 			    
-			    print $xmlfh "\t\t\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
+			    push @{$xmldata}, "\t\t\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
 				" cstart=\"$link_cstart\" cfinish=\"$link_cfinish\" sense=\"$link_direction\" />\n";
 			    
-			print $xmlfh "\t\t\t\t</bridge>\n";
+			push @{$xmldata}, "\t\t\t\t</bridge>\n";
 			}
-			print $xmlfh "\t\t\t</gap>\n";
+			push @{$xmldata}, "\t\t\t</gap>\n";
 		    }
 		    
 		    $isContig = !$isContig;
 		}
 
-		print $xmlfh "\t\t</scaffold>\n";
+		push @{$xmldata}, "\t\t</scaffold>\n";
 	    } else {
 		foreach my $link (@{$item}) {
 		    my ($linka, $linkb, $template_id, $insertsize) = @{$link};
@@ -854,7 +854,7 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 
 		    #$template_id = $templatenames{$template_id} if $shownames;
 
-		    print $xmlfh "\t\t<superbridge template=\"$template_id\" silow=\"$silow\" sihigh=\"$sihigh\">\n";
+		    push @{$xmldata}, "\t\t<superbridge template=\"$template_id\" silow=\"$silow\" sihigh=\"$sihigh\">\n";
 			    
 		    my ($link_scaffold, $link_sense, $link_contig, $link_project,
 			$link_read, $link_cstart, $link_cfinish, $link_direction) = @{$linka};
@@ -865,7 +865,7 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 
 		    #$link_contig = $contigname->{$link_contig} if $shownames;
 			    
-		    print $xmlfh "\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
+		    push @{$xmldata}, "\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
 			" cstart=\"$link_cstart\" cfinish=\"$link_cfinish\" sense=\"$link_direction\" />\n";
 			    
 		    my ($link_scaffold, $link_sense, $link_contig, $link_project,
@@ -877,35 +877,55 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 
 		    #$link_contig = $contigname->{$link_contig} if $shownames;
 			    
-		    print $xmlfh "\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
+		    push @{$xmldata}, "\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
 			" cstart=\"$link_cstart\" cfinish=\"$link_cfinish\" sense=\"$link_direction\" />\n";
 
-		    print $xmlfh "\t\t</superbridge>\n";
+		    push @{$xmldata}, "\t\t</superbridge>\n";
 		}
 	    }
 
 	    $isScaffold = !$isScaffold;
 	}
 
-	print $xmlfh "\t</superscaffold>\n\n";
+	push @{$xmldata}, "\t</superscaffold>\n\n";
     }
 }
 
 $sth_templates->finish();
 
-$dbh->disconnect();
+if ($xmldata) {
+    push @{$xmldata}, "</assembly>\n";
 
-if ($xmlfh) {
-    print $xmlfh "</assembly>\n";
-    $xmlfh->close();
+    my $xmltext = join("", @{$xmldata});
+
+    if ($xmlfile eq 'DATABASE') {
+	my $query = "insert into NOTE(creator,created,type,format,content) " .
+	    "VALUES (?,NOW(),?,?,?)";
+
+	my $sth = $dbh->prepare($query);
+
+	my $username = getpwuid($>);
+
+	$sth->execute($username, 'scaffold', 'text/xml', $xmltext);
+
+	$sth->finish();
+    } else {
+	my $xmlfh = new FileHandle($xmlfile, "w");
+
+	print $xmlfh $xmltext;
+
+	$xmlfh->close();
+    }
 }
+
+$dbh->disconnect();
 
 exit(0);
 
 sub generateDTD {
-    my $fh = shift;
+    my $fdata = shift;
 
-    print $fh <<END_OF_DTD;
+    push @{$fdata}, <<END_OF_DTD;
 <!DOCTYPE assembly [
 <!ELEMENT assembly (superscaffold*) >
 
