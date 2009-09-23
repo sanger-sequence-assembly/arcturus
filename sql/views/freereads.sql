@@ -8,5 +8,4 @@ CREATE
   on (READINFO.read_id = SEQ2READ.read_id
   and SEQ2READ.seq_id = MAPPING.seq_id
   and MAPPING.contig_id = CURRENTCONTIGS.contig_id)
-  where READINFO.status < 2
-  and CURRENTCONTIGS.contig_id is null;
+  where CURRENTCONTIGS.contig_id is null;
