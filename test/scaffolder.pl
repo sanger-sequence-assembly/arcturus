@@ -116,6 +116,26 @@ my $adb = new ArcturusDatabase(-instance => $instance,
 my $dbh = $adb->getConnection();
 
 ###
+### If XML output has been requested, and the mode is DATABASE,
+### check whether the contigs have been modified more recently
+### than the last scaffold XML object to be stored in the database.
+###
+
+if (defined($xmlfile) && $xmlfile eq 'DATABASE') {
+    if (&countContigsChangedSinceLastScaffold($dbh) == 0) {
+	$dbh->disconnect();
+	exit(0);
+    }
+}
+
+###
+### Specifying "-xml DATABASE!" overrides the preceding check and
+### still stores the XML in the NOTE table.
+###
+
+$xmlfile = 'DATABASE' if (defined($xmlfile) && $xmlfile eq 'DATABASE!');
+
+###
 ### Create statement handles for all the queries that we will need
 ### later.
 ###
@@ -997,6 +1017,47 @@ sub generateDTD {
 END_OF_DTD
 }
 
+sub countContigsChangedSinceLastScaffold {
+    my $dbh = shift;
+
+    my $query = "select count(*) from CURRENTCONTIGS";
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute();
+
+    my ($count) = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    return 0 if ($count == 0);
+
+    $query = "select count(*) from NOTE where type = ?";
+
+    $sth = $dbh->prepare($query);
+
+    $sth->execute('scaffold');
+
+    ($count) = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    return 1 if ($count == 0);
+
+    $query = "select count(*) from CONTIG where updated > " .
+	"(select max(created) from NOTE where type = ?)";
+
+    $sth = $dbh->prepare($query);
+
+    $sth->execute('scaffold');
+
+    ($count) = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    return $count;
+}
+
 sub FindNextSuperBridge {
     my ($bridges, $minscore, $usedscaffolds, $junk) = @_;
 
@@ -1323,7 +1384,11 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-out\t\tName of output file (default: standard output)\n";
+    print STDERR "\n";
     print STDERR "-xml\t\tName of XML file to store scaffolds\n";
+    print STDERR "\t\t(Use DATABASE to store as a blob in the NOTE table,\n";
+    print STDERR "\t\t or DATABASE! to override date checks.)\n";
+    print STDERR "\n";
     print STDERR "-minbridges\tMinimum number of pUC bridges (default: 2)\n";
     print STDERR "-minbacbridges\tMinimum number of BAC bridges (default: 2)\n";
     print STDERR "-minlen\t\tMinimum contig length (default: all contigs)\n";
