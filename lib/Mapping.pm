@@ -649,6 +649,34 @@ sub applyMirrorTransform { # mirror (different from inverse)
 
     return 1;
 }
+
+sub extendToFill {
+# extend first and last segment to fill a given range in Y-domain
+    my $this = shift;
+    my $scfstart = shift;
+    my $scffinal = shift;
+
+    my $mid = $this->{token};
+
+    $this->normalise();
+
+    my $segments = $this->getSegments();
+
+    return unless $segments->[0];
+
+    my $segment = $segments->[0];
+    if ($scfstart < $segment->getYfinis()) {
+        $segment->modify('L',$scfstart,$mid);
+    }
+    $segment = $segments->[$#$segments];
+    if ($scffinal > $segment->getYstart()) { 
+        $segment->modify('R',$scffinal,$mid);
+    }
+
+    undef $this->{objectrange}; # force re-initialisation of cache
+
+    return $this;
+}
  
 #-------------------------------------------------------------------
 # importing alignment segments
@@ -1046,19 +1074,22 @@ sub transform {
 # which map to the output range
 
     my $transform = $helper->multiply($this);
-    my $segments = $transform->normaliseOnY();
+# no segments when input range outside mapping input window
+    my $segments = $transform->normaliseOnY() || []; 
 
 # extract the actual mapped part as a list of arrays of length 2
+# is this actually used anywhere? 
 
     my @output;
     foreach my $segment (@$segments) {
-        my @section = $segment->getYstart(),$segment->getYfinis();
+        my @section = ($segment->getYstart(),$segment->getYfinis());
         push @output,[@section];
     }
 
 # return the mapped interval(s) and the transform (which has alignment info)
 
     return [@output],$transform;
+#   return $transform;
 }
 
 sub transformString {
@@ -1069,11 +1100,11 @@ sub transformString {
 
 # get the part(s) in the mapped domain (starts at position 1)
 
-    my ($list,$transform) = $this->transform(1,length($string));
+#    my ($list,$transform) = $this->transform(1,length($string));
+    my $transform = $this->transform(1,length($string));
     my $alignment = $transform->getAlignment() || return undef;
-#print STDOUT $transform->toString();
 
-    $options{gapsymbol} = 'n' unless defined $options{gapsymbol};
+    $options{gapsymbol} = '-' unless defined $options{gapsymbol};
     my $gapsymbol = $options{gapsymbol};
 
     my $output;
@@ -1100,8 +1131,8 @@ sub transformString {
 	}
 	else {
 	    $output = $substring;
-            $pfinal = $segment->getYfinis();
 	}
+        $pfinal = $segment->getYfinis();
     }
     
     return $output;
@@ -1115,10 +1146,10 @@ sub transformArray {
 
 # get the part(s) in the mapped domain (starts at position 1)
 
-    my ($output,$transform) = $this->transform(1,scalar(@$array));
+    my $transform = $this->transform(1,scalar(@$array));
     my $alignment = $transform->getAlignment() || return undef;
 
-    $options{gapvalue} = 1 unless defined $options{gapsymbol};
+    $options{gapvalue} = 1 unless defined $options{gapvalue};
     my $gapvalue = $options{gapvalue};
 
     my @output;
@@ -1145,9 +1176,7 @@ sub transformArray {
                 push @output, $gapvalue;
 	    }
 	}
-	else {
-            $pfinal = $segment->getYfinis();
-	}
+        $pfinal = $segment->getYfinis();
         push @output,@subarray;
     }
     
@@ -1221,9 +1250,10 @@ sub writeToString {
     my $yrange = findYrange($segments);
 
     my $maximum = 1;
-    foreach my $position (@$xrange,@$yrange     ) {
+    foreach my $position (@$xrange,@$yrange) {
         $maximum = abs($position) if (abs($position) > $maximum);
     }
+    my $nd = int(log($maximum)/log(10)) + 2;
 
     my $string = '';
     foreach my $segment (@$segments) {
@@ -1235,6 +1265,7 @@ sub writeToString {
         }
         $string .= $text;
         foreach my $position (@segment) {
+#            $string .= sprintf " %${nd}d",$position;
             $string .= sprintf " %d",$position;
 	}
         if ($options{extended}) {
@@ -1268,7 +1299,7 @@ sub toString {
 # force redetermination of intervals
         if (!$options{range} || $options{range} eq 'X') {
            ($cstart, $cfinis) =  $this->getContigRange(1);
-	    $range = 'contig';
+	    $range = 'object';
         }
 	else {
            ($cstart, $cfinis) =  $this->getMappedRange(1);
