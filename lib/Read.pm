@@ -201,6 +201,54 @@ sub isEdited {
 # warning: possible edits to quality data are not captured here
 }
 
+sub encodeAlignToTraceMapping {
+# return align to trace mapping in cigar format 
+    my $this = shift;
+    my %options = @_;
+
+    my $attm = $this->getAlignToTraceMapping();
+
+    return '' if ($options{composite} && $attm->hasSegments() <= 1);
+
+    my $segments = $attm->getSegments();
+
+    my $cigarcode = '';
+    my ($xl,$yl) = (0, 0);
+    foreach my $segment (@$segments) {
+        my ($xs,$xf,$ys,$yf) = $segment->getSegment();
+        if (($xs - $xl) <  1 || ($ys - $yl) < 1) {
+            return undef; # invalid mapping, can't do
+        }
+        elsif (($xs - $xl) == 1) {
+# an insert in Y is expected
+            if (($ys - $yl) > 1) {
+                my $delete = ($ys - $yl) - 1;
+                $cigarcode .= "D$delete";
+	    }
+	}
+        else { # xs-xl > 1
+# an edit of delete in Y is expected
+            if (($ys - $yl) == ($xs - $xl)) {
+                my $edit = ($ys - $yl) - 1;
+                $cigarcode .= "E$edit";
+            } 
+            elsif (($ys - $yl) == 1) {
+                my $insert = ($xs - $xl) - 1;
+                $cigarcode .= "I$insert";
+	    }
+	    else {
+# this is ambiguous: min (xs-xf , ys-yf) deletes, rest edits, but where?
+                return undef;
+	    }
+	}
+
+        $cigarcode .= "M".$segment->getSegmentLength();
+        ($xl,$yl) = ($xf,$yf);
+    }
+
+    return $cigarcode;    
+}
+
 #--------------------------------------------------
 # alternative align-to-trace representation with mapping segments
 #--------------------------------------------------
@@ -1013,6 +1061,10 @@ sub writeToBaf {
     print $FILE "QL=$ql\n";
     print $FILE "QR=$qr\n";
 # TO BE COMPLETED: PR SI SS
+    if (my $st = $this->getStrand()) {
+        my $pr = ($st eq "Reverse" ? 1 : 0);
+        print $FILE "PR=$pr\n";
+    }
     if (my $li = $this->getLigation()) {
 #	print $FILE "SO=$li\n";
     }
@@ -1029,8 +1081,7 @@ sub writeToBaf {
 #        print $FILE "SS=$ss\n";
     }
 # align to trace mapping in "cigar" format
-    my $attm = $this->getAlignToTraceMapping();
-    my $al = $attm->runlengthEncode(composite=>1);
+    my $al = $this->encodeAlignToTraceMapping(composite=>1);
     unless (defined($al)) {
 	print STDERR "invalid align-to-trace mapping in read $rd\n";
     }
