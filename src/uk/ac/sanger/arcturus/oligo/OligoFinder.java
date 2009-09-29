@@ -74,7 +74,10 @@ public class OligoFinder {
 	class Task extends Thread {
 		private Connection conn;
 
-		private final String strFreeReads = "select read_id,readname from FREEREADS";
+		private final String strFreeReads = "select R.read_id,R.readname" +
+			" from FREEREADS FR left join (READINFO R, STATUS S)" +
+			" using (read_id) where R.status = S.status_id and S.name = 'PASS'";
+		
 		private PreparedStatement pstmtFreeReads;
 
 		Read[] reads = null;
@@ -92,9 +95,7 @@ public class OligoFinder {
 
 					if (rs != null) {
 						while (rs.next())
-							v
-									.add(new Read(rs.getString(2),
-											rs.getInt(1), null));
+							v.add(new Read(rs.getString(2), rs.getInt(1), null));
 					}
 
 					reads = (Read[]) v.toArray(new Read[0]);
