@@ -26,10 +26,16 @@ public class ReadFinder {
 	}
 
 	private void prepareStatements() throws SQLException {
-		pstmtReadNameToID = conn.prepareStatement("select read_id from READINFO where readname = ?");
+		String query = "select R.read_id,S.name from READINFO R left join STATUS S" +
+			" on (R.status = S.status_id) where R.readname = ?";
+
+		pstmtReadNameToID = conn.prepareStatement(query);
 		
-		pstmtReadNameLikeToID = conn.prepareStatement(
-				"select read_id from READINFO where readname like ? order by readname asc");
+		query = "select R.read_id,S.name from READINFO R left join STATUS S" +
+			" on (R.status = S.status_id) where R.readname like ?" +
+			" order by readname asc";
+		
+		pstmtReadNameLikeToID = conn.prepareStatement(query);
 		
 		pstmtReadToContig = conn
 				.prepareStatement("select CURRENTCONTIGS.contig_id,cstart,cfinish,direction"
@@ -94,6 +100,9 @@ public class ReadFinder {
 			nreads++;
 			
 			int readid = rs.getInt(1);
+			String status = rs.getString(2);
+			
+			boolean passed = status != null && status.equalsIgnoreCase("PASS");
 			
 			Read read = adb.getReadByID(readid);
 			
@@ -129,7 +138,7 @@ public class ReadFinder {
 			
 			rs2.close();
 			
-			if (readIsFree && listener != null)
+			if (readIsFree && passed && listener != null)
 				listener.readFinderUpdate(event);
 		}
 		
