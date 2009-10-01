@@ -11,9 +11,9 @@ public class SmithWaterman {
 			return null;
 
 		int sMatch = smat.getMatchScore();
-		int sMismatch = smat.getMismatchScore();
-		int sGapInit = smat.getGapInitScore();
-		//int sGapExtend = smat.getGapExtendScore();
+		int sMismatch = smat.getMismatchPenalty();
+		int sGapInit = smat.getGapInitPenalty();
+		//int sGapExtend = smat.getGapExtendPenalty();
 		
 		int bestScore = -1;
 
