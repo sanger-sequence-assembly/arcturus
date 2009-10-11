@@ -34,8 +34,7 @@ public class CreateContigTransferPanel extends MinervaPanel {
 
 	protected JFileChooser fileChooser = new JFileChooser();
 
-	public CreateContigTransferPanel(ArcturusDatabase adb,
-			MinervaTabbedPane parent) {
+	public CreateContigTransferPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
 		super(parent, adb);
 
 		this.adb = adb;

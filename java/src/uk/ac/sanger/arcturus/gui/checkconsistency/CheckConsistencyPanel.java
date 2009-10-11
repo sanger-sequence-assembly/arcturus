@@ -20,8 +20,8 @@ public class CheckConsistencyPanel extends MinervaPanel {
 	protected JButton btnRefresh;
 	protected JButton btnClear;
 
-	public CheckConsistencyPanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
-		super(new BorderLayout(), parent, adb);
+	public CheckConsistencyPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
+		super(parent, adb);
 		
 		try {
 			InputStream is = getClass().getResourceAsStream("/resources/xml/checkconsistency.xml");

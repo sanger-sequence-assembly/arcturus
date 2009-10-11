@@ -31,7 +31,7 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 
 	protected ReadFinder readFinder;
 	
-	public ReadFinderPanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
+	public ReadFinderPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
 		super(parent, adb);
 		
 		try {
