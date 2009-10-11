@@ -195,6 +195,7 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		};
 	}
 	
+	@SuppressWarnings("unchecked")
 	private void showMinervaPanel(final PermanentView view) {
 		MinervaPanel panel = permanentComponents.get(view);
 
