@@ -229,7 +229,7 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		
 		Constructor<MinervaPanel> ctor = panelClass.getConstructor(MinervaTabbedPane.class, ArcturusDatabase.class);
 
-		MinervaPanel panel = (MinervaPanel)ctor.newInstance(this, adb);
+		MinervaPanel panel = ctor.newInstance(this, adb);
 		
 		return panel;
 	}
