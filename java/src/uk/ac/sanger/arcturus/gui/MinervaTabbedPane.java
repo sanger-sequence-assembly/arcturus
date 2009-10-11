@@ -220,7 +220,7 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 
 	}
 	
-	private MinervaPanel createMinervaPanel(Class panelClass)
+	private MinervaPanel createMinervaPanel(Class<MinervaPanel> panelClass)
 		throws SecurityException, NoSuchMethodException, IllegalArgumentException,
 			InstantiationException, IllegalAccessException, InvocationTargetException {
 		if (!MinervaPanel.class.isAssignableFrom(panelClass))
