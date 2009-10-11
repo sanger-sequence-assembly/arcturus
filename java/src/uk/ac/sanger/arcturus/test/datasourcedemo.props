@@ -1,3 +1,0 @@
-java.naming.factory.initial=com.sun.jndi.ldap.LdapCtxFactory
-java.naming.provider.url=ldap://ldap.internal.sanger.ac.uk/cn=test,cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk
-java.naming.security.principal=cn=Manager,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk

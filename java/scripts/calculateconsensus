@@ -1,8 +1,0 @@
-#!/bin/csh -f
-
-setenv JAVA_OPTS "-Djava.awt.headless=true"
-
-set basedir=`dirname $0`
-source ${basedir}/setup.csh
-
-${JAVA_HOME}/bin/java ${JAVA_OPTS} -classpath ${ARCTURUS_JAR} ${ARCTURUS_UTILS_PACKAGE}.CalculateConsensus $*
