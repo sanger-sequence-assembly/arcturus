@@ -8,7 +8,6 @@ import java.awt.Font;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 
-import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.gui.scaffoldmanager.node.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
@@ -24,7 +23,7 @@ public class ScaffoldManagerPanel extends MinervaPanel {
 	private JLabel lblWait = new JLabel("Please wait whilst the scaffold tree is retrieved");
 
 	public ScaffoldManagerPanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
-		super(new BorderLayout(), parent, adb);
+		super(parent, adb);
 
 		createActions();
 
