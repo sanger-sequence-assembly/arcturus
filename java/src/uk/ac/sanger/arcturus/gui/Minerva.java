@@ -198,12 +198,25 @@ public class Minerva {
 			throws SQLException, NamingException {
 		ArcturusDatabase adb = ai[0].findArcturusDatabase(organism);
 
+		return createOrganismDisplay(adb);
+	}
+
+
+	public MinervaTabbedPane createOrganismDisplay(Organism organism)
+			throws SQLException {
+		ArcturusDatabase adb = new ArcturusDatabaseImpl(organism);
+		
+		return createOrganismDisplay(adb);
+	}
+
+	private MinervaTabbedPane createOrganismDisplay(ArcturusDatabase adb)
+			throws SQLException {
 		adb.setCacheing(ArcturusDatabase.READ, false);
 		adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
 
 		MinervaTabbedPane panel = new MinervaTabbedPane(adb);
-
-		panel.showProjectTablePanel();
+		
+		panel.showProjectTable();
 
 		return panel;
 	}
@@ -225,20 +238,6 @@ public class Minerva {
 			frame.setState(JFrame.NORMAL);
 			frame.toFront();
 		}
-	}
-
-	public MinervaTabbedPane createOrganismDisplay(Organism organism)
-			throws SQLException {
-		ArcturusDatabase adb = new ArcturusDatabaseImpl(organism);
-
-		adb.setCacheing(ArcturusDatabase.READ, false);
-		adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
-
-		MinervaTabbedPane panel = new MinervaTabbedPane(adb);
-
-		panel.showProjectTablePanel();
-
-		return panel;
 	}
 
 	class SplashWindow extends JWindow {

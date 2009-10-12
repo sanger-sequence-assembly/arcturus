@@ -30,9 +30,10 @@ import uk.ac.sanger.arcturus.gui.genericdisplay.*;
 public class ScaffoldPanel extends MinervaPanel {
 	protected final GenericContigDisplayPanel panel;
 	
-	public ScaffoldPanel(ContigBox[] contigboxes, Set bridgeset,
-				Contig seedcontig, MinervaTabbedPane mtp, ArcturusDatabase adb) {
-		super(new BorderLayout(), mtp, adb);
+	public ScaffoldPanel(MinervaTabbedPane mtp, ArcturusDatabase adb,
+			ContigBox[] contigboxes, Set bridgeset,
+			Contig seedcontig) {
+		super(mtp, adb);
 		
 		panel = new GenericContigDisplayPanel(seedcontig);
 
@@ -119,7 +120,7 @@ public class ScaffoldPanel extends MinervaPanel {
 	protected void populate(ContigBox[] contigboxes, Set bridgeset, Contig seedcontig) {
 		int dragMode = DrawableFeature.DRAG_XY;
 
-		HashMap contigmap = new HashMap();
+		HashMap<Contig, ContigFeature> contigmap = new HashMap<Contig, ContigFeature>();
 
 		for (int i = 0; i < contigboxes.length; i++) {
 			ContigBox cb = contigboxes[i];
@@ -175,11 +176,11 @@ public class ScaffoldPanel extends MinervaPanel {
 		return new Dimension(width, height);
 	}
 
-	protected Map createLayout(Set bridges) {
-		Map layout = new HashMap();
+	protected Map createLayout(Set<Bridge> bridges) {
+		Map<Contig, ContigBox> layout = new HashMap<Contig, ContigBox>();
 		RowRanges rowranges = new RowRanges();
 
-		Vector bridgevector = new Vector(bridges);
+		Vector<Bridge> bridgevector = new Vector<Bridge>(bridges);
 
 		Collections.sort(bridgevector, new BridgeComparator());
 

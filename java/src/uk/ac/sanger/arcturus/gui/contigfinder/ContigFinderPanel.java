@@ -38,7 +38,7 @@ public class ContigFinderPanel extends MinervaPanel {
 
 	private ContigByID comparator = new ContigByID();
 
-	public ContigFinderPanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
+	public ContigFinderPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
 		super(parent, adb);
 
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
