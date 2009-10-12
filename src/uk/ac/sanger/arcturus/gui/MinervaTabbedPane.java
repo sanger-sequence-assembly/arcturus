@@ -3,14 +3,18 @@ package uk.ac.sanger.arcturus.gui;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.Map;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.gui.oligofinder.OligoFinderPanel;
 import uk.ac.sanger.arcturus.gui.projecttable.ProjectTablePanel;
 import uk.ac.sanger.arcturus.gui.importreads.ImportReadsPanel;
 import uk.ac.sanger.arcturus.gui.checkconsistency.CheckConsistencyPanel;
+import uk.ac.sanger.arcturus.gui.contigtransfertable.AdministratorContigTransferTablePanel;
 import uk.ac.sanger.arcturus.gui.contigtransfertable.ContigTransferTablePanel;
 import uk.ac.sanger.arcturus.gui.createcontigtransfers.CreateContigTransferPanel;
 import uk.ac.sanger.arcturus.gui.readfinder.ReadFinderPanel;
@@ -24,44 +28,154 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	protected MinervaAbstractAction actionShowProjectList;
 	protected MinervaAbstractAction actionClose;
 
-	protected MinervaAbstractAction actionShowReadImporter;
-	protected MinervaAbstractAction actionShowOligoFinder;
-	protected MinervaAbstractAction actionShowReadFinder;
-	protected MinervaAbstractAction actionShowContigFinder;
-	protected MinervaAbstractAction actionShowContigTransfers;
-	protected MinervaAbstractAction actionShowAllContigTransfers;
-	protected MinervaAbstractAction actionShowCreateContigTransfer;
-	protected MinervaAbstractAction actionCheckConsistency;
+	protected Map<PermanentView, MinervaPanel> permanentComponents =
+		new HashMap<PermanentView, MinervaPanel>();
 
-	protected Map<String, MinervaPanel> permanentComponents = new HashMap<String, MinervaPanel>();
+	class PermanentView {
+		final private Class panelClass;
+		private String menuText;
+		private String tabText;
+		private String description;
+		private Integer mnemonic;
+		private KeyStroke accelerator;
+		private boolean isAdministratorView;
 
-	private static final String PROJECT_TABLE = "PROJECT_TABLE";
-	private static final String IMPORT_READS = "IMPORT_READS";
-	private static final String READ_FINDER = "READ_FINDER";
-	private static final String CONTIG_FINDER = "CONTIG_FINDER";
-	private static final String CONTIG_TRANSFER_TABLE = "CONTIG_TRANSFER_TABLE";
-	private static final String ADMIN_CONTIG_TRANSFER_TABLE = "ADMIN_CONTIG_TRANSFER_TABLE";
-	private static final String CREATE_CONTIG_TRANSFER = "CREATE_CONTIG_TRANSFER";
-	private static final String OLIGO_FINDER = "OLIGO_FINDER";
-	private static final String CHECK_CONSISTENCY = "CHECK_CONSISTENCY";
+		public PermanentView(Class panelClass, String menuText, String tabText,
+				String description, int mnemonic, KeyStroke accelerator,
+				boolean isAdministratorView) {
+			this.panelClass = panelClass;
+			this.menuText = menuText;
+			this.tabText = tabText;
+			this.description = description;
+			this.mnemonic = mnemonic;
+			this.accelerator = accelerator;
+			this.isAdministratorView = isAdministratorView;
+		}
+
+		public Class getPanelClass() {
+			return panelClass;
+		}
+
+		public String getMenuText() {
+			return menuText;
+		}
+
+		public String getTabText() {
+			return tabText;
+		}
+
+		public String getDescription() {
+			return description;
+		}
+
+		public Integer getMnemonic() {
+			return mnemonic;
+		}
+
+		public KeyStroke getAccelerator() {
+			return accelerator;
+		}
+
+		public boolean isAdministratorView() {
+			return isAdministratorView;
+		}
+	}
+	
+	private final PermanentView projectTableView = 
+		new PermanentView(
+				ProjectTablePanel.class,
+				"Open project list",
+				"Projects",
+				"Open list of all projects",
+				KeyEvent.VK_O,
+				KeyStroke.getKeyStroke(KeyEvent.VK_O, ActionEvent.CTRL_MASK),
+				false);
+
+	private PermanentView[] permanentViews = {			
+			new PermanentView(
+					ImportReadsPanel.class,
+					"Import reads",
+					"Import reads",
+					"Import reads into project",
+					KeyEvent.VK_I,
+					KeyStroke.getKeyStroke(KeyEvent.VK_I, ActionEvent.CTRL_MASK),
+					false),
+					
+			new PermanentView(
+					OligoFinderPanel.class,
+					"Find oligos",
+					"Find Oligos",
+					"Find oligo sequences in contigs and reads",
+					KeyEvent.VK_L,
+					KeyStroke.getKeyStroke(KeyEvent.VK_L, ActionEvent.CTRL_MASK),
+					false),
+					
+			new PermanentView(
+					ReadFinderPanel.class,
+					"Find reads",
+					"Find reads",
+					"Find one or more reads",
+					KeyEvent.VK_F,
+					KeyStroke.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK),
+					false),
+					
+			new PermanentView(
+					ContigFinderPanel.class,
+					"Find contigs",
+					"Find contigs",
+					"Find one or more contigs",
+					KeyEvent.VK_C,
+					KeyStroke.getKeyStroke(KeyEvent.VK_M, ActionEvent.CTRL_MASK),
+					false),
+					
+			new PermanentView(
+					CreateContigTransferPanel.class,
+					"Create contig transfers",
+					"Create contig transfers",
+					"Create one or more contig transfers",
+					KeyEvent.VK_R,
+					KeyStroke.getKeyStroke(KeyEvent.VK_R, ActionEvent.CTRL_MASK),
+					false),
+					
+			new PermanentView(
+					ContigTransferTablePanel.class,
+					"Show contig transfers",
+					"Contig transfers",
+					"Show contig transfers",
+					KeyEvent.VK_T,
+					KeyStroke.getKeyStroke(KeyEvent.VK_T, ActionEvent.CTRL_MASK),
+					false),
+					
+			new PermanentView(
+					AdministratorContigTransferTablePanel.class,
+					"Show all contig transfers",
+					"All contig transfers",
+					"Show all contig transfers",
+					KeyEvent.VK_H,
+					KeyStroke.getKeyStroke(KeyEvent.VK_H, ActionEvent.CTRL_MASK),
+					true),
+			
+			new PermanentView(
+					CheckConsistencyPanel.class,
+					"Check database consistency",
+					"Database consistency",
+					"Check the consistency of the database",
+					KeyEvent.VK_D,
+					KeyStroke.getKeyStroke(KeyEvent.VK_D, ActionEvent.CTRL_MASK),
+					false)
+	};
 
 	public MinervaTabbedPane(ArcturusDatabase adb) {
 		super();
 		this.adb = adb;
-
+		
 		createActions();
 
 		createMenu();
 	}
 
 	protected void createActions() {
-		actionShowProjectList = new MinervaAbstractAction("Open project list",
-				null, "Open project list", new Integer(KeyEvent.VK_O),
-				KeyStroke.getKeyStroke(KeyEvent.VK_O, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				showProjectTablePanel();
-			}
-		};
+		actionShowProjectList = createAction(projectTableView);
 
 		actionClose = new MinervaAbstractAction("Close", null,
 				"Close this window", new Integer(KeyEvent.VK_C), KeyStroke
@@ -70,6 +184,58 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 				closeParentFrame();
 			}
 		};
+	}
+	
+	private MinervaAbstractAction createAction(final PermanentView view) {
+		return new MinervaAbstractAction(view.getMenuText(), null, view.getDescription(),
+				new Integer(view.getMnemonic()), view.getAccelerator()) {
+			public void actionPerformed(ActionEvent e) {
+				showMinervaPanel(view);
+			}			
+		};
+	}
+	
+	@SuppressWarnings("unchecked")
+	private void showMinervaPanel(final PermanentView view) {
+		MinervaPanel panel = permanentComponents.get(view);
+
+		if (panel == null) {
+			Class panelClass = view.getPanelClass();
+
+			try {
+				panel = createMinervaPanel(panelClass);
+				
+				if (panel != null)
+					permanentComponents.put(view, panel);
+			}
+			catch (Exception e) {
+				Arcturus.logSevere("Failed to create a " + panelClass.getName() + " view", e);
+				return;
+			}
+		}
+
+		if (indexOfComponent(panel) < 0)	
+			addTab(view.getTabText(), null, panel, view.getDescription());
+		
+		setSelectedComponent(panel);
+
+	}
+	
+	private MinervaPanel createMinervaPanel(Class<MinervaPanel> panelClass)
+		throws SecurityException, NoSuchMethodException, IllegalArgumentException,
+			InstantiationException, IllegalAccessException, InvocationTargetException {
+		if (!MinervaPanel.class.isAssignableFrom(panelClass))
+			throw new IllegalArgumentException("Class " + panelClass.getName() + " is not a sub-class of MiveraPanel");
+		
+		Constructor<MinervaPanel> ctor = panelClass.getConstructor(MinervaTabbedPane.class, ArcturusDatabase.class);
+
+		MinervaPanel panel = ctor.newInstance(this, adb);
+		
+		return panel;
+	}
+	
+	public void showProjectTable() {		
+		showMinervaPanel(projectTableView);
 	}
 
 	protected void createMenu() {
@@ -110,91 +276,16 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	}
 
 	protected void addSharedFileMenuItems(JMenu menu) {
-		actionShowReadImporter = new MinervaAbstractAction(
-				"Import reads", null, "Import reads into project",
-				new Integer(KeyEvent.VK_I), KeyStroke.getKeyStroke(
-						KeyEvent.VK_I, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				showImportReadsPanel();
-			}
-		};
-
-		menu.add(actionShowReadImporter);
-
-		actionShowOligoFinder = new MinervaAbstractAction("Find oligos", null,
-				"Find oligos", new Integer(KeyEvent.VK_L), KeyStroke
-						.getKeyStroke(KeyEvent.VK_L, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				showOligoFinderPanel();
-			}
-		};
-
-		menu.add(actionShowOligoFinder);
-
-		actionShowReadFinder = new MinervaAbstractAction("Show read finder",
-				null, "Show read finder", new Integer(KeyEvent.VK_F), KeyStroke
-						.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				showReadFinderPanel();
-			}
-		};
-
-		menu.add(actionShowReadFinder);
-
-		actionShowContigFinder = new MinervaAbstractAction("Show contig finder",
-				null, "Show contig finder", new Integer(KeyEvent.VK_C), KeyStroke
-						.getKeyStroke(KeyEvent.VK_M, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				showContigFinderPanel();
-			}
-		};
-
-		menu.add(actionShowContigFinder);
-
-		actionShowContigTransfers = new MinervaAbstractAction(
-				"Show contigs transfers", null, "Show contig transfers",
-				new Integer(KeyEvent.VK_T), KeyStroke.getKeyStroke(
-						KeyEvent.VK_T, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				showContigTransferTablePanel();
-			}
-		};
-
-		actionShowAllContigTransfers = new MinervaAbstractAction(
-				"Show all contigs transfers", null,
-				"Show all contig transfers", new Integer(KeyEvent.VK_K),
-				KeyStroke.getKeyStroke(KeyEvent.VK_K, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				showAdminContigTransferTablePanel();
-			}
-		};
-
-		if (adb.isCoordinator())
-			menu.add(actionShowAllContigTransfers);
-		else
-			menu.add(actionShowContigTransfers);
-
-		actionShowCreateContigTransfer = new MinervaAbstractAction(
-				"Create contig transfers", null, "Create contig transfers",
-				new Integer(KeyEvent.VK_R), KeyStroke.getKeyStroke(
-						KeyEvent.VK_R, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				showCreateContigTransferPanel();
-			}
-		};
-
-		menu.add(actionShowCreateContigTransfer);
-
-		actionCheckConsistency = new MinervaAbstractAction(
-				"Check database consistency", null, "Check database consistency",
-				new Integer(KeyEvent.VK_D), KeyStroke.getKeyStroke(
-						KeyEvent.VK_D, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				showCheckConsistencyPanel();
-			}
-		};
-
-		menu.add(actionCheckConsistency);
+		boolean iAmCoordinator = adb.isCoordinator();
+		
+		for (int i = 0; i < permanentViews.length; i++) {
+			PermanentView view = permanentViews[i];
+			
+			boolean canInclude = iAmCoordinator || !view.isAdministratorView();
+			
+			if (canInclude)
+				menu.add(createAction(view));
+		}
 	}
 
 	public JMenuBar getMenuBar() {
@@ -215,154 +306,6 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 			return null;
 	}
 
-	public ProjectTablePanel showProjectTablePanel() {
-		ProjectTablePanel ptp = (ProjectTablePanel)permanentComponents.get(PROJECT_TABLE);
-		
-		if (ptp == null) {
-			ptp = new ProjectTablePanel(adb, this);
-			permanentComponents.put(PROJECT_TABLE, ptp);
-		}
-
-		if (indexOfComponent(ptp) < 0)
-			insertTab("Projects", null, ptp, "All projects", 0);
-
-		setSelectedComponent(ptp);
-
-		return ptp;
-	}
-
-	public ImportReadsPanel showImportReadsPanel() {
-		ImportReadsPanel irp = (ImportReadsPanel)permanentComponents.get(IMPORT_READS);
-		
-		if (irp == null) {
-			irp = new ImportReadsPanel(adb, this);
-			permanentComponents.put(IMPORT_READS, irp);
-		}
-
-		if (indexOfComponent(irp) < 0)
-			addTab("Import reads", null, irp, "Import reads");
-
-		setSelectedComponent(irp);
-
-		return irp;
-	}
-
-	public ReadFinderPanel showReadFinderPanel() {
-		ReadFinderPanel rfp = (ReadFinderPanel)permanentComponents.get(READ_FINDER);
-		
-		if (rfp == null) {
-			rfp = new ReadFinderPanel(adb, this);
-			permanentComponents.put(READ_FINDER, rfp);
-		}
-
-		if (indexOfComponent(rfp) < 0)
-			addTab("Find reads", null, rfp, "Find reads");
-
-		setSelectedComponent(rfp);
-
-		return rfp;
-	}
-	
-	public ContigFinderPanel showContigFinderPanel() {
-		ContigFinderPanel cfp = (ContigFinderPanel)permanentComponents.get(CONTIG_FINDER);
-		
-		if (cfp == null) {
-			cfp = new ContigFinderPanel(adb, this);
-			permanentComponents.put(CONTIG_FINDER, cfp);
-		}
-
-		if (indexOfComponent(cfp) < 0)
-			addTab("Find contigs", null, cfp, "Find contigs");
-
-		setSelectedComponent(cfp);
-
-		return cfp;
-	}
-
-	public ContigTransferTablePanel showContigTransferTablePanel() {
-		ContigTransferTablePanel cttp = (ContigTransferTablePanel)permanentComponents.get(CONTIG_TRANSFER_TABLE);
-		
-		if (cttp == null) {
-			cttp = new ContigTransferTablePanel(adb, adb.findMe(), this, false);
-			permanentComponents.put(CONTIG_TRANSFER_TABLE, cttp);
-		}
-
-		if (indexOfComponent(cttp) < 0)
-			addTab("Contig transfers", null, cttp, "Contig transfers");
-
-		setSelectedComponent(cttp);
-
-		cttp.resetDivider();
-
-		return cttp;
-	}
-
-	public ContigTransferTablePanel showAdminContigTransferTablePanel() {
-		ContigTransferTablePanel cttpAdmin = (ContigTransferTablePanel)permanentComponents.get(ADMIN_CONTIG_TRANSFER_TABLE);
-	
-		if (cttpAdmin == null) {
-			cttpAdmin = new ContigTransferTablePanel(adb, adb.findMe(), this, true);
-			permanentComponents.put(ADMIN_CONTIG_TRANSFER_TABLE, cttpAdmin);
-		}
-
-		if (indexOfComponent(cttpAdmin) < 0)
-			addTab("All contig transfers", null, cttpAdmin,
-					"All contig transfers");
-
-		setSelectedComponent(cttpAdmin);
-
-		return cttpAdmin;
-	}
-
-	public CreateContigTransferPanel showCreateContigTransferPanel() {
-		CreateContigTransferPanel cctp = (CreateContigTransferPanel)permanentComponents.get(CREATE_CONTIG_TRANSFER);
-		
-		if (cctp == null) {
-			cctp = new CreateContigTransferPanel(adb, this);
-			permanentComponents.put(CREATE_CONTIG_TRANSFER, cctp);
-		}
-		
-		if (indexOfComponent(cctp) < 0)
-			addTab("Create contig transfers", null, cctp,
-					"Create contig transfers");
-
-		setSelectedComponent(cctp);
-
-		return cctp;
-	}
-
-	public OligoFinderPanel showOligoFinderPanel() {
-		OligoFinderPanel ofp = (OligoFinderPanel)permanentComponents.get(OLIGO_FINDER);
-		
-		if (ofp == null) {
-			ofp = new OligoFinderPanel(adb, this);
-			permanentComponents.put(OLIGO_FINDER, ofp);
-		}
-		
-		if (indexOfComponent(ofp) < 0)
-			addTab("Oligo finder", null, ofp, "Oligo finder");
-
-		setSelectedComponent(ofp);
-
-		return ofp;
-	}
-
-	public CheckConsistencyPanel showCheckConsistencyPanel() {
-		CheckConsistencyPanel ccp = (CheckConsistencyPanel)permanentComponents.get(CHECK_CONSISTENCY);
-		
-		if (ccp == null) {
-			ccp = new CheckConsistencyPanel(adb, this);
-			permanentComponents.put(CHECK_CONSISTENCY, ccp);
-		}
-		
-		if (indexOfComponent(ccp) < 0)
-			addTab("Database Check", null, ccp, "Check database consistency");
-		
-		setSelectedComponent(ccp);
-		
-		return ccp;
-	}
-
 	public void addTab(String title, Component component) {
 		addTab(title, null, component, title);
 	}
@@ -374,7 +317,9 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 
 	protected void packFrame() {
 		JFrame frame = (JFrame) SwingUtilities.getRoot(this);
-		frame.pack();
+		
+		if (frame != null)
+			frame.pack();
 	}
 
 	public void closeResources() {
@@ -399,11 +344,11 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	public void remove(Component c) {
 		super.remove(c);
 		fireStateChanged();
-		
+
 		if (!isPermanent(c) && c instanceof MinervaPanel)
-			((MinervaPanel)c).closeResources();
+			((MinervaPanel) c).closeResources();
 	}
-	
+
 	protected boolean isPermanent(Component c) {
 		return permanentComponents.containsValue(c);
 	}

@@ -25,12 +25,16 @@ public class ContigTransferTablePanel extends MinervaPanel {
 
 	private ContigTransferTable tableAdmin = null;
 	private ContigTransferTableModel modelAdmin = null;
+	
+	public ContigTransferTablePanel(MinervaTabbedPane mtp, ArcturusDatabase adb) {
+		this(mtp, adb, false);
+	}
 
-	public ContigTransferTablePanel(ArcturusDatabase adb, Person user,
-			MinervaTabbedPane mtp, boolean isAdmin) {
+	protected ContigTransferTablePanel(MinervaTabbedPane mtp, ArcturusDatabase adb,
+			boolean isAdmin) {
 		super(mtp, adb);
-
-		setLayout(new BorderLayout());
+		
+		Person user = adb.findMe();
 
 		if (isAdmin) {
 			modelAdmin = new ContigTransferTableModel(adb, user,

@@ -51,7 +51,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 
 	protected DecimalFormat df = new DecimalFormat();
 
-	public OligoFinderPanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
+	public OligoFinderPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
 		super(parent, adb);
 
 		df.setGroupingSize(3);

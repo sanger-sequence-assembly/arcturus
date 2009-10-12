@@ -2,14 +2,10 @@ package uk.ac.sanger.arcturus.gui;
 
 import javax.swing.*;
 
-import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.people.PeopleManager;
-import uk.ac.sanger.arcturus.people.Person;
 
-import java.awt.LayoutManager;
+import java.awt.BorderLayout;
 import java.awt.event.*;
-import java.sql.SQLException;
 
 public abstract class MinervaPanel extends JPanel implements MinervaClient {
 	protected ArcturusDatabase adb;
@@ -22,15 +18,11 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 	protected MinervaAbstractAction actionPrint;
 	protected MinervaAbstractAction actionRefresh;
 
-	public MinervaPanel(LayoutManager layoutManager, MinervaTabbedPane parent,
+	public MinervaPanel(MinervaTabbedPane parent,
 			ArcturusDatabase adb) {
-		super(layoutManager);
+		super(new BorderLayout());
 		this.parent = parent;
 		this.adb = adb;
-	}
-
-	public MinervaPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
-		this((LayoutManager) null, parent, adb);
 	}
 
 	public JMenuBar getMenuBar() {

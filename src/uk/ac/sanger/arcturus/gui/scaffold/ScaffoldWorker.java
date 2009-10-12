@@ -55,7 +55,7 @@ public class ScaffoldWorker extends SwingWorker<Void, ScaffoldEvent> implements
 		adb.setCacheing(ArcturusDatabase.SEQUENCE, cacheing);
 
 		if (bridgeset != null && !bridgeset.isEmpty()) {
-			Map layout = createLayout(bridgeset);
+			Map<Contig, ContigBox> layout = createLayout(bridgeset);
 
 			contigBoxes = (ContigBox[]) layout.values().toArray(
 					new ContigBox[0]);
@@ -149,11 +149,11 @@ public class ScaffoldWorker extends SwingWorker<Void, ScaffoldEvent> implements
 		}
 	}
 
-	protected Map createLayout(Set bridges) {
-		Map layout = new HashMap();
+	protected Map<Contig, ContigBox> createLayout(Set<Bridge> bridges) {
+		Map<Contig, ContigBox> layout = new HashMap<Contig, ContigBox>();
 		RowRanges rowranges = new RowRanges();
 
-		Vector bridgevector = new Vector(bridges);
+		Vector<Bridge> bridgevector = new Vector<Bridge>(bridges);
 
 		Collections.sort(bridgevector, new BridgeComparator());
 
@@ -295,8 +295,8 @@ public class ScaffoldWorker extends SwingWorker<Void, ScaffoldEvent> implements
 			return;
 		
 		if (bridgeset != null && !bridgeset.isEmpty()) {
-			ScaffoldPanel sp = new ScaffoldPanel(contigBoxes, bridgeset,
-					seedcontig, mtp, adb);
+			ScaffoldPanel sp = new ScaffoldPanel(mtp, adb, contigBoxes, bridgeset,
+					seedcontig);
 			mtp.addTab("Scaffold", sp);
 			mtp.setSelectedComponent(sp);
 		} else {

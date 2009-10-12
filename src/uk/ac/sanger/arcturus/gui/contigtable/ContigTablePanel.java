@@ -5,7 +5,6 @@ import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 
 import java.awt.BorderLayout;
-import java.awt.Point;
 import java.awt.event.*;
 
 import java.sql.SQLException;
@@ -17,7 +16,6 @@ import uk.ac.sanger.arcturus.people.*;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEventListener;
 import uk.ac.sanger.arcturus.data.*;
-import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.Arcturus;
 
 public class ContigTablePanel extends MinervaPanel implements ProjectChangeEventListener {
@@ -44,8 +42,8 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 	
 	protected final ProjectComparator comparator = new ProjectComparator();
 	
-	public ContigTablePanel(Project[] projects, MinervaTabbedPane parent) {
-		super(new BorderLayout(), parent, projects[0].getArcturusDatabase());
+	public ContigTablePanel(MinervaTabbedPane parent, Project[] projects) {
+		super(parent, projects[0].getArcturusDatabase());
 		
 		projectlist = (projects != null && projects.length > 0) ? projects[0]
 				.getName() : "[null]";

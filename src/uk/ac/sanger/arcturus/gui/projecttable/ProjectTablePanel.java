@@ -41,8 +41,8 @@ public class ProjectTablePanel extends MinervaPanel implements
 	
 	private final static boolean allowBinImport = Arcturus.getBoolean("project.allowbinimport");
 
-	public ProjectTablePanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
-		super(new BorderLayout(), parent, adb);
+	public ProjectTablePanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
+		super(parent, adb);
 
 		panelNewProject = new NewProjectPanel(this, adb);
 

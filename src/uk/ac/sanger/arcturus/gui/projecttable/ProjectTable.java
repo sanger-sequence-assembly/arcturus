@@ -305,7 +305,7 @@ public class ProjectTable extends SortableTable {
 
 		MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(this);
 
-		ContigTablePanel ctp = new ContigTablePanel(projects, mtp);
+		ContigTablePanel ctp = new ContigTablePanel(mtp, projects);
 
 		mtp.add(title, ctp);
 

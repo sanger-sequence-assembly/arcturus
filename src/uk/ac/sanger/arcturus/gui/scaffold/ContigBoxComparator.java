@@ -2,11 +2,8 @@ package uk.ac.sanger.arcturus.gui.scaffold;
 
 import java.util.Comparator;
 
-public class ContigBoxComparator implements Comparator {
-	public int compare(Object o1, Object o2) {
-		ContigBox box1 = (ContigBox) o1;
-		ContigBox box2 = (ContigBox) o2;
-
+public class ContigBoxComparator implements Comparator<ContigBox> {
+	public int compare(ContigBox box1, ContigBox box2) {
 		int diff = box1.getLeft() - box2.getLeft();
 
 		if (diff != 0)
