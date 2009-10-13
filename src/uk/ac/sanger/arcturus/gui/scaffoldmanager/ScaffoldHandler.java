@@ -1,9 +1,11 @@
 package uk.ac.sanger.arcturus.gui.scaffoldmanager;
 
+import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Vector;
+import java.util.zip.DataFormatException;
 
 import javax.swing.tree.DefaultTreeModel;
 
@@ -12,6 +14,9 @@ import org.xml.sax.SAXException;
 import org.xml.sax.SAXParseException;
 import org.xml.sax.helpers.DefaultHandler;
 
+import uk.ac.sanger.arcturus.Arcturus;
+import uk.ac.sanger.arcturus.data.Contig;
+import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.gui.scaffoldmanager.node.*;
 
 public class ScaffoldHandler extends DefaultHandler {
@@ -26,6 +31,7 @@ public class ScaffoldHandler extends DefaultHandler {
 	public static final int LINK = 8;
 	
 	private DefaultTreeModel model = null;
+	private ArcturusDatabase adb;
 	
 	private AssemblyNode assemblyNode;
 	private SuperscaffoldNode superscaffoldNode;
@@ -33,8 +39,9 @@ public class ScaffoldHandler extends DefaultHandler {
 	
 	private List<SuperscaffoldNode> ssnList = new Vector<SuperscaffoldNode>();
 	
-	public ScaffoldHandler(DefaultTreeModel model) {
+	public ScaffoldHandler(DefaultTreeModel model, ArcturusDatabase adb) {
 		this.model = model;
+		this.adb = adb;
 	}
 
 	public void startDocument() throws SAXException {
@@ -119,12 +126,18 @@ public class ScaffoldHandler extends DefaultHandler {
 				break;
 
 			case CONTIG:
-				int ID = getIntegerAttribute(attrs, "id", -1);
-				int cSize = getIntegerAttribute(attrs, "size", 0);
-				int project = getIntegerAttribute(attrs, "project", -1);
+				int id = getIntegerAttribute(attrs, "id", -1);
+				Contig contig = null;
+				try {
+					contig = adb.getContigByID(id);
+				} catch (SQLException e) {
+					Arcturus.logWarning(e);
+				} catch (DataFormatException e) {
+					Arcturus.logWarning(e);
+				}
 				String cSense = attrs.getValue("sense");
 				boolean cForward = cSense.equalsIgnoreCase("F");
-				ContigNode cNode = new ContigNode(ID, project, cSize, cForward);
+				ContigNode cNode = new ContigNode(contig, cForward);
 				scaffoldNode.add(cNode);
 				break;
 

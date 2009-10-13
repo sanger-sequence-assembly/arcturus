@@ -154,6 +154,7 @@ public class ScaffoldManagerPanel extends MinervaPanel {
 			JScrollPane treepane = new JScrollPane(tree);
 			removeAll();
 			add(treepane, BorderLayout.CENTER);
+			invalidate();
 		}
 	}
 

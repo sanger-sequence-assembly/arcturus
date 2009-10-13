@@ -20,11 +20,7 @@ public class ScaffoldManagerWorker extends SwingWorker<TreeModel,Void> {
 	protected TreeModel doInBackground() throws Exception {
 		result = null;
 		
-		Connection conn = adb.getPooledConnection(this);
-		
-		result = parser.buildTreeModel(conn);
-		
-		conn.close();
+		result = parser.buildTreeModel(adb);
 		
 		return result;
 	}

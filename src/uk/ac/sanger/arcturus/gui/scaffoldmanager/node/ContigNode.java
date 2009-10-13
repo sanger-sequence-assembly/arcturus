@@ -2,21 +2,19 @@ package uk.ac.sanger.arcturus.gui.scaffoldmanager.node;
 
 import javax.swing.tree.DefaultMutableTreeNode;
 
+import uk.ac.sanger.arcturus.data.Contig;
+
 public class ContigNode extends DefaultMutableTreeNode {
-	private int ID;
-	private int projectID;
-	private int length;
+	private Contig contig;
 	private boolean forward;
 	
-	public ContigNode(int ID, int projectID, int length, boolean forward) {
-		this.ID = ID;
-		this.projectID = projectID;
-		this.length = length;
+	public ContigNode(Contig contig, boolean forward) {
+		this.contig = contig;
 		this.forward = forward;
 	}
-	
-	public int length() {
-		return length;
+
+	public Contig getContig() {
+		return contig;
 	}
 	
 	public boolean isForward() {
@@ -28,6 +26,7 @@ public class ContigNode extends DefaultMutableTreeNode {
 	}
 	
 	public String toString() {
-		return "Contig " + ID + " (" + length + " bp, project " + projectID + ")";
+		return "Contig " + contig.getID() + " (" + contig.getLength() + " bp, project "
+			+ contig.getProject().getName() + ")";
 	}
 }
