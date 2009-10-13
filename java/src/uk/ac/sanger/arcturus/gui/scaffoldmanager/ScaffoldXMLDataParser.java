@@ -12,9 +12,12 @@ import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParser;
 
 import uk.ac.sanger.arcturus.Arcturus;
+import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
 public class ScaffoldXMLDataParser {
-	public TreeModel buildTreeModel(Connection conn) throws SQLException, IOException {
+	public TreeModel buildTreeModel(ArcturusDatabase adb) throws SQLException, IOException {
+		Connection conn = adb.getPooledConnection(this);
+		
 		String query = "select content from NOTE where type = 'scaffold' order by created desc limit 1";
 		
 		Statement stmt = conn.createStatement();
@@ -26,7 +29,7 @@ public class ScaffoldXMLDataParser {
 		TreeModel model = null;
 		
 		try {
-			model = parseXMLStream(is);
+			model = parseXMLStream(is, adb);
 		} catch (ParserConfigurationException e) {
 			Arcturus.logWarning(e);
 		} catch (SAXException e) {
@@ -36,16 +39,17 @@ public class ScaffoldXMLDataParser {
 			is.close();
 			rs.close();
 			stmt.close();
+			conn.close();
 		}
 		
 		return model;
 	}
 	
-	private TreeModel parseXMLStream(InputStream is)
+	private TreeModel parseXMLStream(InputStream is, ArcturusDatabase adb)
 		throws ParserConfigurationException, SAXException, IOException {
 		DefaultTreeModel model = new DefaultTreeModel(null);
 		
-		ScaffoldHandler handler = new ScaffoldHandler(model);
+		ScaffoldHandler handler = new ScaffoldHandler(model, adb);
 		
 		SAXParserFactory factory = SAXParserFactory.newInstance();
 		

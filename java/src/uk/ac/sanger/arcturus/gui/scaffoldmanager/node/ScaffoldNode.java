@@ -16,7 +16,7 @@ public class ScaffoldNode extends DefaultMutableTreeNode {
 	public void add(MutableTreeNode node) {
 		if (node instanceof ContigNode) {
 			if (lastNode == null || lastNode instanceof GapNode) {
-				length += ((ContigNode)node).length();
+				length += ((ContigNode)node).getContig().getLength();
 				contigs++;
 			} else
 				throw new IllegalArgumentException("Cannot add a ContigNode at this point.");
