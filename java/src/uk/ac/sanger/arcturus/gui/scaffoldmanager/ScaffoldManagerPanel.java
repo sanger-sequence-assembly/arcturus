@@ -22,7 +22,7 @@ public class ScaffoldManagerPanel extends MinervaPanel {
 
 	private JLabel lblWait = new JLabel("Please wait whilst the scaffold tree is retrieved");
 
-	public ScaffoldManagerPanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
+	public ScaffoldManagerPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
 		super(parent, adb);
 
 		createActions();
