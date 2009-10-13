@@ -18,6 +18,7 @@ import uk.ac.sanger.arcturus.gui.contigtransfertable.AdministratorContigTransfer
 import uk.ac.sanger.arcturus.gui.contigtransfertable.ContigTransferTablePanel;
 import uk.ac.sanger.arcturus.gui.createcontigtransfers.CreateContigTransferPanel;
 import uk.ac.sanger.arcturus.gui.readfinder.ReadFinderPanel;
+import uk.ac.sanger.arcturus.gui.scaffoldmanager.ScaffoldManagerPanel;
 import uk.ac.sanger.arcturus.gui.contigfinder.ContigFinderPanel;
 
 public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
@@ -154,7 +155,16 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 					KeyEvent.VK_H,
 					KeyStroke.getKeyStroke(KeyEvent.VK_H, ActionEvent.CTRL_MASK),
 					true),
-			
+									
+			new PermanentView(
+					ScaffoldManagerPanel.class,
+					"Show all scaffolds",
+					"All scaffolds",
+					"Show all scaffolds",
+					KeyEvent.VK_A,
+					KeyStroke.getKeyStroke(KeyEvent.VK_A, ActionEvent.CTRL_MASK),
+					false),
+		
 			new PermanentView(
 					CheckConsistencyPanel.class,
 					"Check database consistency",
@@ -218,14 +228,13 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 			addTab(view.getTabText(), null, panel, view.getDescription());
 		
 		setSelectedComponent(panel);
-
 	}
 	
 	private MinervaPanel createMinervaPanel(Class<MinervaPanel> panelClass)
 		throws SecurityException, NoSuchMethodException, IllegalArgumentException,
 			InstantiationException, IllegalAccessException, InvocationTargetException {
 		if (!MinervaPanel.class.isAssignableFrom(panelClass))
-			throw new IllegalArgumentException("Class " + panelClass.getName() + " is not a sub-class of MiveraPanel");
+			throw new IllegalArgumentException("Class " + panelClass.getName() + " is not a sub-class of MinervaPanel");
 		
 		Constructor<MinervaPanel> ctor = panelClass.getConstructor(MinervaTabbedPane.class, ArcturusDatabase.class);
 
