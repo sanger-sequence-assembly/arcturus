@@ -112,45 +112,54 @@ public class ScaffoldManagerPanel extends MinervaPanel {
             DefaultMutableTreeNode node = (DefaultMutableTreeNode)value;
  
             Color bg = Color.white;
-            
-            boolean forward = false;
-            
-            setFont(defaultFont);
-            setIcon(null);
+            Font font = defaultFont;
+            ImageIcon icon = null;
             
             if (node instanceof ScaffoldNode) {
-            	bg = PALE_PINK;
             	ScaffoldNode sNode = (ScaffoldNode)node;
-            	forward = sNode.isForward();
-            	Font sFont = (sNode.hasMyContigs() && !expanded) ? boldFont : defaultFont;
-            	fixupLabel(this, forward, sFont);
-            } else if (node instanceof ContigNode) {         		
-            	bg = PALE_BLUE;
-            	ContigNode cNode = (ContigNode)node;
-               	forward = cNode.isForward();
-               	Font cFont = cNode.isMine() ? boldFont : defaultFont;
-            	fixupLabel(this, forward, cFont);
+            	
+            	bg = PALE_PINK;
+            	
+            	icon = sNode.isForward() ? rightArrow : leftArrow;
+            	
+            	font = (sNode.hasMyContigs() && !expanded) ? boldFont : defaultFont;
+             } else if (node instanceof ContigNode) {         		
+             	ContigNode cNode = (ContigNode)node;
+
+             	bg = PALE_BLUE;
+             	
+             	icon = cNode.isForward() ? rightArrow : leftArrow;
+
+               	font = cNode.isMine() ? boldFont : defaultFont;
             } else if (node instanceof SuperscaffoldNode) {
             	SuperscaffoldNode ssNode = (SuperscaffoldNode)node;
-            	Font ssFont = ssNode.hasMyScaffolds() && !expanded ? boldFont : defaultFont;
-            	setFont(ssFont);
+            	
+            	font = (ssNode.hasMyScaffolds() && !expanded) ? boldFont : defaultFont;
             } 
             
+            setFont(font);
+            
+            setIcon(icon);
+          
             setBackgroundNonSelectionColor(bg);
             
 			return this;
 		}
-	}
-	
-	private void fixupLabel(JLabel label, boolean forward,Font font) {
-    	label.setIcon(forward ? rightArrow : leftArrow);
-    	label.setHorizontalTextPosition(JLabel.LEFT);
-    	
-    	label.setFont(font);
-    	
-    	// The following line is a kludge to overcome a bug in the paint method
-    	// of DefaultTreeCellRenderer.
-    	label.setComponentOrientation(ComponentOrientation.RIGHT_TO_LEFT);
+		
+		private void setIcon(ImageIcon icon) {
+			super.setIcon(icon);
+			
+			if (icon != null)
+				fixup();
+		}
+		
+		private void fixup() {
+	    	setHorizontalTextPosition(JLabel.LEFT);
+	    	
+	    	// The following line is a kludge to overcome a bug in the paint method
+	    	// of DefaultTreeCellRenderer.
+	    	setComponentOrientation(ComponentOrientation.RIGHT_TO_LEFT);
+		}
 	}
 	
 	ImageIcon leftArrow = createImageIcon("/resources/icons/left-arrow-blue.png");
