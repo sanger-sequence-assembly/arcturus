@@ -82,9 +82,11 @@ public class MailHandler extends Handler {
 				
 				Throwable cause = thrown == null ? null : thrown.getCause();
 				
-				if (cause != null) {
-					sb.append("\n----- CAUSING EXCEPTION -----\n");
+				while (cause != null) {
+					sb.append("\n----- CHAINED EXCEPTION -----\n");
 					displayThrowable(cause, sb);
+					
+					cause = cause.getCause();
 				}
 			}
 			
