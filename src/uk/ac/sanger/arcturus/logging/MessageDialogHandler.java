@@ -51,6 +51,19 @@ public class MessageDialogHandler extends Handler {
 							|| ste[i].getClassName().startsWith(
 									"uk.ac.sanger.arcturus"))
 						sb.append("  [" + i + "]: " + ste[i] + "\n");
+				
+				Throwable cause = throwable.getCause();
+				
+				if (cause != null) {
+					sb.append("\n\nCAUSE: " + cause.getClass().getName() + " : " + cause.getMessage() + "\n");
+					
+					ste = cause.getStackTrace();
+					
+					for (int i = 0; i < ste.length; i++)
+						if (ste[i].getClassName().startsWith(
+										"uk.ac.sanger.arcturus"))
+							sb.append("  [" + i + "]: " + ste[i] + "\n");
+				}
 
 				message = sb.toString();
 			}
