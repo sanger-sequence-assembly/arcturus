@@ -18,7 +18,6 @@ public class ScaffoldNode extends DefaultMutableTreeNode {
 	private int reads = 0;
 	private boolean forward;
 	
-	private Map<Project, Integer> projectWeightByReads = new HashMap<Project, Integer>();
 	private Map<Project, Integer> projectWeightByLength = new HashMap<Project, Integer>();
 
 	public ScaffoldNode(boolean forward) {
@@ -55,8 +54,6 @@ public class ScaffoldNode extends DefaultMutableTreeNode {
 		reads += contigReads;
 		contigs++;
 		
-		incrementMapEntry(projectWeightByReads, project, contigReads);
-		
 		incrementMapEntry(projectWeightByLength, project, contigLength);
 	}
 	
@@ -83,35 +80,8 @@ public class ScaffoldNode extends DefaultMutableTreeNode {
 	public boolean isForward() {
 		return forward;
 	}
-	
-	public Map<Project, Float> getProjectWeightsByReads() {
-		return getProjectWeights(projectWeightByReads);
-	}
-	
-	public Map<Project, Float> getProjectWeightsByLength() {
-		return getProjectWeights(projectWeightByLength);
-	}
-	
-	private Map<Project, Float> getProjectWeights(Map<Project, Integer> map) {
-		int total = 0;
 		
-		for (Map.Entry<Project, Integer> entry : map.entrySet())
-			total += entry.getValue();
-
-		float ftotal = (float)total;
-		
-		Map<Project, Float> result = new HashMap<Project, Float>();
-		
-		for (Map.Entry<Project, Integer> entry : map.entrySet()) {
-			float frac = (float)entry.getValue() / ftotal;
-			
-			result.put(entry.getKey(), frac);
-		}
-		
-		return result;
-	}
-	
-	class ProjectAndValue implements Comparable<ProjectAndValue> {
+	private class ProjectAndValue implements Comparable<ProjectAndValue> {
 		private Project project;
 		private int value;
 		
