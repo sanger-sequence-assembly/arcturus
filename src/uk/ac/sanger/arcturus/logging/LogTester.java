@@ -8,6 +8,9 @@ public class LogTester {
 		// Explicitly set the testing flag to prevent the logging system
 		// from instantiating a MailHandler.
 		System.setProperty("testing", "true");
+		
+		// Tell Arcturus to use a console log handler instead of a message dialog handler.
+		System.setProperty("useConsoleLogHandler", "true");
 
 		Arcturus.logWarning("Starting");
 
