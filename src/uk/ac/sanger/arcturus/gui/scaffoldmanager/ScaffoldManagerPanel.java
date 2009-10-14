@@ -95,12 +95,19 @@ public class ScaffoldManagerPanel extends MinervaPanel {
 	private final Color PALE_BLUE = new Color(0xCC, 0xFF, 0xFF);
 
 	private class MyRenderer extends DefaultTreeCellRenderer {
+		private Font defaultFont = null;
+		private Font boldFont;
+				
 		public Component getTreeCellRendererComponent(JTree tree, Object value,
 				boolean sel, boolean expanded, boolean leaf, int row,
 				boolean hasFocus) {
-
-			JLabel label = (JLabel)super.getTreeCellRendererComponent(tree, value, sel, expanded,
+			super.getTreeCellRendererComponent(tree, value, sel, expanded,
 					leaf, row, hasFocus);
+			
+			if (defaultFont == null) {
+				defaultFont = getFont();
+				boldFont = defaultFont.deriveFont(Font.BOLD);
+			}
 			
             DefaultMutableTreeNode node = (DefaultMutableTreeNode)value;
  
@@ -108,16 +115,26 @@ public class ScaffoldManagerPanel extends MinervaPanel {
             
             boolean forward = false;
             
+            setFont(defaultFont);
+            setIcon(null);
+            
             if (node instanceof ScaffoldNode) {
             	bg = PALE_PINK;
-            	forward = ((ScaffoldNode)node).isForward();
-            	fixupLabel(label, forward);
+            	ScaffoldNode sNode = (ScaffoldNode)node;
+            	forward = sNode.isForward();
+            	Font sFont = (sNode.hasMyContigs() && !expanded) ? boldFont : defaultFont;
+            	fixupLabel(this, forward, sFont);
             } else if (node instanceof ContigNode) {         		
             	bg = PALE_BLUE;
-               	forward = ((ContigNode)node).isForward();
-            	fixupLabel(label, forward);
-            } else
-            	label.setIcon(null);    
+            	ContigNode cNode = (ContigNode)node;
+               	forward = cNode.isForward();
+               	Font cFont = cNode.isMine() ? boldFont : defaultFont;
+            	fixupLabel(this, forward, cFont);
+            } else if (node instanceof SuperscaffoldNode) {
+            	SuperscaffoldNode ssNode = (SuperscaffoldNode)node;
+            	Font ssFont = ssNode.hasMyScaffolds() && !expanded ? boldFont : defaultFont;
+            	setFont(ssFont);
+            } 
             
             setBackgroundNonSelectionColor(bg);
             
@@ -125,9 +142,12 @@ public class ScaffoldManagerPanel extends MinervaPanel {
 		}
 	}
 	
-	private void fixupLabel(JLabel label, boolean forward) {
+	private void fixupLabel(JLabel label, boolean forward,Font font) {
     	label.setIcon(forward ? rightArrow : leftArrow);
-    	label.setHorizontalTextPosition(JLabel.LEFT);		
+    	label.setHorizontalTextPosition(JLabel.LEFT);
+    	
+    	label.setFont(font);
+    	
     	// The following line is a kludge to overcome a bug in the paint method
     	// of DefaultTreeCellRenderer.
     	label.setComponentOrientation(ComponentOrientation.RIGHT_TO_LEFT);
