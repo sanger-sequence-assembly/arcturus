@@ -76,15 +76,16 @@ public class MailHandler extends Handler {
 			Throwable thrown = record.getThrown();
 			
 			if (thrown != null) {
-				StackTraceElement ste[] = thrown.getStackTrace();
-
-				sb.append("\n" + thrown.getClass().getName() + ": " + thrown.getMessage() + "\n");
-		
-				sb.append("\nSTACK TRACE:\n\n");
+				sb.append("\n----- PRIMARY EXCEPTION -----\n");
 				
-				for (int i = 0; i < ste.length; i++)
-					sb.append(i + ": " + ste[i].getClassName() + " " +
-							ste[i].getMethodName() + " line " + ste[i].getLineNumber() + "\n");
+				displayThrowable(thrown, sb);
+				
+				Throwable cause = thrown == null ? null : thrown.getCause();
+				
+				if (cause != null) {
+					sb.append("\n----- CAUSING EXCEPTION -----\n");
+					displayThrowable(cause, sb);
+				}
 			}
 			
 			String body = sb.toString();
@@ -101,4 +102,22 @@ public class MailHandler extends Handler {
 
 	}
 
+	private void displayThrowable(Throwable thrown, StringBuffer sb) {
+		StackTraceElement ste[] = thrown.getStackTrace();
+
+		sb.append("\n" + thrown.getClass().getName());
+
+		String message = thrown.getMessage();
+		if (message != null)
+			sb.append(": " + thrown.getMessage());
+		
+		sb.append("\n");
+
+		sb.append("\nSTACK TRACE:\n\n");
+		
+		for (int i = 0; i < ste.length; i++)
+			sb.append(i + ": " + ste[i].getClassName() + " " +
+					ste[i].getMethodName() + " line " + ste[i].getLineNumber() + "\n");
+	
+	}
 }
