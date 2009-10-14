@@ -138,20 +138,16 @@ public class ScaffoldNode extends DefaultMutableTreeNode {
 		
 		sb.append(" [");
 		
-		ProjectAndValue[] array;
+		ProjectAndValue[] array = new ProjectAndValue[projectWeightByLength.size()];
 		
-		synchronized (projectWeightByLength) {
-			array = new ProjectAndValue[projectWeightByLength.size()];
+		int i = 0;
 		
-			int i = 0;
-		
-			for (Map.Entry<Project, Integer> entry : projectWeightByLength.entrySet())
-				array[i++] = new ProjectAndValue(entry);
-		}
+		for (Map.Entry<Project, Integer> entry : projectWeightByLength.entrySet())
+			array[i++] = new ProjectAndValue(entry);
 			
 		Arrays.sort(array);
 		
-		for (int i = 0; i < array.length; i++) {
+		for (i = 0; i < array.length; i++) {
 			Project project = array[i].getProject();
 			int value = array[i].getValue();
 			
