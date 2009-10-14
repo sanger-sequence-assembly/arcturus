@@ -1,6 +1,5 @@
 package uk.ac.sanger.arcturus.gui.scaffoldmanager.node;
 
-import java.text.DecimalFormat;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -15,6 +14,7 @@ public class ScaffoldNode extends DefaultMutableTreeNode {
 	private MutableTreeNode lastNode = null;
 	private int length = 0;
 	private int contigs = 0;
+	private int myContigs = 0;
 	private int reads = 0;
 	private boolean forward;
 	
@@ -52,7 +52,11 @@ public class ScaffoldNode extends DefaultMutableTreeNode {
 		
 		length += contigLength;
 		reads += contigReads;
+		
 		contigs++;
+		
+		if (project.isMine())
+			myContigs++;
 		
 		incrementMapEntry(projectWeightByLength, project, contigLength);
 	}
@@ -75,6 +79,14 @@ public class ScaffoldNode extends DefaultMutableTreeNode {
 	
 	public int getContigCount() {
 		return contigs;
+	}
+	
+	public int getMyContigCount() {
+		return myContigs;
+	}
+	
+	public boolean hasMyContigs() {
+		return myContigs > 0;
 	}
 	
 	public boolean isForward() {

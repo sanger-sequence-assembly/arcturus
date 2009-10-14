@@ -7,6 +7,7 @@ public class SuperscaffoldNode extends DefaultMutableTreeNode {
 	private int length = 0;
 	private int contigs = 0;
 	private int scaffolds = 0;
+	private int myScaffolds = 0;
 	
 	public void add(MutableTreeNode node) {
 		if (node instanceof ScaffoldNode) {
@@ -15,12 +16,15 @@ public class SuperscaffoldNode extends DefaultMutableTreeNode {
 			length += snode.length();
 			contigs += snode.getContigCount();
 			
+			if (snode.hasMyContigs())
+				myScaffolds++;
+			
 			if (snode.getContigCount() == 1) {
 				ContigNode cnode = (ContigNode)snode.getFirstChild();
 				
 				if (!snode.isForward())
 					cnode.reverse();
-				
+					
 				super.add(cnode);
 			} else {
 				scaffolds++;
@@ -44,6 +48,10 @@ public class SuperscaffoldNode extends DefaultMutableTreeNode {
 		return contigs;
 	}
 	
+	public boolean hasMyScaffolds() {
+		return myScaffolds > 0;
+	}
+
 	public int getScaffoldCount() {
 		return scaffolds;
 	}
