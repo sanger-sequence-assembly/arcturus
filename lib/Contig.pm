@@ -215,6 +215,7 @@ sub setContigID {
 
 sub getContigName {
     my $this = shift;
+    my %options = @_;
 
 # in its absence generate a name based on the contig_id
 
@@ -222,7 +223,12 @@ sub getContigName {
         my $cid = $this->getContigID() || 0;
         my $ins = $this->getInstance() || 0;
         my $org = $this->getOrganism() || 0;
-        $this->setContigName($ins."_".$org."_contig_".sprintf("%08d",$cid));
+        if ($options{long}) {
+            $this->setContigName($ins."_".$org."_contig_".sprintf("%08d",$cid));
+	}
+	else {
+            $this->setContigName($ins."_".$org."_contig_$cid");
+	}
     }
     return $this->{contigname};
 }
@@ -510,11 +516,9 @@ sub getReads {
 # delayed loading of reads (if required); without frugal flag, the read sequence 
 # itself will be loaded in bulk, with the flag by delayed loading when required 
 
-    if (!$this->{Read} && $load && (my $SOURCE = $this->{SOURCE})) {
-#        my $frugal = $this->{frugal} || 0;
-#        $SOURCE->getReadsForContig($this,nosequence=>$frugal,caller=>'Contig');
-#        compare with nrofreads?
+    my $reads = $this->{Read} || [];
 
+    if (!@$reads && $load && (my $SOURCE = $this->{SOURCE})) {
         $options{nosequence} = $this->{frugal} || 0;
         $options{caller} = 'Contig'; # for diagnostics
         $SOURCE->getReadsForContig($this,%options);
@@ -652,7 +656,7 @@ sub addParentContig {
 sub hasParentContigs {
 # returns number of previous contigs
     my $this = shift;
-    my $parents = $this->getParentContigs(shift);
+    my $parents = $this->getParentContigs(@_);
     return $parents ? scalar(@$parents) : 0;
 }
 
@@ -1068,7 +1072,13 @@ sub writeToCaf {
 
     unless ($options{noreads}) {
 # if there are no reads, use delayed loading
-        my $reads = $this->getReads(1); 
+        my $reads = $this->getReads(1);
+# test consistency of pad status
+        unless ($this->testPadStatus()) {
+            my $logger = &verifyLogger('writeToCaf');
+            $logger->error("Inconsistent pad status in contig $contigname");
+            return 1; # error status
+        } 
 # in frugal mode we bunch the reads in blocks to improve speed (and reduce memory)
 	if (my $blocksize = $this->{frugal}) {
             $blocksize = 100 if ($blocksize < 100); # minimum
@@ -1239,9 +1249,11 @@ sub writeDNA {
 	my $offset = 0;
 	my $length = length($dna);
 	while ($offset < $length) {    
-	    print $DFILE substr($dna,$offset,60)."\n";
+	    print $DFILE substr($dna,$offset,60);
+            print $DFILE "\n" unless $options{nobreak};
 	    $offset += 60;
 	}
+        print $DFILE "\n" if $options{nobreak};
     }
     else {
         print STDERR "Missing DNA data for contig $identifier\n";
@@ -1276,8 +1288,10 @@ sub writeBaseQuality {
         for (my $i = 0; $i <= $n; $i += 25) {
             my $m = $i + 24;
             $m = $n if ($m > $n);
-	    print $QFILE join(' ',@$quality[$i..$m]),"\n";
+	    print $QFILE join(' ',@$quality[$i..$m]);
+            print $QFILE $options{nobreak} ? " " : "\n";
 	}
+        print $QFILE "\n" if $options{nobreak};
     }
     else {
         print STDERR "Missing BaseQuality data for contig $identifier\n";
@@ -1543,23 +1557,32 @@ sub writeToBaf {
                            'noreads',     # don't export reads, only contig
                            'readsonly',   # only export reads
                            'qualitymask', # if readsonly: mask low quality read sequence
-                           'gap4name',    # 
+                           'gap4name',    # add gap4name to contig identifier
+                           'convert',     # allow conversion to padded if found to be unpadded
                            'notags');     # don't export tags
 
     &verifyKeys('writeToBaf',\%options,@validoptionkeys);
 
     return "Missing file handle for Baf output" unless $FILE;
 
+    my $logger = &verifyLogger('writeToBaf');
+
 # write contig items
 
     my $contigname = $this->getContigName();
 
     unless ($this->isPadded()) {
-        print STDERR "Contig $contigname must be padded to write to BAF\n";
-        exit;
+        $logger->error("Contig $contigname must be padded to write to BAF");
+        $this->toPadded() if $options{convert};
+        return 1 unless $this->isPadded();
     }
 
     $contigname .= " ".$this->getGap4Name() if $options{gap4name};
+# test consistency of pad status
+    unless ($this->testPadStatus()) {
+        $logger->error("Inconsistent pad status in contig $contigname");
+        return 1; # error status
+    } 
 
     print $FILE "CO=$contigname\n";
     print $FILE "LN=".$this->getConsensusLength()."\n";
@@ -1604,6 +1627,8 @@ sub writeToBaf {
 	}
 	$read->writeToBaf($FILE,$mapping,%options);
     }
+
+    return 0;
 }
 
 sub encodePhredScore {
@@ -1821,6 +1846,22 @@ sub isPadded {
 # return 0 for unpadded (default) or true for padded
     my $this = shift;
     return $this->{padstatus} eq "Padded" ? 1 : 0;
+}
+
+sub testPadStatus {
+# test consistency of pad status of contig and its reads
+    my $this = shift;
+
+    return undef unless $this->hasReads(); # can't do
+
+    my $reads = $this->getReads();
+
+    foreach my $read (@$reads) {
+        next if ($read->isPadded() == $this->isPadded());
+        return 0;
+    }
+
+    return 1; # passed
 }
 
 #-------------------------------------------------------------------    
