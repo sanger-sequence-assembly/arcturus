@@ -394,9 +394,9 @@ sub getParentContigsForContig {
         my $parentids = $this->getParentIDsForReadsInContig($contig);
 	unless (defined($parentids)) {
             my $logger = $this->verifyLogger('getParentContigsForContig');
-            $logger->error("unexpected : missing sequence data for "
+            $logger->error("unexpected : missing read sequence data for "
 			   . $contig->getContigName());
-            next;
+            return undef;
 	}
         @parentids = @$parentids if @$parentids;        
     }
@@ -576,6 +576,7 @@ sub putContig {
 
 # okay, the contig is new; find out if it is connected to existing contigs
 # search based on the read_ids (not seq_id) in (initial) current contigs  
+# NOTE: this may be done outside this method .... ?
 
     $message .= "$contigname is new ";
     if ($this->getParentContigsForContig($contig,usereads=>1)) {
@@ -585,7 +586,7 @@ sub putContig {
             return 0,"$message  ('prohibitparent' option active)";
         }
 # set-up the contig-to-contig mappings between the new contig and its parents
-        my $msg = $contig->linkToParents();
+        my $msg = $contig->linkToParents(); # forcelink option?
         $message .= "; ".$msg if $msg;
     }
     else {
@@ -918,6 +919,7 @@ sub putMetaDataForContig {
 
     &verifyPrivate($dbh,"informUsersOfChange");
 
+#              . "(gap4name,length,ncntgs,nreads,newreads,cover,creator"
     my $query = "insert into CONTIG "
               . "(gap4name,length,ncntgs,nreads,newreads,cover,userid"
               . ",origin,created,readnamehash,project_id) "
@@ -1014,8 +1016,9 @@ sub deleteContig {
         my $pquery = "select parent_id from C2CMAPPING where contig_id = $cid";
         my $hasparent = $dbh->do($pquery) || &queryFailed($pquery);
         if (!$hasparent || $hasparent > 0) { # exit, unless forcedelete
+            my $parentids = &getParentIDsForContigID($dbh,$cid);
             return 0, "Single-read contig $identifier has, or may have, a parent "
-                    . "and can't be deleted" unless $options{forcedelete};
+                    . "(@$parentids) and can't be deleted" unless $options{forcedelete};
 	}
         $deletetarget = "parent_id";
     }
@@ -1171,7 +1174,7 @@ sub getContigMappingsForContig {
                  "       cstart,cfinish,direction" .
                  "  from C2CMAPPING" .
                  " where contig_id = ?" .
-                 " order by ".($options{orderbyparent} ? "parent_id" : "cstart");
+                 " order by ".($options{orderbyparent} ? "parent_id,cstart" : "cstart");
  
     my $squery = "select C2CSEGMENT.mapping_id,C2CSEGMENT.cstart," .
                  "       C2CSEGMENT.pstart,length" .
@@ -1186,7 +1189,7 @@ sub getContigMappingsForContig {
 
     my $cid = $contig->getContigID();
 
-    $sth->execute($cid) || &queryFailed($mquery,$cid);
+    my $rows = $sth->execute($cid) || &queryFailed($mquery,$cid);
 
     my @mappings;
     my $mappings = {}; # to identify mapping instance with mapping ID
@@ -1737,8 +1740,15 @@ sub repairContigToContigMappings {
     my $inventory = {};
     foreach my $mapping (@$oldmappings) {
         my $parent_id = $mapping->getSequenceID();
-        $inventory->{$parent_id} = $mapping;
-        $message .= "$parent_id ";
+        $inventory->{$parent_id} = [] unless defined $inventory->{$parent_id};
+        my $mappings = $inventory->{$parent_id};
+        push @$mappings, $mapping;
+        if ($message =~ / ${parent_id} /) {
+            $message .= "(multi)" unless ($message =~ /\(multi\)$/);
+        }
+	else {
+            $message .= "$parent_id ";
+	}
     }
     $message .= "\n";
 
@@ -1747,57 +1757,62 @@ sub repairContigToContigMappings {
 
     $message .= "There are ".scalar(@$newmappings).
                 " mapping(s) defined for contig $contig_id ";
-    $message .= "to parents:  " if scalar(@$newmappings);
+    $message .= "to parent(s):  " if scalar(@$newmappings);
+
+    my $i = 0;
+    while ($i < scalar(@$newmappings)) {
+        my $newmapping = $newmappings->[$i];
+        my $parent_id = $newmapping->getSequenceID();
+        $message .= "$parent_id ";
+        my $existingmappings = $inventory->{$parent_id} || [];
+        my $j = 0;
+        my $isequal = 0;
+# delete mappings which are already in the database
+        while ($j < scalar(@$existingmappings)) {
+            my $existingmapping = $existingmappings->[$j];
+# test the new mapping against this existing mapping 
+           ($isequal,my @dummy) = $newmapping->isEqual($existingmapping);
+            if ($isequal) { # remove both the newmapping and the existing mapping
+                splice @$existingmappings,$j,1;
+                splice @$newmappings,$i,1;
+                $message .= "(unchanged) ";
+                last;
+            }
+            $j++;
+        }
+        next if $isequal;
+        $message .= "(new) ";
+        $contig->addContigToContigMapping($newmapping);
+        $i++;
+    }
+    $message .= "\n";
+
+# the mappings left in the newmappings list are new and have to be loaded
+# the mappings left in the inventory hash are superseeded and have to be removed 
 
     my @deletemappings;
-    my @deleteparentids;
-    foreach my $mapping (@$newmappings) {
-        my $parent_id = $mapping->getSequenceID();
-        my $existingmapping = $inventory->{$parent_id};
-        $message .= "$parent_id ";
-        unless ($existingmapping) {
-            $message .= "(new) ";
-	    $contig->addContigToContigMapping($mapping);
-            next;
-        }
-        push @deleteparentids,$parent_id; # collect mappings with a counterpart
-#       delete $inventory->{$parent_id}; # not here, to trap duplicate mappings
-        my ($isEqual,@dummy) = $mapping->isEqual($existingmapping);
-        if ($isEqual) {
-            $message .= "(unchanged) ";
-            next;
-        }
-# the mapping has changed: add old one to delete list, the new one to contig
-	$contig->addContigToContigMapping($mapping);
-        push @deletemappings, $existingmapping;
-        $message .= "(changed) ";
-    }
-
-# remove all mappings having a counterpart
-
-    foreach my $parent_id (@deleteparentids) {
-        delete $inventory->{$parent_id};
-    }
-
-# the keys left of %$inventory are existing mappings without
-# new counterpart; they have to be deleted too
-
     foreach my $parent_id (keys %$inventory) {
-        push @deletemappings, $inventory->{$parent_id};
+        my $existingmappings = $inventory->{$parent_id};
+        next unless @$existingmappings;
+        push @deletemappings, @$existingmappings;
     }
+
+# do the delete based on contig and parent ID and mapping ID
 
     my $dbh = $this->getConnection();
 
-    $message .= "\n";
-#   $log->debug("deletemappings  @deletemappings  $message");
     foreach my $existingmapping (@deletemappings) {
-        next if $options{nodelete};
         my $parent_id = $existingmapping->getSequenceID();
         my $mapping_id = $existingmapping->getMappingID();
-        $message .= "Existing mapping ";
-        $message .= "to be deleted" if $options{nokeep};
+        my $synchronize = $options{synchronize};
+        if (my $syncparent = $options{synchronizeparent}) {
+            $synchronize = 1 if ($parent_id =~ /$syncparent/);
+	}
+        $message .= "Existing mapping to be ";
+        $message .= "deleted"  if $synchronize;
+        $message .= "kept" unless $synchronize;
         $message .= ": $contig_id - $parent_id ($mapping_id) ..";
-        unless ($options{nokeep}) {
+        unless ($synchronize) {
             $message .= ".. \n";
             next;
 	}
@@ -1813,16 +1828,16 @@ sub repairContigToContigMappings {
 	}
     }
 
-    if ($options{cleanup}) {
+#    if ($options{cleanup}) { # redundent because of foreign key constraints
 # remove redundent segments form the C2CSEGMENT table
-        $message .= &cleanupSegmentTables($dbh, ($options{confirm} ? 0 : 1) ,1);
-    }
+#        $message .= &cleanupSegmentTables($dbh, ($options{confirm} ? 0 : 1) ,1);
+#    }
   
     my $nm = 0;
     if ($contig->hasContigToContigMappings()) {
         $nm = scalar(@{$contig->getContigToContigMappings()});
     }
-    $message .= ($nm || "No")." new mappings to be loaded for contig $contig_id\n";
+    $message .= ($nm || "No")." new mappings are to be loaded for contig $contig_id\n";
 
     if ($nm && $options{confirm}) {
         $message .= "Insert contig-to-contig mappings for $contig_id ..";
@@ -2031,7 +2046,7 @@ sub getParentIDsForContig {
 }
 
 sub getParentIDsForReadsInContig {
-# returns a list of contig IDs in generation 0 identified by shared reads  
+# returns a list of contig IDs IN GENERATION 0 identified by shared reads  
 # the search can be done using read IDs, if the contig has Reads, or readnames,
 # if the contig has either Reads or Mappings; generation 0 IS CACHED on first
 # entry, so that new contigs presented one after another are linked to the
@@ -2049,7 +2064,7 @@ sub getParentIDsForReadsInContig {
 
     my $usereadname = $options{readname}; # default use read id
 
-    my $rids = []; # for either bread ID or readname
+    my $rids = []; # for either read ID or readname
 
     my $reads = $contig->getReads() || [];
 
