@@ -1030,9 +1030,11 @@ sub getReadsForContig {
 
     $this->getTagsForReads(\@reads) unless $options{notags};
 
-# and add to the contig
+# and add to the contig (and reset the pad status)
 
     $contig->addRead([@reads]);
+
+    $contig->setPadStatus(0);
 }
 
 #------------------------------------------------------------------------------
