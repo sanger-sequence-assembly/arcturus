@@ -1221,7 +1221,7 @@ my $addressees = $adb->getMessageAddresses(1);
 
 foreach my $user (@$addressees) {
     my $message = $adb->getMessageForUser($user);
-    &sendMessage($user,$message) if $message;
+    &sendMessage($user, $message, $instance) if $message;
 }
 
 
@@ -1554,7 +1554,12 @@ sub scaffoldfileparser { # TO BE TESTED
 #------------------------------------------------------------------------
 
 sub sendMessage {
-    my ($user,$message) = @_;
+    my ($user,$message,$instance) = @_;
+
+    if ($instance eq 'test') {
+	print STDOUT "TEST MODE -- This message would be mailed user $user:\n$message\n\n";
+	return;
+    }
 
     print STDOUT "message to be emailed to user $user:\n$message\n\n";
 
