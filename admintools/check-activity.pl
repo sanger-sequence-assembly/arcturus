@@ -64,7 +64,7 @@ while (my ($schema) = $sth->fetchrow_array()) {
 
 $sth->finish();
 
-printf "%-20s %20s  %8s %8s %8s %8s\n", 'SCHEMA', 'UPDATED', 'IMPORTS', 'CONTIGS', 'READS', 'SEQLEN';
+printf "%-20s %20s  %10s %10s %10s %10s\n", 'SCHEMA', 'UPDATED', 'IMPORTS', 'CONTIGS', 'READS', 'SEQLEN';
 
 foreach my $schema (@dblist) {
     $query = "select max(created) from " . $schema . ".CONTIG";
@@ -94,7 +94,7 @@ foreach my $schema (@dblist) {
 
     next if ($hideidle && $imports == 0 && $ncontigs == 0);
 
-    printf "%-20s %20s  %8d %8d %8d %8d\n", $schema, $created, $imports, $ncontigs, $nreads, $totlen;
+    printf "%-20s %20s  %10d %10d %10d %10d\n", $schema, $created, $imports, $ncontigs, $nreads, $totlen;
 }
 
 $dbh->disconnect();
