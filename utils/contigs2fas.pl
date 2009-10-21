@@ -38,6 +38,7 @@ my $seqfilenum;
 my $totseqlen;
 my $pinclude;
 my $pexclude;
+my $useshortname = 0;
 my $projectprefix = 0;
 my $usegapname = 0;
 my $ends = 0;
@@ -80,6 +81,8 @@ while (my $nextword = shift @ARGV) {
     $usegapname = 1 if ($nextword eq '-usegap4name');
 
     $projectprefix = 1 if ($nextword eq '-projectprefix');
+
+    $useshortname = 1 if ($nextword eq '-useshortname');
 
     $ascaf = 1 if ($nextword eq '-ascaf');
 
@@ -208,7 +211,7 @@ while(my @ary = $sth->fetchrow_array()) {
     }
 
     my $contigname = $projectprefix ? $projectname . "_contig_" . $contigid : 
-	$instance . "_" . $organism . "_contig_" . $contigid;
+	($useshortname ? "ctg$contigid" : $instance . "_" . $organism . "_contig_" . $contigid);
 
     $contigname = $gap4name if ($usegapname && defined($gap4name));
 
