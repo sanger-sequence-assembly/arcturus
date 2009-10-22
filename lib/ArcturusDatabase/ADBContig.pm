@@ -914,14 +914,13 @@ sub putMetaDataForContig {
     my $dbh = shift; # database handle
     my $contig = shift; # Contig instance
     my $readhash = shift;
-    my $userid = shift;
+    my $creator = shift;
     my $default_project_id = shift;
 
     &verifyPrivate($dbh,"informUsersOfChange");
 
-#              . "(gap4name,length,ncntgs,nreads,newreads,cover,creator"
     my $query = "insert into CONTIG "
-              . "(gap4name,length,ncntgs,nreads,newreads,cover,userid"
+              . "(gap4name,length,ncntgs,nreads,newreads,cover,creator"
               . ",origin,created,readnamehash,project_id) "
               . "VALUES (?,?,?,?,?,?,?,?,now(),?,?)";
 
@@ -933,7 +932,7 @@ sub putMetaDataForContig {
                 $contig->getNumberOfReads(),
                 $contig->getNumberOfNewReads(),
                 $contig->getAverageCover(),
-                $userid,
+                $creator,
                 $contig->getOrigin(),
                 $readhash,
 		$default_project_id);

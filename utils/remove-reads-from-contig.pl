@@ -187,8 +187,8 @@ sub copyContig {
 
     &report("=== copyContig($old_contig_id) ===");
 
-    my $query = "insert into CONTIG(project_id,origin,userid,created)" .
-	" select project_id,origin,userid,now() from CONTIG where contig_id = ?";
+    my $query = "insert into CONTIG(project_id,origin,creator,created)" .
+	" select project_id,origin,creator,now() from CONTIG where contig_id = ?";
 
     my $sth = $dbh->prepare($query);
 
