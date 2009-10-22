@@ -3,6 +3,8 @@
 use strict;
 use TraceServer;
 
+use constant NOT_DEFINED => '<UNDEFINED>';
+
 my $terse = 1;
 
 if (scalar(@ARGV) > 0 && $ARGV[0] eq '-full') {
@@ -118,17 +120,17 @@ sub seq_dump {
 	my $type = $src->get_type();
 
 	if ($type eq "clone") {
-	    print "$s    - l.name   = ", $src->get_library_name(), "\n";
-	    print "$s    - size     = ", $src->get_library_size(), "\n";
-	    print "$s    - stddev   = ", $src->get_library_stddev(), "\n";
-	    print "$s    - vector   = ", $src->get_library_vector(), "\n";
-	    print "$s    - is_trans = ", $src->get_library_is_transposon(), "\n";
+	    print "$s    - l.name   = ", $src->get_library_name() || NOT_DEFINED, "\n";
+	    print "$s    - size     = ", $src->get_library_size() || NOT_DEFINED, "\n";
+	    print "$s    - stddev   = ", $src->get_library_stddev() || NOT_DEFINED, "\n";
+	    print "$s    - vector   = ", $src->get_library_vector() || NOT_DEFINED, "\n";
+	    print "$s    - is_trans = ", $src->get_library_is_transposon() || NOT_DEFINED, "\n";
 	} elsif ($type eq 'pcr') {
-	    print "$s    - p.name   = ", $src->get_pcr_name(), "\n";
-	    print "$s    - desc     = ", $src->get_pcr_description(), "\n";
-	    print "$s    - est.size = ", $src->get_pcr_size(), "\n";
-	    print "$s    - fwd      = ", $src->get_pcr_fwd_primer(), "\n";
-	    print "$s    - rev      = ", $src->get_pcr_rev_primer(), "\n";
+	    print "$s    - p.name   = ", $src->get_pcr_name() || NOT_DEFINED, "\n";
+	    print "$s    - desc     = ", $src->get_pcr_description() || NOT_DEFINED, "\n";
+	    print "$s    - est.size = ", $src->get_pcr_size() || NOT_DEFINED, "\n";
+	    print "$s    - fwd      = ", $src->get_pcr_fwd_primer() || NOT_DEFINED, "\n";
+	    print "$s    - rev      = ", $src->get_pcr_rev_primer() || NOT_DEFINED, "\n";
 	} elsif ($type eq 'pool') {
 	    print "$s    - DO NOT KNOW WHAT ATTRIBUTES TO SHOW FOR TYPE $type\n";
 	} else {
