@@ -1,11 +1,19 @@
 #!/bin/bash
 
-### These settings are Sanger-specific
+#########################################################################
+###             These settings are Sanger-specific                    ###
+#########################################################################
 LDAP_URL="ldap://ldap.internal.sanger.ac.uk/"
 LDAP_ROOT_DN="cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk"
 LDAP_USER="uid=${USER},ou=people,dc=sanger,dc=ac,dc=uk"
+
+ARCTURUS_INSTANCES=pathogen,vertebrates,test
+MYSQL_INSTANCES=arcp,hlmp,arct
+
 ACTIVE_ORGANISMS_LIST=~arcturus/active-organisms.list
-### End of Sanger-specific settings
+#########################################################################
+###              End of Sanger-specific settings                      ###
+#########################################################################
 
 SCRIPT_HOME=`dirname $0`
 
@@ -13,7 +21,7 @@ PERL_LIB_DIR=${SCRIPT_HOME}/../lib
 
 export PERL5LIB=${PERL_LIB_DIR}:${PERL5LIB}
 
-echo -n "Enter Arcturus instance [pathogen,test] > "
+echo -n "Enter Arcturus instance [${ARCTURUS_INSTANCES}] > "
 read instance
 
 echo -n "Enter organism name > "
@@ -34,11 +42,11 @@ then
     fi
 fi
 
-echo -n "Enter MySQL instance [arcp,hlmp,arct] > "
+echo -n "Enter MySQL instance [${MYSQL_INSTANCES}] > "
 read node
 
-#echo -n "Enter template database name > "
-#read template
+echo -n "Enter MySQL database name (hit RETURN to default to ${organism}) > "
+read dbname
 
 echo -n "Enter Group/Genus (e.g. Bacteria/Clostridium) > "
 read subdir
@@ -55,7 +63,7 @@ echo "Arcturus instance     $instance"
 echo "Organism name         $organism"
 echo "Repository location   $reposdir"
 echo "MySQL instance        $node"
-#echo "Template database     $template"
+echo "MySQL database        $dbname"
 echo "LDAP sub-directory    $subdir"
 echo "Description           $description"
 
@@ -80,6 +88,7 @@ ${SCRIPT_HOME}/create-new-organism.pl \
     -instance $instance \
     -organism $organism \
     -node $node \
+    -db $dbname \
     -ldapurl ${LDAP_URL} \
     -rootdn ${LDAP_ROOT_DN} \
     -ldapuser ${LDAP_USER} \
