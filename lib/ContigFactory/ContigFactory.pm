@@ -1848,6 +1848,9 @@ sub parseContig {
 	    }
             $isUnpadded = 0;
         }
+	elsif ($record =~ /^Stolen\s*/) {
+	    next;
+	}
 
 # process 'Assembled_from' specification get constituent reads and mapping
 
