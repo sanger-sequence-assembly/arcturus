@@ -30,19 +30,19 @@ public class LDAPSocketFactory extends SocketFactory {
 	public Socket createSocket(String host, int port) throws IOException,
 			UnknownHostException {
 		if (debug)
-			System.err.println("LDAPSocketFactory.createSocket(" + host + ", " + port + ")");
+			System.err.println("LDAPSocketFactory\n\tcreateSocket(" + host + ", " + port + ")");
 		
 		InetAddress[] addrs = InetAddress.getAllByName(host);
 		
 		if (debug)
-			System.err.println(host + " resolves to " + addrs.length + " IP addresses");
+			System.err.println("\t" + host + " resolves to " + addrs.length + " IP addresses");
 		
 		String errors = null;
 		
 		for (InetAddress addr : addrs) {
 			try {
 				if (debug)
-					System.err.println("Trying " + addr);
+					System.err.println("\t" + "Trying " + addr);
 				
 				Socket socket = new Socket(addr, port);
 				if (socket != null)
@@ -67,17 +67,20 @@ public class LDAPSocketFactory extends SocketFactory {
 	public Socket createSocket(String host, int port, InetAddress localAddr, int localPort)
 			throws IOException, UnknownHostException {
 		if (debug)
-			System.err.println("LDAPSocketFactory.createSocket(" + host + ", " + port + ")");
+			System.err.println("LDAPSocketFactory\n\tcreateSocket(" + host + ", " + port + ")");
 
 		InetAddress[] addrs = InetAddress.getAllByName(host);
 		
 		if (debug)
-			System.err.println(host + " resolves to " + addrs.length + " IP addresses");
+			System.err.println("\t" + host + " resolves to " + addrs.length + " IP addresses");
 		
 		String errors = null;
 		
 		for (InetAddress addr : addrs) {
 			try {
+				if (debug)
+					System.err.println("\t" + "Trying " + addr);
+				
 				Socket socket = new Socket(addr, port, localAddr, localPort);
 				if (socket != null)
 					return socket;
