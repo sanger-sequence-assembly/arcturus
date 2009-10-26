@@ -7,21 +7,43 @@ import java.net.UnknownHostException;
 import javax.net.SocketFactory;
 
 public class LDAPSocketFactory extends SocketFactory {
+	private static final LDAPSocketFactory instance = new LDAPSocketFactory();
+	
+	private boolean debug = true;
+	
+	public void setDebugging(boolean debug) {
+		this.debug = debug;
+	}
+	
+	public boolean isDebugging() {
+		return debug;
+	}
+	
+	public static SocketFactory getDefault() {
+		return instance;
+	}
+	
 	public Socket createSocket() throws IOException {
-		System.err.println("LDAPSocketFactory.createSocket() invoked");
 		return super.createSocket();
 	}
 	
 	public Socket createSocket(String host, int port) throws IOException,
 			UnknownHostException {
-		System.err.println("LDAPSocketFactory.createSocket(" + host + "," + port + ") invoked");
+		if (debug)
+			System.err.println("LDAPSocketFactory.createSocket(" + host + ", " + port + ")");
 		
 		InetAddress[] addrs = InetAddress.getAllByName(host);
+		
+		if (debug)
+			System.err.println(host + " resolves to " + addrs.length + " IP addresses");
+		
 		String errors = null;
 		
 		for (InetAddress addr : addrs) {
 			try {
-				System.err.println("Trying " + addr);
+				if (debug)
+					System.err.println("Trying " + addr);
+				
 				Socket socket = new Socket(addr, port);
 				if (socket != null)
 					return socket;
@@ -44,15 +66,21 @@ public class LDAPSocketFactory extends SocketFactory {
 
 	public Socket createSocket(String host, int port, InetAddress localAddr, int localPort)
 			throws IOException, UnknownHostException {
+		if (debug)
+			System.err.println("LDAPSocketFactory.createSocket(" + host + ", " + port + ")");
+
 		InetAddress[] addrs = InetAddress.getAllByName(host);
-		String errors = null;
 		
-		Socket socket = null;
+		if (debug)
+			System.err.println(host + " resolves to " + addrs.length + " IP addresses");
+		
+		String errors = null;
 		
 		for (InetAddress addr : addrs) {
 			try {
-				if (socket == null)
-					socket = new Socket(addr, port, localAddr, localPort);
+				Socket socket = new Socket(addr, port, localAddr, localPort);
+				if (socket != null)
+					return socket;
 			}
 			catch (IOException ioe) {
 				if (errors == null)
