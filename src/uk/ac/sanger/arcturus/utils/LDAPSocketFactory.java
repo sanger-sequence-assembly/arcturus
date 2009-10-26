@@ -23,51 +23,16 @@ public class LDAPSocketFactory extends SocketFactory {
 		return instance;
 	}
 	
-	public Socket createSocket() throws IOException {
-		return super.createSocket();
-	}
-	
 	public Socket createSocket(String host, int port) throws IOException,
 			UnknownHostException {
-		if (debug)
-			System.err.println("LDAPSocketFactory\n\tcreateSocket(" + host + ", " + port + ")");
-		
-		InetAddress[] addrs = InetAddress.getAllByName(host);
-		
-		if (debug)
-			System.err.println("\t" + host + " resolves to " + addrs.length + " IP addresses");
-		
-		String errors = null;
-		
-		for (InetAddress addr : addrs) {
-			try {
-				if (debug)
-					System.err.println("\t" + "Trying " + addr);
-				
-				Socket socket = new Socket(addr, port);
-				if (socket != null)
-					return socket;
-			}
-			catch (IOException ioe) {
-				if (errors == null)
-					errors = "";
-				
-				errors += "A " + ioe.getClass().getName() + " occurred when trying to connect to " +
-					addr + " : " + ioe.getMessage() + "\n";
-			}
-		}
-		
-		throw new IOException(errors);
-	}
-
-	public Socket createSocket(InetAddress addr, int port) throws IOException {
-		return new Socket(addr, port);
+		return createSocket(host, port, null, 0);
 	}
 
 	public Socket createSocket(String host, int port, InetAddress localAddr, int localPort)
 			throws IOException, UnknownHostException {
 		if (debug)
-			System.err.println("LDAPSocketFactory\n\tcreateSocket(" + host + ", " + port + ")");
+			System.err.println("LDAPSocketFactory\n\tcreateSocket(" + host + ", " + port + 
+					", " + localAddr + ", " + localPort + ")");
 
 		InetAddress[] addrs = InetAddress.getAllByName(host);
 		
@@ -81,7 +46,9 @@ public class LDAPSocketFactory extends SocketFactory {
 				if (debug)
 					System.err.println("\t" + "Trying " + addr);
 				
-				Socket socket = new Socket(addr, port, localAddr, localPort);
+				Socket socket = (localAddr == null) ?
+						new Socket(addr, port) : new Socket(addr, port, localAddr, localPort);
+				
 				if (socket != null)
 					return socket;
 			}
@@ -95,6 +62,10 @@ public class LDAPSocketFactory extends SocketFactory {
 		}
 		
 		throw new IOException(errors);
+	}
+
+	public Socket createSocket(InetAddress addr, int port) throws IOException {
+		return new Socket(addr, port);
 	}
 
 	public Socket createSocket(InetAddress host, int port, InetAddress localAddr,
