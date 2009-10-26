@@ -11,6 +11,8 @@ import uk.ac.sanger.arcturus.Arcturus;
 public class TestLDAPSocketFactory {	
 	public static void main(String[] args) {
 		Properties props = Arcturus.getProperties();
+		
+		props.put("java.naming.ldap.factory.socket", "uk.ac.sanger.arcturus.utils.LDAPSocketFactory");
 
 		try {
 			@SuppressWarnings("unused")
