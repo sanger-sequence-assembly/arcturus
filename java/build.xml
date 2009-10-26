@@ -88,6 +88,8 @@
   <property name="webapp.zip" value="${webapp.name}.zip" />
 
   <property name="webapp.path" value="uk/ac/sanger/arcturus/remotejarrunner" />
+  <property name="webapp.utils.path" value="uk/ac/sanger/arcturus/utils" />
+	
   <property name="webapp.src" value="${src.dir}/${webapp.path}" />
 
   <property name="webapp.webdir" value="/nfs/WWWdev/INTWEB_docs/htdocs/Software/Arcturus" />
@@ -97,7 +99,8 @@
   	<jar jarfile="${webapp.jar}"
   		 manifest="${webapp.src}/MANIFEST.MF" >
   		<fileset dir="${build.classes}" includes="${webapp.path}/*.class"/>
-  		<fileset dir="${src.dir}" includes="resources/remotejarrunner.props" />
+ 		<fileset dir="${build.classes}" includes="${webapp.utils.path}/LDAPSocketFactory.class"/>
+ 		<fileset dir="${src.dir}" includes="resources/remotejarrunner.props" />
   	</jar>
   </target>
 
