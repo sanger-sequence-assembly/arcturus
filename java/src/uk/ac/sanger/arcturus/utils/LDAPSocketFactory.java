@@ -56,8 +56,13 @@ public class LDAPSocketFactory extends SocketFactory {
 				if (errors == null)
 					errors = "";
 				
-				errors += "A " + ioe.getClass().getName() + " occurred when trying to connect to " +
-					addr + " : " + ioe.getMessage() + "\n";				
+				String message = "A " + ioe.getClass().getName() + " occurred when trying to connect to " +
+				addr + " : " + ioe.getMessage();
+				
+				errors += message + "\n";
+				
+				if (debug)
+					System.err.println("\t" + message);
 			}
 		}
 		
