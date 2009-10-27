@@ -24,17 +24,26 @@ public class RemoteJarRunner {
 	}
 	
 	public RemoteJarRunner() throws MalformedURLException {
-		this.url = getUrlFromProperties();		
+		this.url = getUrlFromProperties();
 		initUrl();
 	}
 			
 	private void initUrl() throws MalformedURLException {	
 		URL jarUrl = new URL(url);
 
-		cl = new URLClassLoader(new URL[] { jarUrl });
+		cl = new URLClassLoader(new URL[] { jarUrl }, Thread.currentThread().getContextClassLoader());
+		
+		Thread.currentThread().setContextClassLoader(cl);
 	}
 
 	protected String getUrlFromProperties() {
+		String jarURL = System.getProperty("arcturus.remotejarrunner.url");
+		
+		if (jarURL != null) {
+			System.err.println("Using user-defined URL for application JAR file: " + jarURL);
+			return jarURL;
+		}
+		
 		try {
 			InputStream is = getClass().getResourceAsStream("/resources/remotejarrunner.props");
 			
