@@ -58,7 +58,7 @@ while (my $nextword = shift @ARGV) {
         die "You can't re-define project" if $projectname;
         $projectname   = shift @ARGV;
         $version = "A" unless defined($version);   #? somewhere else
-        $gap4name = $projectname unless $gap4name; #? somewhere else
+        $gap4name = uc($projectname) unless $gap4name; #? somewhere else
     }
 
     if ($nextword eq '-assembly' || $nextword eq '-a') {
