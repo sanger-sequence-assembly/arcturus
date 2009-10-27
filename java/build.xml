@@ -99,7 +99,6 @@
   	<jar jarfile="${webapp.jar}"
   		 manifest="${webapp.src}/MANIFEST.MF" >
   		<fileset dir="${build.classes}" includes="${webapp.path}/*.class"/>
- 		<fileset dir="${build.classes}" includes="${webapp.utils.path}/LDAPSocketFactory.class"/>
  		<fileset dir="${src.dir}" includes="resources/remotejarrunner.props" />
   	</jar>
   </target>
