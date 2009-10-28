@@ -48,6 +48,11 @@ read node
 echo -n "Enter MySQL database name (hit RETURN to default to ${organism}) > "
 read dbname
 
+if [ "x$dbname" == "x" ]
+then
+    dbname=$organism
+fi
+
 echo -n "Enter Group/Genus (e.g. Bacteria/Clostridium) > "
 read subdir
 
