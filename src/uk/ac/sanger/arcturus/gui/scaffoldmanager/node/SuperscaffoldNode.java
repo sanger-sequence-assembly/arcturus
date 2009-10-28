@@ -1,9 +1,8 @@
 package uk.ac.sanger.arcturus.gui.scaffoldmanager.node;
 
-import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.MutableTreeNode;
 
-public class SuperscaffoldNode extends DefaultMutableTreeNode {
+public class SuperscaffoldNode extends SequenceNode {
 	private int length = 0;
 	private int contigs = 0;
 	private int scaffolds = 0;
@@ -37,7 +36,7 @@ public class SuperscaffoldNode extends DefaultMutableTreeNode {
 	
 	public String toString() {
 		return "Superscaffold of " + scaffolds + " scaffolds, " + contigs + " contigs, " + 
-			length + " bp";
+			formatter.format(length) + " bp";
 	}
 	
 	public int length() {

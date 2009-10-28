@@ -4,13 +4,12 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.MutableTreeNode;
 
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Project;
 
-public class ScaffoldNode extends DefaultMutableTreeNode {
+public class ScaffoldNode extends SequenceNode {
 	private MutableTreeNode lastNode = null;
 	private int length = 0;
 	private int contigs = 0;
@@ -136,7 +135,7 @@ public class ScaffoldNode extends DefaultMutableTreeNode {
 			if (i > 0)
 				sb.append(", ");
 			
-			sb.append(project.getName() + " : " + value + " bp");
+			sb.append(project.getName() + " : " + formatter.format(value) + " bp");
 		}
 		
 		sb.append("]");
@@ -148,7 +147,8 @@ public class ScaffoldNode extends DefaultMutableTreeNode {
 
 	public String toString() {
 		if (cachedToString == null)
-			cachedToString =  "Scaffold of " + contigs + " contigs, " + length + " bp" + getProjectWeightsString();
+			cachedToString =  "Scaffold of " + contigs + " contigs, " +
+			formatter.format(length) + " bp" + getProjectWeightsString();
 		
 		return cachedToString;
 	}
