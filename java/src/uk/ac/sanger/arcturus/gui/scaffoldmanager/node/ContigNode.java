@@ -1,10 +1,8 @@
 package uk.ac.sanger.arcturus.gui.scaffoldmanager.node;
 
-import javax.swing.tree.DefaultMutableTreeNode;
-
 import uk.ac.sanger.arcturus.data.Contig;
 
-public class ContigNode extends DefaultMutableTreeNode {
+public class ContigNode extends SequenceNode {
 	private Contig contig;
 	private boolean forward;
 	private boolean current;
@@ -36,7 +34,7 @@ public class ContigNode extends DefaultMutableTreeNode {
 	}
 	
 	public String toString() {
-		return "Contig " + contig.getID() + " (" + contig.getLength() + " bp, project "
+		return "Contig " + contig.getID() + " (" + formatter.format(contig.getLength()) + " bp, project "
 			+ contig.getProject().getName() + ")" + (current ? "" : " *** NOT CURRENT ***");
 	}
 }
