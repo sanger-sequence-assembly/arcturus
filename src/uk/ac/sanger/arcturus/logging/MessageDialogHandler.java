@@ -31,14 +31,19 @@ public class MessageDialogHandler extends Handler {
 		if (throwable != null) {
 			if (throwable instanceof javax.naming.ServiceUnavailableException ||
 					throwable instanceof javax.naming.CommunicationException) {
+				title = "There is a problem with the LDAP server";
+				
 				message = "Minerva cannot connect to the LDAP server.\n" +
 				"Please try again later.\n" +
 				"If the problem persists, please submit a helpdesk ticket.";
 			} else if (throwable instanceof ClassNotFoundException) {
-				message = "Minerva cannot find a required Java class:\n" +
+				title = "The application is not correctly installed";
+				
+				message = "Minerva cannot find a required Java class: " +
 				throwable.getMessage() + "\n" +
 				"Your application may not be correctly installed.\n" +
-				"Please submit a helpdesk ticket.";
+				"Please submit a helpdesk ticket, quoting this message:\n" +
+				record.getMessage();
 			} else {
 				StringBuffer sb = new StringBuffer();
 
