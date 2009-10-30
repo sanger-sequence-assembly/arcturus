@@ -34,6 +34,11 @@ public class MessageDialogHandler extends Handler {
 				message = "Minerva cannot connect to the LDAP server.\n" +
 				"Please try again later.\n" +
 				"If the problem persists, please submit a helpdesk ticket.";
+			} else if (throwable instanceof ClassNotFoundException) {
+				message = "Minerva cannot find a required Java class:\n" +
+				throwable.getMessage() + "\n" +
+				"Your application may not be correctly installed.\n" +
+				"Please submit a helpdesk ticket.";
 			} else {
 				StringBuffer sb = new StringBuffer();
 
