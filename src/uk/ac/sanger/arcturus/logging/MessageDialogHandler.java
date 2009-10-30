@@ -39,10 +39,9 @@ public class MessageDialogHandler extends Handler {
 			} else if (throwable instanceof ClassNotFoundException) {
 				title = "The application is not correctly installed";
 				
-				message = "Minerva cannot find a required Java class: " +
-				throwable.getMessage() + "\n" +
-				"Your application may not be correctly installed.\n" +
-				"Please submit a helpdesk ticket, quoting this message:\n" +
+				message = "Please submit a helpdesk ticket, quoting this message:\n" +
+				"Your application may not be correctly installed.\n" +				
+				"Minerva cannot find a required Java class: " + throwable.getMessage() + "\n" +
 				record.getMessage();
 			} else {
 				StringBuffer sb = new StringBuffer();
