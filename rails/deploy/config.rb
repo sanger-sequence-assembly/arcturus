@@ -9,8 +9,7 @@ set :user, 'arcturus'
 set :group, 'psg'
 set :password, proc { Capistrano::CLI.password_prompt('Password for arcturus:') }
 
-role :app, "psd1a.internal.sanger.ac.uk"
-#role :app, "psd-dev.internal.sanger.ac.uk"
+role :app, "psd-dev.internal.sanger.ac.uk"
 
 role :frontend, "psd-dev.internal.sanger.ac.uk"
 
