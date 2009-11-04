@@ -74,7 +74,7 @@ public class MailHandler extends Handler {
 				hostname = "[InetAddress.getLocalHost().getHostName() failed : " + e.getMessage() + "]";
 			}
 			
-			sb.append("Minerva is running on " + hostname + "\n\n");
+			sb.append("Hostname: " + hostname + "\n\n");
 			
 			sb.append(subject + "\n\n");
 			
