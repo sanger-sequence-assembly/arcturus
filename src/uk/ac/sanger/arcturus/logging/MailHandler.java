@@ -1,5 +1,7 @@
 package uk.ac.sanger.arcturus.logging;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.logging.*;
 import javax.mail.*;
 import javax.mail.internet.*;
@@ -63,6 +65,16 @@ public class MailHandler extends Handler {
 			StringBuffer sb = new StringBuffer(16384);
 			
 			sb.append("An Arcturus Java exception has occurred\n\n");
+			
+			String hostname = null;
+			
+			try {
+				hostname = InetAddress.getLocalHost().getHostName();
+			} catch (UnknownHostException e) {
+				hostname = "[InetAddress.getLocalHost().getHostName() failed : " + e.getMessage() + "]";
+			}
+			
+			sb.append("Minerva is running on " + hostname + "\n\n");
 			
 			sb.append(subject + "\n\n");
 			
