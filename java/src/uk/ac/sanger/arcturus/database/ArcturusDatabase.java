@@ -491,6 +491,5 @@ public interface ArcturusDatabase {
 	public void notifyProjectChangeEventListeners(
 			ProjectChangeEvent event, Class listenerClass);
 
-	public String getDefaultDirectory();
-
+	public String[] getAllDirectories();
 }

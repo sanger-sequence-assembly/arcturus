@@ -7,6 +7,7 @@ import javax.sql.*;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.Vector;
 import java.util.zip.DataFormatException;
 
 import com.mysql.jdbc.jdbc2.optional.MysqlDataSource;
@@ -96,8 +97,6 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		defaultConnection = connectionPool.getConnection(this);
 
 		createManagers();
-
-		inferDefaultDirectory();
 	}
 
 	public synchronized void closeConnectionPool() {
@@ -1078,39 +1077,36 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	/*
 	 * ******************************************************************************
 	 */
-
-	private void inferDefaultDirectory() {
-		String query = "select directory from PROJECT where directory is not null"
-				+ " order by project_id asc limit 1";
+	
+	public String[] getAllDirectories() {
+		String query = "select distinct directory from PROJECT where directory is not null" +
+			" order by directory asc";
 
 		try {
+			Vector<String> dirs = new Vector<String>();
+			
 			Statement stmt = defaultConnection.createStatement();
 
 			ResultSet rs = stmt.executeQuery(query);
 
-			String dirname = rs.next() ? rs.getString(1) : null;
+			while (rs.next()) {
+				String dirname = rs.getString(1);
+			
+				dirs.add(dirname);
+			}
 
 			rs.close();
 			stmt.close();
-
-			if (dirname != null) {
-				int lastSlash = dirname.lastIndexOf("/");
-				
-				if (lastSlash > -1)
-					dirname = dirname.substring(0, lastSlash);
-				
-				defaultDirectory = dirname;
-			}
+			
+			String[] dirArray = dirs.toArray(new String[0]);
+			
+			return dirArray;
 		} catch (SQLException e) {
-			Arcturus
-					.logSevere(
-							"An error occurred whilst trying to infer the default directory",
-							e);
+			Arcturus.logSevere(
+						"An error occurred whilst trying to build a list of directories",
+						e);
+			return null;
 		}
-	}
-
-	public String getDefaultDirectory() {
-		return defaultDirectory;
 	}
 
 	public boolean isCacheing(int type) {

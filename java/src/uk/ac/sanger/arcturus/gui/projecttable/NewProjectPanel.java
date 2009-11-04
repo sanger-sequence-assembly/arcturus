@@ -14,7 +14,7 @@ import uk.ac.sanger.arcturus.Arcturus;
 
 public class NewProjectPanel extends JPanel {
 	private JTextField txtName = new JTextField(25);
-	private JTextField txtDirectory = new JTextField(40);
+	private JComboBox cbxDirectory = new JComboBox();
 	private JComboBox cbxOwner = new JComboBox();
 	private JComboBox cbxAssembly = new JComboBox();
 	private JButton btnBrowse = new JButton("Browse...");
@@ -77,7 +77,9 @@ public class NewProjectPanel extends JPanel {
 
 		c.gridwidth = 2;
 		
-		add(txtDirectory, c);
+		add(cbxDirectory, c);
+		
+		cbxDirectory.setEditable(true);
 
 		c.anchor = GridBagConstraints.EAST;
 		c.fill = GridBagConstraints.HORIZONTAL;
@@ -112,7 +114,7 @@ public class NewProjectPanel extends JPanel {
 	}
 	
 	protected void browseWorkDir() {
-		File workdir = new File(txtDirectory.getText());
+		File workdir = new File((String)cbxDirectory.getSelectedItem());
 		
 		JFileChooser chooser = new JFileChooser();
 		
@@ -125,7 +127,7 @@ public class NewProjectPanel extends JPanel {
 
 		if (rc == JFileChooser.APPROVE_OPTION) {
 			workdir = chooser.getSelectedFile();
-			txtDirectory.setText(workdir.getPath());
+			cbxDirectory.setSelectedItem(workdir.getPath());
 		}
 	}
 	
@@ -138,11 +140,11 @@ public class NewProjectPanel extends JPanel {
 	}
 	
 	public String getDirectory() {
-		return txtDirectory.getText().trim();
+		return ((String)cbxDirectory.getSelectedItem()).trim();
 	}
 	
 	public void setDirectory(String directory) {
-		txtDirectory.setText(directory);
+		cbxDirectory.setSelectedItem(directory);
 	}
 	
 	public Person getOwner() {
@@ -163,12 +165,18 @@ public class NewProjectPanel extends JPanel {
 	private void refresh() {
 		updateUserList();
 		updateAssemblyList();
+		updateDirectoryList();
+	}
+	
+	private void updateDirectoryList() {
+		String[] dirs = adb.getAllDirectories();
 		
-		if (txtDirectory.isEnabled()) {
-			String dirname = adb.getDefaultDirectory();
+		cbxDirectory.removeAllItems();
 		
-			txtDirectory.setText(dirname);
-		}
+		for (String dir : dirs)
+			cbxDirectory.addItem(dir);
+		
+		cbxDirectory.setSelectedIndex(0);
 	}
 	
 	private void updateUserList() {
@@ -179,6 +187,8 @@ public class NewProjectPanel extends JPanel {
 			
 			for (int i = 0; i < users.length; i++)
 				cbxOwner.addItem(users[i]);
+			
+			cbxOwner.setSelectedItem(adb.findMe());
 		} catch (SQLException e) {
 			Arcturus.logSevere("An error occurred whilst enumerating users", e);
 		}
