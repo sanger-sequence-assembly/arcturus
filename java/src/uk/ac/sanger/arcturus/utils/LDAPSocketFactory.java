@@ -6,10 +6,12 @@ import java.net.Socket;
 import java.net.UnknownHostException;
 import javax.net.SocketFactory;
 
+import uk.ac.sanger.arcturus.Arcturus;
+
 public class LDAPSocketFactory extends SocketFactory {
 	private static final LDAPSocketFactory instance = new LDAPSocketFactory();
 	
-	private boolean debug = true;
+	private boolean debug = Arcturus.getBoolean("LDAPSocketFactory.debug");
 	
 	public void setDebugging(boolean debug) {
 		this.debug = debug;
