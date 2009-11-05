@@ -34,3 +34,5 @@ scaffoldbuilder.puclimit=15000
 project.allowbinimport=false
 
 oligofinder.useRegex=true
+
+LDAPSocketFactory.debug=false
