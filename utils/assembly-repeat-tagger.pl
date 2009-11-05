@@ -10,7 +10,7 @@ my $project = 'ALL';
 
 my $vectordb = 'repeats.dbs'; # default
 
-my $minscore = 100;
+my $minscore;
 
 my $tagid = 'REPT';
 
@@ -124,8 +124,9 @@ system($export) unless $noexport;
 system("grep REPT $expfile");
 system("grep REPT $expfile | wc");
 
-my $caftag = "caftagfeature -tagid $tagid -vector $vectordb "
-           . "-minscore $minscore < $expfile  > $impfile";
+my $caftag = "caftagfeature -tagid $tagid -vector $vectordb" .
+    (defined($minscore) ? " -minscore $minscore" : "") . 
+    " < $expfile  > $impfile";
 
 print STDOUT "tagging caf file:\n$caftag\n\n";
 print STDOUT "Using previously tagged file $impfile\n\n" if $nomatch;
@@ -152,7 +153,7 @@ sub showUsage {
     print STDERR "$text\n\n" if $text;
 
     print STDERR "\nUsage:\n\n$0 -o [organism] -i [instance] -p [project:ALL]"
-                ."-v [vectors:repeats.dbs] -t [tagid:REPT] -m [minscore:100] "
+                ."-v [vectors:repeats.dbs] -t [tagid:REPT] -m [minscore] "
                 ."[-noexport:use existing export] [-nomatch:skip tagging] "
                 ."[-report] [-confirm:import result]";
     exit 0;
