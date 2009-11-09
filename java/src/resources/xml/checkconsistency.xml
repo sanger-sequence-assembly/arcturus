@@ -70,6 +70,31 @@
 
 	<test critical="YES">
 		<description>
+			Are there any current contigs which share duplicate reads?
+		</description>
+		
+		<query>
+				select CCA.contig_id,CCA.length,CCA.nreads,CCA.created,PA.name,
+					CCB.contig_id,CCB.length,CCB.nreads,CCB.created,PB.name,
+       				count(*) as `links`
+				from CURRENTCONTIGS CCA,PROJECT PA,MAPPING MA,SEQ2READ SRA,
+					 CURRENTCONTIGS CCB,PROJECT PB,MAPPING MB,SEQ2READ SRB
+				where CCA.contig_id=MA.contig_id and MA.seq_id=SRA.seq_id
+				and SRA.read_id=SRB.read_id
+				and SRB.seq_id=MB.seq_id and MB.contig_id=CCB.contig_id
+				and CCA.contig_id &lt; CCB.contig_id
+				and CCA.project_id=PA.project_id and CCB.project_id=PB.project_id
+				group by CCA.contig_id,CCB.contig_id
+				order by CCA.contig_id asc,CCB.contig_id asc	
+		</query>
+		
+		<format>
+			Contigs {0,number,#} ({4}, {1,number,#} bp, {2,number,#} reads, created at {3,time} on {3,date}) and {5,number,#} ({9}, {6,number,#} bp, {7,number,#} reads, created at {8,time} on {8,date}) share {10,number,#} {10,choice,1#read|1&lt;reads} in common.
+		</format>
+	</test>
+
+	<test critical="YES">
+		<description>
 			Do all mappings correspond to contigs?
 		</description>
 		
