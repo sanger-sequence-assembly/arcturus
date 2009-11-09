@@ -61,8 +61,11 @@ public class CheckConsistency {
 	protected void checkConsistency(Connection conn, boolean criticalOnly) throws SQLException {
 		cancelled = false;
 		
-		Statement stmt = conn.createStatement();
-
+		Statement stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
+	              java.sql.ResultSet.CONCUR_READ_ONLY);
+		
+		stmt.setFetchSize(Integer.MIN_VALUE);
+		
 		for (Test test : tests) {
 			if (cancelled) {
 				notifyListener("\n\n***** TASK WAS CANCELLED *****\n");
@@ -118,7 +121,7 @@ public class CheckConsistency {
 
 		Object[] args = format != null ? new Object[cols] : null;
 
-		while (rs.next()) {
+		while (rs.next()  && !cancelled) {
 			for (int col = 1; col <= cols; col++)
 				args[col - 1] = rs.getObject(col);
 
