@@ -27,6 +27,8 @@ public class CheckConsistency {
 	
 	protected List<Test> tests;
 	
+	protected boolean cancelled = false;
+	
 	public CheckConsistency(InputStream is) throws SAXException, IOException, ParserConfigurationException {
 		tests = parseXML(is);
 	}
@@ -57,9 +59,16 @@ public class CheckConsistency {
 	}
 
 	protected void checkConsistency(Connection conn, boolean criticalOnly) throws SQLException {
+		cancelled = false;
+		
 		Statement stmt = conn.createStatement();
 
 		for (Test test : tests) {
+			if (cancelled) {
+				notifyListener("\n\n***** TASK WAS CANCELLED *****\n");
+				break;
+			}
+			
 			if (criticalOnly && !test.isCritical())
 				continue;
 			
@@ -90,6 +99,12 @@ public class CheckConsistency {
 			notifyListener("");
 			notifyListener("--------------------------------------------------------------------------------");
 		}
+		
+		stmt.close();
+	}
+	
+	public void cancel() {
+		cancelled = true;
 	}
 
 	protected int doQuery(Statement stmt, String query, MessageFormat format)

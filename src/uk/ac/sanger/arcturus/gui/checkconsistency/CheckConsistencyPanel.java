@@ -19,6 +19,9 @@ public class CheckConsistencyPanel extends MinervaPanel {
 	protected JTextArea textarea = new JTextArea();
 	protected JButton btnRefresh;
 	protected JButton btnClear;
+	protected JButton btnCancel;
+	
+	protected Worker worker;
 
 	public CheckConsistencyPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
 		super(parent, adb);
@@ -36,6 +39,7 @@ public class CheckConsistencyPanel extends MinervaPanel {
 
 		btnRefresh = new JButton(actionRefresh);
 		btnClear = new JButton("Clear all messages");
+		btnCancel = new JButton("Cancel");
 
 		JScrollPane scrollpane = new JScrollPane(textarea);
 
@@ -45,12 +49,21 @@ public class CheckConsistencyPanel extends MinervaPanel {
 
 		buttonpanel.add(btnRefresh);
 		buttonpanel.add(btnClear);
+		buttonpanel.add(btnCancel);
+		
+		btnCancel.setEnabled(false);
 
 		add(buttonpanel, BorderLayout.SOUTH);
 
 		btnClear.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				textarea.setText("");
+			}
+		});
+
+		btnCancel.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				cancelTask();
 			}
 		});
 
@@ -80,9 +93,16 @@ public class CheckConsistencyPanel extends MinervaPanel {
 		return true;
 	}
 
+	private void cancelTask() {
+		System.err.println("Cancel button pressed");
+		worker.cancel(true);
+	}
+
 	public void refresh() {
 		actionRefresh.setEnabled(false);
-		new Worker().execute();
+		worker = new Worker();
+		worker.execute();
+		btnCancel.setEnabled(true);
 	}
 
 	class Worker extends SwingWorker<Void, String> implements
@@ -98,7 +118,11 @@ public class CheckConsistencyPanel extends MinervaPanel {
 		}
 
 		protected void done() {
+			if (isCancelled())
+				checker.cancel();
+			
 			actionRefresh.setEnabled(true);
+			btnCancel.setEnabled(false);
 		}
 
 		protected void process(List<String> messages) {
