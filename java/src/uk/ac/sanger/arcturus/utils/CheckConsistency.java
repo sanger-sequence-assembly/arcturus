@@ -29,6 +29,8 @@ public class CheckConsistency {
 	
 	protected boolean cancelled = false;
 	
+	protected Statement stmt = null;
+	
 	public CheckConsistency(InputStream is) throws SAXException, IOException, ParserConfigurationException {
 		tests = parseXML(is);
 	}
@@ -53,7 +55,15 @@ public class CheckConsistency {
 	throws SQLException {
 		this.listener = listener;
 		Connection conn = adb.getPooledConnection(this);
-		checkConsistency(conn,criticalOnly);
+		
+		try {
+			checkConsistency(conn,criticalOnly);
+		}
+		catch (SQLException sqle) {
+			// Test for ER_QUERY_INTERRUPTED : Query execution was interrupted
+			if (sqle.getErrorCode() != 1317)
+				throw sqle;
+		}
 		conn.close();
 		this.listener = null;
 	}
@@ -61,7 +71,7 @@ public class CheckConsistency {
 	protected void checkConsistency(Connection conn, boolean criticalOnly) throws SQLException {
 		cancelled = false;
 		
-		Statement stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
+		stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
 	              java.sql.ResultSet.CONCUR_READ_ONLY);
 		
 		stmt.setFetchSize(Integer.MIN_VALUE);
@@ -104,9 +114,18 @@ public class CheckConsistency {
 		}
 		
 		stmt.close();
+		
+		stmt = null;
 	}
 	
 	public void cancel() {
+		if (stmt != null)
+			try {
+				stmt.cancel();
+			} catch (SQLException e) {
+				Arcturus.logWarning(e);
+			}
+		
 		cancelled = true;
 	}
 
