@@ -112,7 +112,9 @@ public class CheckConsistencyPanel extends MinervaPanel {
 				checker.checkConsistency(adb, this, true);
 			}
 			catch (SQLException sqle) {
-				Arcturus.logWarning("An error occurred whilst checking the database", sqle);
+				int errorCode = sqle.getErrorCode();
+				Arcturus.logWarning("An error occurred whilst checking the database [Error code: " +
+							errorCode + "]", sqle);
 			}
 			return null;
 		}
