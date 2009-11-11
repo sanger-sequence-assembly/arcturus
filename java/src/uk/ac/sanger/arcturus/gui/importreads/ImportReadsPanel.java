@@ -182,7 +182,7 @@ public class ImportReadsPanel extends MinervaPanel {
 	}
 
 	public void refresh() {
-		// Does nothing
+		plm.refresh();
 	}
 
 	protected void closePanel() {
@@ -316,7 +316,7 @@ public class ImportReadsPanel extends MinervaPanel {
 				Arrays.sort(projects);
 				fireContentsChanged(this, 0, projects.length);
 			} catch (SQLException sqle) {
-
+				Arcturus.logWarning("An error occurred when updating the project list", sqle);
 			}
 		}
 
@@ -360,7 +360,7 @@ public class ImportReadsPanel extends MinervaPanel {
 	}
 
 	protected boolean isRefreshable() {
-		return false;
+		return true;
 	}
 
 	protected void doPrint() {
