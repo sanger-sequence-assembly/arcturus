@@ -16,6 +16,8 @@ import org.xml.sax.SAXException;
 import org.xml.sax.SAXParseException;
 import org.xml.sax.helpers.DefaultHandler;
 
+import com.mysql.jdbc.exceptions.MySQLStatementCancelledException;
+
 import javax.xml.parsers.SAXParserFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParser;
@@ -59,9 +61,16 @@ public class CheckConsistency {
 		try {
 			checkConsistency(conn,criticalOnly);
 		}
+		catch (MySQLStatementCancelledException e) {
+			System.err.println("Caught a MySQLStatementCancelledException");
+		}
 		catch (SQLException sqle) {
+			int errorCode = sqle.getErrorCode();
+			
 			// Test for ER_QUERY_INTERRUPTED : Query execution was interrupted
-			if (sqle.getErrorCode() != 1317)
+			if (errorCode == 1317)
+				System.err.println("Caught a " + sqle.getClass().getName() + " with error code " + errorCode);
+			else
 				throw sqle;
 		}
 		conn.close();
