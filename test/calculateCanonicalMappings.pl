@@ -51,7 +51,7 @@ $query .= " limit $limit" if defined($limit);
 my $sth_get_mappings = $dbh->prepare($query);
 &db_die("prepare($query) failed");
 
-$query = "select cstart,rstart,length from SEGMENT where mapping_id = ? order by cstart asc";
+$query = "select cstart,rstart,length from SEGMENT where mapping_id = ? order by rstart asc";
 
 my $sth_get_segments =  $dbh->prepare($query);
 &db_die("prepare($query) failed");
@@ -68,27 +68,24 @@ while (my ($contigid,$mappingid,$direction) = $sth_get_mappings->fetchrow_array(
     my $coffset = undef;
     my $roffset = undef;
 
-    my $segments = [];
-
-    while (my ($cstart,$rstart,$seglen) = $sth_get_segments->fetchrow_array()) {
-	push @{$segments}, [$cstart,$rstart,$seglen];
-    }
+    my @segments;
 
     print "OLD SCHEMA\n\n";
 
     printf "%8s %8s %8s\n","cstart","rstart","length";
     print "-------- -------- --------\n";
 
-    foreach my $segment (@{$segments}) {
-	my ($cstart,$rstart,$seglen) = @{$segment};
+    while (my ($cstart,$rstart,$seglen) = $sth_get_segments->fetchrow_array()) {
 	printf "%8d %8d %8d\n", $cstart, $rstart, $seglen;
+
+	($cstart,$rstart) = ($cstart+$seglen-1, $rstart-$seglen+1) unless $forward;	
+
+	push @segments, [$cstart,$rstart,$seglen];
     }
 
     print "\n";
 
-    $segments = &reverseTransform($segments) unless $forward;
-
-    my ($cs0, $rs0, $dummy) = @{$segments->[0]};
+    my ($cs0, $rs0, $dummy) = @{$segments[0]};
 
     my $coffset = $forward ? $cs0 - 1 : $cs0 + 1;
     my $roffset = $rs0 - 1;
@@ -102,7 +99,7 @@ while (my ($contigid,$mappingid,$direction) = $sth_get_mappings->fetchrow_array(
 
     my $signature = '';
 
-    foreach my $segment (@{$segments}) {
+    foreach my $segment (@segments) {
 	my ($cstart,$rstart,$seglen) = @{$segment};
 	
 	my $czero = $forward ? $cstart - $coffset : $coffset - $cstart;
@@ -131,20 +128,6 @@ sub db_die {
     return unless $DBI::err;
     print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
     exit(0);
-}
-
-sub reverseTransform {
-    my $oldSegments = shift;
-
-    my $newSegments = [];
-
-    foreach my $segment (reverse @{$oldSegments}) {
-	my ($cs,$rs,$l) = @{$segment};
-
-	push @{$newSegments}, [$cs+$l-1, $rs-$l+1, $l];
-    }
-
-    return $newSegments;
 }
 
 sub showUsage {
