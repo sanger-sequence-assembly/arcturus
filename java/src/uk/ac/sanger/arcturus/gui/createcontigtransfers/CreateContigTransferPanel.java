@@ -5,6 +5,7 @@ import uk.ac.sanger.arcturus.jdbc.ContigTransferRequestManager;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequest;
 import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequestException;
+import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequestNotifier;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Project;
@@ -287,6 +288,8 @@ public class CreateContigTransferPanel extends MinervaPanel {
 				appendMessage("Invalid request: \"" + lines[i] + "\"");
 			}
 		}
+		
+		ContigTransferRequestNotifier.getInstance().processAllQueues();
 	}
 
 	protected void updateTransferContigsButton() {
