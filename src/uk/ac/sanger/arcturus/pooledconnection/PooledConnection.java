@@ -29,6 +29,8 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 	private Object owner = null;
 
 	protected ObjectName mbeanName = null;
+	
+	private int connectionID = -1;
 
 	public PooledConnection(Connection conn, ConnectionPool pool) {
 		this.conn = conn;
@@ -39,10 +41,38 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 		synchronized (pool) {
 			ID = ++counter;
 		}
+		
+		initConnection();
 
 		registerAsMBean();
 	}
+	
+	private void initConnection() {
+		String sql = "SELECT CONNECTION_ID()";
+		
+		try {
+			Statement stmt = conn.createStatement();
+			
+			ResultSet rs = stmt.executeQuery(sql);
+			
+			if (rs.next())
+				connectionID = rs.getInt(1);
+			
+			rs.close();
+			stmt.close();
+		}
+		catch (SQLException sqle) {
+			// Unable to get connection ID -- maybe we're not talking
+			// to a MySQL server?  It's not a fatal condition, since
+			// we only want the connection ID for debugging and monitoring
+			// purposes anyway.
+		}
+	}
 
+	public int getConnectionID() {
+		return connectionID;
+	}
+	
 	protected void registerAsMBean() {
 		try {
 			mbeanName = new ObjectName("PooledConnection:pool="

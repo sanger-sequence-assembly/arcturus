@@ -7,5 +7,6 @@ public interface PooledConnectionMBean {
 	public long getLastLeaseTime();
 	public long getTotalLeaseTime();
 	public int getLeaseCounter();
+	public int getConnectionID();
 	public String getOwnerClassName();
 }
