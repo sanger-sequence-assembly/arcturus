@@ -12,6 +12,7 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 public class ListForeignKeyConstraints {
 	public static final int AS_SQL = 1;
 	public static final int AS_TABLE = 2;
+	public static final int AS_RAW = 3;
 	
 	public static final char TAB = '\t';
 	
@@ -38,6 +39,9 @@ public class ListForeignKeyConstraints {
 			
 			if (args[i].equalsIgnoreCase("-sql"))
 				mode = AS_SQL;
+			
+			if (args[i].equalsIgnoreCase("-raw"))
+				mode = AS_RAW;
 		}
 		
 
@@ -123,11 +127,11 @@ public class ListForeignKeyConstraints {
 	
 	private void reportResults(ResultSet rs, int mode) throws SQLException {
 		while (rs.next()) {
-			String table = rs.getString(3);
-			String column = rs.getString(4);
+			String table = columnToString(rs,3);
+			String column = columnToString(rs,4);
 			
-			String fk_table = rs.getString(7);
-			String fk_column = rs.getString(8);
+			String fk_table = columnToString(rs,7);
+			String fk_column = columnToString(rs,8);
 			
 			String update_rule = ruleCodeToString(rs.getShort(10));
 			String delete_rule = ruleCodeToString(rs.getShort(11));
@@ -146,9 +150,31 @@ public class ListForeignKeyConstraints {
 					System.out.print(" ON UPDATE " + update_rule);
 					System.out.println(" ON DELETE " + delete_rule + ";");
 					break;
-
+					
+				case AS_RAW:
+					//System.out.println("PKTABLE_CAT     " + columnToString(rs,1));
+					//System.out.println("PKTABLE_SCHEME  " + columnToString(rs,2));
+					System.out.println("PKTABLE_NAME    " + columnToString(rs,3));
+					System.out.println("PKCOLUMN_NAME   " + columnToString(rs,4));
+					//System.out.println("FKTABLE_CAT     " + columnToString(rs,5));
+					//System.out.println("FKTABLE_SCHEME  " + columnToString(rs,6));
+					System.out.println("FKTABLE_NAME    " + columnToString(rs,7));
+					System.out.println("FKCOLUMN_NAME   " + columnToString(rs,8));
+					System.out.println("KEY_SEQ         " + columnToString(rs,9));
+					System.out.println("UPDATE_RULE     " + update_rule);
+					System.out.println("DELETE_RULE     " + delete_rule);
+					System.out.println("FK_NAME         " + columnToString(rs,12));
+					System.out.println("PK_NAME         " + columnToString(rs,13));
+					System.out.println("DEFERRABILITY   " + deferrabilityCodeToString(rs.getShort(14)));
+					System.out.println("------------------------------------------------------------");
 			}
 		}		
+	}
+	
+	private String columnToString(ResultSet rs, int col) throws SQLException {
+		String str = rs.getString(col);
+		
+		return str == null ? "[NULL]" : str;
 	}
 	
 	private String ruleCodeToString(short code) {
@@ -165,6 +191,22 @@ public class ListForeignKeyConstraints {
 				
 			case DatabaseMetaData.importedKeySetDefault:
 				return "SET DEFAULT";
+				
+			default:
+				return "UNKNOWN";
+		}
+	}
+	
+	private String deferrabilityCodeToString(short code) {
+		switch(code) {
+			case DatabaseMetaData.importedKeyInitiallyDeferred:
+				return "INITIALLY DEFERRED";
+				
+			case DatabaseMetaData.importedKeyInitiallyImmediate:
+				return "INITIALLY IMMEDIATE";
+				
+			case DatabaseMetaData.importedKeyNotDeferrable:
+				return "NOT DEFERRABLE";
 				
 			default:
 				return "UNKNOWN";
