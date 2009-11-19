@@ -10,6 +10,11 @@ import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
 public class ListForeignKeyConstraints {
+	public static final int AS_SQL = 1;
+	public static final int AS_TABLE = 2;
+	
+	public static final char TAB = '\t';
+	
 	public static void main(String[] args) {
 		ListForeignKeyConstraints lfkc = new ListForeignKeyConstraints();
 		int rc = lfkc.execute(args);
@@ -19,6 +24,7 @@ public class ListForeignKeyConstraints {
 	public int execute(String[] args) {
 		String instance = null;
 		String organism = null;
+		int mode = AS_SQL;
 		
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equalsIgnoreCase("-instance"))
@@ -26,6 +32,12 @@ public class ListForeignKeyConstraints {
 
 			if (args[i].equalsIgnoreCase("-organism"))
 				organism = args[++i];
+			
+			if (args[i].equalsIgnoreCase("-table"))
+				mode = AS_TABLE;
+			
+			if (args[i].equalsIgnoreCase("-sql"))
+				mode = AS_SQL;
 		}
 		
 
@@ -53,7 +65,7 @@ public class ListForeignKeyConstraints {
 				return 1;
 			}
 			
-			int rc = listForeignKeyConstraints(conn);
+			int rc = listForeignKeyConstraints(conn, mode);
 			
 			conn.close();
 			
@@ -65,7 +77,7 @@ public class ListForeignKeyConstraints {
 		}
 	}
 	
-	private int listForeignKeyConstraints(Connection conn) throws SQLException {
+	private int listForeignKeyConstraints(Connection conn, int mode) throws SQLException {
 		DatabaseMetaData dmd = conn.getMetaData();
 		
 		Statement stmt = conn.createStatement();
@@ -95,10 +107,13 @@ public class ListForeignKeyConstraints {
 		
 		rs.close();
 		
+		if (mode == AS_TABLE)
+			System.out.println("#TABLE\tCOLUMN\tREFTABLE\tREFCOLUMN\tONDELETE\tONUPDATE");
+		
 		for (String table : tables) {
 			rs = dmd.getExportedKeys(null, database, table);
 			
-			reportResults(rs);
+			reportResults(rs, mode);
 			
 			rs.close();
 		}
@@ -106,7 +121,7 @@ public class ListForeignKeyConstraints {
 		return 0;
 	}
 	
-	private void reportResults(ResultSet rs) throws SQLException {
+	private void reportResults(ResultSet rs, int mode) throws SQLException {
 		while (rs.next()) {
 			String table = rs.getString(3);
 			String column = rs.getString(4);
@@ -117,10 +132,22 @@ public class ListForeignKeyConstraints {
 			String update_rule = ruleCodeToString(rs.getShort(10));
 			String delete_rule = ruleCodeToString(rs.getShort(11));
 			
-			System.out.print("alter table " + fk_table + " add constraint foreign key (" + fk_column + ")");
-			System.out.print(" references " + table + "(" + column + ")");
-			System.out.print(" ON UPDATE " + update_rule);
-			System.out.println(" ON DELETE " + delete_rule + ";");
+			switch (mode) {								
+				case AS_TABLE:
+					System.out.println(fk_table + TAB + fk_column + TAB + table + TAB + column + TAB +
+							delete_rule + TAB + update_rule);
+					break;
+
+				case AS_SQL:
+				default:
+					System.out.print("alter table " + fk_table + " add constraint foreign key (" +
+							fk_column + ")");
+					System.out.print(" references " + table + "(" + column + ")");
+					System.out.print(" ON UPDATE " + update_rule);
+					System.out.println(" ON DELETE " + delete_rule + ";");
+					break;
+
+			}
 		}		
 	}
 	
@@ -149,5 +176,8 @@ public class ListForeignKeyConstraints {
 		ps.println("\t-instance\tName of instance");
 		ps.println("\t-organism\tName of organism");
 		ps.println();
+		ps.println("OPTIONAL PARAMETERS:");
+		ps.println("\t-sql\t\tOutput in SQL mode");
+		ps.println("\t-table\t\tOutput in tabular mode");
 	}
 }
