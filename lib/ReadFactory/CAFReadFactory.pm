@@ -360,8 +360,8 @@ sub CAFFileParser {
                 next;
             }
 # special provision for "stolen": work into a warning tag
-	    elsif ($record =~ /stole(n)?(.*)/i) {
-                my $info = $2 || '';
+	    elsif ($record =~ /stole[n]?(.*)/i) {
+                my $info = $1 || '';
                 $info =~ s/([\"\'])([^\"\']+)\1/$2/;
                 $info = "Stolen ".$info; 
                 my $rstart = 1;     
