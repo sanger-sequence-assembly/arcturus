@@ -1328,7 +1328,7 @@ sub testreadsindatabase {
 	    }
 
             unless ($read->getPrimer()) {
-                $read->setPrimer("Custom_primer");
+                $read->setPrimer("Custom");
 	    }
 
             unless ($read->getChemistry()) {
