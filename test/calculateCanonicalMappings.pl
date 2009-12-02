@@ -42,7 +42,10 @@ unless (defined($dbh)) {
     die "getConnection failed";
 }
 
-my $query = "select contig_id,seq_id,mapping_id,direction from MAPPING order by contig_id asc";
+my $query = "select M.contig_id,M.seq_id,M.mapping_id,M.direction" .
+    " from MAPPING M left join SEQ2CONTIG SC" .
+    " on (M.contig_id = SC.contig_id and M.seq_id = SC.seq_id)" .
+    " where SC.mapping_id is null";
 
 $query .= " limit $limit" if defined($limit);
 
@@ -51,34 +54,47 @@ my $sth_get_mappings = $dbh->prepare($query);
 
 $query = "select cstart,rstart,length from SEGMENT where mapping_id = ? order by rstart asc";
 
-my $sth_get_segments =  $dbh->prepare($query);
+my $sth_get_segments = $dbh->prepare($query);
 &db_die("prepare($query) failed");
 
 $query = "select mapping_id from CANONICALMAPPING where checksum = ?";
 
-my $sth_find_canonical_mapping =  $dbh->prepare($query);
+my $sth_find_canonical_mapping = $dbh->prepare($query);
 &db_die("prepare($query) failed");
 
 $query = "insert into SEQ2CONTIG(contig_id,seq_id,mapping_id,direction,coffset,roffset) value (?,?,?,?,?,?)";
 
-my $sth_insert_seq_to_contig =  $dbh->prepare($query);
+my $sth_insert_seq_to_contig = $dbh->prepare($query);
 &db_die("prepare($query) failed");
 
 $query = "insert into CANONICALMAPPING(cspan,rspan,checksum) values (?,?,?)";
 
-my $sth_insert_canonical_mapping =  $dbh->prepare($query);
+my $sth_insert_canonical_mapping = $dbh->prepare($query);
 &db_die("prepare($query) failed");
 
 $query = "insert into CANONICALSEGMENT(mapping_id,cstart,rstart,length) values (?,?,?,?)";
 
-my $sth_insert_canonical_segment =  $dbh->prepare($query);
+my $sth_insert_canonical_segment = $dbh->prepare($query);
 &db_die("prepare($query) failed");
+
+my $canonicalmappings = {};
+
+$query = "select mapping_id,checksum from CANONICALMAPPING";
+
+my $sth = $dbh->prepare($query);
+&db_die("prepare($query) failed");
+
+$sth->execute();
+
+while (my ($mappingid, $checksum) = $sth->fetchrow_array()) {
+    $canonicalmappings->{$checksum} = $mappingid;
+}
+
+$sth->finish();
 
 $sth_get_mappings->execute();
 
 while (my ($contigid,$seqid,$mappingid,$direction) = $sth_get_mappings->fetchrow_array()) {
-    #print "Contig $contigid (mapping $mappingid) $direction\n\n";
-
     my $forward = $direction eq 'Forward';
 
     my $dirn = $forward ? 'F' : 'R';
@@ -90,34 +106,22 @@ while (my ($contigid,$seqid,$mappingid,$direction) = $sth_get_mappings->fetchrow
 
     my @segments;
 
-    #print "OLD SCHEMA\n\n";
-
-    #printf "%8s %8s %8s\n","cstart","rstart","length";
-    #print "-------- -------- --------\n";
-
     while (my ($cstart,$rstart,$seglen) = $sth_get_segments->fetchrow_array()) {
-	#printf "%8d %8d %8d\n", $cstart, $rstart, $seglen;
 
 	($cstart,$rstart) = ($cstart+$seglen-1, $rstart-$seglen+1) unless $forward;	
 
 	push @segments, [$cstart,$rstart,$seglen];
     }
 
-    #print "\n";
-
     my ($cs0, $rs0, $dummy) = @{$segments[0]};
 
     my $coffset = $forward ? $cs0 - 1 : $cs0 + 1;
     my $roffset = $rs0 - 1;
 
-    #print "NEW SCHEMA\n\n";
-
-    #print "coffset = $coffset\nroffset = $roffset\n\n";
-
-    #printf "%8s %8s %8s\n","cstart","rstart","length";
-    #print "-------- -------- --------\n";
-
     my $signature = '';
+
+    my $cspan = 0;
+    my $rspan = 0;
 
     foreach my $segment (@segments) {
 	my ($cstart,$rstart,$seglen) = @{$segment};
@@ -125,20 +129,18 @@ while (my ($contigid,$seqid,$mappingid,$direction) = $sth_get_mappings->fetchrow
 	my $czero = $forward ? $cstart - $coffset : $coffset - $cstart;
 	my $rzero = $rstart - $roffset;
 
-	#printf "%8d %8d %8d\n", $czero, $rzero, $seglen;
-
 	$signature .= ':' if ($cstart != $cs0);
 
 	$signature .= "$czero,$rzero,$seglen";
+
+	my $cmax = $czero + $seglen - 1;
+	my $rmax = $rzero + $seglen - 1;
+
+	$cspan = $cmax if ($cmax > $cspan);
+	$rspan = $rmax if ($rmax > $rspan);
     }
 
-    my $cspan = 0;
-    my $rspan = 0;
-
     my $sighash_hex = md5_hex($signature);
-
-    #print "\nHash is $sighash\n";
-    #print "\n-----------------------------------------\n\n";
 
     printf "%8d %8d %8d %8d %1s %32s %s\n",$contigid,$seqid,$coffset,$roffset,$dirn,$sighash_hex,$signature;
 
@@ -146,9 +148,15 @@ while (my ($contigid,$seqid,$mappingid,$direction) = $sth_get_mappings->fetchrow
 
     $dbh->begin_work();
 
-    $sth_find_canonical_mapping->execute($sighash);
+    my $new_mapping_id = $canonicalmappings->{$sighash};
 
-    my ($new_mapping_id) = $sth_find_canonical_mapping->fetchrow_array();
+    if (!defined($new_mapping_id)) {
+	$sth_find_canonical_mapping->execute($sighash);
+
+	($new_mapping_id) = $sth_find_canonical_mapping->fetchrow_array();
+
+	$canonicalmappings->{$sighash} = $new_mapping_id if (defined($new_mapping_id));
+    }
 
     unless (defined($new_mapping_id)) {
 	$sth_insert_canonical_mapping->execute($cspan, $rspan, $sighash);
@@ -157,8 +165,14 @@ while (my ($contigid,$seqid,$mappingid,$direction) = $sth_get_mappings->fetchrow
 
 	foreach my $segment (@segments) {
 	    my ($cstart,$rstart,$seglen) = @{$segment};
-	    $sth_insert_canonical_segment->execute($new_mapping_id, $cstart, $rstart, $seglen );
+	
+	    my $czero = $forward ? $cstart - $coffset : $coffset - $cstart;
+	    my $rzero = $rstart - $roffset;
+
+	    $sth_insert_canonical_segment->execute($new_mapping_id, $czero, $rzero, $seglen);
 	}
+
+	$canonicalmappings->{$sighash} = $new_mapping_id;
     }
 
     $sth_insert_seq_to_contig->execute($contigid, $seqid, $new_mapping_id, $direction, $coffset, $roffset);
