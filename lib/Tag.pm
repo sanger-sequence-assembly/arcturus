@@ -28,16 +28,19 @@ sub new {
 sub copy {
 # spawn an exact copy of this tag
     my $this = shift;
+    my %options = @_; # noposition
 
     my $copy = $this->new();
 
     my @items = ('Host',
-                 'PositionMapping', # copy positions via mapping intermediate
                  'Strand','Comment','SequenceID', #  TAG2CONTIG table items
                  'TagID','Type','SystematicID',   #   CONTIGTAG table items
                  'TagComment','TagSequenceID',    #   CONTIGTAG table items
                  'TagSequenceName','DNA',         # TAGSEQUENCE table items
                  'FrameShiftStatus');
+    unless ($options{noposition}) {
+        push @items, 'PositionMapping'; # copy positions via mapping intermediate
+    }
 
     foreach my $item (@items) {
         my $nostatus = ($item eq 'Comment') ? 'nostatus=>1' : '';
