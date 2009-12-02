@@ -257,10 +257,17 @@ sub getContigIDsForExport {
     my @acceptedcontigs;
     my @rejectedcontigs;
     foreach my $sfcid (@$sfcids) {
+# this needs a rewrite: for large numbers of contigs this takes a lot of time!
         if ($contigidhash->{abs($sfcid)}) {
             push @acceptedcontigs,$sfcid;
             delete $contigidhash->{abs($sfcid)};
 	}
+#       else {
+#           push @originalcontigs,abs($sfcid);
+#       }
+#   }
+# any remaining originals are members of the original scaffold but now not current
+#   
 	elsif (my $ADB = $this->{ADB}) {
             my $offspring = $ADB->getCurrentContigIDsForAncestorIDs([(abs($sfcid))]);
             unless ($offspring && @$offspring) {
@@ -603,7 +610,7 @@ sub writeContigsToFasta {
     my $errors = 0;
 
     my %woptions;
-    foreach my $option ('readsonly','gap4name','minNX') {
+    foreach my $option ('readsonly','gap4name','minNX','qualitymask') {
         next unless defined $options{$option};
         $woptions{$option} = $options{$option};
     }
