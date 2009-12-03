@@ -6,19 +6,18 @@ import javax.swing.event.ListSelectionListener;
 
 import java.awt.BorderLayout;
 import java.awt.event.*;
-
-import java.sql.SQLException;
-import java.util.*;
+import java.util.List;
+import java.util.Vector;
 
 import uk.ac.sanger.arcturus.gui.*;
+import uk.ac.sanger.arcturus.gui.common.contigtransfer.ContigTransferMenu;
+import uk.ac.sanger.arcturus.gui.common.contigtransfer.ContigTransferSource;
 import uk.ac.sanger.arcturus.gui.scaffold.ScaffoldWorker;
-import uk.ac.sanger.arcturus.people.*;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEventListener;
 import uk.ac.sanger.arcturus.data.*;
-import uk.ac.sanger.arcturus.Arcturus;
 
-public class ContigTablePanel extends MinervaPanel implements ProjectChangeEventListener {
+public class ContigTablePanel extends MinervaPanel implements ProjectChangeEventListener, ContigTransferSource {
 	protected ContigTable table = null;
 	protected ContigTableModel model = null;
 
@@ -32,7 +31,7 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 	protected MinervaAbstractAction actionViewContigs;
 	protected MinervaAbstractAction actionScaffoldContig;
 	
-	protected JMenu xferMenu = new JMenu("Transfer selected contigs to");
+	protected ContigTransferMenu xferMenu;
 	
 	protected JPopupMenu contigPopupMenu = new JPopupMenu();
 	
@@ -40,10 +39,10 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 
 	protected boolean oneProject;
 	
-	protected final ProjectComparator comparator = new ProjectComparator();
-	
 	public ContigTablePanel(MinervaTabbedPane parent, Project[] projects) {
 		super(parent, projects[0].getArcturusDatabase());
+		
+		xferMenu = new ContigTransferMenu("Transfer selected contigs to", this, adb);
 		
 		projectlist = (projects != null && projects.length > 0) ? projects[0]
 				.getName() : "[null]";
@@ -219,7 +218,7 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 
 		contigMenu.add(xferMenu);
 		
-		refreshContigTransferMenu();
+		xferMenu.refreshMenu();
 		
 		contigPopupMenu.add(actionViewContigs);
 
@@ -234,64 +233,6 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 		contigPopupMenu.add(actionScaffoldContig);
 	}
 	
-	protected void refreshContigTransferMenu() {
-		xferMenu.removeAll();
-		
-		Person me = adb.findMe();
-
-		Set<Project> mypset = null;
-		
-		try {
-			if (adb.isCoordinator())
-				mypset = adb.getAllProjects();
-			else
-				mypset = adb.getProjectsForOwner(me);
-		} catch (SQLException sqle) {
-			Arcturus.logWarning("Error whilst enumerating my projects", sqle);
-		}
-
-		SortedSet<Project> myProjects = new TreeSet<Project>(comparator);
-		
-		if (mypset != null && !mypset.isEmpty()) {
-			myProjects.addAll(mypset);
-
-			for (Project project : myProjects)
-				if (!project.isBin()) {
-					ContigTransferAction action = new ContigTransferAction(table, project);
-					action.setEnabled(project.isActive());
-					xferMenu.add(action);
-				}
-			
-			Set<Project> bin = null;
-
-			try {
-				bin = adb.getBinProjects();
-			} catch (SQLException sqle) {
-				Arcturus.logWarning("Error whilst finding the BIN project", sqle);
-			}
-
-			if (bin != null) {
-				myProjects.clear();
-				myProjects.addAll(bin);
-				xferMenu.addSeparator();
-				for (Project project : myProjects)
-					xferMenu.add(new ContigTransferAction(table, project));
-			}
-			
-			if (xferMenu.getMenuComponentCount() > 40) {	        
-				VerticalGridLayout menuGrid = new VerticalGridLayout(40,0);   
-		        xferMenu.getPopupMenu().setLayout(menuGrid); 
-			}
-		}
-
-	}
-
-	class ProjectComparator implements Comparator<Project> {
-		public int compare(Project p1, Project p2) {
-			return p1.getName().compareTo(p2.getName());
-		}
-
-	}
 
 	private void handleMouseEvent(MouseEvent e) {
 		if (e.isPopupTrigger()) {
@@ -337,7 +278,7 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 
 	public void refresh() {
 		table.refresh();
-		refreshContigTransferMenu();
+		xferMenu.refreshMenu();
 	}
 
 	protected boolean isRefreshable() {
@@ -350,5 +291,17 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 
 	public void projectChanged(ProjectChangeEvent event) {
 		refresh();
+	}
+
+	public List<Contig> getSelectedContigs() {
+		int[] indices = table.getSelectedRows();
+		ContigTableModel ctm = (ContigTableModel) table.getModel();
+		
+		List<Contig> contigs = new Vector<Contig>(indices.length);
+		
+		for (int i = 0; i < indices.length; i++)
+			contigs.add((Contig)ctm.elementAt(indices[i]));
+		
+		return contigs;
 	}
 }

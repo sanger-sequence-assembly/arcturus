@@ -2,7 +2,9 @@ package uk.ac.sanger.arcturus.gui.scaffoldmanager.node;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Vector;
 
 import javax.swing.tree.MutableTreeNode;
 
@@ -12,10 +14,9 @@ import uk.ac.sanger.arcturus.data.Project;
 public class ScaffoldNode extends SequenceNode {
 	private MutableTreeNode lastNode = null;
 	private int length = 0;
-	private int contigs = 0;
-	private int myContigs = 0;
 	private int reads = 0;
 	private boolean forward;
+	private List<Contig> contigs = new Vector<Contig>();
 	
 	private Map<Project, Integer> projectWeightByLength = new HashMap<Project, Integer>();
 
@@ -52,10 +53,7 @@ public class ScaffoldNode extends SequenceNode {
 		length += contigLength;
 		reads += contigReads;
 		
-		contigs++;
-		
-		if (project.isMine())
-			myContigs++;
+		contigs.add(node.getContig());
 		
 		incrementMapEntry(projectWeightByLength, project, contigLength);
 	}
@@ -77,15 +75,15 @@ public class ScaffoldNode extends SequenceNode {
 	}
 	
 	public int getContigCount() {
-		return contigs;
-	}
-	
-	public int getMyContigCount() {
-		return myContigs;
+		return contigs.size();
 	}
 	
 	public boolean hasMyContigs() {
-		return myContigs > 0;
+		for (Contig contig : contigs)
+			if (contig.getProject().isMine())
+				return true;
+		
+		return false;
 	}
 	
 	public boolean isForward() {
@@ -114,7 +112,20 @@ public class ScaffoldNode extends SequenceNode {
 		}
 	}
 	
+	private void calculateProjectWeights() {
+		projectWeightByLength.clear();
+		
+		for (Contig contig : contigs) {
+			Project project = contig.getProject();
+			int contigLength = contig.getLength();
+			
+			incrementMapEntry(projectWeightByLength, project, contigLength);
+		}
+	}
+	
 	private String getProjectWeightsString() {
+		calculateProjectWeights();
+		
 		StringBuilder sb = new StringBuilder();
 		
 		sb.append(" [");
@@ -142,14 +153,13 @@ public class ScaffoldNode extends SequenceNode {
 		
 		return sb.toString();
 	}
-	
-	private String cachedToString = null;
 
 	public String toString() {
-		if (cachedToString == null)
-			cachedToString =  "Scaffold of " + contigs + " contigs, " +
-			formatter.format(length) + " bp" + getProjectWeightsString();
-		
-		return cachedToString;
+		return "Scaffold of " + contigs.size() + " contigs, " +
+			formatter.format(length) + " bp" + getProjectWeightsString();		
+	}
+
+	public List<Contig> getContigs() {
+		return contigs;
 	}
 }
