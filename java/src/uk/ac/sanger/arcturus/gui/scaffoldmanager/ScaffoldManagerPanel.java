@@ -5,11 +5,18 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.ComponentOrientation;
 import java.awt.Font;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.List;
 
 import uk.ac.sanger.arcturus.gui.*;
+import uk.ac.sanger.arcturus.gui.common.contigtransfer.ContigTransferMenu;
+import uk.ac.sanger.arcturus.gui.common.contigtransfer.ContigTransferSource;
 import uk.ac.sanger.arcturus.gui.scaffoldmanager.node.*;
+import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
+import uk.ac.sanger.arcturus.projectchange.ProjectChangeEventListener;
+import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
 import javax.swing.*;
@@ -17,13 +24,17 @@ import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
 import javax.swing.tree.*;
 
-public class ScaffoldManagerPanel extends MinervaPanel {
+public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeEventListener, ContigTransferSource {
 	private JTree tree= new JTree();
 
 	private JLabel lblWait = new JLabel("Please wait whilst the scaffold tree is retrieved");
 
+	protected ContigTransferMenu xferMenu;
+
 	public ScaffoldManagerPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
 		super(parent, adb);
+
+		xferMenu = new ContigTransferMenu("Transfer selected contigs to", this, adb);
 
 		createActions();
 
@@ -34,8 +45,10 @@ public class ScaffoldManagerPanel extends MinervaPanel {
 		ScaffoldManagerWorker worker = new ScaffoldManagerWorker(this, adb);
 		
 		createUI();
-		
+	
 		worker.execute();
+
+		adb.addProjectChangeEventListener(this);
 	}
 	
 	private void createUI() {
@@ -44,21 +57,7 @@ public class ScaffoldManagerPanel extends MinervaPanel {
 
 		tree.addTreeSelectionListener(new TreeSelectionListener() {
 			public void valueChanged(TreeSelectionEvent e) {
-				DefaultMutableTreeNode node = (DefaultMutableTreeNode) tree
-						.getLastSelectedPathComponent();
-
-				if (node == null)
-					return;
-			}
-		});
-
-		tree.addMouseListener(new MouseAdapter() {
-			public void mousePressed(MouseEvent e) {
-				mouseHandler(e);
-			}
-
-			public void mouseReleased(MouseEvent e) {
-				mouseHandler(e);
+				updateActions();
 			}
 		});
 
@@ -71,24 +70,12 @@ public class ScaffoldManagerPanel extends MinervaPanel {
 		
 		add(lblWait, BorderLayout.CENTER);
 	}
-
-	protected void mouseHandler(MouseEvent e) {
-		if (e.isPopupTrigger()) {
-			int x = e.getX();
-			int y = e.getY();
-
-			System.out.println("Popup trigger at (" + x + ", " + y + ")");
-
-			TreePath path = tree.getPathForLocation(x, y);
-
-			if (path == null)
-				return;
-
-			DefaultMutableTreeNode node = (DefaultMutableTreeNode) path
-					.getLastPathComponent();
-
-			System.out.println("Clicked on " + node);
-		}
+	
+	void updateActions() {
+		int nrows = tree.getSelectionCount();
+		boolean noneSelected = nrows == 0;
+		
+		xferMenu.setEnabled(!noneSelected);
 	}
 
 	private final Color PALE_PINK = new Color(0xFF, 0xCC, 0xCC);
@@ -122,7 +109,7 @@ public class ScaffoldManagerPanel extends MinervaPanel {
             	
             	icon = sNode.isForward() ? rightArrow : leftArrow;
             	
-            	font = (sNode.hasMyContigs() && !expanded) ? boldFont : defaultFont;
+            	font = (!expanded && sNode.hasMyContigs()) ? boldFont : defaultFont;
              } else if (node instanceof ContigNode) {         		
              	ContigNode cNode = (ContigNode)node;
 
@@ -134,7 +121,7 @@ public class ScaffoldManagerPanel extends MinervaPanel {
             } else if (node instanceof SuperscaffoldNode) {
             	SuperscaffoldNode ssNode = (SuperscaffoldNode)node;
             	
-            	font = (ssNode.hasMyScaffolds() && !expanded) ? boldFont : defaultFont;
+            	font = (!expanded && ssNode.hasMyContigs()) ? boldFont : defaultFont;
             } 
             
             setFont(font);
@@ -201,16 +188,50 @@ public class ScaffoldManagerPanel extends MinervaPanel {
 	}
 
 	protected void createClassSpecificMenus() {
+		createContigMenu();
+	}
+
+	protected void createContigMenu() {
+		JMenu contigMenu = createMenu("Contigs", KeyEvent.VK_C, "Contigs");
+		menubar.add(contigMenu);
+
+		contigMenu.add(xferMenu);
+		
+		xferMenu.refreshMenu();
 	}
 
 	protected void doPrint() {
 	}
 
 	protected boolean isRefreshable() {
-		return false;
+		return true;
 	}
 
 	public void refresh() {
+		xferMenu.refreshMenu();
+		refreshTree();
+	}
+	
+	private void refreshTree() {
+		TreeModel model = tree.getModel();
+		
+		if (model instanceof DefaultTreeModel) {
+			DefaultTreeModel dtm = (DefaultTreeModel)model;
+			
+			dtm.nodeStructureChanged((TreeNode)dtm.getRoot());
+		}
 	}
 
+	public List<Contig> getSelectedContigs() {
+		DefaultMutableTreeNode node = (DefaultMutableTreeNode)tree.getLastSelectedPathComponent();
+
+		if (node != null && node instanceof SequenceNode)
+			return ((SequenceNode)node).getContigs();
+		else
+			return null;	
+	}
+
+	public void projectChanged(ProjectChangeEvent event) {
+		refresh();
+	}
 }

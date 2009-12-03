@@ -1,22 +1,22 @@
 package uk.ac.sanger.arcturus.gui.scaffoldmanager.node;
 
+import java.util.List;
+import java.util.Vector;
+
 import javax.swing.tree.MutableTreeNode;
+
+import uk.ac.sanger.arcturus.data.Contig;
 
 public class SuperscaffoldNode extends SequenceNode {
 	private int length = 0;
-	private int contigs = 0;
 	private int scaffolds = 0;
-	private int myScaffolds = 0;
+	private List<Contig> contigs = new Vector<Contig>();
 	
 	public void add(MutableTreeNode node) {
 		if (node instanceof ScaffoldNode) {
 			ScaffoldNode snode = (ScaffoldNode)node;
 			
 			length += snode.length();
-			contigs += snode.getContigCount();
-			
-			if (snode.hasMyContigs())
-				myScaffolds++;
 			
 			if (snode.getContigCount() == 1) {
 				ContigNode cnode = (ContigNode)snode.getFirstChild();
@@ -24,9 +24,13 @@ public class SuperscaffoldNode extends SequenceNode {
 				if (!snode.isForward())
 					cnode.reverse();
 					
+				contigs.add(cnode.getContig());
+				
 				super.add(cnode);
 			} else {
 				scaffolds++;
+				
+				contigs.addAll(snode.getContigs());
 				
 				super.add(snode);
 			}
@@ -35,7 +39,7 @@ public class SuperscaffoldNode extends SequenceNode {
 	}
 	
 	public String toString() {
-		return "Superscaffold of " + scaffolds + " scaffolds, " + contigs + " contigs, " + 
+		return "Superscaffold of " + scaffolds + " scaffolds, " + contigs.size() + " contigs, " + 
 			formatter.format(length) + " bp";
 	}
 	
@@ -44,11 +48,15 @@ public class SuperscaffoldNode extends SequenceNode {
 	}
 	
 	public int getContigCount() {
-		return contigs;
+		return contigs.size();
 	}
 	
-	public boolean hasMyScaffolds() {
-		return myScaffolds > 0;
+	public boolean hasMyContigs() {
+		for (Contig contig : contigs)
+			if (contig.getProject().isMine())
+				return true;
+		
+		return false;
 	}
 
 	public int getScaffoldCount() {
@@ -57,5 +65,9 @@ public class SuperscaffoldNode extends SequenceNode {
 	
 	public boolean isDegenerate() {
 		return scaffolds == 1 && getChildCount() == 1;
+	}
+
+	public List<Contig> getContigs() {
+		return contigs;
 	}
 }
