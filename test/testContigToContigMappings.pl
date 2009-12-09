@@ -31,7 +31,7 @@ while (my $nextword = shift @ARGV) {
     }
 }
 
-unless (defined($instance) && defined($organism) && defined($firstparent) && defined($lastparent)) {
+unless (defined($instance) && defined($organism)) {
     &showUsage("One or more mandatory parameters missing");
     exit(1);
 }
@@ -49,11 +49,37 @@ unless (defined($dbh)) {
 
 my %consensus;
 
+my $query;
+my $sth;
+
+unless (defined($firstparent) && defined($lastparent)) {
+    print STDERR "Determining range of parent contig IDs ... ";
+
+    $query = "select min(parent_id),max(parent_id) from C2CMAPPING";
+
+    if (defined($firstparent)) {
+	$query .= " where parent_id >= $firstparent";
+    } elsif (defined($lastparent)) {
+	$query .= " where parent_id <= $lastparent";
+    }
+
+    $sth = $dbh->prepare($query);
+    &db_die("prepare($query) failed");
+
+    $sth->execute();
+
+    ($firstparent, $lastparent) = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    print STDERR "$firstparent $lastparent\n";
+}
+
 print STDERR "Determining range of child contig IDs ... ";
 
-my $query = "select min(contig_id),max(contig_id) from C2CMAPPING where parent_id between ? and ?";
+$query = "select min(contig_id),max(contig_id) from C2CMAPPING where parent_id between ? and ?";
 
-my $sth = $dbh->prepare($query);
+$sth = $dbh->prepare($query);
 &db_die("prepare($query) failed");
 
 $sth->execute($firstparent, $lastparent);
@@ -70,14 +96,14 @@ if (defined($firstchild) && defined($lastchild)) {
     exit(1);
 }
 
-print STDERR "Fetching consensus sequences for parent contigs ... ";
+print STDERR "Fetching consensus sequences for contigs ... ";
 
 my $query = "select contig_id,sequence from CONSENSUS where contig_id between ? and ?";
 
 my $sth = $dbh->prepare($query);
 &db_die("prepare($query) failed");
 
-$sth->execute($firstparent, $lastparent);
+$sth->execute($firstparent, $lastchild);
 
 my $ncontigs = 0;
 my $nseqlen = 0;
@@ -90,22 +116,6 @@ while (my ($contig_id,$sequence) = $sth->fetchrow_array()) {
 }
 
 $sth->finish();
-
-print STDERR " got $nseqlen bp from $ncontigs contigs\n";
-
-print STDERR "Fetching consensus sequences for child contigs ... ";
-
-$sth->execute($firstchild, $lastchild);
-
-$ncontigs = 0;
-$nseqlen = 0;
-
-while (my ($contig_id,$sequence) = $sth->fetchrow_array()) {
-    $sequence = uc(uncompress($sequence));
-    $consensus{$contig_id} = $sequence;
-    $ncontigs++;
-    $nseqlen += length($sequence);
-}
 
 print STDERR " got $nseqlen bp from $ncontigs contigs\n";
 
@@ -156,10 +166,10 @@ sub showUsage {
     print STDERR "-instance\tName of instance\n";
     print STDERR "-organism\tName of organism\n";
     print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "\n";
     print STDERR "-firstcontig\tID of first parent contig to check\n";
     print STDERR "-lastcontig\tID of last parent contig to check\n";
-    print STDERR "\n";
-    print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-limit\t\tShow only the first N contigs\n";
     print STDERR "-verbose\tProduce verbose output\n";
