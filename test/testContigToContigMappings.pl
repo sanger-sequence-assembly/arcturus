@@ -131,6 +131,11 @@ my $sth = $dbh->prepare($query);
 
 $sth->execute($firstparent, $lastparent);
 
+my $goodcount = 0;
+my $goodlength = 0;
+my $badcount = 0;
+my $badlength = 0;
+
 while (my ($parent_id,$child_id,$direction,$pstart,$cstart,$seglen) =
        $sth->fetchrow_array()) {
     $pstart -= $seglen - 1 if ($direction eq 'Reverse');
@@ -143,13 +148,23 @@ while (my ($parent_id,$child_id,$direction,$pstart,$cstart,$seglen) =
 	$pseq =~ tr/ACGT/TGCA/;
     }
 
-    print "$parent_id,$child_id,$direction,$pstart,$cstart,$seglen\n$pseq\n$cseq\n\n"
-	if ($pseq ne $cseq);
+    if ($pseq eq $cseq) {
+	$goodcount++;
+	$goodlength += $seglen;
+    } else {
+	$badcount++;
+	$badlength += $seglen;
+	print "$parent_id,$child_id,$direction,$pstart,$cstart,$seglen\n$pseq\n$cseq\n\n";
+    }
 }
 
 $sth->finish();
 
 $dbh->disconnect();
+
+print STDERR "Examined ",($goodcount+$badcount)," segments containing ",($goodlength+$badlength)," bp\n";
+print STDERR "Good segments: $goodcount ($goodlength bp)\n";
+print STDERR "Bad segments:  $badcount ($badlength bp)\n";
 
 exit(0);
 
