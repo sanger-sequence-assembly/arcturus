@@ -183,8 +183,8 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-firstcontig\tID of first parent contig to check\n";
-    print STDERR "-lastcontig\tID of last parent contig to check\n";
+    print STDERR "-firstparent\tID of first parent contig to check\n";
+    print STDERR "-lastparent\tID of last parent contig to check\n";
     print STDERR "\n";
     print STDERR "-limit\t\tShow only the first N contigs\n";
     print STDERR "-verbose\tProduce verbose output\n";
