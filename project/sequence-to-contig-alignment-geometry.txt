@@ -1,0 +1,41 @@
+ARCTURUS SEQUENCE-TO-CONTIG ALIGNMENT GEOMETRY
+==============================================
+
+Original scheme
+---------------
+
+rs = SEGMENT.rstart
+cs = SEGMENT.cstart
+ l = SEGMENT.length
+
+                  rs                        rs+l-1
+                  +---------------------------->         Co-aligned read
+
+                  cs                        cs+l-1
+    --------------+----------------------------+-------> Contig
+                  cs                        cs+l-1
+
+                  <----------------------------+         Counter-aligned read
+                  rs                        rs-l+1
+
+
+Canonical mapping scheme
+------------------------
+
+r0 = SEQ2CONTIG.roffset
+c0 = SEQ2CONTIG.coffset
+
+rs = CANONICALSEGMENT.rstart
+cs = CANONICALSEGMENT.cstart
+ l = CANONICALSEGMENT.length
+
+
+                  r0+rs                  r0+rs+l-1
+                  +---------------------------->         Co-aligned read
+
+                  c0+cs                  c0+cs+l-1
+    --------------+----------------------------+-------> Contig
+                  c0-cs-l+1                  c0-cs
+
+                  <----------------------------+         Counter-aligned read
+                  r0+rs+l-1                  r0+rs
