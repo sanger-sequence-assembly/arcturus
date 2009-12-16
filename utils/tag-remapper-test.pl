@@ -14,35 +14,64 @@ use Logging;
 # mapping modules)
 #----------------------------------------------------------------
 
-my $organism;
-my $instance;
+my ($organism,$instance);
 
-# my ($contig,$begin,$final,$block);
+my ($contig,$parent);
 
-my $verbose;
-my $debug;
+my ($log,$verbose,$debug);
 
-my $validKeys  = "organism|instance|contig|begin|final|"
-               . "verbose|info|debug|help";
+my ($tagtype,$tagkey);
+
+
+my $validKeys  = "organism|o|instance|i|"
+               . "contig|parent|tagtype|tt|tagkey|tk|"
+               . "log|verbose|info|fine|debug|help|h";
 
 while (my $nextword = shift @ARGV) {
+
+    $validKeys =~ s/\|contig// if defined $parent;
+    $validKeys =~ s/\|parent// if defined $contig;
 
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage("Invalid keyword '$nextword'");
     }                                                                           
-    $instance  = shift @ARGV  if ($nextword eq '-instance');
-      
-    $organism  = shift @ARGV  if ($nextword eq '-organism');
 
-#    $contig    = shift @ARGV  if ($nextword eq '-contig');
+    if ($nextword eq '-instance' || $nextword eq '-i') {
+        $instance  = shift @ARGV;
+# remove key from list to prevent redefinition when used with e.g. a wrapper script
+        next;
+    }
 
-    $verbose   = 1            if ($nextword eq '-verbose');
+    if ($nextword eq '-organism' || $nextword eq '-o') {
+        $organism  = shift @ARGV;
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        next;
+    }
 
-    $verbose   = 2            if ($nextword eq '-info');
+    $contig        = shift @ARGV  if ($nextword eq '-contig');
 
-    $debug     = 1            if ($nextword eq '-debug');
+    $parent        = shift @ARGV  if ($nextword eq '-parent');
 
-    &showUsage(0) if ($nextword eq '-help');
+    if ($nextword eq '-tagtype' || $nextword eq '-tt') {
+        $tagtype   = shift @ARGV;
+    } 
+    if ($nextword eq '-tagkey'  || $nextword eq '-tk') {
+        $tagkey    = shift @ARGV;
+    } 
+
+    $log           = shift @ARGV  if ($nextword eq '-log');
+
+    $verbose       = 0            if ($nextword eq '-fine');
+
+    $verbose       = 1            if ($nextword eq '-verbose');
+
+    $verbose       = 2            if ($nextword eq '-info');
+
+    $debug         = 1            if ($nextword eq '-debug');
+
+    if ($nextword eq '-help' || $nextword eq '-h') {
+        &showUsage(0); 
+    }
 }
  
 #----------------------------------------------------------------
@@ -53,8 +82,10 @@ my $logger = new Logging('STDOUT');
  
 $logger->setStandardFilter($verbose) if defined $verbose; # set reporting level
 
-$logger->setDebugStream('STDOUT',list=>1)   if $debug;
- 
+$logger->setDebugStream('STDOUT',list=>1) if $debug;
+
+$logger->setSpecialStream($log,append=>1) if $log; 
+
 #----------------------------------------------------------------
 # get the database connection
 #----------------------------------------------------------------
@@ -63,9 +94,8 @@ $logger->setDebugStream('STDOUT',list=>1)   if $debug;
 
 &showUsage("Missing database instance") unless $instance;
 
-#&showUsage("Missing contig ID") unless ($contig || $fofn);
-
-#&showUsage("Missing tagtype") unless $tagtype;
+# we use the ArcturusDatabase module ONLY to get the database connection
+# and contig IDs of the contigs to be tested (default: current contigs)
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
@@ -80,7 +110,47 @@ my $URL = $adb->getURL;
 $logger->info("Database $URL opened succesfully");
 
 #----------------------------------------------------------------
-# preparations
+# contig selection
+#----------------------------------------------------------------
+
+my $contigids = [];
+    
+if ($contig && lc($contig) ne 'current') {
+# single ID or comma-separated list or range(s), or mixture of these
+    my @contigids;
+    my @cids = split /[\s\,\:]+/,$contig;
+    foreach my $contig (@cids) {
+        unless ($contig =~ /\-/) {
+            push @contigids,$contig;
+            next;
+        }
+# it's a range defined
+        my @range = sort {$a <=> $b} split /\-/,$contig;
+        if (scalar(@range) > 2) {
+            $logger->error("Invalid contig range specification: $contig");
+            next;
+        }
+        push @contigids, ($range[0] .. $range[1]);
+    }
+# weedout duplicates
+    my $contigidhash = {};
+    foreach my $contig_id (@contigids) {
+        $contigidhash->{$contig_id}++;
+    }
+    @$contigids = sort {$a <=> $b} keys %$contigidhash;
+}
+elsif ($parent) {
+    my $cidhash = $adb->getRelationsForContigID($parent);
+    @$contigids = sort {$a <=> $b} keys %$cidhash;
+}
+else { # default
+    $contigids = $adb->getCurrentContigIDs();
+}
+
+#print STDERR "cids: @$contigids\n";# exit;
+
+#----------------------------------------------------------------
+# prepare statements
 #----------------------------------------------------------------
 
 my $dbh = $adb->getConnection();
@@ -92,22 +162,32 @@ my $parentcontigquery = "select parent_id,mapping_id,direction,"
                       . "  from C2CMAPPING"
                       . " where contig_id = ?"
                       . " order by cstart";
-my $pqsth = $dbh->prepare($parentcontigquery);
+my $pq_sth = $dbh->prepare($parentcontigquery);
 
 my $c2csegmentquery   = "select cstart,pstart,length from C2CSEGMENT"
                       . " where mapping_id = ?"
                       . " order by cstart";
-my $sqsth = $dbh->prepare($c2csegmentquery);
+my $sq_sth = $dbh->prepare($c2csegmentquery);
 
-my $tagpositionquery  = "select id,parent_id,cstart,cfinal,strand"
-                      . "   from TAG2CONTIG"
-                      . " where contig_id = ?" 
-                      . " order by cstart";
-my $tqsth = $dbh->prepare($tagpositionquery);
+my $tagpositionquery;
+if ($tagtype || $tagkey) {
+# do the join
+    $tagpositionquery  = "select id,parent_id,cstart,cfinal,strand,"
+                       . "       tagtype,comment,systematic_id,tagcomment"
+                       . "  from TAG2CONTIG join CONTIGTAG using (tag_id)"
+                       . " where contig_id = ?" 
+                       . " order by cstart";
+}
+else {
+# only use TAG2CONTIG
+    $tagpositionquery  = "select id,parent_id,cstart,cfinal,strand"
+                       . "   from TAG2CONTIG"
+                       . " where contig_id = ?" 
+                       . " order by cstart";
+}
+my $tq_sth = $dbh->prepare($tagpositionquery);
 
 # get list of current contigs
-
-my $currentcontigids = $adb->getCurrentContigIDs();
 
 #----------------------------------------------------------------
 # MAIN
@@ -115,43 +195,45 @@ my $currentcontigids = $adb->getCurrentContigIDs();
 
 my $remaphash = {};
 
-foreach my $contig_id (@$currentcontigids) {
+foreach my $contig_id (@$contigids) {
 
 # find the parents with tags 
 
-    $pqsth->execute($contig_id) || &testerror();
+    $pq_sth->execute($contig_id) || &testerror();
 
     my $parentidhash = {};
-    while (my @ary = $pqsth->fetchrow_array()) {
+    while (my @ary = $pq_sth->fetchrow_array()) {
         my $parent_id = shift @ary;
+        next if ($parent && $parent != $parent_id); # select only parent
         my $mappingid = shift @ary;
         $parentidhash->{$parent_id} = {} unless $parentidhash->{$parent_id};
         $parentidhash->{$parent_id}->{$mappingid} = [@ary];
     }
-    $pqsth->finish();
+    $pq_sth->finish();
     unless (keys %$parentidhash) {
-        $logger->warning("contig $contig_id has no parents");
-        $pqsth->finish();
+        $logger->info("contig $contig_id has no parents");
+        $pq_sth->finish();
         next;
     }
 
 # find remapped tags on the contig
 
-    $tqsth->execute($contig_id) || &testerror();
+    $tq_sth->execute($contig_id) || &testerror();
 
     my $contigtagidhash = {};
-    while (my @ary = $tqsth->fetchrow_array()) {
+    while (my @ary = $tq_sth->fetchrow_array()) {
         my $id = shift @ary;
         my $parenttagid = shift @ary;
         next unless $parenttagid; # ignore tags which appear for the first time
         $contigtagidhash->{$parenttagid} = [@ary]; 
     }
-    $tqsth->finish();
+    $tq_sth->finish();
     unless (keys %$contigtagidhash) {
         $logger->info("contig $contig_id has no remapped tags");
         next;
     }
-    $logger->warning("contig $contig_id has remapped tags:".scalar(keys %$contigtagidhash));
+    $logger->warning("contig $contig_id has remapped tags:"
+                    .scalar(keys %$contigtagidhash),preskip=>1);
 
 # test each parent-mapping combination in turn
 
@@ -163,17 +245,28 @@ foreach my $contig_id (@$currentcontigids) {
 
 # get the tags on the parent
 
-        $tqsth->execute($parent_id) || &testerror();
+        $tq_sth->execute($parent_id) || &testerror();
 
         my $parenttagidhash = {};
-        while (my @ary = $tqsth->fetchrow_array()) {
+        while (my @ary = $tq_sth->fetchrow_array()) {
             my $id = shift @ary;
             my $parent_id = shift @ary;
+            if ($tagtype && @ary > 3) {
+                next unless ($ary[3] eq $tagtype);
+	    }
+            if ($tagkey  && @ary > 4) {
+                my $accept = 0;
+                $accept = 1 if ($ary[4] && $ary[4] =~ /$tagkey/); # test systemtic ID
+                $accept = 1 if ($ary[5] && $ary[5] =~ /$tagkey/); # test comment
+                $accept = 1 if ($ary[6] && $ary[6] =~ /$tagkey/); # test tagcomment
+                next unless $accept;
+	    }
             $parenttagidhash->{$id} = [@ary];
         }
-        $tqsth->finish();
+        $tq_sth->finish();
         unless (keys %$parenttagidhash) {
-            $logger->warning("parent $parent_id has no tags");
+            $logger->warning("parent $parent_id has no "
+                   .(($tagtype || $tagkey) ? "matching tags" : "tags"));
             next;
         }
         $logger->warning("parent $parent_id has tags:".scalar(keys %$parenttagidhash));
@@ -187,20 +280,20 @@ foreach my $contig_id (@$currentcontigids) {
 
 # get the mapping segments
 
-            $sqsth->execute($mapping_id) || &testerror();
+            $sq_sth->execute($mapping_id) || &testerror();
             my $alignmentdirection = $mappingidhash->{$mapping_id}->[0] || 0;
             my $alignment = ($alignmentdirection eq 'Forward') ? 1 : -1;
             my $k = ($alignment > 0) ? 0 : 1; # used in interval
             my $segmentlist = [];
-            while (my ($cstart,$pstart,$length) = $sqsth->fetchrow_array()) {
+            while (my ($cstart,$pstart,$length) = $sq_sth->fetchrow_array()) {
                 my $cfinish = $cstart + $length;
-                my $pfinish = $pstart + $alignment*$length;
+                my $pfinish = $pstart + $alignment*($length-1);
                 ($pstart,$pfinish) = ($pfinish,$pstart) if ($alignment < 0);
                 my @segment = ($cstart,$cfinish,$pstart,$pfinish);
                 push @$segmentlist,[@segment];
                 $logger->info("mapping segment : @segment");
             }
-            $sqsth->finish();
+            $sq_sth->finish();
             unless (@$segmentlist) {
                 $logger->warning("empty mapping $mapping_id between contigs $contig_id and $parent_id");
                 next;
@@ -222,8 +315,18 @@ foreach my $contig_id (@$currentcontigids) {
                                  ."on parent $parent_id was not remapped");
                     next if defined $remaphash->{$parent_id}->{$parenttagid}; # mapped to another contig
                     $remaphash->{$parent_id}->{$parenttagid} = -1; # set not remapped
-# TBC check tag position against mapping range
-
+# check tag positions against mapping range on parent contig; they may not overlap
+                    my $outside = 1;
+                    my $mappingranges = $mappingidhash->{$mapping_id};
+                    foreach my $position (@parenttagposition) {
+                        $outside = 0 if ($position >= $mappingranges->[3]
+                                     &&  $position <= $mappingranges->[4]);
+		    }
+                    foreach my $position ($mappingranges->[3],$mappingranges->[4]) {
+                        $outside = 0 if ($position >= $parenttagposition[0]
+			     	     &&  $position <= $parenttagposition[1]);
+		    }
+                    $remaphash->{$parent_id}->{$parenttagid} = -2 unless $outside;
                     next;
 		}
 # get the tag position on contig           
@@ -263,8 +366,8 @@ foreach my $contig_id (@$currentcontigids) {
 		}
 # analyse result 
                 unless (defined($segmentoncontig[0]) && defined($segmentoncontig[1])) {
-# this condition occurs when the tag is not remapped (both values undefined) 
-# or it signals a change of mapping from the one used to remap (only one value undefined)
+# this condition occurs when the tag is not remapped (which is unexpected) 
+# possible cause can be a change of mapping from the one used to remap the tags 
                     if (defined $remaphash->{$parent_id}->{$parenttagid}) {
 # test if the tag was remapped with an earlier mapping
                         next if ($remaphash->{$parent_id}->{$parenttagid} == 0);
@@ -283,7 +386,8 @@ foreach my $contig_id (@$currentcontigids) {
                 $remaphash->{$parent_id}->{$parenttagid} = 0; # no errors
 
                 if (defined($segmentonparent[0]) && defined($segmentonparent[1])) {
-# these should never occur: would indicate mapping to different segment, hence corrupted mapping
+# test the segments on the contig and the parent, they should be identical, if
+# not, that would indicate mapping to a different segment, hence corrupted mapping
                     unless ($segmentoncontig[0] == $segmentonparent[$k]) {
                         $remaphash->{$parent_id}->{$parenttagid} = 20;
 		    }
@@ -291,41 +395,60 @@ foreach my $contig_id (@$currentcontigids) {
                         $remaphash->{$parent_id}->{$parenttagid} = 20;
 		    }
 # if no error, the tags are remapped correctly
+# TEST PODSITION IN DETAIL (both ends via remap)
                 }
                 elsif (defined($segmentonparent[0])) {
 # the tag is truncated, the leading position falls outside the mapping segments
                     $remaphash->{$parent_id}->{$parenttagid} += 1;
+# TEST PODSITION IN DETAIL (one end remap, other coinciding with segment boundary)
 		}
                 elsif (defined($segmentonparent[1])) {
 # the tag is truncated, the traiing position falls outside the mapping segments
                     $remaphash->{$parent_id}->{$parenttagid} += 2;
+# TEST PODSITION IN DETAIL (one end remap, other coinciding with segment boundary)
 		}
+# finally check the details of the mapping
+
+
 		$logger->info("Tag error status : $remaphash->{$parent_id}->{$parenttagid}");
 	    } # next mapping
 	}
     }
 
 #last;
-#last unless ($contig_id < 201600);
+last unless ($contig_id < 201600);
 }
+
+$dbh->disconnect();
 
 my %status = ( 1 => 'truncated on the left side',
                2 => 'truncated on the right side',
                3 => 'truncated on both sides',
               10 => 'was not remapped (should not occur!)',
               20 => 'in discordant segments; possibly changed contig-parent mapping',
-	    '-1' => 'was not remapped, outside mapping range');
+	    '-1' => 'was not remapped, outside mapping range',
+	    '-2' => 'was incorrectly not remapped because stradling mapping range');
 
-foreach my $parent_id (sort {$a <=> $b} keys %$remaphash) {
+my @parentids = sort {$a <=> $b} keys %$remaphash;
+
+$logger->warning("remapped tags tested from ".scalar(@parentids)." parent contigs");
+
+my $totaltags = 0;
+my $totalproblemtags = 0;
+foreach my $parent_id (@parentids) {
     my $problemtags = 0;
     my $parenttaghash = $remaphash->{$parent_id};
     my @parenttagids = sort {$a <=> $b} keys %$parenttaghash;
     foreach my $parenttagid (@parenttagids) {
+        $totaltags++;
         my $mapstatus = $parenttaghash->{$parenttagid};
-        next unless $mapstatus;
+        next unless $mapstatus; # status 0 for correct mapping
         $problemtags++;
     }
-    $logger->warning("Problem tags for parent contig $parent_id : $problemtags");
+#    $logger->special("Problem tags for parent contig $parent_id : $problemtags");
+    next unless $problemtags;
+    $totalproblemtags += $problemtags;
+    $logger->warning("Problem tags for parent contig $parent_id : $problemtags",preskip=>1);
     foreach my $parenttagid (@parenttagids) {
         my $mapstatus = $parenttaghash->{$parenttagid};
         next if ($mapstatus == 0);
@@ -333,6 +456,8 @@ foreach my $parent_id (sort {$a <=> $b} keys %$remaphash) {
         $logger->warning("remap status of tag $parenttagid : $status");
     }
 }
+
+$logger->warning("$totalproblemtags tags (out of $totaltags) had problems",ss=>1);
 
 exit;
 
@@ -377,47 +502,28 @@ sub showUsage {
 
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
-    print STDERR "Test contig to parent links using common reads; propagate tags\n";
+    print STDERR "Test of tags remapped with Arcturus core system\n";
     print STDERR "\n";
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-organism\tArcturus database name\n";
     print STDERR "-instance\teither 'prod' or 'dev'\n";
     print STDERR "\n";
+    print STDERR "OPTIONAL EXCLUSIVE PARAMETERS:\n";
+    print STDERR "\n";
     print STDERR "-contig\t\tcontig ID, comma-separated list of IDs, 'current' or 'range'\n";
-    print STDERR "\t\tWhen using 'range' specify -begin and -final or -block\n";
-    print STDERR "-fofn\t\tfile with list of contig IDs\n";
+    print STDERR "-parent\t\tselect just the contig having parent contig with specified ID\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-strong\t\t(no value) find links using common reads having identical read mappings\n";
+    print STDERR "-tt\t\t(tagtype) investigate only tags of the tag type specified\n";
+    print STDERR "-tk\t\t(tagkey)  investigate only tags with a matching descriptor\n";
     print STDERR "\n";
-    print STDERR "-next\t\tnumber of contigs to be tested from given contig\n";
-    print STDERR "-begin\t\twith '-range': first contig_id to be used (default 1)\n";
-    print STDERR "-final\t\twith '-range':  last contig_id to be used\n";
-    print STDERR "-block\t\twith '-range': number of ids after '-begin' to be used\n";
+    print STDERR "-log\t\tlog file for detailed output\n";
     print STDERR "\n";
-    print STDERR "-filter\t\t(pidf;parent-identifier-filter) select parent contig ID(s) to be tested\n";
-    print STDERR "\n";
-    print STDERR "-nosync\t\t(nosynchronize) do not remove mappings in the database which\n";
-    print STDERR "\t\t do not correspond to the links found; default synchronize\n";
-    print STDERR "-force\t\t(no value) force installation of the links\n";
-    print STDERR "\n";
-    print STDERR "-it\t\t(inherittags) propagate tags of the tag type specified\n";
-    print STDERR "\n";
-    print STDERR "-confirm\t(-commit) do the change(s) to mappings and/or tags\n";
-    print STDERR "-cleanup\t(no value) cleanup of segments database \n";
-    print STDERR "-verbose\t(no value) for some progress info\n";
-    print STDERR "\n";
-    print STDERR "OPTIONAL PARAMETERS for testing:\n";
-    print STDERR "\n";
-    print STDERR "-preview\n";
-    print STDERR "\n";
-    print STDERR "-st\t\t(showtags) show tag sequence on both the contig and its parent(s)\n";
-    print STDERR "-str\t\t as for '-st' but in reverse complement\n";
-    print STDERR "\n";
-    print STDERR "-rc\t\t(reversecontig) reverse the input contig\n";
-    print STDERR "-rp\t\t(reverseparent) reverse the parent contig(s)\n";
+    print STDERR "-info\n";
+    print STDERR "-verbose\n";
+    print STDERR "-debug\n";
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);
