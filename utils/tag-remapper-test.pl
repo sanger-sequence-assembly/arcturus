@@ -84,7 +84,9 @@ $logger->setStandardFilter($verbose) if defined $verbose; # set reporting level
 
 $logger->setDebugStream('STDOUT',list=>1) if $debug;
 
-$logger->setSpecialStream($log,append=>1) if $log; 
+$logger->setSpecialStream($log) if $log; 
+
+$logger->setSpecialStream('STDOUT') unless $log; 
 
 #----------------------------------------------------------------
 # get the database connection
@@ -286,7 +288,7 @@ foreach my $contig_id (@$contigids) {
             my $k = ($alignment > 0) ? 0 : 1; # used in interval
             my $segmentlist = [];
             while (my ($cstart,$pstart,$length) = $sq_sth->fetchrow_array()) {
-                my $cfinish = $cstart + $length;
+                my $cfinish = $cstart + ($length-1);
                 my $pfinish = $pstart + $alignment*($length-1);
                 ($pstart,$pfinish) = ($pfinish,$pstart) if ($alignment < 0);
                 my @segment = ($cstart,$cfinish,$pstart,$pfinish);
@@ -298,7 +300,9 @@ foreach my $contig_id (@$contigids) {
                 $logger->warning("empty mapping $mapping_id between contigs $contig_id and $parent_id");
                 next;
 	    }
-         
+
+            my $mappinglist;
+
 # test each tag on the parent and determine if it has been remapped to this contig
 # if so, check the quality of the mapping and register possible problems.
 # if not, add the tag as not having been remapped in the remaphash
@@ -311,10 +315,13 @@ foreach my $contig_id (@$contigids) {
                 my $contigtagdata = $contigtagidhash->{$parenttagid};
                 unless ($contigtagdata) {
 # do not override a previous status setting
-		    $logger->info("Tag $parenttagid at @parenttagposition "
-                                 ."on parent $parent_id was not remapped");
-                    next if defined $remaphash->{$parent_id}->{$parenttagid}; # mapped to another contig
-                    $remaphash->{$parent_id}->{$parenttagid} = -1; # set not remapped
+                    my $previousstatus = $remaphash->{$parent_id}->{$parenttagid};
+                    if (defined($previousstatus)) {
+# skip if the tag was earlier found mapped to another contig
+                        next if ($previousstatus >= 0 && $previousstatus <= 3);
+		    }
+
+                    $remaphash->{$parent_id}->{$parenttagid} = -1; # set to not remapped
 # check tag positions against mapping range on parent contig; they may not overlap
                     my $outside = 1;
                     my $mappingranges = $mappingidhash->{$mapping_id};
@@ -326,7 +333,20 @@ foreach my $contig_id (@$contigids) {
                         $outside = 0 if ($position >= $parenttagposition[0]
 			     	     &&  $position <= $parenttagposition[1]);
 		    }
-                    $remaphash->{$parent_id}->{$parenttagid} = -2 unless $outside;
+                    if ($outside) { # the correct situation
+                        $logger->info("Tag $parenttagid on parent $parent_id was not remapped",ps=>1);
+                        $logger->info("tag range falls outside mapping range :");
+	   	        $logger->info("tag (parent) position : @parenttagposition ; mapping "
+                                      ."span : $mappingranges->[3] $mappingranges->[4]",skip=>1);
+                    }
+		    else { # the incorrect situation
+                        $logger->special("Tag $parenttagid on parent $parent_id was not remapped",ps=>1);
+                        $logger->special("Error! tag range has an overlap with mapping range :");
+	   	        $logger->special("tag (parent) position : @parenttagposition ; mapping "
+                                        ."span : $mappingranges->[3] $mappingranges->[4]");
+                        $logger->special(&listmapping($segmentlist)) unless $mappinglist++;
+                        $remaphash->{$parent_id}->{$parenttagid} = -2;
+		    }
                     next;
 		}
 # get the tag position on contig           
@@ -364,9 +384,16 @@ foreach my $contig_id (@$contigids) {
 			}
 		    }
 		}
-# analyse result 
+
+                if ($segmenterror && !$mappinglist++) {
+                    $logger->special("Segment errors in parent to contig mapping : $segmenterror");
+                    $logger->special("Mapping between parent $parent_id and contig $contig_id:");
+                    $logger->special(&listmapping($segmentlist));          
+		}
+
+# analyse result; we do a full report here for tags with both contig segments defined  
                 unless (defined($segmentoncontig[0]) && defined($segmentoncontig[1])) {
-# this condition occurs when the tag is not remapped (which is unexpected) 
+# this condition occurs when the tag is not remapped 
 # possible cause can be a change of mapping from the one used to remap the tags 
                     if (defined $remaphash->{$parent_id}->{$parenttagid}) {
 # test if the tag was remapped with an earlier mapping
@@ -388,24 +415,76 @@ foreach my $contig_id (@$contigids) {
                 if (defined($segmentonparent[0]) && defined($segmentonparent[1])) {
 # test the segments on the contig and the parent, they should be identical, if
 # not, that would indicate mapping to a different segment, hence corrupted mapping
+                    my $isinconsistent;
                     unless ($segmentoncontig[0] == $segmentonparent[$k]) {
+                        $logger->special("Inconsistent mapping segment for tag $parenttagid "
+			        	."on parent contig $parent_id mapped to $contig_id",ps=>1);
+			$logger->special("Mapping segment on contig : $segmentoncontig[0]");
+			$logger->special("Mapping segment on parent : $segmentonparent[$k]");
                         $remaphash->{$parent_id}->{$parenttagid} = 20;
+                        $isinconsistent++;
 		    }
                     unless ($segmentoncontig[1] == $segmentonparent[1-$k]) {
+                        $logger->special("Inconsistent mapping segment for tag $parenttagid "
+			        	."on parent contig $parent_id mapped to $contig_id",ps=>1);
+			$logger->special("Mapping segment on contig : $segmentoncontig[1]");
+			$logger->special("Mapping segment on parent : $segmentonparent[1-$k]");
                         $remaphash->{$parent_id}->{$parenttagid} = 20;
+                        $isinconsistent++;
 		    }
-# if no error, the tags are remapped correctly
-# TEST PODSITION IN DETAIL (both ends via remap)
+                    if ($isinconsistent) {
+                        $logger->special("position of tag on parent $parent_id : @parenttagposition");
+                        $logger->special("position of tag on contig $contig_id : @contigtagposition");
+                        next if $mappinglist++;
+                        $logger->special("Mapping between parent $parent_id and contig $contig_id:");
+                        $logger->special(&listmapping($segmentlist));
+			next;
+		    }
+# no error, the tags are remapped correctly in the same segments
+# now do the detailed comparison
+                    @parenttagposition = reverse @parenttagposition if ($alignment < 0);
+                    foreach my $i (0,1) {
+                        my $mappingsegment = $segmentlist->[$segmentoncontig[$i]];
+                        my $mappedcontigposition = &remap($mappingsegment,$contigtagposition[$i],$alignment);
+                        unless ($parenttagposition[$i] == $mappedcontigposition) {
+                            $remaphash->{$parent_id}->{$parenttagid} = 4;
+                            $logger->special("Inconsistent mapping position for tag $parenttagid "
+					    ."on parent contig $parent_id mapped to $contig_id",ps=>1);
+                            $logger->special("mapping segment : @$mappingsegment    alignment $alignment");
+			    $logger->special("parent position : $parenttagposition[$i]");
+			    $logger->special("contig position : $contigtagposition[$i]");
+			    $logger->special("mapped position : $mappedcontigposition");
+		        }
+		    }
+		    next;
                 }
                 elsif (defined($segmentonparent[0])) {
-# the tag is truncated, the leading position falls outside the mapping segments
+# the tag is truncated, the leading position on parent falls outside the mapping segments
                     $remaphash->{$parent_id}->{$parenttagid} += 1;
-# TEST PODSITION IN DETAIL (one end remap, other coinciding with segment boundary)
+# check on tag boundary
+                    my $mappingsegment = $segmentlist->[$segmentoncontig[1-$k]]; # 1
+                    unless ($contigtagposition[1-$k] == $mappingsegment->[1-$k]) {
+                        $logger->special("Inconsistent boundary position (R) for tag $parenttagid "
+		       		        ."on parent contig $parent_id mapped to $contig_id",ps=>1);
+                        $logger->special("mapping segment : @$mappingsegment    alignment $alignment");
+                        $logger->special("tag boundary position $contigtagposition[1-$k]");
+$logger->special("k = $k");
+                        $logger->special("position on contig : @contigtagposition ",skip=>1);
+		    }
 		}
                 elsif (defined($segmentonparent[1])) {
-# the tag is truncated, the traiing position falls outside the mapping segments
+# the tag is truncated, the traiing position on parent falls outside the mapping segments
                     $remaphash->{$parent_id}->{$parenttagid} += 2;
-# TEST PODSITION IN DETAIL (one end remap, other coinciding with segment boundary)
+# check on tag boundary
+                    my $mappingsegment = $segmentlist->[$segmentoncontig[$k]]; # 0
+                    unless ($contigtagposition[$k] == $mappingsegment->[$k]) {
+                        $logger->special("Inconsistent boundary position (L) for tag $parenttagid "
+		       		        ."on parent contig $parent_id mapped to $contig_id",ps=>1);
+                        $logger->special("mapping segment : @$mappingsegment    alignment $alignment");
+                        $logger->special("tag boundary position $contigtagposition[$k]");
+$logger->special("k = $k");
+                        $logger->special("position on contig : @contigtagposition ",skip=>1);
+		    }
 		}
 # finally check the details of the mapping
 
@@ -416,13 +495,13 @@ foreach my $contig_id (@$contigids) {
     }
 
 #last;
-last unless ($contig_id < 201600);
+#last unless ($contig_id < 201600);
 }
 
 $dbh->disconnect();
 
-my %status = ( 1 => 'truncated on the left side',
-               2 => 'truncated on the right side',
+my %status = ( 1 => 'truncated on the right side on parent',
+               2 => 'truncated on the  left side on parent',
                3 => 'truncated on both sides',
               10 => 'was not remapped (should not occur!)',
               20 => 'in discordant segments; possibly changed contig-parent mapping',
@@ -464,32 +543,32 @@ exit;
 #------------------------------------------------------------------------
 # read a list of names from a file and return an array
 #------------------------------------------------------------------------
- 
-sub getNamesFromFile {
-    my $file = shift; # file name
- 
-    &showUsage("File $file does not exist") unless (-e $file);
- 
-    my $FILE = new FileHandle($file,"r");
- 
-    &showUsage("Can't access $file for reading") unless $FILE;
- 
-    my @list;
-    while (defined (my $name = <$FILE>)) {
-        last unless ($name =~ /\S/);
-        $name =~ s/^\s+|\s+$//g;
-        $name =~ s/.*\scontig\s+(\d+)\s.*/$1/;
-        push @list, $name;
-    }
- 
-    return [@list];
-}
 
+sub remap {
+    my $segment = shift; # array 0-1 contig  2-3 parent
+    my $position = shift; # on contig
+    my $alignment = shift;
+
+    $position -= $segment->[0];
+    return $segment->[2] + $position if ($alignment > 0); 
+    return $segment->[3] - $position unless ($alignment > 0); 
+}
+ 
 sub testerror {
     return unless $DBI::err;
     my $msg = $adb->errorStatus(1);
     print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
     exit;
+}
+
+sub listmapping {
+    my $segments = shift;
+
+    my $string = '';
+    foreach my $segment (@$segments) {
+        $string .= sprintf("%7d %7d %7d %7d\n",@$segment); 
+    }
+    return $string;
 }
  
 #------------------------------------------------------------------------
