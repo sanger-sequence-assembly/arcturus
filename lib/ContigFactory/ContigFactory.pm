@@ -87,6 +87,11 @@ sub fastaFileParser {
 
     my $FASTA = new FileHandle($fasfile,'r'); # open for read
 
+    unless ($FASTA) {
+	$logger->error("Can't open fasta file $fasfile");
+	return undef;
+    }
+
     return undef unless $FASTA;
 
     my $fastacontigs = [];
@@ -98,7 +103,6 @@ sub fastaFileParser {
     my $line = 0;
     my $report = $options{report};
     while (defined (my $record = <$FASTA>)) {
-
         $line++;
         if ($report && ($line%$report == 0)) {
             $logger->error("processing line $line",bs => 1);
