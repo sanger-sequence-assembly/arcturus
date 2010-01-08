@@ -30,7 +30,7 @@ my $queries =
     'insert into SEQUENCE(seqlen, seq_hash, qual_hash, sequence, quality) values (?,?,?,?,?)',
 
     'insert_seq2read',
-    'insert into SEQ2READ(read_id, seq_id, version) values (?,?,1)',
+    'insert into SEQ2READ(read_id, seq_id, version) values (?,?,0)',
 
     'insert_readtag',
     'insert into READTAG(seq_id,tagtype,pstart,pfinal,comment) values (?,?,?,?,?)',
