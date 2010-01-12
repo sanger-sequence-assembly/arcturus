@@ -80,8 +80,6 @@ public class CheckConsistency {
 	protected void checkConsistency(Connection conn, boolean criticalOnly) throws SQLException {
 		cancelled = false;
 		
-		long t0 = System.currentTimeMillis();
-		
 		stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
 	              java.sql.ResultSet.CONCUR_READ_ONLY);
 		
@@ -100,8 +98,12 @@ public class CheckConsistency {
 			notifyListener("");
 
 			MessageFormat format = new MessageFormat(test.getFormat());
+			
+			long t0 = System.currentTimeMillis();
 
 			int rows = doQuery(stmt, test.getQuery(), format);
+			
+			long dt = System.currentTimeMillis() - t0;
 
 			String message;
 
@@ -121,6 +123,7 @@ public class CheckConsistency {
 
 			notifyListener(message);
 			notifyListener("");
+			notifyListener("Time elapsed: " + dt + " ms");
 			notifyListener("--------------------------------------------------------------------------------");
 		}
 		
@@ -128,9 +131,7 @@ public class CheckConsistency {
 		
 		stmt = null;
 		
-		long dt = System.currentTimeMillis() - t0;
-		
-		notifyListener("\n\n+++++ ALL TESTS COMPLETED IN " + dt + " ms +++++");
+		notifyListener("\n\n+++++ ALL TESTS COMPLETED +++++");
 	}
 	
 	public void cancel() {
