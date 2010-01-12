@@ -80,6 +80,8 @@ public class CheckConsistency {
 	protected void checkConsistency(Connection conn, boolean criticalOnly) throws SQLException {
 		cancelled = false;
 		
+		long t0 = System.currentTimeMillis();
+		
 		stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
 	              java.sql.ResultSet.CONCUR_READ_ONLY);
 		
@@ -125,6 +127,10 @@ public class CheckConsistency {
 		stmt.close();
 		
 		stmt = null;
+		
+		long dt = System.currentTimeMillis() - t0;
+		
+		notifyListener("\n\n+++++ ALL TESTS COMPLETED IN " + dt + " ms +++++");
 	}
 	
 	public void cancel() {
@@ -179,6 +185,7 @@ public class CheckConsistency {
 	public static void main(String args[]) {
 		String instance = null;
 		String organism = null;
+		boolean criticalOnly = false;
 
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equalsIgnoreCase("-instance"))
@@ -186,6 +193,9 @@ public class CheckConsistency {
 
 			if (args[i].equalsIgnoreCase("-organism"))
 				organism = args[++i];
+			
+			if (args[i].equalsIgnoreCase("-critical"))
+				criticalOnly = true;
 		}
 
 		if (instance == null || organism == null) {
@@ -229,7 +239,7 @@ public class CheckConsistency {
 				
 			};
 			
-			cc.checkConsistency(adb, listener);
+			cc.checkConsistency(adb, listener, criticalOnly);
 
 			System.exit(0);
 		} catch (Exception e) {
