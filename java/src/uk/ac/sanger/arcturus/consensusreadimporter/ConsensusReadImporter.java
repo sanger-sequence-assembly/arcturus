@@ -375,10 +375,6 @@ public class ConsensusReadImporter {
 		pstmtInsertQualityClip.executeUpdate();
 	}
 
-	public interface ConsensusReadImporterListener {
-		public void report(String message);
-	}
-
 	public static void printUsage(PrintStream ps) {
 		ps.println("MANDATORY PARAMETERS:");
 		ps.println("\t-instance\tName of instance");
