@@ -64,7 +64,7 @@ public class ConsensusReadImporter {
 	private int passValue = 0;
 	
 	private MessageDigest digester;
-	private Deflater compresser = new Deflater();;
+	private Deflater compresser = new Deflater();
 
 	public ConsensusReadImporter() {
 		try {
