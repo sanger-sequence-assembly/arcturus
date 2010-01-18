@@ -1,6 +1,8 @@
 package uk.ac.sanger.arcturus.gui.createcontigtransfers;
 
 import uk.ac.sanger.arcturus.gui.*;
+import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectListModel;
+import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectProxy;
 import uk.ac.sanger.arcturus.jdbc.ContigTransferRequestManager;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequest;
@@ -173,7 +175,15 @@ public class CreateContigTransferPanel extends MinervaPanel {
 	}
 
 	public void refresh() {
-		plm.refresh();
+		if (plm != null) {
+			try {
+				plm.refresh();
+			} catch (SQLException sqle) {
+				Arcturus.logWarning(
+						"An error occurred when refreshing the project list",
+						sqle);
+			}
+		}
 	}
 
 	protected boolean isRefreshable() {
@@ -306,81 +316,6 @@ public class CreateContigTransferPanel extends MinervaPanel {
 		else {
 			lstProjects.setSelectedValue(proxy, true);
 			return true;
-		}
-	}
-
-	class ProjectListModel extends AbstractListModel {
-		ProjectProxy[] projects;
-		ArcturusDatabase adb;
-
-		public ProjectListModel(ArcturusDatabase adb) {
-			this.adb = adb;
-			refresh();
-		}
-
-		public void refresh() {
-			try {
-				Set projectset = adb.getAllProjects();
-				
-				for (Iterator iter = projectset.iterator(); iter.hasNext();) {
-					Project project = (Project) iter.next();
-					if (!project.isActive())
-						iter.remove();
-				}
-
-				projects = new ProjectProxy[projectset.size()];
-
-				int i = 0;
-
-				for (Iterator iter = projectset.iterator(); iter.hasNext(); i++) {
-					Project project = (Project) iter.next();
-					projects[i] = new ProjectProxy(project);
-				}
-
-				Arrays.sort(projects);
-				fireContentsChanged(this, 0, projects.length);
-			} catch (SQLException sqle) {
-				Arcturus.logWarning("Error whilst refreshing project list",
-						sqle);
-			}
-		}
-
-		public Object getElementAt(int index) {
-			return projects[index];
-		}
-
-		public int getSize() {
-			return projects.length;
-		}
-
-		public ProjectProxy getProjectProxyByName(String name) {
-			for (int i = 0; i < projects.length; i++)
-				if (projects[i].toString().equalsIgnoreCase(name))
-					return projects[i];
-
-			return null;
-		}
-	}
-
-	class ProjectProxy implements Comparable {
-		protected final Project project;
-
-		public ProjectProxy(Project project) {
-			this.project = project;
-		}
-
-		public Project getProject() {
-			return project;
-		}
-
-		public String toString() {
-			return project.getName();
-		}
-
-		public int compareTo(Object o) {
-			ProjectProxy that = (ProjectProxy) o;
-			return project.getName()
-					.compareToIgnoreCase(that.project.getName());
 		}
 	}
 

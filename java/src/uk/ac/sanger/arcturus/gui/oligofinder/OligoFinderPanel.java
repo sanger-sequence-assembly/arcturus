@@ -2,6 +2,8 @@ package uk.ac.sanger.arcturus.gui.oligofinder;
 
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.gui.*;
+import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectListModel;
+import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectProxy;
 import uk.ac.sanger.arcturus.oligo.*;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
@@ -661,80 +663,6 @@ public class OligoFinderPanel extends MinervaPanel implements
 		else {
 			lstProjects.setSelectedValue(proxy, true);
 			return true;
-		}
-	}
-
-	class ProjectListModel extends AbstractListModel {
-		ProjectProxy[] projects;
-		ArcturusDatabase adb;
-
-		public ProjectListModel(ArcturusDatabase adb) {
-			this.adb = adb;
-			try {
-				refresh();
-			} catch (SQLException sqle) {
-				Arcturus.logWarning(
-						"An error occurred when initialising the project list",
-						sqle);
-			}
-		}
-
-		public void refresh() throws SQLException {
-			try {
-				Set projectset = adb.getAllProjects();
-
-				projects = new ProjectProxy[projectset.size()];
-
-				int i = 0;
-
-				for (Iterator iter = projectset.iterator(); iter.hasNext(); i++) {
-					Project project = (Project) iter.next();
-					projects[i] = new ProjectProxy(project);
-				}
-
-				Arrays.sort(projects);
-				fireContentsChanged(this, 0, projects.length);
-			} catch (SQLException sqle) {
-
-			}
-		}
-
-		public Object getElementAt(int index) {
-			return projects[index];
-		}
-
-		public int getSize() {
-			return projects.length;
-		}
-
-		public ProjectProxy getProjectProxyByName(String name) {
-			for (int i = 0; i < projects.length; i++)
-				if (projects[i].toString().equalsIgnoreCase(name))
-					return projects[i];
-
-			return null;
-		}
-	}
-
-	class ProjectProxy implements Comparable {
-		protected final Project project;
-
-		public ProjectProxy(Project project) {
-			this.project = project;
-		}
-
-		public Project getProject() {
-			return project;
-		}
-
-		public String toString() {
-			return project.getName();
-		}
-
-		public int compareTo(Object o) {
-			ProjectProxy that = (ProjectProxy) o;
-			return project.getName()
-					.compareToIgnoreCase(that.project.getName());
 		}
 	}
 
