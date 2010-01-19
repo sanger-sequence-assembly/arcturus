@@ -14,6 +14,7 @@ import uk.ac.sanger.arcturus.gui.oligofinder.OligoFinderPanel;
 import uk.ac.sanger.arcturus.gui.projecttable.ProjectTablePanel;
 import uk.ac.sanger.arcturus.gui.importreads.ImportReadsPanel;
 import uk.ac.sanger.arcturus.gui.checkconsistency.CheckConsistencyPanel;
+import uk.ac.sanger.arcturus.gui.consensusreadimporter.ConsensusReadImporterPanel;
 import uk.ac.sanger.arcturus.gui.contigtransfertable.AdministratorContigTransferTablePanel;
 import uk.ac.sanger.arcturus.gui.contigtransfertable.ContigTransferTablePanel;
 import uk.ac.sanger.arcturus.gui.createcontigtransfers.CreateContigTransferPanel;
@@ -155,6 +156,15 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 					KeyEvent.VK_H,
 					KeyStroke.getKeyStroke(KeyEvent.VK_H, ActionEvent.CTRL_MASK),
 					true),
+					
+			new PermanentView(
+					ConsensusReadImporterPanel.class,
+					"Import reads from a FASTA file",
+					"Import FASTA file",
+					"Import reads from a FASTA file",
+					KeyEvent.VK_G,
+					KeyStroke.getKeyStroke(KeyEvent.VK_F, ActionEvent.ALT_MASK),
+					false),
 									
 			new PermanentView(
 					ScaffoldManagerPanel.class,
