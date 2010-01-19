@@ -251,6 +251,8 @@ public class ConsensusReadImporter {
 		catch (SQLException sqle) {
 			Arcturus.logWarning(sqle);
 			conn.rollback();
+			notify("***** The sequence was NOT stored because a database exception occurred : " + 
+					sqle.getMessage() + " *****");
 		}
 	}
 	
