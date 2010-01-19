@@ -74,7 +74,7 @@ public class ConsensusReadImporter {
 		}
 	}
 	
-	private void importReads(ArcturusDatabase adb, File file, int quality,
+	public void importReads(ArcturusDatabase adb, File file, int quality,
 			ConsensusReadImporterListener listener) throws IOException, SQLException {
 		this.listener = listener;
 		this.qualityValue = quality;
