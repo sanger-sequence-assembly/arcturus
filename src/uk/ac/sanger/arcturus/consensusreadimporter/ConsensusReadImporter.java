@@ -33,6 +33,9 @@ public class ConsensusReadImporter {
 	private PreparedStatement pstmtInsertReadInfo = null;
 	private static final String INSERT_READINFO = "insert into READINFO(readname,status) values (?,?)";
 	
+	private PreparedStatement pstmtGetTemplateID = null;
+	private static final String GET_TEMPLATE_ID = "select template_id from TEMPLATE where name = ?";
+	
 	private PreparedStatement pstmtInsertTemplate = null;
 	private static final String INSERT_TEMPLATE = "insert into TEMPLATE(name) values (?)";
 	
@@ -82,11 +85,13 @@ public class ConsensusReadImporter {
 		conn = adb.getPooledConnection(this);
 		
 		boolean oldAutoCommit = conn.getAutoCommit();
+		int oldTransactionIsolationLevel = conn.getTransactionIsolation();
 		
 		prepareStatements();
 		
 		getPassValue();
 		
+		conn.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
 		conn.setAutoCommit(false);
 
 		FileReader fr = new FileReader(file);
@@ -95,6 +100,7 @@ public class ConsensusReadImporter {
 		processFASTAFile(br);
 		
 		conn.setAutoCommit(oldAutoCommit);
+		conn.setTransactionIsolation(oldTransactionIsolationLevel);
 		
 		closeStatements();
 		
@@ -113,6 +119,8 @@ public class ConsensusReadImporter {
 		
 		pstmtInsertReadInfo =  conn.prepareStatement(INSERT_READINFO, Statement.RETURN_GENERATED_KEYS);
 		
+		pstmtGetTemplateID = conn.prepareStatement(GET_TEMPLATE_ID);
+		
 		pstmtInsertTemplate = conn.prepareStatement(INSERT_TEMPLATE, Statement.RETURN_GENERATED_KEYS);
 		
 		pstmtUpdateReadInfo = conn.prepareStatement(UPDATE_READINFO);
@@ -129,6 +137,7 @@ public class ConsensusReadImporter {
 	private void closeStatements() throws SQLException {
 		pstmtGetPassStatus = null;		
 		pstmtInsertReadInfo =  null;
+		pstmtGetTemplateID = null;
 		pstmtInsertTemplate = null;
 		pstmtUpdateReadInfo = null;
 		pstmtInsertSequence = null;
@@ -202,18 +211,27 @@ public class ConsensusReadImporter {
 			
 			int template_id;
 			
-			try {
-				template_id = insertTemplate(seqname);
+			String[] words = seqname.split("\\.");
+			
+			String template_name = words[0];
+			
+			notify("\tTemplate name is " + template_name);
+			
+			notify("\tLooking up template ...");
+			
+			pstmtGetTemplateID.setString(1, template_name);
+			
+			ResultSet rs = pstmtGetTemplateID.executeQuery();
+			
+			template_id = rs.next() ? rs.getInt(1) : -1;
+			
+			rs.close();
+			
+			if (template_id < 0) {
+				notify("\tInserting new template");
+				template_id = insertTemplate(template_name);
 			}
-			catch (SQLException e) {
-				if (e.getErrorCode() == MysqlErrorNumbers.ER_DUP_ENTRY) {
-					notify("\tA template named " + seqname +" already exists in the database");
-					conn.rollback();
-					return;
-				} else
-					throw e;
-			}
-		
+			
 			notify("\tTemplate ID is " + template_id);
 			
 			setTemplateForRead(read_id, template_id);
