@@ -215,9 +215,7 @@ public class ConsensusReadImporter {
 			
 			String template_name = words[0];
 			
-			notify("\tTemplate name is " + template_name);
-			
-			notify("\tLooking up template ...");
+			notify("\tLooking up template "+ template_name);
 			
 			pstmtGetTemplateID.setString(1, template_name);
 			
@@ -228,7 +226,7 @@ public class ConsensusReadImporter {
 			rs.close();
 			
 			if (template_id < 0) {
-				notify("\tInserting new template");
+				notify("\tCreating new template " + template_name);
 				template_id = insertTemplate(template_name);
 			}
 			
