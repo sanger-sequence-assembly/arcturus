@@ -67,6 +67,8 @@
           description="Generates the JAR file for Arcturus">
     <echo file="${src.dir}/resources/buildtime.props">BuildTime=${build.time}${line.separator}</echo>
 
+    <delete file="${jar.file}" quiet="true" failonerror="false" />
+
     <jar jarfile="${jar.file}"
          manifest="${src.dir}/MANIFEST.MF">
         <fileset dir="${build.classes}" />
