@@ -4,6 +4,8 @@ import java.io.*;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.*;
+import java.util.List;
+import java.util.Vector;
 import java.util.zip.Deflater;
 
 import com.mysql.jdbc.MysqlErrorNumbers;
@@ -163,10 +165,15 @@ public class ConsensusReadImporter {
 		
 		String line;
 		
+		List<String> readsLoaded = new Vector<String>();
+		
 		while ((line = br.readLine()) != null) {
 			if (line.startsWith(FASTA_PREFIX)) {
-				if (seqname != null)
-					processSequence(seqname, sb.toString());
+				if (seqname != null) {
+					boolean ok = processSequence(seqname, sb.toString());
+					if (ok)
+						readsLoaded.add(seqname);
+				}
 				
 				line = line.substring(1);
 				
@@ -180,8 +187,20 @@ public class ConsensusReadImporter {
 			}
 		}
 		
-		if (seqname != null)
-			processSequence(seqname, sb.toString());
+		if (seqname != null) {
+			boolean ok = processSequence(seqname, sb.toString());
+			if (ok)
+				readsLoaded.add(seqname);
+		}
+		
+		if (!readsLoaded.isEmpty()) {
+			notify("\n\nThe following consensus reads were successfully stored:\n");
+			
+			for (String readname : readsLoaded)
+				notify(readname);
+			
+			notify("\n");
+		}
 	}
 	
 	private void notify(String message) {
@@ -189,8 +208,8 @@ public class ConsensusReadImporter {
 			listener.report(message);
 	}
 
-	private void processSequence(String seqname, String dna) throws SQLException {
-		notify("\nStoring consensus sequence \"" + seqname + "\" (" + dna.length() + " bp)");
+	private boolean processSequence(String seqname, String dna) throws SQLException {
+		notify("\nStoring consensus read \"" + seqname + "\" (" + dna.length() + " bp)");
 		
 		try {
 			int read_id;
@@ -200,14 +219,14 @@ public class ConsensusReadImporter {
 			}
 			catch (SQLException e) {
 				if (e.getErrorCode() == MysqlErrorNumbers.ER_DUP_ENTRY) {
-					notify("\tA read named " + seqname +" already exists in the database");
+					notify("  -- A read named " + seqname +" already exists in the database");
 					conn.rollback();
-					return;
+					return false;
 				} else
 					throw e;
 			}
 			
-			notify("\tRead ID is " + read_id);
+			notify("  -- Read ID is " + read_id);
 			
 			int template_id;
 			
@@ -215,7 +234,7 @@ public class ConsensusReadImporter {
 			
 			String template_name = words[0];
 			
-			notify("\tLooking up template "+ template_name);
+			notify("  -- Looking up template "+ template_name);
 			
 			pstmtGetTemplateID.setString(1, template_name);
 			
@@ -226,17 +245,17 @@ public class ConsensusReadImporter {
 			rs.close();
 			
 			if (template_id < 0) {
-				notify("\tCreating new template " + template_name);
+				notify("  -- Creating new template " + template_name);
 				template_id = insertTemplate(template_name);
 			}
 			
-			notify("\tTemplate ID is " + template_id);
+			notify("  -- Template ID is " + template_id);
 			
 			setTemplateForRead(read_id, template_id);
 			
 			int seq_id = insertSequence(dna);
 			
-			notify("\tSequence ID is " + seq_id);
+			notify("  -- Sequence ID is " + seq_id);
 			
 			insertSeq2Read(read_id, seq_id);
 			
@@ -246,13 +265,16 @@ public class ConsensusReadImporter {
 			
 			conn.commit();
 			
-			notify("Sequence successfully stored.");
+			notify("Consensus read " + seqname + " successfully stored.");
+			
+			return true;
 		}
 		catch (SQLException sqle) {
 			Arcturus.logWarning(sqle);
 			conn.rollback();
 			notify("***** The sequence was NOT stored because a database exception occurred : " + 
 					sqle.getMessage() + " *****");
+			return false;
 		}
 	}
 	
