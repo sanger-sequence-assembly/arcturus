@@ -4,7 +4,7 @@ use strict;
 
 use Exporter;
 
-use ArcturusDatabase::ADBRead;
+use ArcturusDatabase::ADBMapping;
 
 use TagFactory::TagFactory;
 
@@ -14,11 +14,13 @@ use Digest::MD5 qw(md5 md5_hex md5_base64);
 use Contig;
 use Mapping;
 
-our @ISA = qw(ArcturusDatabase::ADBRead Exporter);
+our @ISA = qw(ArcturusDatabase::ADBMapping Exporter);
 
 our @EXPORT = qw(getCurrentContigs); # DEPRECATE when view can be used
 
 use ArcturusDatabase::ADBRoot qw(queryFailed);
+
+my $NEW = 1;
 
 #-----------------------------------------------------------------------------
 # constructor and initialisation via constructor of superclass
@@ -260,7 +262,7 @@ sub getCachedContig {
 
     my $contig_id = $options{contig_id} || 0; # if undefined, returns undef
 
-print STDOUT "getting cached contig $contig_id\n";
+#print STDOUT "getting cached contig $contig_id\n";
     return ( $cache->{$contig_id} ||= $this->getContig(%options) );
 }
 
@@ -666,6 +668,7 @@ sub putContig {
 
 	die "Failed to insert read-to-contig mappings for $contigname"
 	    unless &putMappingsForContig($dbh,$contig,$log,type=>'read');
+#	    unless &newputMappingsForContig($dbh,$contig,$log,type=>'read');
 
 # the CONTIG2CONTIG mappings
 
@@ -1083,7 +1086,14 @@ sub deleteContig {
 # methods dealing with Mappings
 #---------------------------------------------------------------------------------
 
-sub getReadMappingsForContig {
+sub getReadMappingsForContig { 
+    return &oldgetReadMappingsForContig(@_) unless $NEW;
+    my $this = shift;
+print STDERR "Using newgetReadMappingsForContig\n";
+    return $this->newgetReadMappingsForContig(@_);
+}
+
+sub oldgetReadMappingsForContig {
 # adds an array of read-to-contig MAPPINGS to the input Contig instance
     my $this = shift;
     my $contig = shift;
@@ -1155,7 +1165,13 @@ sub getReadMappingsForContig {
     $contig->addMapping([@mappings]);
 }
 
-sub getContigMappingsForContig {
+sub getContigMappingsForContig { 
+    return &oldgetContigMappingsForContig(@_) unless $NEW;
+print STDERR "Using getContigMappingsForContig\n";
+    return &getContigMappingsForContig(@_);
+}
+
+sub oldgetContigMappingsForContig {
 # adds an array of contig-to-contig MAPPINGS to the input Contig instance
     my $this = shift;
     my $contig = shift;
@@ -1240,6 +1256,12 @@ sub getContigMappingsForContig {
 }
 
 sub putMappingsForContig {
+    return &oldputMappingsForContig(@_) unless $NEW;
+print STDERR "Using putReadMappingsForContig\n";
+    return &putReadMappingsForContig(@_);
+}
+
+sub oldputMappingsForContig { # superseded by putReadMappingsForContig putContigMappingsForContig
 # private method, write mapping contents to (C2C)MAPPING & (C2C)SEGMENT tables
     my $dbh = shift; # database handle
     my $contig = shift;
