@@ -2,15 +2,16 @@ package RegularMapping;
 
 use strict;
 
-use CanonicalMapping;
+use MappingFactory::MappingFactory;
 
 #-------------------------------------------------------------------
 # Constructor new 
 #-------------------------------------------------------------------
 
 sub new {
+# constructor takes a list of alignment segments
     my $prototype = shift;
-    my $identifier = shift; # mapping number or name, optional
+    my $segment_arrayref = shift;
 
     my $class = ref($prototype) || $prototype;
 
@@ -18,9 +19,21 @@ sub new {
 
     bless $this, $class;
 
-# optionally set the identifier
+# pass segment array and options to ->build method; return undef or CanonicalMapping
+# options taken : empty     => 1 : allow building an empty mapping (default do not) 
+#                 bridgegap => n : merge budding segments if the gap size is <= n
+#                 verify    => 1 : (test) switch on verification of mappings against
+#                                  the properties of a possible cached version
+#                 default values for all three options is 0
 
-    $this->setMappingName($identifier) if $identifier;
+    my ($cm, $xo, $yo, $alignment) = MappingFactory->build($segment_arrayref,@_);
+
+    return 0 unless defined $cm; # signal failure of build
+
+    $this->setCanonicalMapping($cm);
+    $this->setCanonicalOffsetX($xo);
+    $this->setCanonicalOffsetY($yo);
+    $this->setAlignment($alignment);
 
     return $this;
 }
@@ -34,20 +47,18 @@ sub setCanonicalMapping {
     my $cmap = shift;
 
     if (ref($cmap) eq 'CanonicalMapping') {
-        $this->{CanonicalMapping} = $cmap;
+        $this->{canonicalmapping} = $cmap;
     }
 }
 
 sub getCanonicalMapping {
     my $this = shift;
-# if we use a construction scheme in MappingFactory only, the next can not be done
-#    MappingFactory->buildCanonicalMapping($this) unless $this->{CanonicalMapping};
-    return $this->{CanonicalMapping};
+    return $this->{canonicalmapping};
 }
 
 sub getCanonicalMappingID {
     my $this = shift;
-    my $canonicalmapping = $this->{CanonicalMapping};
+    my $canonicalmapping = $this->getCanonicalMapping();
     return undef unless defined $canonicalmapping; # just test
     return $canonicalmapping->getMappingID();
 }
@@ -59,8 +70,7 @@ sub setCanonicalOffsetX { # contig domain
 
 sub getCanonicalOffsetX {
     my $this = shift;
-    $this->getCanonicalMapping() unless defined $this->{canonicaloffsetx};
-    return $this->{canonicaloffsetx} || 0;
+    return $this->{canonicaloffsetx};
 }
 
 sub setCanonicalOffsetY { # read / parent-contig / tag domain
@@ -70,8 +80,7 @@ sub setCanonicalOffsetY { # read / parent-contig / tag domain
 
 sub getCanonicalOffsetY {
     my $this = shift;
-    $this->getCanonicalMapping() unless defined $this->{canonicaloffsety};
-    return $this->{canonicaloffsety} || 0;
+    return $this->{canonicaloffsety};
 }
 
 sub getCheckSum() {
@@ -90,15 +99,16 @@ sub getContigRange { # alias
     return &getObjectRange(@_);
 }
 
-sub getContigStart {
+sub getContigStart { # re: sort mappings on (contig) position
     my $this = shift;
-    return $this->getCanonicalOffsetX() + 1;
+    my @range = $this->getObjectRange();
+    return $range[0];
 }
 
 sub getObjectRange { # range on the host object, i.p. Contig
     my $this = shift;
-    my $cmap = $this->getCanonicalMapping();
-    my $span = $cmap->getSpanX();
+    my $cmap = $this->getCanonicalMapping() || return undef;
+    my $span = $cmap->getSpanX() || return (0,0);
     if ($this->isCounterAligned()) {
         return $this->getCanonicalOffsetX() - $span,
                $this->getCanonicalOffsetX() - 1;
@@ -109,10 +119,10 @@ sub getObjectRange { # range on the host object, i.p. Contig
     }
 }
 
-sub getMappedRange { # e.g. range on mapped object (read / parent / tag)
+sub getMappedRange { # e.g. range on mapped from object (read / parent / tag)
     my $this = shift;
-    my $cmap = $this->getCanonicalMapping();
-    my $span = $cmap->getSpanY();
+    my $cmap = $this->getCanonicalMapping() || return undef;
+    my $span = $cmap->getSpanY() || return (0,0);
     return $this->getCanonicalOffsetY() + 1,
            $this->getCanonicalOffsetY() + $span;
 }
@@ -196,142 +206,33 @@ sub isCounterAligned {
 }
 
 #-------------------------------------------------------------------
-# compare mappings
-#-------------------------------------------------------------------
-
-sub isEqual {
-# compare this Mapping instance with input Mapping
-# return 0 if mappings are in any respect different
-#    my $mapping = shift;
-#    my $compare = shift;
-    return MappingFactory::isEqual(@_);
-}
-
-sub oldcompare {
-    my $mapping = shift;
-    my $compare = shift;
-
-    return $mapping->multiply($compare->inverse(),@_); # test
-}
-
-sub compare {
-# compare this Mapping instance with input Mapping at the segment level
-#    my $mapping = shift;
-#    my $compare = shift;
-    return MappingFactory::compare(@_);
-}
-
-#-------------------------------------------------------------------
 # apply linear transformation to mapping; access only via Contig
 #-------------------------------------------------------------------
 
 sub applyShiftToContigPosition { # shiftXPosition
-# apply a linear contig (i.e. X) shift to each segment
+# apply a linear contig (i.e. X domain) shift to each segment
     my $this = shift;
     my $shift = shift;
 
-    $shift = -$shift if ($this->getAlignment() < 0);
+# we do the shift on the x-offset parameter for the canonical mapping
 
-# we do the shift on the c-offset parameter for the canonical mapping
-# the next call on getCanonicalOffsetX builds the mapping from regular
-# mapping segments, if not done before and resets the regular mappings
-
-    $this->setCanonicalOffsetX( $this->getCanonicalOffsetX() + $shift);
-#    $this->setCanonicalOffsetX( $this->getCanonicalOffsetX() + $shift); # wrong for counter aligned case
-
-    undef $this->{RegularSegments}; # forces recalculation ?
+    $this->setCanonicalOffsetX( $this->getCanonicalOffsetX() + $shift );
 }
 
 sub applyMirrorTransform { # mirror (different from inverse)
-# apply a contig mapping reversion and shift to each segment
+# apply a contig (Y domain) mapping reversion and shift to each segment
     my $this = shift;
     my $mirror = shift || 0; # the mirror position (= contig_length + 1)
 
     $this->setCanonicalOffsetX( $mirror - $this->getCanonicalOffsetX() );
-#    $this->setCanonicalOffsetX( $mirror - $this->getCanonicalOffsetX() ); # wrong for counter aligned case
 
 # invert alignment status
 
-    $this->setAlignment(-$this->getAlignment());
-
-    undef $this->{RegularSegments}; # forces recalculation ?
+    $this->setAlignment( -$this->getAlignment() );
 }
 
-sub extendToFill {
-# extend first and last segment to fill a given range in Y-domain
-    my $this = shift;
-    my $scfstart = shift;
-    my $scffinal = shift;
-
-# return a new mapping via MappingFactory
-
-    return $this;
-}
- 
 #-------------------------------------------------------------------
-# importing alignment segments THIS SHOUL GO INTO THE MappingFactory
-#-------------------------------------------------------------------
-
-# sub addAlignmentFromDatabase  moved to canonical mapping 
-# import regular alignment in local buffer              
-
-sub addAssembledFrom {
-# alias of putSegment: input (contigstart, contigfinis, (read)seqstart, seqfinis)
-    return &putRegularSegment(@_);
-}    
-
-sub putRegularSegment {
-# input 4 array (Xstart, Xfinis, Ystart, Yfinis)
-    my $this = shift;
-    my ($xs, $xf, $ys, $yf, @dummy) = @_;
-
-# test validity of input; order segment in x-domain
-
-    if ($xs > $xf) { # reorder
-        ($xs, $xf) = ($xf, $xs);
-        ($ys, $yf) = ($yf, $ys);
-    }
-
-    my $xl = $xf - $xs;
-    my $yl = $yf - $ys;
-# test equality of segments
-    unless ($xl == abs($yl)) {
-        print STDERR "Invalid segment sizes in Segment constructor: @_\n";
-	return undef; # process outside
-    }
-# if length > 0, test alignment of new segment against mapping direction
-    if ($xl > 0) {
-        my $direction = ($xl == $yl) ? 1 : -1;
-#        if (my $alignment = ($canonical ? 1 : $this->getAlignment())) {
-        if (my $alignment = $this->getAlignment()) {  # add canonical?
-            unless ($alignment == $direction) {
-                print STDERR "Inconsistent alignment direction in Segment constructor: @_\n";
-    	        return 0; # process outside
-	    }
-	}
-# else unless canonical?
-#        elsif (!$canonical) {
-        else { # the alignment direction is not yet defined; do it here
-            $this->setAlignment($direction);
-	}
-    }
-
-# add the segments to this mappings segment list
-
-#    my $segments = $this->getSegments($canonical);
-    my $segments = $this->getRegularSegments();
-    return 0 unless $segments;
-
-#    push @$segments, $segment;
-
-#    undef $this->{orderdomain};
-
-#    return $this->hasSegments($canonical);
-    return $this->hasRegularSegments();
-}    
-
-#-------------------------------------------------------------------
-# export of alignment segments
+# export of alignment segments derived from the canonical mapping
 #-------------------------------------------------------------------
 
 sub hasSegments {
@@ -340,7 +241,7 @@ sub hasSegments {
     my $mark = shift; # optional
 # cache the array_ref to the canonical segments
     unless ($this->{canonicalsegments}) {
-        my $canonicalmapping = $this->{CanonicalMapping};
+        my $canonicalmapping = $this->getCanonicalMapping(); # may do complete
         return undef unless $canonicalmapping;
         $this->{canonicalsegments} = $canonicalmapping->getSegments();
     }
@@ -355,12 +256,14 @@ sub getSegment {
     my $this = shift;
     my $segmentnumber = shift;
 
-    return undef unless $this->hasSegments($segmentnumber);
+    return undef unless $this->hasSegments($segmentnumber); # does segment exist
 
-    my $canonicalsegment = $this->{canonicalsegments}->[$segmentnumber];
+    my $canonicalsegment = $this->{canonicalsegments}->[$segmentnumber-1];
 
-    my $xoffset = $this->getCanonicalOffsetY();
-    my $yoffset = $this->getCanonicalOffsetX();
+    $this->setCurrentSegment($segmentnumber); # record last accessed segment
+
+    my $xoffset = $this->getCanonicalOffsetX();
+    my $yoffset = $this->getCanonicalOffsetY();
 
     my @segment = $canonicalsegment->getSegment();
 # transform the x and y coordinates from canonical coordinates
@@ -381,7 +284,7 @@ sub getXforY {
 
     return undef unless $this->hasSegments($segmentnumber);
 
-    my $canonicalsegment = $this->{canonicalsegments}->[$segmentnumber];
+    my $canonicalsegment = $this->{canonicalsegments}->[$segmentnumber-1];
 
     $y -= $this->getCanonicalOffsetY(); #   to canonical coordinates
     my $x = $canonicalsegment->getXforY($y,@_);
@@ -401,7 +304,7 @@ sub getYforX {
 
     return undef unless $this->hasSegments($segmentnumber);
 
-    my $canonicalsegment = $this->{canonicalsegments}->[$segmentnumber];
+    my $canonicalsegment = $this->{canonicalsegments}->[$segmentnumber-1];
 
     $x -= $this->getCanonicalOffsetX();
     $x = -$x if $this->isCounterAligned(); # to canonical coordinates
@@ -414,33 +317,38 @@ sub getYforX {
 }
 
 #-------------------------------------------------------------------
-# tracking of alignment segments
+# tracking of alignment segments (re: multiply operation)
 #-------------------------------------------------------------------
 
-sub setSegmentTracker {
-# set counter to keep track of (last) segment used in multiply operation
+sub setCurrentSegment {
     my $this = shift;
     $this->{currentsegment} = shift;
 }
 
-sub getSegmentTracker {
-# get counter, e.g. of next segment to be used in multiply operation
+sub getCurrentSegment {
     my $this = shift;
-    my $vary = shift;
+    return $this->{currentsegment};
+}
 
-    $this->{currentsegment} = 0 unless defined $this->{currentsegment};
+#-------------------------------------------------------------------
+# compare mappings
+#-------------------------------------------------------------------
 
-    my $rank = $this->{currentsegment};
+sub isEqual {
+# compare this Mapping instance with input Mapping
+# return 0 if mappings are in any respect different
+    my $mapping = shift;
+    my $compare = shift;
 
-    $rank += $vary if $vary; # optional offset NEEDS UPDATING based on alignment
-#    if ($vary) {
-#        $vary = -$vary if $this->isCounterAligned();
-#        $rank += $vary;
-#    }
+    return MappingFactory::isEqual($mapping,$compare,@_);
+}
 
-    $rank = 0 if ($rank < 0 || $rank >= $this->hasSegments());
-
-    return $rank;
+sub compare { # TO TEST OBSOLETE?
+# compare this Mapping instance with input Mapping at the segment level
+    my $mapping = shift;
+    my $compare = shift;
+#    return MappingFactory::compare($mapping,$compare);
+    return $mapping->multiply($compare->inverse(),@_); # test
 }
 
 #-------------------------------------------------------------------
@@ -460,6 +368,22 @@ sub inverse {
     return MappingFactory->inverse($this);
 }
 
+sub multiply {
+# return the product R x T of this (mapping) and another mapping
+# returns a mapping without segments if product is empty
+    my $thismap = shift; # mapping R
+    my $mapping = shift; # mapping T
+    my %options = @_; # e.g. bridgegap=>1  tracksegments=> 0,1,2,3 backskip after
+    return MappingFactory->multiply($thismap,$mapping,@_);
+}
+
+sub toString {
+    my $this = shift;
+    return MappingFactory->toString($this);
+}
+
+# the next two methods were used in tag remapping; they may be redundent
+
 sub split {
 # split the mapping in a list of new mappings
 # default, split into the smallest number of regular mappings
@@ -476,20 +400,11 @@ sub join {
     return MappingFactory->join($thismap,$thatmap);
 }
 
-sub multiply {
-# return the product R x T of this (mapping) and another mapping
-# returns a mapping without segments if product is empty
-    my $thismap = shift; # mapping R
-    my $mapping = shift; # mapping T
-    my %options = @_; # e.g. repair=>1  tracksegments=> 0,1,2,3 backskip after
-    return MappingFactory->multiply($thismap,$mapping);
-}
-
 #-------------------------------------------------------------------
 # transformation of objects in x-domain to y-domain
 #-------------------------------------------------------------------
 
-sub transform {
+sub transform { # TO TEST
 #sub transformPositions {
 # transform an input x-range to an (array of) y-position intervals
     my $this = shift;
@@ -497,7 +412,7 @@ sub transform {
     return MappingFactory($this,@position);
 }
 
-sub sliceString {
+sub sliceString { # TO TEST
 #sub transformString { # used in ContigHelper (1979) new-contig-loader (1478)
 # map an input string in the x-domain to a string in the y-domain, replacing gaps by gapsymbol
     my $this = shift;
@@ -506,7 +421,7 @@ sub sliceString {
     return MappingFactory->transformString($this,$string,%options);
 }
 
-sub sliceArray {
+sub sliceArray { # TO TEST
 #sub transformArray {
 # map an input array in the x-domain to an array in the y-domain, replacing gaps by gap values
     my $this = shift;
@@ -516,7 +431,21 @@ sub sliceArray {
 }
 
 #-------------------------------------------------------------------
-# formatted export
+
+sub expand { # TO TEST
+# extend first and last segment to fill a given range in Y-domain
+    my $this = shift;
+    my $scfstart = shift;
+    my $scffinal = shift;
+# return a new mapping via MappingFactory
+    my %options = (domain => 'Y');
+    $options{start} = $scfstart if $scfstart;
+    $options{final} = $scffinal if $scffinal;
+    return MappingFactory->extendToFill($this,%options);
+}
+
+#-------------------------------------------------------------------
+# formatted export (i.p. read-to-contig alignment)
 #-------------------------------------------------------------------
 
 sub assembledFromToString {
@@ -532,7 +461,7 @@ sub writeToString {
 # write alignments as (block of) "$text" records
     my $this = shift;
     my $text = shift || '';
-    my %options = @_; # canonical ?
+    my %options = @_;
 
 
     my @xrange = $this->getObjectRange();
@@ -540,113 +469,37 @@ sub writeToString {
 
     my $maximum = 1;
     foreach my $position (@xrange,@yrange) {
+        next unless defined($position);
         $maximum = abs($position) if (abs($position) > $maximum);
     }
     my $nd = int(log($maximum)/log(10)) + 2;
 
     my $string = '';
 
-#    my $numberofsegments = $this->hasSegments();
-#    foreach my $segmentnumber (1 .. $numberofsegments) {
-#        my @segment = $this->getSegment($segmentnumber);
-    my $segments = $this->getSegments();
-#    my $segments = $this->getRegularSegments();
-
-    foreach my $segment (@$segments) {
-# unless option asis use standard representation: align on Y
-        my @segment = $segment->getSegment();
+    my $numberofsegments = $this->hasSegments() || 0;
+    foreach my $segmentnumber (1 .. $numberofsegments) {
+        my @segment = $this->getSegment($segmentnumber);
 
         unless ($options{asis} || $segment[2] <= $segment[3]) {
+# order segment in y domain
             ($segment[0],$segment[1]) = ($segment[1],$segment[0]);
             ($segment[2],$segment[3]) = ($segment[3],$segment[2]);
         }
         $string .= $text;
         foreach my $position (@segment) {
-#            $string .= sprintf " %${nd}d",$position;
-            $string .= sprintf " %d",$position;
+            $string .= sprintf " %${nd}d",$position;
 	}
         if ($options{extended}) {
-            $string .= "   a:".($segment->getAlignment() || 'undef');
-            $string .=   " o:".($segment->getOffset()    || 0);
-            $string .=   " l:". $segment->getSegmentLength();
+            $string .= "   a:".($this->getAlignment() || 'undef');
+            my $offset = $segment[2];
+            $offset = -$offset if $this->isCounterAligned();
+            $string .=   " o:".($offset);
+            $string .=   " l:".($segment[3]-$segment[2]+1);
 	}
         $string .= "\n";
     }
 
-    $string = $text." is undefined\n" unless $string; 
-
-    return $string;
-}
-
-sub toString {
-# primarily for diagnostic purposes
-    my $this = shift;
-    my %options = @_; # text=>...  extended=>...  norange=>...
-
-    my $mappingname = $this->getMappingName()        || 'undefined';
-    my $direction   = $this->getAlignmentDirection() || 'UNDEFINED';
-    my $targetsid   = $this->getSequenceID('y')      || 'undef';
-    my $hostseqid   = $this->getSequenceID('x')      || 'undef';
-
-    my $string = "Mapping: name=$mappingname, sense=$direction"
-	       .         " target=$targetsid  host=$hostseqid";
-
-    unless (defined($options{range}) && !$options{range}) {
-	my ($cstart, $cfinis,$range);
-# force redetermination of intervals
-        if (!$options{range} || $options{range} eq 'X') {
-           ($cstart, $cfinis) =  $this->getContigRange();
-	    $range = 'object';
-        }
-	else {
-           ($cstart, $cfinis) =  $this->getMappedRange();
-	    $range = 'mapped';
-        }
-        $cstart = 'undef' unless defined $cstart;
-        $cfinis = 'undef' unless defined $cfinis;
-	$string .= ", ${range}range=[$cstart, $cfinis]";
-    }
-
-    $string .= "\n";
-
-    unless ($options{Xdomain} || $options{Ydomain}) {
-        $string .= $this->writeToString($options{text},%options);
-        return $string;
-    }
-
-# list the windows and the sequences 
-
-#    my $numberofsegments = $this->hasSegments();
-#    foreach my $segmentnumber (1 .. $numberofsegments) {
-#        my @segment = $this->getSegment($segmentnumber);
-
-    my $segments = $this->getSegments();
-#    my $segments = $this->getRegularSegments();
-
-    foreach my $segment (@$segments) {
-        my @segment = $segment->getSegment();
-#        my @segment = @$segment;
-# diagnostic output with mapped sequence segments
-        my $length = abs($segment[1] - $segment[0]) + 1;
-        if (my $sequence = $options{Xdomain}) {
-            my $k = ($segment[2] <= $segment[3]) ? 2 : 3;
-            $string .= sprintf("%7d",$segment[2])
-		    .  sprintf("%7d",$segment[3]);
-            my $substring = substr($sequence,$segment[$k]-1,$length);
-            $substring = reverse($substring)    if ($k == 3);
-            $substring =~ tr/acgtACGT/tgcaTGCA/ if ($k == 3);    
-            $string .= "  " . $substring ."\n";
- 	}
-        if (my $template = $options{Ydomain}) {
-            my $k = ($segment[0] <= $segment[1]) ? 0 : 1;
-            $string .= sprintf("%7d",$segment[0])
-	    	    .  sprintf("%7d",$segment[1]);
-            my $substring = substr($template,$segment[$k]-1,$length);
-            $substring = reverse($substring)    if ($k == 1);
-            $substring =~ tr/acgtACGT/tgcaTGCA/ if ($k == 1); 
-            $string .= "  " . $substring ."\n";
-        }
-    }
+    $string = "mapping is empty\n" unless $string; 
 
     return $string;
 }
