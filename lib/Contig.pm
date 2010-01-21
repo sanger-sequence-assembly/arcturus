@@ -690,7 +690,8 @@ sub importer {
     elsif ($Component) {
 # test type of input object against specification
         my $instanceref = ref($Component);
-        if ($class ne $instanceref) {
+        if ($class ne $instanceref && $instanceref !~ /$class/) { # allow subclasses
+#        if ($class ne $instanceref) {
             die "Contig->importer expects a(n array of) $class instance(s) as input";
         }
         $this->{$buffername} = [] if !defined($this->{$buffername});
@@ -1041,9 +1042,10 @@ sub writeToCaf {
 # if there are no reads, use delayed loading
         my $reads = $this->getReads(1);
 # test consistency of pad status
-        unless ($this->testPadStatus()) {
+        unless (my $ps = $this->testPadStatus()) {
             my $logger = &verifyLogger('writeToCaf');
-            $logger->error("Inconsistent pad status in contig $contigname");
+            $logger->error("Inconsistent pad status in contig $contigname") if defined $ps;
+            $logger->error("No reads found for contig $contigname")     unless defined $ps;
             return 1; # error status
         } 
 # in frugal mode we bunch the reads in blocks to improve speed (and reduce memory)
