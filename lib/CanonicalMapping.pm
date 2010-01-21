@@ -4,7 +4,7 @@ use strict;
 
 use CanonicalSegment;
 
-use MappingFactory::MappingFactory;
+use Digest::MD5 qw(md5 md5_hex md5_base64);
 
 #-------------------------------------------------------------------
 # Class variable
@@ -19,19 +19,28 @@ my $CANONICALMAPPING_HASHREF = {}; # cache
 sub new {
 # if a parameter is passed, use the cache
     my $class = shift;
-    my $cache = shift;
-
-    if ($cache && (my $cacheinstance = $CANONICALMAPPING_HASHREF->{$cache})) {
-        return $cacheinstance;
-    }
 
     my $this = {};
 
     bless $this, $class;
 
-    $CANONICALMAPPING_HASHREF->{$cache} = $this if $cache;
-
     return $this;
+}
+
+#-----------------------------------------------------------------------------
+# cache look up
+#-----------------------------------------------------------------------------
+
+sub lookup { 
+# class method: retrieve a cached mapping keyed on the checksum
+    my $class = shift;
+    my $checksum = shift || 0;
+#print STDOUT "Probe cache for checksum ".sprintf("%vd",$checksum)."\n";
+    return $CANONICALMAPPING_HASHREF->{$checksum};
+}
+
+sub cache { # returns the size of the cache (test/monitoring)
+    return scalar(keys %$CANONICALMAPPING_HASHREF);
 }
 
 #-----------------------------------------------------------------------------
@@ -61,21 +70,35 @@ sub getSpanY {
 }
 
 sub setCheckSum {
+# set the checksum and add to the cache; test return value
     my $this = shift;
-    $this->{segmentchecksum} = shift;
+    my $checksum = shift || return undef;
+    $this->{segmentchecksum} = $checksum;
+# check if a cached version of the mapping already exists
+    return 0 if $this->lookup($checksum);
+# add instance to cache
+    $CANONICALMAPPING_HASHREF->{$checksum} = $this;
+#print STDOUT "CM $this added to cache for checksum ".sprintf("%vd",$checksum)."\n";
+    return 1;
 }
 
 sub getCheckSum {
     my $this = shift;
-    MappingFactory->getCheckSum($this) unless $this->{segmentchecksum}; # ? redundent
+    unless ($this->{segmentchecksum}) {
+        $this->setCheckSum( &buildCheckSum($this->verify()) );
+    }
     return $this->{segmentchecksum};
 }
 
-sub verify { # go to MappingFactory ?
-# order and test the segments and test parameters of the canonical mapping 
-# against its segments, calculate span etc ..
-    my $this = shift;
-    return MappingFactory->verify($this);
+sub buildCheckSum {
+# private: construct a hash of string formatted from segment parameters
+    my $segments = shift || [];
+    my $signature = '';
+    foreach my $segment (@$segments) {
+        $signature .= ':' if $signature;
+        $signature .= join ',',@$segment[0 .. 2];
+    }
+    return md5($signature);
 }
 
 #-------------------------------------------------------------------
@@ -96,19 +119,17 @@ sub setMappingID {
 # importing alignment segments
 #-------------------------------------------------------------------
 
-sub addSegment {
+sub addCanonicalSegment {
     my $this = shift;
-    my ($cs, $rs, $length, @verify) = @_;
+    my ($xs, $ys, $length, @dummy) = @_;
 
     my $segments = $this->getSegments();
 
-    my $segment = new CanonicalSegment($cs, $rs, $length);
+    my $segment = new CanonicalSegment($xs, $ys, $length);
 
     return 0 unless $segment; # failed to create; process outside 
 
     push @$segments, $segment;
-
-#    $this->verify() if @verify;
 
     return scalar(@$segments);
 }
@@ -133,12 +154,26 @@ sub getSegments {
     return $segments;
 }
 
-sub orderSegments {
-# order the canonical segments
+sub verify {
+# order and test the canonical segments; return undef if none or invalid
     my $this = shift;
 
     my $segments = $this->getSegments();
-    @$segments = sort {$a->getXstart() <=> $b->getXfinis()} @$segments;
+    return undef unless ($segments && @$segments);
+
+    @$segments = sort {$a->getXstart() <=> $b->getXstart()} @$segments;
+
+# verify the first segment; should start at position 1 on both domains
+
+    my @first = $segments->[0]->getSegment();
+    return undef unless ($first[0] == 1 && $first[2] == 1);
+
+# define the span
+
+    my @last = $segments->[$#$segments]->getSegment();
+    $this->setSpanX($last[1]);  
+    $this->setSpanY($last[3]);  
+
     return $segments;
 }
 
