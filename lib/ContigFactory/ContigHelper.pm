@@ -6,6 +6,8 @@ use Contig;
 
 use Mapping;
 
+use RegularMapping;
+
 use TagFactory::TagFactory;
 
 use Alignment;
@@ -320,6 +322,7 @@ $logger->debug("pass $pass");
                 my $shift = 1 - $cstart;
                 $logger->info("zero point shift by $shift applied to contig $name");
                 foreach my $mapping (@$mappings) {
+print STDERR "Applying zeropoint shift $shift\n";
                     $mapping->applyShiftToContigPosition($shift);
                 }
 # and apply shift to possible tags
@@ -450,7 +453,8 @@ sub reverseComplement {
     if (my $consensus = $contig->getSequence()) {
         $logger->info("inverting sequence");
         my $newsensus = reverse($consensus);
-        $newsensus =~ tr/ACGTacgt/TGCAtgca/;
+        $newsensus =~ tr/ACGTacgt/TGCAtgca/ if ($newsensus !~ /U/i);
+        $newsensus =~ tr/ACGUacgu/UGCAugca/ if ($newsensus !~ /T/i);
 	$contig->setSequence($newsensus);
     }
     else {
@@ -461,13 +465,6 @@ sub reverseComplement {
 # invert the base quality array
         $logger->info("inverting base quality array");
         @$quality = reverse(@$quality);
-#        for (my $i = 0 ; $i < $length ; $i++) {
-#            my $j = $length - $i - 1;
-#            last unless ($i < $j);
-#            my $swap = $quality->[$i];
-#            $quality->[$i] = $quality->[$j];
-#            $quality->[$j] = $swap;
-#        }
     }
 
     $contig->getStatistics(1) if $contig->hasMappings();
@@ -495,7 +492,7 @@ sub deleteLowQualityBases {
 
     my $flq = &findlowquality($contig->getSequence(),
                               $contig->getBaseQuality(),
-                              $options{symbols},   # default 'ACGTN'
+                              $options{symbols},   # default 'ACGTUN'
                               $options{threshold}, # default 20
                               $options{minimum},   # default 0,15
                               $options{hqpm},      # default 0,30
@@ -635,7 +632,7 @@ sub replaceLowQualityBases {
 
     my $flq = &findlowquality($contig->getSequence(),
                               $quality,
-                              $options{symbols},   # default 'ACGTN'
+                              $options{symbols},   # default 'ACGTUN'
                               $options{threshold}, # default 20
                               $options{minimum},   # default 0,15
                               $options{hqpm},      # default 0,30
@@ -772,7 +769,7 @@ sub removeLowQualityReads {
 
     my $flq = &findlowquality($contig->getSequence(),
                               $contig->getBaseQuality(),
-                              $options{symbols},   # default 'ACGTN'
+                              $options{symbols},   # default 'ACGTUN'
                               $options{threshold}, # default 20
                               $options{minimum},   # default 0,15
                               $options{hqpm},      # default 0,30
@@ -1388,7 +1385,7 @@ sub findlowquality {
 
 # options (and defaults if 0 or undef)
  
-    my $symbols               = shift || 'ACGTN';
+    my $symbols               = shift || 'ACGTUN';
     my $threshold             = shift;
     my $minimum               = shift;
     my $highqualitypadminimum = shift;
@@ -1472,6 +1469,7 @@ sub slidingmeanfilter {
 # sliding mean filtering of (quality) array
     my $qinput = shift;
     my $window = shift;
+    my %options = @_;
 
     &verifyPrivate($qinput,'slidingmeanfilter');
 
@@ -1495,7 +1493,7 @@ $logger->debug("ENTER slidingmeanfilter $window");
     my $loghash = {};
 
     my $logtransform;
-    my $offset = 10000.0;
+    my $offset = $options{bias} || 1000.0;
 # $logger->debug("begin LOG transform");
     foreach my $value (@$qinput) {
         my $logkey = int($value+$offset+0.5);
@@ -1516,8 +1514,8 @@ $logger->debug("DONE LOG transform");
     foreach my $element (@filter) {
 	$filtersum += $element;
     }
-   
-    
+
+# TO BE COMPLETED
 
 # step 4: apply inverse log transform
 
@@ -1538,8 +1536,6 @@ sub removepads {
     &verifyPrivate($sequence,'removepads');
 
     my $logger = &verifyLogger('removepads');
-
-$logger->debug("ENTER @_ PADS @$pads");
 
     my $sorted = [];
     @$sorted = sort {$a <=> $b} @$pads;
@@ -1909,25 +1905,272 @@ sub disassemble {
 #-----------------------------------------------------------------------------
 
 sub pad {
+# transform the reads from unpadded to padded representation 
     my $class = shift;
     my $contig = shift;
+    my %options = @_;
 
     &verifyParameter($contig,'pad');
 
-    my $logger = &verifyLogger('pad');
+    return if $contig->isPadded();
 
-    $logger->error("not yet operational");
+    my $logger = &verifyLogger('pad',@_);
+
+    $contig = $contig->copy() if $options{new};
+
+# build a hash keyed on readname
+
+    my $reads = $contig->getReads(1);
+
+    my $readnamehash = {};
+
+    foreach my $read (@$reads) {
+        if ($read->isPadded()) {
+            $logger->error("read ".$read->getReadName()." is (unexpectedly) already padded");
+            next;
+	}
+        $readnamehash->{$read->getReadName()} = $read;
+    }
+
+# get the current contig-to-unpadded-read mappings
+
+    my $mappings = $contig->getMappings(1);
+
+    foreach my $c2ur (@$mappings) {
+
+# test read corresponding to this mapping
+
+        my $read = $readnamehash->{$c2ur->getMappingName()};
+        unless ($read) {
+            $logger->error("no read found for name ".$c2ur->getMappingName());
+            my @keys = keys %$readnamehash;
+            $logger->error("read names: @keys");
+        }
+
+# determine mapping from contig to padded read
+
+        my $c2pr = &ctopr($c2ur);
+
+        my $aligntotrace = $read->getAlignToTraceMapping();
+
+# adjust the copy mapping to fill the range of the align to trace mapping
+
+        my ($uprstart,$uprfinal) = $aligntotrace->getMappedRange();
+# adjust the segments of the c2ur mapping
+        $c2ur->extendToFill($uprstart,$uprfinal);
+# again get the mapping from the (now extended) contig range to the padded read
+        my $ec2pr = &ctopr($c2ur);
+# and get the unpadded read to padded read transform
+        my $ur2pr = ($c2ur->inverse())->multiply($ec2pr);
+
+# transform the read's sequence and align to scf data
+
+# determine the new align to trace mappings from the read to contig mapping 
+        my $newaligntotrace = ($ur2pr->inverse())->multiply($aligntotrace,repair=>1);
+
+# determine the transformation to be used for sequence data from the old and new
+
+        my $newreaddna = $ur2pr->transformString($read->getSequence(),gapsymbol=>'-');
+        my $newreadqlt = $ur2pr->transformArray($read->getBaseQuality,gapvalue => -1);
+# postprocessing of quality array, replace the values -1 by interpolation
+	&interpolatequality ($newreadqlt);
+
+# and put the new stuff back in
+
+        $read->setSequence($newreaddna);
+        $read->setBaseQuality($newreadqlt);
+        $read->putAlignToTraceMapping($newaligntotrace);
+
+# update any other position info on the read
+
+        &transformreadcomponents($read,$ur2pr);
+
+        $read->setPadStatus(1);
+
+        $c2ur = $c2pr; # replace unpadded by padded mapping
+    }
+
+    $contig->setPadStatus(1);
+
+    return $contig;
+}
+
+sub ctopr {
+# derive contig-to-padded-read from contig-to-unpadded-read
+    my $c2ur = shift;
+
+    my @crange = $c2ur->getContigRange();
+    my ($rstart,$rfinal) = $c2ur->getMappedRange();
+# adjust read range and inverse if counter aligned
+    $rfinal = $rstart + $crange[1] - $crange[0];
+   ($rstart,$rfinal) = ($rfinal,$rstart) if ($c2ur->getAlignment() < 0);
+# build the mapping from the contig to the padded read
+    my $c2pr = new Mapping($c2ur->getMappingName());
+    $c2pr->putSegment(@crange,$rstart,$rfinal);
+
+    return $c2pr;
 }
 
 sub depad {
+# transform reads from padded to depadded representation
     my $class = shift;
     my $contig = shift;
+    my %options = @_;
 
     &verifyParameter($contig,'depad');
 
+    return unless $contig->isPadded();
+
+    $contig = $contig->copy() if $options{new};
+
+# build a hash keyed on readname
+
+    my $reads = $contig->getReads(1);
+
+    my $readnamehash = {};
+
+    foreach my $read (@$reads) {
+# test the read
+        unless ($read->isPadded()) {
+            my $logger = &verifyLogger('depad');
+            $logger->error("read ".$read->getReadName()." is (unexpectedly) not padded");
+            next;
+	}
+        $readnamehash->{$read->getReadName()} = $read;
+    }
+
+# get the current contig-to-padded-read mappings
+
+    my $mappings = $contig->getMappings(0); # no loading from database !
+
     my $logger = &verifyLogger('depad');
 
-    $logger->error("not yet operational");
+    foreach my $c2pr (@$mappings) {
+        my $read = $readnamehash->{$c2pr->getMappingName()};
+# find positions of pads from read sequence, return as Mapping 
+        my ($newseq,$newqlt,$padmapping) = &getpadmapping($read->getSequence(),$read->getBaseQuality());
+        my $c2ur = $c2pr->multiply($padmapping); # padmapping X: padded read, Y: unpadded read
+        my $aligntotrace = $read->getAlignToTraceMapping(); 
+        my $newaligntotrace = ($aligntotrace->inverse)->multiply($padmapping,repair=>1);
+
+        $read->setSequence($newseq);
+        $read->setBaseQuality($newqlt);
+        $read->putAlignToTraceMapping($newaligntotrace);
+        
+        &transformreadcomponents($read,$padmapping);
+        $read->setPadStatus(0);
+        $c2ur->setMappingName($c2pr->getMappingName());
+        $c2pr = $c2ur;
+    }
+
+    $contig->setPadStatus(0);
+
+    return $contig;
+}
+
+sub transformreadcomponents {
+# private helper with pad and depad
+    my $read = shift;
+    my $mapping = shift;
+
+    &verifyPrivate($read,'transformreadcomponents');
+
+# transform vector positions, clipping (STILL TO BE IMPLEMENTED)
+
+    if (my $cvector = $read->getCloningVector()) {
+# cloning vector is an array of arrays
+        foreach my $vector (@$cvector) {
+            my $name = shift @$vector;
+#            my ($newvector,$transform) = $mapping->transform(@$vector);
+            my $transform = $mapping->transform(@$vector);
+            @$vector = $transform->getMappedRange();
+            unshift @$vector,$name;
+	}
+    }
+
+    if (my $svector = $read->getSequencingVector()) {
+# sequence vector is an array of arrays
+        foreach my $vector (@$svector) {
+            my $name = shift @$vector;
+#            my ($newvector,$transform) = $mapping->transform(@$vector);
+            my $transform = $mapping->transform(@$vector);
+
+my @newvector = $transform->getMappedRange();
+unless (defined($newvector[0]) && defined($newvector[1])) {
+    print STDOUT "failure to remap vector @$vector  -> @newvector\n";
+    unshift @$vector,$name;
+    $read->writeToCaf(*STDOUT,notags=>1);
+    print STDOUT $mapping->toString()."\n";
+    next;
+} 
+            @$vector = $transform->getMappedRange();
+            unshift @$vector,$name;
+	}
+    }
+
+    my $qleft  = $read->getLowQualityLeft() || 0;
+    my $qright = $read->getLowQualityRight();
+    $qright = $read->getSequenceLength() + 1 unless defined $qright;
+    my @qualityrange = ($qleft+1, $qright-1);
+#    my ($newqrange,$transform) = $mapping->transform(@qualityrange);
+    my $transform = $mapping->transform(@qualityrange);
+    @qualityrange = $transform->getMappedRange();
+    $read->setLowQualityLeft ($qualityrange[0] - 1);    
+    $read->setLowQualityRight($qualityrange[1] + 1);    
+
+    return unless $read->hasTags();
+
+    my $tags = $read->getTags();
+
+    foreach my $tag (@$tags) {
+#        my ($dummy,$transform) = $mapping->transform($tag->getPosition());
+        my $transform = $mapping->transform($tag->getPosition());
+        $tag->setPosition($transform->getMappedRange());
+    }
+}
+
+sub getpadmapping {
+# private helper method with 'depad'
+    my $sequence = shift;
+    my $quality = shift;
+
+    my $pads = [];
+    my $length = length $sequence;
+    for (my $i = 0; $i < $length ; $i++) {
+        next unless (substr($sequence, $i, 1) eq '-');
+        push @$pads, $i;
+    }
+
+    return &removepads($sequence,$quality,$pads);
+}
+
+sub interpolatequality {
+# private helper method with 'pad': replace BQ values < 0 by interpolated values
+    my $quality = shift; # array ref
+
+    my $gap = 0;
+    my $length = scalar(@$quality);
+    while ($gap < $length) {
+        next unless ($quality->[$gap++] < 0);
+        my $qleft = $gap - 2; # last non-gap quality on left
+        my $qright = $gap;   # first non-gap quality on right
+        while ($qright < $length && $quality->[$qright] < 0) {
+            $qright++;
+	}
+        my $qnew = 0;
+        $qnew += $quality->[$qleft]  unless ($qleft < 0);
+        $qnew += $quality->[$qright] if ($qright < $length);
+if ($qleft+1 == 54) {
+ # print STDERR "gap value $qleft $quality->[$qleft] $qright $quality->[$qright] $qnew\n";
+  print STDERR "gap $qleft $qright  @$quality[$qleft .. $qright]   $qnew\n";
+}
+        for my $i (($qleft+1) .. ($qright-1)) {
+#            $qnew++ if ($quality->[$qright] > $quality->[$qleft]);
+            $quality->[$i] = int($qnew/2 + 0.51);
+#            $quality->[$i] = 1;
+	}
+        $gap = $qright;
+    }
 }
 
 #-----------------------------------------------------------------------------
@@ -2053,7 +2296,40 @@ sub isEqual {
     return $align; # 1 for identical, -1 for identical but inverted
 }   
 
-# TO BE TESTED ##################################################################
+#-----------------------------------------------------------------------------
+# linking contigs
+#-----------------------------------------------------------------------------
+
+sub linkContigToParents {
+    my $class = shift;
+    my $contig = shift;
+    my %options = @_;
+
+    &verifyParameter($contig,'linkContigToParents');
+
+    return undef unless $contig->hasParentContigs();
+
+    my $parents = $contig->getParentContigs();
+
+    my $report = '';
+    foreach my $parent (@$parents) {
+        $parent->getMappings(1); # delayed loading if no mappings
+        my ($linked,$deallocated) = $contig->linkToContig($parent,%options);
+            
+        my $parentname = $parent->getContigName();
+
+        unless ($linked) {
+	    $report .= "; " if $report;
+            $report .= "empty link detected to $parentname";
+        }
+        if ($deallocated) {
+	    $report .= "; " if $report;
+            $report .= "$deallocated reads deallocated from $parentname";
+	}
+    }
+
+    return $report;
+}    
 
 sub crossmatch {
 # compare two contigs using sequence IDs in their read-to-contig mappings
@@ -2079,12 +2355,10 @@ sub crossmatch {
 
     if ($cthism && $cthatm && !$options{sequenceonly}) {
 # find the alignment from the read-to-contig mappings
-# option strong       : set True for comparison at read mapping level
+# option strong       : set True for exact matching at at read mapping level
 # option noguillotine : if NOT set, require a minumum number of reads in C2C segment
       
-        return &linkToContig($cthis,$cthat,%options) if $options{useold};
- 
-        return &linkcontigs($cthis,$cthat,%options); 
+       return &linkcontigs($cthis,$cthat,%options);
     }
     elsif ($options{sequenceonly}) {
 # try the alignment of the consensus sequence
@@ -2136,17 +2410,21 @@ sub linkcontigs {
 
     my $logger = &verifyLogger('linkcontigs');
 
-#$logger->debug("ENTER");
-#$logger->info("using new linkcontigs");
-
 # test completeness
 
     return undef unless $thiscontig->hasMappings(); 
     return undef unless $thatcontig->hasMappings();
 
+# for reporting purposes
+
+    my $contigname = $thiscontig->getContigName();
+    my $parentname = $thatcontig->getContigName();
+    my $parentseqid = $thatcontig->getContigID();
+
 # make the comparison using sequence ID; start by getting an inventory of $thiscontig
 # we build a hash on sequence ID values & one for back up on mapping(read)name
 
+    my $deallocated = 0;
     my $sequencehash = {};
     my $readnamehash = {};
     my $lmappings = $thiscontig->getMappings();
@@ -2157,13 +2435,15 @@ sub linkcontigs {
         $readnamehash->{$m_name} = $mapping if $m_name;
     }
 
-# make an inventory hash of (identical) alignments from $thatcontig to $thiscontig
+# PHASE I : build an inventory hash of alignments from thatcontig to 
+#           thiscontig using the shared reads; both forward & reverse 
+#           for "strong" comparison require identical alignments
 
-    my $alignment = 0;
-    my $inventory = {};
-    my $accumulate = {};
-    my $deallocated = 0;
-    my $overlapreads = 0;
+    my $forwardinventory = {};
+    my $reverseinventory = {};
+
+    my $readsincommon = 0;
+
     my $cmappings = $thatcontig->getMappings();
     foreach my $mapping (@$cmappings) {
         my $readname = $mapping->getMappingName();
@@ -2208,408 +2488,392 @@ sub linkcontigs {
 	    }
 # pull out the align-to-SCF as mappings
             my $omapping = $reads->{$oseq_id}->getAlignToTraceMapping(); # original
-            my $emapping = $reads->{$eseq_id}->getAlignToTraceMapping(); # edited
+            my $emapping = $reads->{$eseq_id}->getAlignToTraceMapping(); # edited read
 # find the proper chain of multiplication to get the new mapping 
-
-#**** under development begin
-$logger->info("Missing match for sequence ID $oseq_id"); 
-$logger->info("But the readnames do match : $readname");
-$logger->info("sequences: parent $oseq_id   child (edited) $eseq_id");
-$logger->info("original Align-to-SCF:".$omapping->toString());
-$logger->info("edited   Align-to-SCF:".$emapping->toString());
-$logger->info("Recovering link for read $readname (seqs:$oseq_id, $eseq_id)");
-$logger->info("complement:".$complement->toString(),ss=>2);
-            $complement = $complement->multiply($emapping);
-$logger->info("remapped Mro I:".$complement->toString());
+            $logger->info("Recovering link for read $readname on seqeunce IDs: "
+                         ."$oseq_id, $eseq_id");
+            $complement  = $complement->multiply($emapping);
             my $oinverse = $omapping->inverse();
-$logger->info("o inverse:".$oinverse->toString());
-            $complement = $complement->multiply($oinverse,repair=>3);
-$logger->info("remapped Mro II:".$complement->toString());
-#**** under development end
-
+            $complement  = $complement->multiply($oinverse,repair=>3);
         }
+
 # count the number of reads in the overlapping area
-        $overlapreads++;
+
+        $readsincommon++;
 
 # this mapping/sequence in $thatcontig also figures in the current Contig
 
-        if ($options{strong}) {
-# strong comparison: test for identical mappings (apart from shift)
-            my ($identical,$aligned,$offset) = $complement->isEqual($mapping);
-            $logger->info("not identical $readname $identical,$aligned,$offset") unless $identical;
+        my $inventory = {};
 
-# keep the first encountered (contig-to-contig) alignment value != 0 
+# first test if the mappings are identical; if not, then try the crossmapping
 
-            $alignment = $aligned unless $alignment;
-            next unless ($identical && $aligned == $alignment);
+        my ($isequal,$alignment,$coffset) = $mapping->isEqual($complement);
 
-# the mappings are identical (alignment and segment sizes)
-
+        if ($isequal) {
+# select the inventory to use
+            $inventory = ($alignment > 0) ? $forwardinventory : $reverseinventory;
+# use the span of the read as segment
             my @segment = $mapping->getContigRange();
-# build a hash key based on offset and alignment direction and add segment
-            my $hashkey = sprintf("%08d",$offset);
-            $inventory->{$hashkey} = [] unless defined $inventory->{$hashkey};
+# $offset = (-$offset+0); # conform to offset convention in this method ?
+            my $hashkey = sprintf("%08d",$coffset);
+            $inventory->{$hashkey} = [] unless $inventory->{$hashkey};
             push @{$inventory->{$hashkey}},[@segment];
-            $accumulate->{$hashkey}  = 0 unless $accumulate->{$hashkey};
-            $accumulate->{$hashkey} += abs($segment[1]-$segment[0]+1);
         }
+ 
+        elsif ($options{strong}) {
+# strong comparison: only accept identical mappings
+            $logger->info("not identical $readname $isequal,$alignment,$coffset");
+            next;
+        }
+# (otherwise) do a segment-by-segment comparison
+        elsif (my $cpmapping = $mapping->multiply($complement->inverse(),repair=>2)) {
+# returns local contig-to-parent mapping as a RegularMapping object with at least one segment
+            my $alignment = $cpmapping->getAlignment();
+            $inventory = ($alignment > 0) ? $forwardinventory : $reverseinventory;
 
-# otherwise do a segment-by-segment comparison and find ranges of identical mapping
+# NOTE: this ensures that all segments in the inventory are sorted and aligned on the X-domain
 
-        else {
-# return the ** local ** contig-to-parent mapping as a Mapping object
-            my $cpmapping = $complement->compare($mapping,silent=>1);
-            unless ($cpmapping && $cpmapping->hasSegments()) {
-# empty cross mapping
-
-                if ($thatcontig->getNumberOfReads() > 1) {
-                    $logger->special("Non-overlapping read segments for read $readname");
-		}
-		else {
-                    $logger->special("Non-overlapping read segments for single-read "
-                                    ."parent contig ".$thatcontig->getContigID());
-		}
-                $logger->special("parent mapping:".$mapping->toString());
-                $logger->special("contig mapping:".$complement->toString());
-                $logger->special("c-to-p mapping:".$cpmapping->toString()) if $cpmapping;
-#		$complement->compare($mapping,list=>1); exit;
-
-		next; 
-            }
-
-# keep the first encountered (contig-to-contig) alignment value != 0
-
-            my $cpaligned = $cpmapping->getAlignment();
-$logger->fine($mapping->getMappingName()." : alignment $cpaligned");
-
-            $alignment = $cpaligned unless $alignment;
-
-            next unless ($alignment && $cpaligned == $alignment);
-
-# process the mapping segments and add to the inventory
-
-            my $osegments = $cpmapping->normaliseOnX() || next; # returns array
-
-            foreach my $osegment (@$osegments) {
-                my $offset = $osegment->getOffset();
-                $offset = (-$offset+0); # conform to offset convention in this method
-                my $hashkey = sprintf("%08d",$offset);
+            my $nrofsegments = $cpmapping->hasSegments();
+            foreach my $i (1 .. $nrofsegments) {
+                my @cpsegment = $cpmapping->getSegment($i);
+                my $coffset = $cpmapping->getOffsetForSegment($i);
+# $coffset = (-$coffset+0); # conform to offset convention in this method
+                my $hashkey = sprintf("%08d",$coffset);
                 $inventory->{$hashkey} = [] unless $inventory->{$hashkey};
-                my @segment = ($osegment->getXstart(),$osegment->getXfinis());
+                my @segment = splice @cpsegment,0,2;
                 push @{$inventory->{$hashkey}},[@segment];
-                $accumulate->{$hashkey}  = 0 unless $accumulate->{$hashkey};
-                $accumulate->{$hashkey} += abs($segment[1]-$segment[0]+1);
-	    }
-        }
-    }
-
-# OK, here we have an inventory: the number of keys equals the number of 
-# different alignments between $thiscontig and $thatcontig. On each key we have an
-# array of arrays with the individual mapping data. For each alignment we
-# determine if the covered interval is contiguous. For each such interval
-# we add a (contig) Segment alignment to the output mapping
-# NOTE: the table can be empty, which occurs if all reads in the current Contig
-# have their mappings changed compared with the previous contig 
-
-# if the alignment offsets vary too much, investigate further
-
-    my @offsets = sort { $a <=> $b } keys %$inventory;
-    my $offsetwindow = $options{offsetwindow};
-    $offsetwindow = 40 unless $offsetwindow;
-    my ($lower,$upper) = (0,0); # default no offset range window
-    my $minimumsize = 1; # lowest accepted segment size
-    my $threshold = $options{correlation} || 0.75;
-    my $defects = $options{defects} || 5;
-
-    if (@offsets && ($offsets[$#offsets] - $offsets[0]) >= $offsetwindow) {
-# the offset values vary too much; check how they correlate with position:
-# if no good correlation found the distribution is dodgy, then use a window 
-# based on the median offset and the nominal range
-        my $sumpp = 0.0; # for sum position**2
-        my $sumoo = 0.0; # for sum offset*2
-        my $sumop = 0.0; # for sum offset*position
-        my $weightedsum = 0;
-        my $penalty = 0;
-        my @ph; # position history
-        foreach my $offset (@offsets) {
-            $weightedsum += $accumulate->{$offset};
-            my $segmentlist = $inventory->{$offset};
-$logger->debug("CM offset $offset  segmentlist before ".scalar(@$segmentlist));
-            $segmentlist = &cleanupsegmentlist($segmentlist,);
-$logger->debug("CM offset $offset  segmentlist  after ".scalar(@$segmentlist));
-            unless ($segmentlist && @$segmentlist) {
-   	        print STDERR "unexpectedly NO SEGMENTLIST for offset $offset\n";
-                next;
-	    }
-            my $psum = 0; # re: average position
-            foreach my $mapping (@$segmentlist) {
-$logger->debug("CM offset $offset cleaned mapping @$mapping");
-                my $position = 0.5 * ($mapping->[0] + $mapping->[1]);
-                $sumpp += $position * $position; # weighted?
-                $sumop += $position * $offset;
-                $sumoo += $offset * $offset;
-                $psum += $position;
             }
-# collect penalties (if any) if several segments for same offset
-            my $numberofsegments = scalar(@$segmentlist);
-            if ($numberofsegments > 1) {
-                $penalty += $numberofsegments - 1;
-                $psum /= $numberofsegments;
-	    }
-            unshift @ph,$psum; # put new position upfront
-# collect penalties for reversals of direction
-            next unless (@ph > 2);
-# check ordering and apply penalty for position ordering reversal
-            if (($ph[0]-$ph[1])*($ph[1]-$ph[2]) < 0) {
-$logger->debug("Inversion detected $ph[0] $ph[1] $ph[2]");
-                $penalty++;
-	    }
         }
-# get the correlation coefficient
-        my $threshold = $options{correlation} || 0.75;
-        my $R = $sumop / sqrt($sumpp * $sumoo);
-$logger->debug("Correlation coefficient = $R  penalty $penalty");
-# if CC too small, apply lower and upper boundary to offset
-        unless (abs($R) >= $threshold) {
-# relation offset-position looks messy
-            $logger->special("Suspect correlation coefficient = $R : target "
-                            .$thatcontig->getContigName()
-                            ." (inversion penalty = $penalty)");
-# accept the alignment if no penalties are incurred (monotonous alignment)
-            if ($penalty > $defects) {
-# set up for offset masking
-$logger->debug("Suspect correlation coefficient = $R : target "
-              .$thatcontig->getContigName()." (penalty = $penalty)");
-$logger->debug("Offset masking activated");
-                my $partialsum = 0;
-                foreach my $offset (@offsets) { 
-                    $partialsum += $accumulate->{$offset};
-                    next if ($partialsum < $weightedsum/2);
-# the first offset here is the median
-                    $lower = $offset - $offsetwindow/2; 
-                    $upper = $offset + $offsetwindow/2;
-$logger->debug("median: $offset ($lower $upper)");
-                    $minimumsize = $options{segmentsize} || 2;
-                    last;
-		}
+# else the cross mapping is empty
+        else {
+            if ($thatcontig->getNumberOfReads() > 1) {
+                $logger->special("Non-overlapping read segments for read $readname");
 	    }
+	    else {
+                $logger->special("Non-overlapping read segments for single-read "
+                                ."parent contig $parentname");
+	    }
+            $logger->special("parent-to-read mapping:".$mapping->toString());
+            $logger->special("contig-to-read mapping:".$complement->toString());
+            $logger->special("c-to-p mapping:".$cpmapping->toString()) if $cpmapping;
+	    next; 
         }
+
     }
+
+# report if both forward and reversed alignments were found
+
+    if (keys %$forwardinventory && keys %$reverseinventory) {
+        $logger->warning("Alignment reversion(s) detected in mapping of contig "
+                       . "$contigname to parent $parentname");
+    }
+
+# OK, here we have an inventory: the number of keys equals the number of different
+# alignments between $thiscontig and $thatcontig. On each key we have an array of
+# arrays with the individual mapping segments. 
+# NOTE: the table can be empty, which occurs in "strong" mode if all reads in the
+# contig have their mappings changed compared with the parent.
+
+# PHASE II : For each alignment we determine if the covered interval is contiguous. 
+#            For each such interval we add an alignment segment to the output list
 
 # determine guillotine; accept only alignments with a minimum number of reads 
 
-    my $guillotine = 0;
-    if ($options{readclipping}) { # perhaps drop altogether ??
+    my %moptions; 
+# merge option: minimum read count per segment
+    if ($options{readclipping}) {
+        my $guillotine = 0;
         my $thiscount = scalar(@$lmappings);
         my $thatcount = scalar(@$cmappings);
         my $readcount = ($thiscount <= $thatcount ? $thiscount : $thatcount);
         $guillotine = 1 + int(log($readcount));
 # adjust for small numbers (2 and 3)
         $guillotine -= 1 if ($guillotine > $readcount - 1);
-        $guillotine =  1 if ($guillotine < 1); # minimum required
         $guillotine = $readcount if ($guillotine > $readcount);
+        $moptions{minimumreads} = $guillotine if $guillotine;
     }
+# merge option: minimum overall segment length
+    $moptions{minimumlength} = $options{minimumlength} || 0;
+
+    $options{perinterval} = 1 unless defined $options{perinterval};
+
+# define accepted minumum cross-correlation coefficient and maximum defects
+
+    my $ccthreshold = $options{ccthreshold} || 0.8;
+    my $aligndefect = $options{maxadefects} || 5;
+    my $nominalreadlength = $options{readlength} || 800;
+
+# MAIN loop
+
+    my @mappings;
+    my $contigmappedsections = 0;
+
+    my $alignment;
+    foreach my $inventory ($forwardinventory,$reverseinventory) {
+
+        $alignment = -$alignment if $alignment;
+
+        $alignment = 1 unless defined $alignment;
+
+        next unless keys %$inventory;
+
+        my @offsets = sort keys %$inventory;
+
+        my $segmentlist = [];
+# extract all alignment segments after collating for each offset separately
+        foreach my $offset (@offsets) {
+# merge overlapping segments for each offset individually 
+            my $offsetsegments = $inventory->{$offset};
+            my $segmentsbefore = scalar(@$offsetsegments);
+            my $newsegmentlist = &mergesegments($offsetsegments,%moptions);
+            unless ($newsegmentlist && @$newsegmentlist) {
+                $logger->special("unexpectedly NO SEGMENTLIST for offset $offset "
+                                ."between contig $contigname and parent $parentname "
+                                ."after merging (before: $segmentsbefore)");
+                next;
+            }
+            my $segmentsafter = scalar(@$newsegmentlist);
+            $logger->fine("Offset $offset: segments before $segmentsbefore, after "
+		         .$segmentsafter);
+            $inventory->{$offset} = $newsegmentlist; # just in case its needed
+# collect the segments in a separate list to find continuous contig mapping  
+            foreach my $newsegment (@$newsegmentlist) {
+# copy the segments for this offset to a separate list
+# complete the segments as they will make up the mapping (re: aligned on X domain)
+                my $ctopsegment = [];
+                foreach my $n (0,1) {
+                    $ctopsegment->[$n]   =  $newsegment->[$n];
+                    $ctopsegment->[$n+2] = ($newsegment->[$n] + $offset) * $alignment;
+		}
+# add the offset and the sub-segment count (from merge)
+		push @$ctopsegment,$offset+0; # use in stats
+        	push @$ctopsegment,$newsegment->[2]; # nr of original segments
+                push @$segmentlist,$ctopsegment; # array of arrays
+	    }
+	}
+
+# remove here segments which fall inside other segments in both X and Y domains
+
+        &prunesegments($segmentlist,$alignment);
+
+# use the contiguous segments for each offset individually to get the overall
+# interval(s) covered by alignments between the contigs (irrespective of offset)
+
+        my $contigsections = &mergesegments($segmentlist,gap=>1);
+#        my $contigsections = &mergesegments($segmentlist,ambi=>$alignment);
+
+        unless ($contigsections && @$contigsections) {
+            $logger->warning("Unexpectedly no contiguous contig section(s) found");
+	    next;
+	}
+        my $numberofsections = scalar(@$contigsections);
+        $contigmappedsections += $numberofsections;
+        $logger->info("$numberofsections contiguous contig section(s) found");
+        foreach my $section (@$contigsections) {
+            $logger->info("@$section");
+	}
+        my $contigrangestart = $contigsections->[0]->[0];
+        my $contigrangefinal = $contigsections->[$numberofsections-1]->[1];
+# apply a minimum to the average section size e.g. typical read length
+        my $averagesectionsize = abs($contigrangefinal - $contigrangestart)/$numberofsections;
+        if ($averagesectionsize < $nominalreadlength) {
+            $logger->info("reverted to single mapping");
+            $contigsections = []; # forces single mapping
+	}
+
+# do some analysis, first on the whole thing:
+
+        my $accept;
+           
+# get the cross-correlations coefficient and other stats for the whole alignment set
+
+        my ($R,$penalty,$wtsum) = &alignmentstats($segmentlist);
+
+        $logger->info("Global correlation test R = $R  penalty $penalty");
+
+        if (abs($R) >= $ccthreshold && $penalty < $aligndefect && !$options{perinterval}) {
+            my $mapping = &buildmapping($segmentlist,$parentname,$parentseqid);
+            push @mappings, $mapping if $mapping;
+            $accept = 1;
+	}
+        elsif (@$contigsections > 1) {
+# check the correlation coefficient for each segment; should be very good 
+            $accept = 1;
+            foreach my $contigsection (@$contigsections) {
+                my @window = @$contigsection[0..1];
+                @window = sort {$a <=> $b} @window; # redundent ?
+                my ($R,$penalty,$wtsum) = &alignmentstats($segmentlist,[@window]);
+                $logger->info("Local (@window) correlation test R = $R  penalty $penalty");
+                $accept = 0 if ( abs($R) < $ccthreshold);
+                $accept = 0 if ($penalty > $aligndefect);
+                if ($accept && $options{perinterval}) {
+# on each interval individually
+                    my $mapping = &buildmapping($segmentlist,$parentname,$parentseqid,[@window]);
+                    push @mappings, $mapping if $mapping;         
+		}
+	    }
+            if ($accept && !$options{perinterval}) {
+# &prunesegments($segmentlist,$alignment,0,ambivalent=>1);
+                my $mapping = &buildmapping($segmentlist,$parentname,$parentseqid);
+                push @mappings, $mapping if $mapping; # on the whole thing
+            }
+	}
+        elsif (abs($R) >= $ccthreshold && $penalty < $aligndefect) {
+            my $mapping = &buildmapping($segmentlist,$parentname,$parentseqid);
+            push @mappings, $mapping if $mapping;
+            $accept = 1;
+	}
+
+# if we still have no satisfactory mapping (bad correlation, also in possible subsections)
+# we try if the offset range has a number of outliers which should be ignored; we build the
+# mapping segments again from the original inventory; now applying possibly an offset window
+
+        unless ($accept) {
+$logger = &verifyLogger('linkcontigs');
+$logger->debug("ENTER recover");
+# the relation between offset and contig position looks messy
+            $logger->special("Suspect mapping between $contigname and $parentname "
+                             ." (correlation R = $R; defect penalty = $penalty)");
+# apply a (possibly) stronger segment clipping 
+            my ($o,$a) = &prunesegments($segmentlist,$alignment,0,ambivalent=>1);
+            $logger->info("strong pruning : outliers $o  corrected overlap $a");
+# do a more detailed analysis on the whole mapping range
+            undef @mappings; # start from scratch
+# set up for offset masking
+            my $offsetmaskhash = {};
+            if (abs($R) < 0.75) {
+# a poor correlation is taken as indicator of serious aligment discontinuities
+# we then try to mask the offset range to exclude outliers from the list
+$logger->info("Testing offsets");
+                $offsetmaskhash = &analyseoffsetpattern($segmentlist,wtsum=>$wtsum,%options);
+#&newanalyseoffsetpattern($segmentlist);
+            }
 
 # go through all offset values and collate the mapping segments;
-# if the offset falls outside the offset range window, we are probably
+# if the offset is marked as to be ignored, we are probably
 # dealing with data arising from mis-assembled reads, resulting in
-# outlier offset values and messed-up rogue alignment segments. We will
-# ignore regular segments which straddle the bad mapping range
+# outlier offset values and messed-up rogue alignment segments. 
 
-    my $rtotal = 0;
-    my @c2csegments; # for the regular segments
-    my $poormapping = new Mapping("Bad Mapping"); # for bad mapping range
-#    my $goodmapping = new Mapping("Good Mapping");
-$logger->info("Testing offsets");
-$logger->fine(" @offsets");
-    foreach my $offset (@offsets) {
-# apply filter if boundaries are defined
-        my $outofrange = 0;
-        if (($lower != $upper) && ($offset < $lower || $offset > $upper)) {
-            $outofrange = 1; # outsize offset range, probably dodgy mapping
-$logger->info("offset $offset out of range $lower $upper");
-        }
-# sort mappings according to increasing contig start position
-        my @mappings = sort { $a->[0] <=> $b->[0] } @{$inventory->{$offset}};
-$logger->info("intervals ".scalar(@mappings));
-        my $nreads = 0; # counter of reads in current segment
-        my $segmentstart = $mappings[0]->[0];
-        my $segmentfinis = $mappings[0]->[1];
-$logger->info("segmentstart $segmentstart  segmentfinis $segmentfinis");
-        foreach my $interval (@mappings) {
-            my $intervalstart = $interval->[0];
-            my $intervalfinis = $interval->[1];
-            next unless defined($intervalstart);
-            next unless defined($segmentfinis);
-$logger->info("intervalstart $intervalstart  intervalfinis $intervalfinis");
-# break of coverage is indicated by begin of interval beyond end of previous
-            if ($intervalstart > $segmentfinis) {
-# add segmentstart - segmentfinis as mapping segment
-                my $size = abs($segmentfinis-$segmentstart) + 1;
-                if ($nreads >= $guillotine && $size >= $minimumsize) {
-                    my $start = ($segmentstart + $offset) * $alignment;
-                    my $finis = ($segmentfinis + $offset) * $alignment;
-		    my @segment = ($start,$finis,$segmentstart,$segmentfinis,$offset);
-                    push @c2csegments,[@segment]  unless $outofrange;
-                    $poormapping->putSegment(@segment) if $outofrange;
-                }
-# initialize the new mapping interval
-                $nreads = 0;
-                $segmentstart = $intervalstart;
-                $segmentfinis = $intervalfinis;
-            }
-            elsif ($intervalfinis > $segmentfinis) {
-                $segmentfinis = $intervalfinis;
-            }
-            $nreads++;
-            $rtotal++;
-        }
-# add segmentstart - segmentfinis as (last) mapping segment
-        next unless ($nreads >= $guillotine);
-        my $size = abs($segmentfinis-$segmentstart) + 1;
-        next unless ($size >= $minimumsize);
-        my $start = ($segmentstart + $offset) * $alignment;
-        my $finis = ($segmentfinis + $offset) * $alignment;
-        my @segment = ($start,$finis,$segmentstart,$segmentfinis,$offset);
-        push @c2csegments,[@segment]  unless $outofrange;
-#        $goodmapping->putSegment(@segment) unless $outofrange;
-        $poormapping->putSegment(@segment) if $outofrange;
-    }
+# We will ignore regular segments which straddle the bad mapping range ??
 
-# if there are rogue mappings, determine the contig range affected
+            my $badmapping = new Mapping("Bad Mapping"); # for bad mapping range
 
-    my @badmap;
-    if ($poormapping->hasSegments()) {
-# the contig interval covered by the bad mapping
-        @badmap = $poormapping->getContigRange() unless $options{nobadrange};
-# subsequently we could use this interval to mask the regular mappings found
-$logger->debug("checking bad mapping range");
-$logger->debug($poormapping->writeToString('bad range'));
-$logger->debug("bad contig range: @badmap");
-    }
+            my $masked = keys %$offsetmaskhash;
 
-# the segment list now may on rare occasions (but in particular when
-# there is a bad mapping range) contain overlapping segments where
-# the position of overlap have conflicting boundaries, and therefore 
-# have to be removed or pruned by adjusting the interval boundaries
-
-# the folowing requires segment data sorted according to increasing X values
-
-    foreach my $segment (@c2csegments) {
-        my ($xs,$xf,$ys,$yf,$s) = @$segment;
-        @$segment = ($xf,$xs,$yf,$ys,$s) if ($xs > $xf);
-    }
-
-    @c2csegments = sort {$a->[0] <=> $b->[0]} @c2csegments;
-
-$logger->info(scalar(@c2csegments)." segments; before pruning");
-
-    my $j =1;
-    while ($j < @c2csegments) {
-        my $i = $j - 1;
-        my $cthis = $c2csegments[$i];
-        my $next = $c2csegments[$j];
-# first remove segments which completely fall inside another
-        if ($cthis->[0] <= $next->[0] && $cthis->[1] >= $next->[1]) {
-# the next segment falls completely inside this segment; remove $next
-            splice @c2csegments, $j, 1;
-#            next;
-        }
-        elsif ($cthis->[0] >= $next->[0] && $cthis->[1] <= $next->[1]) {
-# this segment falls completely inside the next segment; remove $cthis
-            splice @c2csegments, $i, 1;
-#            next;
-        }
-        elsif (@badmap && $next->[0] >= $badmap[0] && $next->[1] <= $badmap[1]) {
-# the next segment falls completely inside the bad mapping range: remove $next
-            splice @c2csegments, $j, 1;
-        }
-        else {
-# this segment overlaps at the end with the beginning of the next segment: prune
-            while ($alignment > 0 && $cthis->[1] >= $next->[0]) {
-                $cthis->[1]--;
-                $cthis->[3]--;
-                $next->[0]++;
-                $next->[2]++;
-  	    }
-# the counter-aligned case
-            while ($alignment < 0 && $cthis->[1] >= $next->[0]) {
-                $cthis->[1]--;
-                $cthis->[3]++;
-                $next->[0]++;
-                $next->[2]--;
+            my $j = 0;
+	    while ($j < scalar(@$segmentlist)) {
+                my $segment = $segmentlist->[$j];
+# print STDERR "bm test segment @$segment\n";
+                if ($masked && !$offsetmaskhash->{$segment->[4]}) {
+# rejected offset add segment to bad mapping range and remove from the list
+	  	    $logger->warning("test segment @$segment added to bad mapping");
+		    $badmapping->putSegment(@$segment);
+                    splice @$segmentlist,$j,1;
+		    next;
+		}
+                $j++;
 	    }
-            $j++;
+
+# if there are rogue mappings, and the bad region is to be masked
+
+            if (!$options{nobadrange} && $badmapping->hasSegments()) {
+# the contig interval covered by the bad mapping
+# should be more sophysticated: join bad mapping intervals, test against segments
+                my @badmap = $badmapping->getContigRange();
+# we use this interval to mask the regular mappings found; needs improvement
+$logger->debug("checking bad mapping range");
+$logger->debug($badmapping->writeToString('bad range'));
+$logger->debug("bad contig range: @badmap");
+                &prunesegments($segmentlist,$alignment,[@badmap]);
+            }
+
+# reanalyse again the resulting segment list
+
+            my ($R,$penalty,$wtsum) = &alignmentstats($segmentlist);
+ 
+            $logger->info("correlation after filtering  R = $R  penalty $penalty");
+
+            if (abs($R) >= $ccthreshold && $penalty < $aligndefect) {
+                my $mapping = &buildmapping($segmentlist,$parentname,$parentseqid);
+                push @mappings, $mapping if $mapping;
+	    }
+
+	} # end unless(accept) block
+
+# here all mappings have been collected
+
+    } # end main loop
+
+# PHASE III : add the collected  mapping(s), if any; count valid mapings
+
+    my $segmentcount = 0;
+    my $validmappinghash = {};
+    my $validmappingcount = 0;
+    foreach my $mapping (@mappings) { 
+
+        if (my $scount = $mapping->hasSegments()) {
+# here, test if the mapping is valid, using the overall maping range
+            my ($isvalid,$msg) = &isvalidmapping($thiscontig,$thatcontig,$mapping,$readsincommon);
+
+            unless ($isvalid) {
+                $logger->special("Suspect link detected between contigs $contigname "
+                                ."and (parent) $parentname : $msg");
+                if ($contigmappedsections == 1 && $readsincommon >= 5) {
+		    $isvalid = 1; # accept 
+                    $logger->special("Link accepted nevertheless because of contiguous read coverage");
+		}
+	    }
+            
+            if ($isvalid || $options{forcelink}) {
+                $validmappinghash->{$mapping}++;
+                $validmappingcount++;
+                $segmentcount += $scount;
+	    }
+
+            if ($isvalid == 2) {
+                $logger->special("(Possibly) split parent contig $parentname");
+                $deallocated = 0; # because we really don't know
+            }
 	}
     }
 
-$logger->info(scalar(@c2csegments)." segments after pruning");
+# add valid mappings to list for this contig; if there are no valid mappings: add an empty mapping
 
-# create an output Mapping enter the segments
+    unless ($validmappingcount) {
+# create an empty mapping
+        my $mapping = new Mapping($parentname);
+        $mapping->setSequenceID($parentseqid);
+        push @mappings,$mapping;
+        $validmappinghash->{$mapping}++;
+        $logger->info("Empty mapping added for link between $contigname and $parentname"); 
+    }
+    
+# prevent the storing of duplicates
 
-    my $mapping = new Mapping($thatcontig->getContigName());
-    $mapping->setSequenceID($thatcontig->getContigID());
-
-    foreach my $segment (@c2csegments) {
-        next if ($segment->[1] < $segment->[0]); # segment pruned out of existence
-$logger->info("segment after filter @$segment");
-        $mapping->putSegment(@$segment);
+    if ($thiscontig->hasContigToContigMappings()) {
+# remove any existing mapping from this contig to the parent thatcontig
+        my $c2pmappings = $thiscontig->getContigToContigMappings();
+        my $j = 0;
+        while ($j < scalar(@$c2pmappings)) {
+            my $c2pmapping = $c2pmappings->[$j];
+            if ($c2pmapping->getSequenceID() eq $parentseqid) {
+                splice @$c2pmappings,$j,1; # remove this mapping
+                next;
+	    }
+	    $j++;
+	}
     }
 
-# use the normalise method to handle possible single-base segments
-
-    $mapping->normalise(mute=>1); # short messsage for alignment problem
-
-    if ($mapping->hasSegments()) {
-# here, test if the mapping is valid, using the overall maping range
-        my ($isValid,$msg) = &isValidMapping($thiscontig,$thatcontig,$mapping,$overlapreads);
-$logger->info("isVALIDmapping $isValid\n$msg",ss=>1);
-
-# here possible recovery based on analysis of continuity of mapping segments
-
-# if still not valid, 
-        if (!$isValid && !$options{forcelink}) {
-#$logger->debug("Spurious link detected to contig ".$thatcontig->getContigName());
-            return 0, $overlapreads;
-        }
-# in case of split contig
-        elsif ($isValid == 2) {
-$logger->debug("(Possibly) split parent contig ".$thatcontig->getContigName());
-            $deallocated = 0; # because we really don't know
-        }
-# for a regular link
-        else {
-            $deallocated = $thatcontig->getNumberOfReads() - $overlapreads; 
-        }
-# store the Mapping as a contig-to-contig mapping (prevent duplicates)
-        if ($thiscontig->hasContigToContigMappings()) {
-            my $c2cmaps = $thiscontig->getContigToContigMappings();
-            foreach my $c2cmap (@$c2cmaps) {
-                my ($isEqual,@dummy) = $mapping->isEqual($c2cmap,silent=>1);
-                next unless $isEqual;
-                next if ($mapping->getSequenceID() != $c2cmap->getSequenceID());
-                $logger->error("Duplicate mapping to parent "
-		              .$thatcontig->getContigName()." ignored");
-
-$logger->debug("Duplicate mapping to parent ".$thatcontig->getContigName()." ignored");
-$logger->debug("existing Mappings: @$c2cmaps");
-$logger->debug("to be added Mapping: $mapping, tested against $c2cmap");
-$logger->debug("equal mappings: \n".$mapping->toString()."\n".$c2cmap->toString());
-
-                return $mapping->hasSegments(),$deallocated;
-            }
-        }
-        $thiscontig->addContigToContigMapping($mapping);
-    }
-# single-read parent without valid link : add empty link
-    elsif ($thatcontig->getNumberOfReads() == 1) {
+    foreach my $mapping (@mappings) {
+        next unless $validmappinghash->{$mapping};
         $thiscontig->addContigToContigMapping($mapping);
     }
 
 # and return the number of segments, which could be 0
 
 $logger->debug("EXIT");
-   return $mapping->hasSegments(),$deallocated;
+   return $segmentcount,$deallocated;
+#   return $segmentcount,$readsincommon,$deallocated;
 
 # if the mapping has no segments, no mapping range could be determined
 # by the algorithm above. If the 'strong' mode was used, perhaps the
@@ -2617,480 +2881,480 @@ $logger->debug("EXIT");
 
 }
 
-##### TO BE DEPRECATED after linkcontigs has been tested 
+sub buildmapping {
+# private helper method with 'linkcontigs': build mapping from segment inventory
+    my $segmentlist = shift;
+    my $mappingname = shift;
+    my $mappingseq_id = shift;
+    my $rangewindow = shift; # array ref
 
-sub linkToContig { # will be REDUNDENT to be DEPRECATED
-# compare two contigs using sequence IDs in their read-to-contig mappings
-# adds a contig-to-contig Mapping instance with a list of mapping segments,
-# if any, mapping from $compare to $this contig
-# returns the number of mapped segments (usually 1); returns undef if 
-# incomplete Contig instances or missing sequence IDs in mappings
-    my $this = shift;
-    my $compare = shift; # Contig instance to be compared to $this
-    my %options = @_;
+    my $logger = &verifyLogger('buildmapping');
 
-# option strong       : set True for comparison at read mapping level
-# option readclipping : if set, require a minumum number of reads in C2C segment
+# create an output Mapping enter the segments
 
-    die "$this takes a Contig instance" unless (ref($compare) eq 'Contig');
+    my $mapping = new Mapping($mappingname);
+    $mapping->setSequenceID($mappingseq_id);
 
-my $DEBUG = &verifyLogger('linkToContig',1);
-
-# test completeness
-
-    return undef unless $this->hasMappings(); 
-    return undef unless $compare->hasMappings();
-
-# make the comparison using sequence ID; start by getting an inventory of $this
-# we build a hash on sequence ID values & one for back up on mapping(read)name
-
-    my $sequencehash = {};
-    my $readnamehash = {};
-    my $lmappings = $this->getMappings();
-    foreach my $mapping (@$lmappings) {
-        my $seq_id = $mapping->getSequenceID();
-        $sequencehash->{$seq_id} = $mapping if $seq_id;
-        my $map_id = $mapping->getMappingName();
-        $readnamehash->{$map_id} = $mapping if $map_id;
+    foreach my $segment (@$segmentlist) {
+        next if ($segment->[1] < $segment->[0]); # invalid segment (pruned out of existence?)
+        if ($rangewindow) {
+            next if ($segment->[0] < $rangewindow->[0]);
+            next if ($segment->[1] > $rangewindow->[1]);
+	}
+# we build the mapping as an inverse to conform to the parent to contig storage in Arcturus
+        my ($xs,$xf,$ys,$yf,@s) = @$segment;
+        $mapping->putSegment($ys,$yf,$xs,$xf);
     }
 
-# make an inventory hash of (identical) alignments from $compare to $this
+# use the normalise method to handle possible single-base segments
 
-    my $alignment = 0;
-    my $inventory = {};
-    my $accumulate = {};
-    my $deallocated = 0;
-    my $overlapreads = 0;
-    my $cmappings = $compare->getMappings();
-    foreach my $mapping (@$cmappings) {
-        my $oseq_id = $mapping->getSequenceID();
-        unless (defined($oseq_id)) {
-#            $logger->severe("Incomplete Mapping ".$mapping->getMappingName());
-            return undef; # abort: incomplete Mapping; should never occur!
-        }
-        my $complement = $sequencehash->{$oseq_id};
-        unless (defined($complement)) {
-# the read in the parent is not identified in this contig; this can be due
-# to several causes: the most likely ones are: 1) the read is deallocated
-# from the previous assembly, or 2) the read sequence was edited and hence
-# its seq_id has been changed and thus is not recognized in the parent; 
-# we can decide between these cases by looking at the readnamehash
-            my $readname = $mapping->getMappingName();
-            my $readnamematch = $readnamehash->{$readname};
-            unless (defined($readnamematch)) {
-# it's a de-allocated read, except possibly in the case of a split parent
-                $deallocated++; 
-                next;
-	    }
-# ok, the readnames match, but the sequences not: its a (new) edited sequence
-# we now use the align-to-trace mapping between the sequences and the original
-# trace file in order to find the contig-to-contig alignment defined by this read 
-            my $eseq_id = $readnamematch->getSequenceID(); # (newly) edited sequence
-# check the existence of the database handle in order to get at the read versions
-            my $ADB = $this->getArcturusDatabase() || $compare->getArcturusDatabase(); # get database handle
-            unless ($ADB) {
-		print STDERR "Unable to recover C2C link for read $readname "
-                           . ": missing database handle\n";
-		next;
-            }
-# get the versions of this read in a hash keyed on sequence IDs
-            my $reads = $ADB->getAllVersionsOfRead(readname=>$readname);
-# test if both reads are found, just to be sure
-            unless ($reads->{$oseq_id} && $reads->{$eseq_id}) {
-		print STDERR "Cannot recover sequence $oseq_id or $eseq_id "
-                           . "for read $readname\n";
-		next;
-	    }
-# pull out the align-to-SCF as mappings
-            my $omapping = $reads->{$oseq_id}->getAlignToTraceMapping(); # original
-            my $emapping = $reads->{$eseq_id}->getAlignToTraceMapping(); # edited
-#****
-#        - find the proper chain of multiplication to get the new mapping 
-if ($DEBUG) {
- $DEBUG->info("Missing match for sequence ID $oseq_id"); 
- $DEBUG->info("But the readnames do match : $readname");
- $DEBUG->info("sequences: parent $oseq_id   child (edited) $eseq_id");
- $DEBUG->info("original Align-to-SCF:".$omapping->toString());
- $DEBUG->info("edited   Align-to-SCF:".$emapping->toString());
-}
-else {
- print STDERR "Recovering link for read $readname (seqs:$oseq_id, $eseq_id)\n";
-}
-#        - assign this new mapping to $complement
-	    $complement = $readnamematch;
-# to be removed later (fix only for single read parents, for the moment)
-            next if (@$lmappings>1 && @$cmappings>1);
-$DEBUG->info("sequences equated to one another (temporary fix)") if $DEBUG;
-print STDERR "sequences equated to one another (temporary fix)\n" unless $DEBUG;
-#****
-        }
-# count the number of reads in the overlapping area
-        $overlapreads++;
+    $mapping->normalise(mute=>1); # short messsage for alignment problem
 
-# this mapping/sequence in $compare also figures in the current Contig
-
-        if ($options{strong}) {
-# strong comparison: test for identical mappings (apart from shift)
-            my ($identical,$aligned,$offset) = $complement->isEqual($mapping);
-
-# keep the first encountered (contig-to-contig) alignment value != 0 
-
-            $alignment = $aligned unless $alignment;
-            next unless ($identical && $aligned == $alignment);
-
-# the mappings are identical (alignment and segment sizes)
-
-            my @segment = $mapping->getContigRange();
-# build a hash key based on offset and alignment direction and add segment
-            my $hashkey = sprintf("%08d",$offset);
-            $inventory->{$hashkey} = [] unless defined $inventory->{$hashkey};
-            push @{$inventory->{$hashkey}},[@segment];
-            $accumulate->{$hashkey}  = 0 unless $accumulate->{$hashkey};
-            $accumulate->{$hashkey} += abs($segment[1]-$segment[0]+1);
-        }
-
-# otherwise do a segment-by-segment comparison and find ranges of identical mapping
-
-        else {
-# return the ** local ** contig-to-parent mapping as a Mapping object
-            my $cpmapping = $complement->compare($mapping);
-            next unless $cpmapping;
-            my $cpaligned = $cpmapping->getAlignment();
-
-unless ($cpaligned || $compare->getNumberOfReads() > 1) {
-    print STDERR "Non-overlapping read segments for single-read parent contig ".
-                  $compare->getContigID()."\n";
-    if ($DEBUG) {
-        $DEBUG->info("parent mapping:".$mapping->toString());
-        $DEBUG->info("contig mapping:".$complement->toString());
-        $DEBUG->info("c-to-p mapping:".$cpmapping->toString());
-    }    
+    return $mapping;
 }
 
-            next unless defined $cpaligned; # empty cross mapping
+sub repairmapping {
+# (try to) repair an irregular mapping
+    my $mapping = shift;
 
-# keep the first encountered (contig-to-contig) alignment value != 0
+    $mapping->normaliseOnX();
 
-            $alignment = $cpaligned unless $alignment;
+    my $segments = $mapping->getSegments();
 
-            next unless ($alignment && $cpaligned == $alignment);
-
-# process the mapping segments and add to the inventory
-
-            my $osegments = $cpmapping->normaliseOnX() || next;
-
-            foreach my $osegment (@$osegments) {
-                my $offset = $osegment->getOffset();
-                $offset = (-$offset+0); # conform to offset convention in this method
-                my $hashkey = sprintf("%08d",$offset);
-                $inventory->{$hashkey} = [] unless $inventory->{$hashkey};
-                my @segment = ($osegment->getXstart(),$osegment->getXfinis());
-                push @{$inventory->{$hashkey}},[@segment];
-                $accumulate->{$hashkey}  = 0 unless $accumulate->{$hashkey};
-                $accumulate->{$hashkey} += abs($segment[1]-$segment[0]+1);
-	    }
-        }
+    my $segmentlist = [];
+    foreach my $segment (@$segments) {
+	my @segment = $segment->getSegment();
+        push @$segmentlist,[@segment];
     }
 
-# OK, here we have an inventory: the number of keys equals the number of 
-# different alignments between $this and $compare. On each key we have an
-# array of arrays with the individual mapping data. For each alignment we
-# determine if the covered interval is contiguous. For each such interval
-# we add a (contig) Segment alignment to the output mapping
-# NOTE: the table can be empty, which occurs if all reads in the current Contig
-# have their mappings changed compared with the previous contig 
+    my ($oc,$ac) = &prunesegments($segmentlist,$mapping->getAlignment(),0,ambivalent=>1,list=>1);
 
-    my $mapping = new Mapping($compare->getContigName());
-    $mapping->setSequenceID($compare->getContigID());
+    my $newmapping = &buildmapping($segmentlist,$mapping->getMappingName(),$mapping->getSequenceID());
 
-# determine guillotine; accept only alignments with a minimum number of reads 
+    return $newmapping->inverse(); 
+}
 
-    my $guillotine = 0;
-    if ($options{readclipping}) {
-        $guillotine = 1 + log(scalar(@$cmappings)); 
-# adjust for small numbers (2 and 3)
-        $guillotine -= 1 if ($guillotine > scalar(@$cmappings) - 1);
-        $guillotine  = 2 if ($guillotine < 2); # minimum required
+sub mergesegments {
+# private helper method with 'linkcontigs'
+# merge segments based on overlap in X-domain only
+    my $inputsegmentlist = shift;
+    my %options = @_; # minimumreads, minimumlength, ambi, gap
+
+    &verifyPrivate($inputsegmentlist,'mergesegments');
+
+    @$inputsegmentlist = sort {$a->[0] <=> $b->[0]} @$inputsegmentlist;
+
+    my $segmentcount = 0;
+    my $segmentstart = $inputsegmentlist->[0]->[0];
+    my $segmentfinis = $inputsegmentlist->[0]->[1];
+
+    my ($k, $counterfinis);
+    if (my $alignment = $options{ambi}) {
+        $k = $alignment > 0 ? 2 : 3;
+        $counterfinis = $inputsegmentlist->[0]->[5-$k];
+	print STDERR "AMBI: alignment $alignment k $k\n";
     }
+    my $gap = $options{gap} || 0;
 
-# if the alignment offsets vary too much apply a window
+# test if at least one segment exists
 
-    my @offsets = sort { $a <=> $b } keys %$inventory;
-    my $offsetwindow = $options{offsetwindow};
-    $offsetwindow = 40 unless $offsetwindow;
-    my ($lower,$upper) = (0,0); # default no offset range window
-    my $minimumsize = 1; # lowest accepted segment size
+    return undef unless (defined($segmentstart));
+    return undef unless (defined($segmentfinis));
 
-    if (@offsets && ($offsets[$#offsets] - $offsets[0]) >= $offsetwindow) {
-# the offset values vary too much; check how they correlate with position:
-# if no good correlation found the distribution is dodgy, then use a window 
-# based on the median offset and the nominal range
-        my $sumpp = 0.0; # for sum position**2
-        my $sumoo = 0.0; # for sum offset*2
-        my $sumop = 0.0; # for sum offset*position
-        my $weightedsum = 0;
-        foreach my $offset (@offsets) {
-            $weightedsum += $accumulate->{$offset};
-            my $segmentlist = $inventory->{$offset};
-            foreach my $mapping (@$segmentlist) {
-$DEBUG->fine("offset $offset mapping @$mapping") if $DEBUG;
-                my $position = 0.5 * ($mapping->[0] + $mapping->[1]);
-                $sumpp += $position * $position;
-                $sumop += $position * $offset;
-                $sumoo += $offset * $offset;
-            }
-        }
-# get the correlation coefficient
-        my $threshold = $options{correlation} || 0.75;
-        my $R = $sumop / sqrt($sumpp * $sumoo);
-$DEBUG->info("Correlation coefficient = $R\n") if $DEBUG;
-        unless (abs($sumop / sqrt($sumpp * $sumoo)) >= $threshold) {
-# relation offset-position looks messy: set up for offset masking
-            my $partialsum = 0;
-            foreach my $offset (@offsets) { 
-                $partialsum += $accumulate->{$offset};
-                next if ($partialsum < $weightedsum/2);
-# the first offset here is the median
-                $lower = $offset - $offsetwindow/2; 
-                $upper = $offset + $offsetwindow/2;
-$DEBUG->info("median: $offset ($lower $upper)") if $DEBUG;
-                $minimumsize = $options{segmentsize} || 2;
-                last;
-	    }
-        }
-    }
-
-# go through all offset values and collate the mapping segments;
-# if the offset falls outside the offset range window, we are probably
-# dealing with data arising from mis-assembled reads, resulting in
-# outlier offset values and messed-up rogue alignment segments. We will
-# ignore regular segments which straddle the bad mapping range
-
-    my $rtotal = 0;
-    my @c2csegments; # for the regular segments
-    my $badmapping = new Mapping("Bad Mapping"); # for bad mapping range
-    foreach my $offset (@offsets) {
-# apply filter if boundaries are defined
-        my $outofrange = 0;
-$DEBUG->info("Testing offset $offset") if $DEBUG;
-        if (($lower != $upper) && ($offset < $lower || $offset > $upper)) {
-            $outofrange = 1; # outsize offset range, probably dodgy mapping
-$DEBUG->info("offset out of range $offset") if $DEBUG;
-        }
-# sort mappings according to increasing contig start position
-        my @mappings = sort { $a->[0] <=> $b->[0] } @{$inventory->{$offset}};
-        my $nreads = 0; # counter of reads in current segment
-        my $segmentstart = $mappings[0]->[0];
-        my $segmentfinis = $mappings[0]->[1];
-        foreach my $interval (@mappings) {
-            my $intervalstart = $interval->[0];
-            my $intervalfinis = $interval->[1];
-            next unless defined($intervalstart);
-            next unless defined($segmentfinis);
+    my $outputsegmentlist = [];
+    foreach my $interval (@$inputsegmentlist) {
+        my $intervalstart = $interval->[0];
+        my $intervalfinis = $interval->[1];
+# test for valid data
+        next unless defined($intervalstart);
+        next unless defined($intervalfinis);
 # break of coverage is indicated by begin of interval beyond end of previous
-            if ($intervalstart > $segmentfinis) {
-# add segmentstart - segmentfinis as mapping segment
-                my $size = abs($segmentfinis-$segmentstart) + 1;
-                if ($nreads >= $guillotine && $size >= $minimumsize) {
-                    my $start = ($segmentstart + $offset) * $alignment;
-                    my $finis = ($segmentfinis + $offset) * $alignment;
-		    my @segment = ($start,$finis,$segmentstart,$segmentfinis,$offset);
-                    push @c2csegments,[@segment]  unless $outofrange;
-                    $badmapping->putSegment(@segment) if $outofrange;
-                }
+        if ( ($intervalstart > $segmentfinis + 1 + $gap) && # (add selection on both sides if $k
+             (!$k || ($interval->[$k] > $counterfinis + 1 + $gap)) ) {
+# segmentstart - segmentfinis is new  segment; add counter as third element
+            my @outputsegment = ($segmentstart,$segmentfinis,$segmentcount);
+            push @$outputsegmentlist,[@outputsegment];
 # initialize the new mapping interval
-                $nreads = 0;
-                $segmentstart = $intervalstart;
-                $segmentfinis = $intervalfinis;
-            }
-            elsif ($intervalfinis > $segmentfinis) {
-                $segmentfinis = $intervalfinis;
-            }
-            $nreads++;
-            $rtotal++;
+            $segmentstart = $intervalstart;
+            $segmentfinis = $intervalfinis;
+	    $segmentcount = 0;
         }
-# add segmentstart - segmentfinis as (last) mapping segment
-        next unless ($nreads >= $guillotine);
-        my $size = abs($segmentfinis-$segmentstart) + 1;
-        next unless ($size >= $minimumsize);
-        my $start = ($segmentstart + $offset) * $alignment;
-        my $finis = ($segmentfinis + $offset) * $alignment;
-        my @segment = ($start,$finis,$segmentstart,$segmentfinis,$offset);
-        push @c2csegments,[@segment]  unless $outofrange;
-        $badmapping->putSegment(@segment) if $outofrange;
+        elsif ($intervalfinis > $segmentfinis) {
+            $segmentfinis = $intervalfinis;
+            $counterfinis = $interval->[5-$k] if $k;
+        }
+        $segmentcount++;
     }
 
-# if there are rogue mappings, determine the contig range affected
+# add the final segment
 
-    my @badmap;
-    if ($badmapping->hasSegments()) {
-# the contig interval covered by the bad mapping
-        @badmap = $badmapping->getContigRange() unless $options{nobadrange};
-# subsequently we could use this interval to mask the regular mappings found
-$DEBUG->info("checking bad mapping range") if $DEBUG;
-$DEBUG->info($badmapping->writeToString('bad range')) if $DEBUG;
-$DEBUG->info("bad contig range: @badmap") if $DEBUG;
+    my @outputsegment = ($segmentstart,$segmentfinis,$segmentcount);
+    push @$outputsegmentlist,[@outputsegment];
+
+# optionally apply a length or count filter
+
+    my $minr = $options{minimumreads};  # contribution to an overall segment
+
+    my $minl = $options{minimumlength}; # minimum length of overall segment 
+
+    if (($minr || $minl) && @$outputsegmentlist > 1) {
+
+        my $segmentlist = [];
+        foreach my $segment (@$outputsegmentlist) {
+            next if ($minr && $segment->[2] < $minr);
+            next if ($minl && $segment->[1] - $segment->[0] + 1 < $minl);
+            push @$segmentlist,$segment;
+        }
+        $outputsegmentlist = $segmentlist;
     }
 
-# the segment list now may on rare occasions (but in particular when
-# there is a bad mapping range) contain overlapping segments where
-# the position of overlap have conflicting boundaries, and therefore 
-# have to be removed or pruned by adjusting the interval boundaries
+    return $outputsegmentlist; # list of vectors each of length 3
+}
+
+sub alignmentstats {
+# private: helper method with 'linkcontigs' get correlation coefficient for offsets
+    my $segmentlist = shift; # array reference, list of arrays (segment (4), offset, count)
+    my $rangewindow = shift;
+
+    &verifyPrivate($segmentlist);
+
+# extract a list of segment positions and their offsets
+
+    my $extracted = [];
+
+    if ($rangewindow) {
+# re: each segment is aligned on X-domain
+        foreach my $segment (@$segmentlist) {
+# accept only segments completely inside window 
+            next if ($segment->[0] < $rangewindow->[0]); 
+            next if ($segment->[1] > $rangewindow->[1]);
+            push @$extracted, $segment;
+        }
+    }
+    else {
+	$extracted = $segmentlist;
+    }
+
+# sort the segments to get a better estimate of ordering errors 
+
+    @$extracted = sort {$a->[0] <=> $b->[0]} @$extracted;
+
+    my $sumpp = 0.0; # for sum position**2
+    my $sumoo = 0.0; # for sum offset*2
+    my $sumop = 0.0; # for sum offset*position
+
+    my ($R,$penalty,$weightedsum) = (0,0,0);
+
+    my @positionhistory;
+
+    foreach my $segment (@$extracted) {
+
+        my $measure = $segment->[4]; 
+# measure === offset          re: build of segmentlist in main loop             
+        my $position = 0.5 * ($segment->[0] + $segment->[1]);
+        my $weight   = abs   ($segment->[1] - $segment->[0]) + 1;
+
+        $weightedsum += $weight;
+        $sumpp += $position * $position * $weight; # weighted?
+        $sumop += $position * $measure  * $weight;
+        $sumoo += $measure  * $measure  * $weight;
+
+        unshift @positionhistory,$position; # put new position upfront
+# collect penalties for reversals of direction
+        next unless (@positionhistory > 2);
+# check ordering and apply penalty for position ordering reversal; this
+# registers a break in the position progression with increasing offset
+        if (($positionhistory[0]-$positionhistory[1]) * 
+            ($positionhistory[1]-$positionhistory[2]) < 0) {
+             $penalty++; 
+	}
+    }
+
+# get the correlation coefficient
+
+    if ($sumpp && $sumoo) {
+        $R = $sumop / sqrt($sumpp * $sumoo); # protect
+    }
+    elsif ($sumpp) { # all offsets are 0
+        $R = 1;
+    }
+    elsif (scalar(@$extracted) == 1) {
+        $R = 1;
+    }
+    else { # all positions and possibly offsets are 0
+        $R = 0;
+    }
+
+    return $R,$penalty,$weightedsum;
+}
+
+sub prunesegments {
+# private helper method with 'linkcontigs'
+    my $segmentlist = shift;
+    my $alignment = shift;
+    my $exclude = shift; # array ref
+    my %options = @_; # outlierclipping, inhibit, ambivalent
+
+    my $logger = &verifyLogger("prunesegments");
+
+$options{list} = 1;
+if ($options{list}) {
+ $logger->debug(scalar(@$segmentlist)." segments before filtering; options @_");
+ foreach my $segment (@$segmentlist) {
+  $logger->debug("initial segment : @$segment");
+ }
+}
+
+    $alignment = 1 unless defined($alignment);
 
 # the folowing requires segment data sorted according to increasing X values
 
-    foreach my $segment (@c2csegments) {
-        my ($xs,$xf,$ys,$yf,$s) = @$segment;
-        @$segment = ($xf,$xs,$yf,$ys,$s) if ($xs > $xf);
+    foreach my $segment (@$segmentlist) {
+        my ($xs,$xf,$ys,$yf,@s) = @$segment;
+        next unless ($xs > $xf); # this should always be the case ....
+	$logger->error("Unexpectedly reversing input segment ($xs,$xf,$ys,$yf)");
+        @$segment = ($xf,$xs,$yf,$ys,@s);
     }
 
-    @c2csegments = sort {$a->[0] <=> $b->[0]} @c2csegments;
+# remove segments which completely fall inside other segments in both the
+# x-domain and the y-domain (and having different offset values)
 
-$DEBUG->info(scalar(@c2csegments)." segments; before pruning") if $DEBUG;
+    my $outlierclipping = $options{outlierclip};
+    $outlierclipping = 1 unless defined $outlierclipping;
 
-    my $j =1;
-    while ($j < @c2csegments) {
+    my $outliercount = 0;
+
+    @$segmentlist = sort {$a->[0] <=> $b->[0]} @$segmentlist;
+
+    my $k = $alignment >= 0 ? 2 : 3;
+
+    my $j = 1;
+    my $runningoffsetchange = 0;
+    while ($j < scalar(@$segmentlist)) {
         my $i = $j - 1;
-        my $this = $c2csegments[$i];
-        my $next = $c2csegments[$j];
-# first remove segments which completely fall inside another
-        if ($this->[0] <= $next->[0] && $this->[1] >= $next->[1]) {
-# the next segment falls completely inside this segment; remove $next
-            splice @c2csegments, $j, 1;
-#            next;
-        }
-        elsif ($this->[0] >= $next->[0] && $this->[1] <= $next->[1]) {
-# this segment falls completely inside the next segment; remove $this
-            splice @c2csegments, $i, 1;
-#            next;
-        }
-        elsif (@badmap && $next->[0] >= $badmap[0] && $next->[1] <= $badmap[1]) {
-# the next segment falls completely inside the bad mapping range: remove $next
-            splice @c2csegments, $j, 1;
-        }
-        else {
-# this segment overlaps at the end with the beginning of the next segment: prune
-            while ($alignment > 0 && $this->[1] >= $next->[0]) {
-                $this->[1]--;
-                $this->[3]--;
-                $next->[0]++;
-                $next->[2]++;
-  	    }
-# the counter-aligned case
-            while ($alignment < 0 && $this->[1] >= $next->[0]) {
-                $this->[1]--;
-                $this->[3]++;
-                $next->[0]++;
-                $next->[2]--;
-	    }
-            $j++;
+        my $this = $segmentlist->[$i];
+        my $next = $segmentlist->[$j];
+# check if offset and length are defined (later replace by segment functions)
+        foreach my $segment ($this,$next) {
+            next if $segment->[5];
+            $segment->[4] = $alignment >= 0 ? $segment->[2] - $segment->[0]
+                                            : $segment->[2] + $segment->[0];
+            $segment->[5] = abs($segment->[1] - $segment->[0]); 
 	}
+# keep track of the current offset change
+        my $currentoffsetchange = abs($this->[4] - $next->[4]);
+        my $nominaloffsetchange = $runningoffsetchange/$j; # average over accepted segments
+        my $offsetchangewindow = $this->[5] < $next->[5] ? $this->[5] : $next->[5]; # smallest
+        my $offsetdiscreapancy = abs($currentoffsetchange - $nominaloffsetchange);
+	my $outsideoffsetwindow = ($offsetdiscreapancy > $nominaloffsetchange) ? 1 : 0;
+ 
+# if an exclusion range is defined, it is applied to the X domain
+
+        if ($exclude && defined($exclude->[0]) && defined($exclude->[1])
+            && $next->[0] >= $exclude->[0] && $next->[1] <= $exclude->[1]) {
+# the next segment falls completely inside the bad mapping range: remove $next
+            splice @$segmentlist, $j, 1;
+            next;
+        }
+# remove segments which completely fall inside another
+        if ($this->[0] <= $next->[0] && $this->[1] >= $next->[1]) {
+# the next segment falls completely inside this segment in the X domain
+            if ($this->[$k] <= $next->[$k] && $this->[5-$k] >= $next->[5-$k]) { 
+# the next segment also falls completely inside this segment in the Y domain
+                splice @$segmentlist, $j, 1; # remove $next
+                next;
+	    }
+            my $length = $next->[1] - $next->[0] + 1;
+# the next segment does not fall inside the Y-domain: TO BE DEVELOPED ?
+            if ($length <= $outlierclipping || $outsideoffsetwindow) {
+                splice @$segmentlist, $j, 1; # remove $next
+                next;
+	    }
+            $outliercount++;
+        }
+        if ($this->[0] >= $next->[0] && $this->[1] <= $next->[1]) {
+# this segment falls completely inside the next segment in the X domain
+            if ($this->[$k] >= $next->[$k] && $this->[5-$k] <= $next->[5-$k]) {
+# this segment also falls completely inside the next segment in the Y domain
+                splice @$segmentlist, $i, 1; # remove $this
+		next;
+	    }
+# this segment does no fall inside the Y-domain: TO BE DEVELOPED ?
+            my $length = $this->[1] - $this->[0] + 1;
+            if ($length <= $outlierclipping || $outsideoffsetwindow) {
+                splice @$segmentlist, $i, 1; # remove $this
+                next;
+	    }
+            $outliercount++;
+        }
+        $j++;
+	$runningoffsetchange += $currentoffsetchange;
     }
 
-$DEBUG->info(scalar(@c2csegments)." segments after pruning") if $DEBUG;
-
-# enter the segments to the mapping
-
-    foreach my $segment (@c2csegments) {
-$DEBUG->fine("segment after filter @$segment") if $DEBUG;
-        next if ($segment->[1] < $segment->[0]); # segment pruned out of existence
-        $mapping->putSegment(@$segment);
-    }
-# use the normalise method to handle possible single-base segments
-
-    $mapping->normalise(mute=>1);
-
-    if ($mapping->hasSegments()) {
-# here, test if the mapping is valid, using the overall maping range
-        my ($isValid,$msg) = &isValidMapping($this,$compare,$mapping,$overlapreads);
-$DEBUG->info("\n isVALIDmapping $isValid\n$msg") if $DEBUG;
-# here possible recovery based on analysis of continuity of mapping segments
-
-# if still not valid, 
-        if (!$isValid && !$options{forcelink}) {
-$DEBUG->info("Spurious link detected to contig ".$compare->getContigName()) if $DEBUG;
-            return 0, $overlapreads;
-        }
-# in case of split contig
-        elsif ($isValid == 2) {
-$DEBUG->info("(Possibly) split parent contig ".$compare->getContigName()) if $DEBUG;
-            $deallocated = 0; # because we really don't know
-        }
-# for a regular link
-        else {
-            $deallocated = $compare->getNumberOfReads() - $overlapreads; 
-        }
-# store the Mapping as a contig-to-contig mapping (prevent duplicates)
-        if ($this->hasContigToContigMappings()) {
-            my $c2cmaps = $this->getContigToContigMappings();
-            foreach my $c2cmap (@$c2cmaps) {
-                my ($isEqual,@dummy) = $mapping->isEqual($c2cmap,silent=>1);
-                next unless $isEqual;
-                next if ($mapping->getSequenceID() != $c2cmap->getSequenceID());
-                print STDERR "Duplicate mapping to parent " .
-		             $compare->getContigName()." ignored\n";
-if ($DEBUG) {
- $DEBUG->info("Duplicate mapping to parent ".$compare->getContigName()." ignored");
- $DEBUG->info("existing Mappings: @$c2cmaps ");
- $DEBUG->info("to be added Mapping: $mapping, tested against $c2cmap");
- $DEBUG->info("equal mappings: \n".$mapping->toString()."\n".$c2cmap->toString());
+if ($options{list}) {
+ $logger->debug(scalar(@$segmentlist)." segments after filter step 1");
+ foreach my $segment (@$segmentlist) {
+  $logger->debug("filtered (1) segment : @$segment");
+ }
 }
-                return $mapping->hasSegments(),$deallocated;
+
+# reduce the size of overlapping segments at the affected ends alternatingly
+# until the overlap has disappeared; this assumes that the earlier filtering
+# on coinciding segments has removed all outliers; if not, the next step may
+# be less reliable   
+
+    my $ambi = $options{ambivalent} || 0;
+
+    $j = 1;
+    my $ambivalentcount = 0;
+    while ($j < @$segmentlist) {
+        my $i = $j - 1;
+        my $this = $segmentlist->[$i];
+        my $next = $segmentlist->[$j];
+        
+        my $alternate = ($this->[1] - $this->[0]) >= ($next->[1] - $next->[0]) ? 1 : 0;
+
+if ($options{list}) {
+$logger->debug("i $i [@$this]   j $j [@$next]"); my $l = 5 -$k;
+$logger->debug("this-1:$this->[1] next-0:$next->[0] a:$ambi k:$k 5-k:$this->[$l] k:$next->[$k]");
+}
+
+        while (($this->[1] >= $next->[0]) || $ambi && ($this->[5-$k] <= $next->[$k])) {
+# this segment overlaps at the end with the beginning of the next segment: decrease 
+# segment size alternatingly until no overlap left 
+            if ($alternate) { # shrink this segment from the right
+                $this->[1]--;
+                $this->[3]-- if ($alignment > 0);
+                $this->[3]++ if ($alignment < 0);
+	    }
+	    else { # shrink the next segment from the left
+                $next->[0]++;
+                $next->[2]++ if ($alignment > 0);
+                $next->[2]-- if ($alignment < 0);
+	    }
+# count the number of bases clipped because of overlap in Y domain
+            $ambivalentcount++ unless ($this->[1] >= $next->[0]);
+# switch the alternate flag
+            $alternate = 1 - $alternate;
+# test the resulting segment sizes: if shrunk out of existence, remove from list
+# because we alternate, this will always affect at most one of the two segments  
+            if ($this->[1] - $this->[0] < 0) {
+                splice @$segmentlist, $i, 1; # remove $this
+                last;
             }
-        }
-        $this->addContigToContigMapping($mapping);
-# what about the parent?
+            elsif ($next->[1] - $next->[0] < 0) {
+                splice @$segmentlist, $j, 1; # remove $next
+                last;
+            }
+	}
+        $j++;
     }
 
-# and return the number of segments, which could be 0
 
- $DEBUG->debug("EXIT");
-    return $mapping->hasSegments(),$deallocated;
-
-# if the mapping has no segments, no mapping range could be determined
-# by the algorithm above. If the 'strong' mode was used, perhaps the
-# method should be re-run in standard (strong=0) mode
-
+if ($options{list}) {
+ $logger->debug(scalar(@$segmentlist)." segments after filter step 2");
+ foreach my $segment (@$segmentlist) {
+  $logger->debug("filtered (2) segment : @$segment");
+ }
 }
 
-###### TO HERE
+    if ($outliercount && !$options{inhibit}) { # try again to see if pruning has had an effect
+        &prunesegments($segmentlist,$alignment,$exclude,inhibit => 1);
+    }
 
-sub linkContigToParents {
-    my $class = shift;
-    my $contig = shift;
+    $logger->fine(scalar(@$segmentlist)." segments after filtering and pruning");
+    $logger->fine("there are $outliercount discordant segments left") if $outliercount;
+
+#exit if $options{list};
+
+    return $outliercount,$ambivalentcount;
+}
+
+sub analyseoffsetpattern {
+    my $segmentlist = shift;
     my %options = @_;
 
-    &verifyParameter($contig,'linkContigToParents');
+# this analysis may require a more sophisticated approach ....
+# here we use a crude measure based on the median and a window
 
-    return undef unless $contig->hasParentContigs();
+    my ($loweroffset, $upperoffset) = (0,0);
+    my $offsetwindow = $options{offsetwindow} || 40;
+    my $wtsum = $options{wtsum} || 0;
 
-    my $parents = $contig->getParentContigs();
+    my $offsetmaskhash = {};
+    return $offsetmaskhash unless $wtsum;
 
-#my $logger = &verifyLogger('linkContigToParents');
-#$logger->info("linkContigToParents: parents : @$parents");
-
-    my $report = '';
-    foreach my $parent (@$parents) {
-        $parent->getMappings(1); # delayed loading if no mappings
-        my ($linked,$deallocated) = $contig->linkToContig($parent,%options);
-            
-        my $parentname = $parent->getContigName();
-
-        unless ($linked) {
-	    $report .= "; " if $report;
-            $report .= "empty link detected to $parentname";
+    my $partialsum = 0;
+    foreach my $segment (@$segmentlist) {
+        my $offset = $segment->[4];
+        $partialsum += abs($segment->[1] - $segment->[0]) + 1;
+        next if ($partialsum < $wtsum/2);
+# the offset here is approximately the median (precise if sorted on offset)
+        $loweroffset = $offset - $offsetwindow/2; 
+        $upperoffset = $offset + $offsetwindow/2;
+        last;
+    }
+    foreach my $segment (@$segmentlist) {
+        my $offset = $segment->[4];
+        unless ($loweroffset == $upperoffset) {
+            next if ($offset < $loweroffset);
+            next if ($offset > $upperoffset);
         }
-        if ($deallocated) {
-	    $report .= "; " if $report;
-            $report .= "$deallocated reads deallocated from $parentname";
+        $offsetmaskhash->{$offset}++;
+    }
+     
+    return $offsetmaskhash;
+}
+
+sub newanalyseoffsetpattern {
+    my $segmentlist = shift;
+    my %options = @_;
+$options{weightbyreads} = 1;
+
+# make an inventory of offsets
+
+    my $offsetcounthash = {};
+    foreach my $segment (@$segmentlist) {
+        my $offset = $segment->[4] + 0;
+        if ($options{weightbyreads}) {
+# weighted by number of reads contributing to the segment
+            $offsetcounthash->{$offset} += $segment->[5]; 
+	}
+	else {
+# weighted by the length of the segment
+            $offsetcounthash->{$offset} += abs($segment->[1] - $segment->[0] + 1);
 	}
     }
-#$logger->info("link-contig-to-parents report : $report");
-    return $report;
-}    
 
-sub isValidMapping {
-# helper method for 'linkToContig': decide if a mapping is reasonable, based 
+# apply a sliding mean filter
+
+    my $window = $options{window} || 9;
+    my @offset = sort {$a <=> $b} keys %$offsetcounthash;
+    my $ostart = $offset[0] - $window;
+    my $ofinal = $offset[$#offset] + $window;
+
+    my $offsetcount = [];
+    foreach my $offset ($ostart .. $ofinal) {
+        $offsetcount->[$offset - $ostart] = $offsetcounthash->{$offset} || 0; 
+    }
+
+    &slidingmeanfilter($offsetcount,$window);
+
+# find sampling windows
+
+    my $logger = &verifyLogger(' ');
+    foreach my $offset ($ostart .. $ofinal) {
+        $logger->warning("o: $offset  c:".$offsetcount->[$offset-$ostart]);
+    }
+
+    my $peak = $ostart;
+    foreach my $offset ($ostart .. $ofinal) {
+        $peak = $offset if ($offsetcount->[$offset-$ostart] > $offsetcount->[$peak-$ostart]);
+    }
+}
+
+sub isvalidmapping {
+# helper method for 'linkcontigs': decide if a mapping is reasonable, based 
 # on the mapped contig range and the sizes of the two contigs involved and the
 # number of reads
     my $child = shift;
@@ -3182,202 +3446,11 @@ sub isValidMapping {
     return 1,$report;
 }
 
-sub cleanupsegmentlist {
-# strictly private
-    my $segmentlist = shift;
-    my %options = @_;
-
-    &verifyPrivate($segmentlist,'cleanupsegmentlist');
-
-    @$segmentlist = sort {$a->[0] <=> $b->[0]} @$segmentlist;
-
-    my $segmentstart = $segmentlist->[0]->[0];
-    my $segmentfinis = $segmentlist->[0]->[1];
-
-    return undef unless (defined($segmentstart));
-    return undef unless (defined($segmentfinis));
-
-    my $newsegmentlist = [];
-    foreach my $interval (@$segmentlist) {
-        my $intervalstart = $interval->[0];
-        my $intervalfinis = $interval->[1];
-        next unless defined($intervalstart);
-        next unless defined($intervalfinis);
-# break of coverage is indicated by begin of interval beyond end of previous
-        if ($intervalstart > $segmentfinis) {
-# add segmentstart - segmentfinis as mapping segment
-            my @newsegment = ($segmentstart,$segmentfinis);
-            push @$newsegmentlist,[@newsegment];
-# initialize the new mapping interval
-            $segmentstart = $intervalstart;
-            $segmentfinis = $intervalfinis;
-        }
-        elsif ($intervalfinis > $segmentfinis) {
-            $segmentfinis = $intervalfinis;
-        }
-    }
-    my @newsegment = ($segmentstart,$segmentfinis);
-    push @$newsegmentlist,[@newsegment];
-
-# weedout small segments if there is a large one and disconnected small ones 
-
-    if (@$newsegmentlist > 1) {
-        my $length = 0;
-        foreach my $segment (@$newsegmentlist) {
-            my $size = $segment->[1] - $segment->[0] + 1;
-            $length = $size if ($size > $length);
-        } 
-        my $threshold = $options{threshold} || 5;
-        $threshold = $length/2 if ($threshold >= $length);
-
-        my $segmentlist = [];
-        foreach my $segment (@$newsegmentlist) {
-            my $size = $segment->[1] - $segment->[0] + 1;
-            push @$segmentlist,$segment if ($size > $threshold);
-        }
-        $newsegmentlist = $segmentlist;
-    }
-
-    return $newsegmentlist;
-}
-
 #------------------------------------------------------------------------------
 # remapping tags
 #------------------------------------------------------------------------------
 
 sub propagateTagsToContig {
-    my $class = shift;
-# propagate tags FROM parent TO the specified target contig
-return $class->newpropagateTagsToContig(@_);
-    my $parent = shift;
-    my $target = shift;
-    my %options = @_;
-
-    &verifyParameter($parent,'propagateTagsToContig 1-st parameter');
-
-    &verifyParameter($target,'propagateTagsToContig 2-nd parameter');
-
-# options, delayed loading of data
-#          asis       : default 0, if no mapping/tags on target, get by delayed loading (if any)
-# options, mapping selection
-#          unique     : default 0, insist on 1 valid mapping between parent and target
-#          norerun    : default 0, do not, if no mapping found, determine from scratch
-# options, tagselection and marking
-#          annotation : comma-separated list of selected annotation tag types (def: FCDS,CDS)
-#          finishing  : comma-separated list of selected finishing tag types (def: REPT,RP20) 
-#          markftags  : comma-separated list of finishing tag types, which are marked 
-#                                       if frame shifts or truncations are are detected
-
-# autoload tags unless tags are already defined or notagload specified
-
-    $parent->getTags(($options{asis} ? 0 : 1),sort=>'full',merge=>1);
-
-    return 0 unless $parent->hasTags();
-
-    my $logger = &verifyLogger('propagateTagsToContig',1);
-
-# use (delayed) autoloading to probe for c2cmapping on target; specify asis=>1 if not to be used 
-# for new contigs built from a CAF source this will have no effect as contig_id is not defined
-
-    $target->hasContigToContigMappings(1) unless $options{asis};
-
-# get the mapping from parent to target
-
-    my $unique = $options{unique} || 0; # default accept all matching mappings
-
-    my @mapping = &getMappingFromParentToContig($parent,$target,unique=>$unique);
-
-    unless (@mapping) {
-        $logger->info("Finding mapping from scratch");
-        return 0 if $options{norerun}; # prevent endless loop
-        my %loptions; # to be refined (e.g. banded?)
-        my ($nrofsegments,$deallocated) = $target->linkToContig($parent,%loptions);
-        unless ($nrofsegments) {
-	    $logger->info("Failed to determine parent to target mapping");
-            return 0;
-	}
-# now that we have a mapping use recursion
-        return $class->propagateTagsToContig($parent,$target,norerun=>1,%options);
-    }
-
-#--------------------------- test the mapping ---------------------------
-
-    my @p2tmapping;
-    foreach my $p2tmapping (@mapping) {     
-        unless ($p2tmapping->isRegularMapping()) {
-            my $name = $p2tmapping->getMappingName();
-	    $logger->warning($name." is not a regular mapping");
-            next;
-# or try a split ?
-        }
-	push @p2tmapping,$p2tmapping;
-    }
-
-    unless (@p2tmapping) {
-        my $pname = $parent->getContigName();
-        my $tname = $target->getContigName();
-        $logger->warning("NO valid mapping found between $pname and $tname");
-        return 0;
-    }
-
-# propagate the tags from parent to target; define tag selection
-
-# get the tags on the parent (as they are, but sorted and unique)
-
-    my $ptags = $parent->getTags(0,sort=>'full',merge=>1);
-
-    $logger->info("parent contig $parent has tags: ".scalar(@$ptags),skip=>1);
-
-    foreach my $tag (@$ptags) {
-        $logger->fine($tag->writeToCaf()); # test
-    }
-
-# define annotation tags explicitly or use defaults
-
-    $options{annotation} = 'CDS|FCDS' unless defined $options{annotation}; # default
-    my $annotation = $options{annotation};
-# all other tags are considered as finishing tags, unless explicitly specified
-    my $finishing  = $options{finishing};
-
-    my @rtags; # remapped tags
-    if ($annotation) {
-        my %aoptions = (tagfilter => $annotation);     
-        my $atags = &remapAnnotationTags($ptags,\@p2tmapping,%aoptions);
-        $logger->info(scalar(@$atags)." remapped annotation tags added",skip=>1) if $atags;
-        $target->addTag($atags);
-    }
-
-# now the finishing tags which cannot be split
-
-    unless (defined($finishing) && !$finishing) { # i.e. unless finishing set to '0'   
-        my %foptions;
-        if ($finishing) {
-            $foptions{tagfilter} = $finishing; # explicitly defined
-            $foptions{tagscreen} = 1; # to include
-        }
-        else {
-# default all tag typs not listed as annotation are considered as finishing tags
-            $foptions{tagfilter} = $annotation;
-            $foptions{tagfilter} = 'CDS|FCDS' unless $annotation; # default
-            $foptions{tagfilter} .= '|ASIT'; # add Arcturus annotation to exclude
-            $foptions{tagscreen} = 0; # to exclude
-	}
-        $foptions{markftags} = 'REPT|RP20' unless defined $options{markftags}; # default
-        $foptions{markftags} = $options{markftags} if defined $options{markftags};
-        my $ftags = &oldremapFinishingTags($ptags,\@p2tmapping,%foptions);
-        $logger->info(scalar(@$ftags)." remapped finishing tags added",skip=>1) if $ftags;
-        $target->addTag($ftags);
-    }
-
-# finally, remove possible duplicates on the target
-
-    $target->getTags(0,sort=>'full',merge=>1);
-
-    return;
-}
-#***
-
-sub newpropagateTagsToContig {
     my $class = shift;
 # propagate tags FROM parent TO the specified target contig
     my $parent = shift;
@@ -3432,15 +3505,40 @@ sub newpropagateTagsToContig {
         return $class->propagateTagsToContig($parent,$target,norerun=>1,%options);
     }
 
-#--------------------------- test the mapping ---------------------------
+#--------------------------- test the mapping(s) ---------------------------
 
     my @p2tmapping;
-    foreach my $p2tmapping (@mapping) {     
+    foreach my $p2tmapping (@mapping) {
+        next unless $p2tmapping; # protection
+        $logger->debug("mapping to be tested $p2tmapping:\n".$p2tmapping->toString(),skip=>2);
         unless ($p2tmapping->isRegularMapping()) {
+# the mapping has inversions, overlapping segments or other irregularities
             my $name = $p2tmapping->getMappingName();
-	    $logger->warning($name." is not a regular mapping");
-            next;
-# or try a split ?
+            my $pid = $parent->getContigID();
+            my $tid = $target->getContigName();
+            $logger->special("Mapping $name (p:$pid t:$tid) is not a regular mapping");
+            $logger->special($p2tmapping->writeToString());
+$logger->debug("Mapping $name (p:$pid t:$tid) is not a regular mapping");
+$logger->flush();
+            my $newmapping = &repairmapping($p2tmapping);
+$logger->debug("newmapping\n".$newmapping->writeToString());
+
+            if ($newmapping) {
+# if the new mapping is valid, replace the original one
+                $p2tmapping = $newmapping if $newmapping->hasSegments();
+	    }
+
+            if ($p2tmapping->isRegularMapping()) {
+      	        $logger->info("Mapping $name (p:$pid t:$tid) was repaired");
+$logger->debug("Mapping $name (p:$pid t:$tid) was repaired");
+	    }
+	    else {
+      	        $logger->warning("Mapping $name (p:$pid t:$tid) is not a regular mapping");
+      	        $logger->special("Mapping $name could not be (fully) repaired");
+$logger->debug("Mapping $name could not be (fully) repaired");
+                $logger->special($p2tmapping->writeToString());
+                next if $options{noirregularmapping};
+	    }
         }
 	push @p2tmapping,$p2tmapping;
     }
@@ -3462,25 +3560,36 @@ sub newpropagateTagsToContig {
 
     $logger->info("parent contig $parent has tags: ".scalar(@$ptags),skip=>1);
 
-foreach my $tag (@$ptags) {
-    $logger->fine($tag->writeToCaf()); # test
-}
-
 # get the tags on the target (if any, as they are, but sorted and unique)
 
     my $ttags = $target->getTags(0,sort=>'full',merge=>1) || [];
 
     $logger->info("target contig $target has tags: ".scalar(@$ttags),skip=>1);
 
-foreach my $tag (@$ttags) {
-    $logger->fine($tag->writeToCaf()); # test
-}
+# compose a message for the log file
+
+    my $objectranges = '';
+    my $mappedranges = '';
+    foreach my $mapping (@p2tmapping) {
+        my @orange = $mapping->getObjectRange();
+	$objectranges .= " , " if $objectranges;
+        $objectranges .= sprintf ('%6d - %6d',@orange);
+        my @mrange = $mapping->getMappedRange();
+	$mappedranges .= " , " if $mappedranges;
+        $mappedranges .= sprintf ('%6d - %6d',@mrange);
+    }
+    $objectranges .= " ; l:".$parent->getConsensusLength();
+    $mappedranges .= " ; l:".$target->getConsensusLength();
+    my $message = "remapping " . sprintf('%3d',scalar(@$ptags)) ." tags on parent "
+	        .  $parent->getContigName() . " ($objectranges)";
+    $message   .= "\n\t\t   to  child " .$target->getContigName(). " ($mappedranges)";
+    $logger->special($message,ss=>1);
 
 # define annotation tags explicitly or use defaults
 
     $options{annotation} = 'CDS|FCDS' unless defined $options{annotation}; # default
 
-    my $annotation = &cleanTagList($options{annotation});
+    my $annotation = &cleanTagList($options{annotation}); # can be 0
 # all other tags are considered as finishing tags, unless explicitly specified
     my $finishing  = &cleanTagList($options{finishing});
 
@@ -3505,9 +3614,8 @@ foreach my $tag (@$ttags) {
         }
         else { # all tag types NOT listed as annotation are considered as finishing tags
             $foptions{tagscreen} = 0; # to exclude
-            $foptions{tagfilter} = $annotation;
-            $foptions{tagfilter} = "CDS|FCDS" unless $annotation; # default, if annotation defined 0
-            $foptions{tagfilter} .= "|$internaltag" if $internaltag; # do not remap internal tag type
+            $foptions{tagfilter} = ($annotation ? "$annotation|" : "");
+            $foptions{tagfilter} .= "$internaltag" if $internaltag; # do not remap internal tag type
 	}
         my $ftags = &remapFinishingTags($ptags,\@p2tmapping,%foptions);
 # get the tags in the parent (as they are, but sorted and unique)
@@ -3540,102 +3648,6 @@ sub cleanTagList {
     $list =~ s/^\s+|\s+$//g; # leading/trailing blanks
     $list =~ s/\W+/|/g; # put separators in include list
     return $list;
-}
-
-sub oldremapFinishingTags {
-# private, remap input tags without splitting (marking frameshifts/truncations) 
-    my $tags = shift;
-    my $maps = shift;
-    my %options = @_;
-
-    &verifyPrivate ($tags,'remapFinishingTags');
-
-    my $logger = &verifyLogger('remapFinishingTags',1);
-
-# options
-
-# tagfilter : comma-separated list of selected tagtypes (def: FCDS,CDS)
-# tagscreen : default 0, exclude (only) the tags in tagfilter; set 1 to include
-# markftags : if set, rename the remapped tags to a type used internally by
-#             Arcturus, but ONLY if frame shifts or truncations are are detected
-
-    my $includetag; # default include all
-    my $excludetag; # default exclude none
-
-    my $tagfilter = $options{tagfilter};
-    $tagfilter = 'FCDS|CDS' unless defined $tagfilter; # default annotation tags
-
-    if ($tagfilter) { # can be defined and 0
-        $tagfilter =~ s/^\s+|\s+$//g; # leading/trailing blanks
-        $tagfilter =~ s/\W+/|/g; # put separators in include list
-        my $screen = $options{tagscreen}; # 1 include; 0 exclude
-        $screen = 0 unless defined $screen; # default exclude
-        $excludetag = $tagfilter unless $screen;
-        $includetag = $tagfilter if $screen;
-    }
-# specific tags can have their type changed on output to flag frame shifts or truncations
-    my $markftags = $options{markftags};
-    if ($markftags) {
-        $markftags =~ s/^\s+|\s+$//g; # leading/trailing blanks
-        $markftags =~ s/\W+/|/g; # put separators in include list
-    }
-
-#------------------------------------------------------------------------------
-# remap tags which may not be split and can have frameshifts after remapping
-#------------------------------------------------------------------------------
-
-    my @rtags; # for (remapped) tags
-    my $remapped = 0;
-    foreach my $ptag (@$tags) {
-# apply include or exclude filter
-        my $tagtype = $ptag->getType() || '';
-        next if ($excludetag && $tagtype =~ /\b$excludetag\b/i);
-        next if ($includetag && $tagtype !~ /\b$includetag\b/i);
-
-        my @newtags;
-        foreach my $p2tmapping (@$maps) {
-            my $tptags = $ptag->remap($p2tmapping,nosplit=>'collapse',tracksegments=>3);
-            next unless ($tptags && @$tptags);
-            push @newtags, $tptags->[0]; 
-	}
-        unless (@newtags) {
-    	    $logger->info("tag $tagtype could not be re-mapped (1)");
-	    next;
-	}
-
-# if the remapped tag has frameshifts or is truncated & the tagtype is among
-# the keys of the hash list $newtypetag the tagtype is to be renamed  
-
-        foreach my $tptag (@newtags) {
-            my $tagtype = $tptag->getType();
-            $tptag->setParentTagID($ptag->getID());
-            unless ($markftags && $tagtype =~ /$markftags/) {
-                push @rtags,$tptag;
-   	        $remapped++;
-		next;
-	    }
-# rename the tag and mark with a comment about about frame shifts or truncations, if present
-	    next unless ($tptag->getFrameShiftStatus() || $tptag->getTruncationStatus());
-            my $comment = $tptag->getComment();
-            my $tagcomment = $tptag->getTagComment();
-            my $newcomment = "Alteration detected of previous version of tag "
-                           . "at this position\\n\\$tagcomment\\n\\$comment";
-# rename the tag type and amend the comment
-            $tptag->setType('ASIT');
-            $tptag->setTagComment($newcomment);
-            $tptag->setDNA(); # remove any sequence info
-            $tptag->setTagSequenceID();
-            $logger->info($tptag->writeToCaf()); # test
-            push @rtags,$tptag;
-	    $remapped++;
-        }
-    }
-
-    $logger->info("$remapped tags remapped (no-split) ",skip=>1) if $remapped;
-
-# finally, remove duplicates on the target
-
-    return [@rtags];
 }
 
 sub remapFinishingTags {
@@ -3687,18 +3699,33 @@ sub remapFinishingTags {
                 $newtag++;
 	    }
 	}
-# check result
-        unless ($newtag) {
-    	    $logger->info("tag $tagtype (ID $id) could not be re-mapped");
-	    next;
+
+# check result; prepare a message for the log file
+
+        my $host = $ptag->getHost();
+        my @position = $ptag->getPosition();
+        my $message = "tag $tagtype ";
+        my $sys_id = $ptag->getSystematicID();
+        $message .= ($sys_id ? "($sys_id)" :  "(ID $id)") . "\tat";
+        $message .= sprintf ('%6d - %6d',@position);
+        $message .= "  on ".$host->getContigID() if (ref($host) eq 'Contig');
+
+        if ($newtag) {
+            $message .= "  done";
+  	    $remapped++;
+            $message .= " ! unexpectedly split tag or multiple mappings" if ($newtag > 1);
 	}
-        unless ($newtag == 1) {
-            $logger->info("tag $tagtype (ID $id) was unexpectedly split"); 
+        else {
+            $message .= "  fail";
 	}
-	$remapped++;
+        $logger->special($message);
+    	$logger->info($message);
     }
 
-    $logger->info("$remapped tags remapped (no-split) ",skip=>1) if $remapped;
+    if ($remapped) {
+        $logger->info   ("$remapped tags remapped (no-split mode)",preskip=>1);
+        $logger->special("$remapped tags remapped (no-split mode)",preskip=>1);
+    }
 
     return [@rtags];
 }
@@ -3753,7 +3780,7 @@ sub filterRemappedFinishingTags {
 # identify the counterpart of the inherited tags among the new tags and transfer
 # the parent tag id; if frameshifts found replace the inherited tag by ASIT tag 
 
-    $logger->info("filtering for type $type");
+    $logger->fine("filtering for type $type");
 
     my @ftags;
     foreach my $tag (@$tags) {
@@ -3902,8 +3929,15 @@ sub getMappingFromParentToContig {
     my @c2cmappings;
     foreach my $contig ($target,$parent) { # look in both contigs
         my $cmappings = $contig->getContigToContigMappings();
-        next unless ($cmappings && @$cmappings);
-        push @c2cmappings, @$cmappings;
+        next unless $cmappings;
+        foreach my $mapping (@$cmappings) {
+            unless ($mapping) {
+                $logger->warning("Undefined mapping in contig ".$contig->getContigName()
+                                ." was ignored");
+                next;
+	    }
+            push @c2cmappings, $mapping;
+	}
     }
 
     $logger->info(scalar(@c2cmappings)." mappings to be tested");
@@ -3930,8 +3964,13 @@ sub getMappingFromParentToContig {
 # the inverse mapping matches the parent domain
             next if ( $target_id && $xdomainseq_id && $target_id != $xdomainseq_id);
             next if (!$target_id && $xdomainseq_id);
-            $logger->info("inverse of mapping $mapping accepted");
-            push @mapping,$mapping->inverse();
+            if (my $inverse = $mapping->inverse()) {
+                $logger->info("inverse of mapping $mapping accepted");
+                push @mapping,$inverse;
+	    }
+	    else {
+                $logger->warning("mapping ".$mapping->getMappingName()." has NO valid inverse");
+	    }
         }
     }
 # if no mapping was found (e.g. parent id is undefined (taken to be 0), use target_id on its own
@@ -3939,8 +3978,13 @@ sub getMappingFromParentToContig {
         foreach my $mapping (@c2cmappings) {
             my $xdomainseq_id = $mapping->getSequenceID('x') || 0;
             my $ydomainseq_id = $mapping->getSequenceID('y') || 0;
-            push @reserve,$mapping            if ($target_id == $ydomainseq_id && !$xdomainseq_id);
-            push @reserve,$mapping->inverse() if ($target_id == $xdomainseq_id && !$ydomainseq_id);
+            if ($target_id == $ydomainseq_id && !$xdomainseq_id) {
+                push @reserve,$mapping;
+	    }
+   	    elsif ($target_id == $xdomainseq_id && !$ydomainseq_id) {
+                my $inverse = $mapping->inverse();
+                push @reserve,$inverse if $inverse;
+  	    }
         }
     }
 # if still no mapping identified, then no sequence id info may be available to identify a mapping
@@ -3963,7 +4007,9 @@ sub getMappingFromParentToContig {
 	$logger->fine("only 1 mapping matches");
     }
     elsif (@mapping) {
-# test for duplicate mappings, sort mappings ?        
+# test for duplicate mappings, sort mappings ? 
+$logger->flush();       
+print STDERR "testing for duplicate mappings: '@mapping'\n";
         while (@mapping > 1) {
 # exit loop on first mismatch (implies at least 2 different ones)
             last unless ($mapping[0]->isEqual($mapping[1]));
@@ -3971,7 +4017,7 @@ sub getMappingFromParentToContig {
         }
         if (@mapping > 1 && $options{unique}) {
   	    $logger->warning("ambiguous parent-to-contig mapping: several (reserve) matches");
-            return 0; # this case is unrecoverable
+            return 0; # this case is unrecoverable in 'unique' mode
 	}
     }
     elsif (scalar(@reserve) == 1) {
@@ -3986,7 +4032,7 @@ sub getMappingFromParentToContig {
 	$logger->warning("no (valid) parent-to-contig mapping found (p:$parent_id c:$target_id)");
     }
 
-    return @mapping;
+    return @mapping; # can be none, one or more than one
 }
 
 sub sortContigTags {
@@ -3994,6 +4040,7 @@ sub sortContigTags {
     my $class = shift;
     my $contig = shift;
     my %options = @_; # sort=> (position, full), merge=>
+print STDERR "accessing sortContigTags \n";
 
     &verifyParameter($contig,'sortContigTags');
 
@@ -4118,6 +4165,46 @@ sub inheritProject {
 }
 
 #-----------------------------------------------------------------------------
+
+sub filterSequence {
+    my $class = shift;
+    my $contig = shift;
+# minNX: substitute sequences of 'N's in the consensus sequence by 'X's and a few 'N's 
+    my %options = @_;
+
+    &verifyParameter($contig,'processConsensus');
+    my $logger = &verifyLogger();
+    $logger->warning("ENTER filterConsensus");
+
+    my $sequence = $contig->getSequence();
+
+# first replace all Ns by X
+
+    my $minrow = $options{minNX};
+    my $symbol = $options{symbol} || 'N';
+
+    if ($minrow && $sequence =~ s/[${symbol}\?]/X/ig ) {
+
+# then change contiguous runs of X smaller than $minrow back to N
+
+        my $X = 'X';
+        my $N = $symbol;
+        my $i = 1;
+
+        while ($i++ < $minrow) {
+            $sequence =~ s/([ACTGU\-\?])($X)(?=[ACTGU\-\?])/$1$N/ig;
+            $X .= 'X';
+            $N .= $symbol;
+        }
+
+        $contig->setSequence($sequence);     
+    }
+    $logger->warning("END filterConsensus");
+
+    return $contig;
+}
+
+#-----------------------------------------------------------------------------
 # access protocol
 #-----------------------------------------------------------------------------
 
@@ -4159,7 +4246,9 @@ sub verifyLogger {
 
         if (defined($prefix)) {
 
-            $prefix = "ContigHelper->".$prefix unless ($prefix =~ /\-\>/); 
+            $prefix = "ContigHelper->".$prefix unless ($prefix =~ /\-\>/);
+
+            $prefix .= " called with @_" if @_;
 
             $LOGGER->setPrefix($prefix);
         }
