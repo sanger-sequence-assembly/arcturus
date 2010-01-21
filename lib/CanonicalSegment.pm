@@ -80,7 +80,7 @@ sub getXforY {
 
     $ypos -= $this->[1];
 
-    if ($ypos < 0 || $ypos > $this->[2]) {
+    if ($ypos < 0 || $ypos >= $this->[2]) {
         return undef unless $full; # out of range
     }
 
@@ -95,7 +95,7 @@ sub getYforX {
 
     $xpos -= $this->[0];
 
-    if ($xpos < 0 || $xpos > $this->[2]) {
+    if ($xpos < 0 || $xpos >= $this->[2]) {
         return undef unless $full; # out of range
     }
     
