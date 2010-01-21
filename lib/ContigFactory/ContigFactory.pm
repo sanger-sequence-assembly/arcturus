@@ -6,6 +6,9 @@ use Contig;
 
 use Mapping;
 
+use RegularMapping;
+use CanonicalMapping;
+
 use Read;
 
 use Tag;
@@ -87,6 +90,11 @@ sub fastaFileParser {
 
     my $FASTA = new FileHandle($fasfile,'r'); # open for read
 
+    unless ($FASTA) {
+	$logger->error("Can't open fasta file $fasfile");
+	return undef;
+    }
+
     return undef unless $FASTA;
 
     my $fastacontigs = [];
@@ -98,7 +106,6 @@ sub fastaFileParser {
     my $line = 0;
     my $report = $options{report};
     while (defined (my $record = <$FASTA>)) {
-
         $line++;
         if ($report && ($line%$report == 0)) {
             $logger->error("processing line $line",bs => 1);
@@ -864,6 +871,7 @@ sub readExtractor {
             $logger->error("Missing read $readname NOT found in inventory");
             next;
         }
+        $read->setDataSource($class);
         push @$extractedreads,$read;
         foreach my $item (@readitems) {
             my $itemlocation = $rinventory->{$item};
@@ -1059,6 +1067,8 @@ sub cafFileParser {
 
     my $logger = &verifyLogger('cafFileParser');
 
+    $logger->error(": TO BE DPRECATED");
+
 # open file handle for input CAF file
 
     my $CAF;
@@ -1238,7 +1248,7 @@ $logger->warning("Contig tags to be processed: $contigtaglist");
             }
             $objectType = 0; # preset
             my $objectInstance;
-            if ($newObjectName =~ /(\s|^)Contig/) {
+            if ($newObjectName =~ /(\s|^)Contig/i) {
 # it's a contig; decide if the new object has to be built
                 next unless $consensus;
                 next if $blockobject->{$newObjectName};
@@ -1297,6 +1307,7 @@ $logger->warning("Contig tags to be processed: $contigtaglist");
 
 		my $readhashref = \%reads;
                 my $contig = $contigs{$objectName};
+$logger->error("parseContig");
                 my ($status,$line) = &parseContig($CAF,$contig,$lineCount,
                                                   readhashref=>$readhashref,
                                                   noverify=>1);
@@ -1321,7 +1332,7 @@ $logger->warning("Contig tags to be processed: $contigtaglist");
 	}
 
 # REMOVE from HERE ?
-    my $IGNORETHIS = 0; unless ($IGNORETHIS) {
+    my $IGNORETHIS = 1; unless ($IGNORETHIS) {
         if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:?\s*(\S+)/) {
 #print STDERR "IGNORETHIS block used  ... \n";
 # a new object is detected
@@ -1440,7 +1451,7 @@ $logger->warning("Contig tags to be processed: $contigtaglist");
 # the next block handles the standard contig initiation
 
         if ($record =~ /Is_contig/ && $objectType == 0) {
-# decide if this contig is to be included
+# decide  if this contig is to be included
             if ($contignamefilter !~ /\S/ || $objectName =~ /$contignamefilter/) {
                 $logger->fine("NEW contig $objectName: ($lineCount)");
                 if (!($contig = $contigs{$objectName})) {
@@ -1507,6 +1518,7 @@ $logger->warning("Contig tags to be processed: $contigtaglist");
             $logger->error("scan $objectName ($objectType) SHOULD NOT occur $lineCount");
 # TO BE DEPRECATED
             my $contig = $contigs{$objectName};
+$logger->error("parseContig");
             my ($status,$line) = &parseContig($CAF,$contig,$lineCount,noverify=>1);
             $lineCount = $line if $status;
 	    $objectType = 0;
@@ -1728,13 +1740,21 @@ sub parseBaseQuality {
 
 # add the BaseQuality to the object provided
 
+    my $objectname = $object->getName();
+
     if ($qualitydata) {
         $qualitydata =~ s/^\s+|\s+$//g; # remove leading/trailing
         my @BaseQuality = split /\s+/,$qualitydata;
+# ad hoc change consensus
+        if (ref($object) eq 'Read' && $objectname =~ /afake/) {
+            foreach my $qlt (@BaseQuality) {
+                $qlt = 2;
+	    }
+        }
         $object->setBaseQuality (\@BaseQuality);
-   }
+    }
     else {
-        $logger->warning("$line: empty Base Quality block detected for ".$object->getName());
+        $logger->warning("$line: empty Base Quality block detected for $objectname");
     }
 
     return 1,$line;
@@ -1805,13 +1825,12 @@ sub parseContig {
     while (defined($record = <$CAF>)) {
         $fline++;
         chomp $record;
-# add subsequent lines if continuation mark '\n\' present
+# add subsequent lines if continuation mark '\n\' present (followed by nothing else)
         while ($record =~ /\\n\\\s*$/) {
             my $extension;
             if (defined($extension = <$CAF>)) {
                 chomp $extension;
                 $record .= $extension;
-#                $record =~ s/\\n\\\s*\"/\"/; # replace continuation & closing quote
                 $fline++;
             }
             elsif ($record !~ /\"\s*$/) {
@@ -1819,7 +1838,8 @@ sub parseContig {
                 $record .= '"' if ($record =~ /\"/); # closing quote
             }
         }
-
+# replace possible continuation mark & closing quote by closing quote
+        $record =~ s/(\\n\\)+\s*\"/\"/;
 # check presence and compatibility of keywords
         last unless ($record =~ /\S/); # blank line
 
@@ -1867,17 +1887,29 @@ sub parseContig {
                     $readdata->[0] = new Read($readname);
                     $readobjecthash->{$readname} = $readdata->[0] if $readobjecthash;
 		}
-                $readdata->[1] = new Mapping($readname);
                 $readnamehash->{$readname} = $readdata;
-                $contig->addMapping($readdata->[1]);
-                $contig->addRead($readdata->[0]);
+#                $contig->addRead($readdata->[0]);
+                $readdata->[1] = []; # for alignment records
 	    }            
 # add the alignment to the Mapping
-            my $mapping = $readdata->[1];
+            my $segment_arrayref = $readdata->[1];
             my @positions = split /\s+/,$2;
             if (scalar @positions == 4) {
-# an asssembled from record; $entry returns number of alignments
-                my $entry = $mapping->addAssembledFrom(@positions); 
+# an assembled from record; test alignment data
+                foreach my $position (@positions) {
+                    unless ($position && $position > 0) { # invalid position
+                        $logger->severe("l:$line Invalid alignment ignored @positions");
+                        next;
+		    }
+                }
+                unless (abs($positions[1]-$positions[0]) == abs($positions[3]-$positions[2])) {
+                    $logger->severe("l:$line Alignment segment size error : @positions");
+                    next;
+		}
+# add the segment to the cache
+                push @$segment_arrayref, [@positions];
+                               
+                my $entry = scalar(@$segment_arrayref);
 # test number of alignments: a padded contig allows only one record per read
                 if (!$isUnpadded && $entry > 1) {
                     $logger->severe("l:$line Multiple 'assembled_from' records in "
@@ -1885,6 +1917,9 @@ sub parseContig {
                     next;
                 }
             }
+	    else {
+                $logger->severe("l:$line Invalid alignment ignored @positions");
+	    }
         }
 
 # process contig tags
@@ -1893,7 +1928,12 @@ sub parseContig {
 # detected a contig TAG
             my $type = $1; my $tcps = $2; my $tcpf = $3; 
             my $info = $4; $info =~ s/\s+\"([^\"]+)\".*$/$1/ if $info;
-
+# put in a test for unexpected continuation mark at the end of the tag info
+            if ($info =~ /\\n\\\s*$/) {
+                $logger->special("Unexpected continuation mark in tag removed ($line: $info)");
+                $info =~ s/(\\n\\)+\s*$//;
+		exit;
+      	    }
 # ignore autogenerated tags
 
             next if ($info =~ /imported|split|shift|truncated/);
@@ -1917,6 +1957,33 @@ sub parseContig {
             $logger->info("($line) Ignored: $record");
         }
     }
+
+# now go through the cached read info data and build the mappings
+
+    $logger->info("Building RegularMappings");
+    foreach my $readname (keys %$readnamehash) {
+        my $readdata = $readnamehash->{$readname};
+        my $mapping = new RegularMapping($readdata->[1]); # constructor builds mapping
+#$logger->warning("new Regular Mapping $readname");
+        if ($mapping) {
+            $mapping->setMappingName($readname);
+            $contig->addMapping($mapping);
+#$logger->warning($mapping->writeToString());
+	}
+	else { # build of mapping failed
+            my $ignore = $options{ignorefailedmapping} || 0;
+            $logger->error("FAILED to build read-to-contig mapping $readname");
+            next if $ignore; # also do not add read
+            $logger->error("skipped mapping $readname");
+	}
+        $contig->addRead($readdata->[0]);
+        delete $readnamehash->{$readname};
+    }
+
+    return 0,$fline unless $contig->hasMappings();
+
+$logger->warning("number of Regular   Mappings: " .$contig->hasMappings());
+$logger->warning("number of Canonical Mappings: " .CanonicalMapping->cache());
 
     return 1,$fline;
 }
@@ -1979,6 +2046,7 @@ sub parseRead {
 
     my $isUnpadded = 1;
     my $sequencingvector;
+    my $tagpositiontest;
     while (defined($record = <$CAF>)) {
         $fline++;
         chomp $record;
@@ -2005,7 +2073,7 @@ sub parseRead {
         if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:/) {
             $logger->error("Missing blank line after Read block ($line)");
             $logger->error("$record");
-	    last; # (unexpected) end of block
+	    last; # (unexpected) end of block (INVESTIGATE if this occurs!)
 	}
     
         elsif ($record =~ /Is_contig/) {
@@ -2185,12 +2253,45 @@ $logger->error("This line extention block should NOT be activated : $fline $reco
                     $read->setTraceArchiveIdentifier($items[1]);
                 } 
             }
-
 	}
+# special "stolen": format as WARN tag
+        elsif ($record =~ /stole[n]?(.*)/i) {
+            my $info = $1 || '';
+            $info =~ s/([\"\'])([^\"\']+)\1/$2/;
+            $info = "Stolen ".$info; 
+            my ($rstart,$rfinal) = (1,0);
+# do not test here for read length, because that would load sequence by delay
+            $rfinal = $read->getSequenceLength() if $read->hasSequence();
+# if length not found, try clipping range
+            unless ($rfinal) {
+                my $lql = $read->getLowQualityLeft();
+                my $lqr = $read->getLowQualityRight();
+                $rstart = $lql + 1 if defined($lql);
+                $rfinal = $lqr - 1 if defined($lqr);
+                $rfinal = 1 unless defined $rfinal;
+                $tagpositiontest = 1;
+            }
+            my $tag = TagFactory->makeTag('WARN',$rstart,$rfinal);
+            $tag->setTagComment($info) if $info;
+            $read->addTag($tag);
+        }
 
 	else {
             $logger->warning("($line) not recognized : $record");
+
         }
+    }
+
+    if ($tagpositiontest) {
+# adjust tag positions here if special tags were flagged
+        my $tags = $read->getTags();
+        foreach my $tag (@$tags) {
+            next unless ($tag->getType() eq 'WARN');
+            my ($ps,$pf) = $tag->getPosition();
+            next if ($ps > 0 && $ps <= $pf);
+            $pf = $read->getSequenceLength();
+            $tag->setPosition(1,$pf);
+	}
     }
 
     return 1,$fline;
