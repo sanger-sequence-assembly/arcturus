@@ -324,7 +324,7 @@ unless ($version eq "B" || $nonstandard) {
 # extract contig order from the Gap4 database
 #------------------------------------------------------------------------------
 
-my $scaffoldfile = "/tmp/".lc($gap4name.".".$version.".sff");
+my $scaffoldfile = "/tmp/".lc($gap4name.".".$version.".$$.sff");
 &mySystem ("$scaffold_script $gap4name $version > $scaffoldfile");
 
 #------------------------------------------------------------------------------

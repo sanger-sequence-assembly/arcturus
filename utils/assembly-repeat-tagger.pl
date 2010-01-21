@@ -10,7 +10,7 @@ my $project = 'ALL';
 
 my $vectordb = 'repeats.dbs'; # default
 
-my $minscore;
+my $minscore = 30;
 
 my $tagid = 'REPT';
 
@@ -102,8 +102,20 @@ $adb->disconnect();
 
 #----------------------------------------------------------------
 
-my $expfile = "/tmp/".lc($organism)."-$project.depad.exp.caf";
-my $impfile = "/tmp/".lc($organism)."-$project.depad.imp.caf";
+my $expfile = "/tmp/".lc($organism);
+my $impfile = "/tmp/".lc($organism);
+
+# if the whole process is done in one, add process ID ($$) to file names
+
+unless ($noexport || $nomatch || !$confirm) {
+    $expfile .= "-$$";
+    $impfile .= "-$$";
+}
+
+$expfile .= "-$project.depad.exp.caf";
+$impfile .= "-$project.depad.imp.caf";
+
+# export the specified projects
 
 my $export = "/software/arcturus/utils/project-export "
            . "-instance $instance -organism $organism "
@@ -111,7 +123,7 @@ my $export = "/software/arcturus/utils/project-export "
            . "-caf $expfile -gap4name";
 
 # test stuff
-# my $alter  =  "/nfs/team81/ejz/arcturus/utils/new-contig-export.pl "
+# my $alter  =  "$ENV{HOME}/arcturus/utils/new-contig-export.pl "
 #            . "-instance $instance -organism $organism "
 #            . "-project $project -confirm "
 #           . "-project $project -ignore problems,trash "
@@ -119,14 +131,14 @@ my $export = "/software/arcturus/utils/project-export "
 
 print STDOUT "\nexporting from Arcturus:\n$export\n";
 print STDOUT "Using previously exported file $expfile\n\n" if $noexport;
+#exit; # test
 
 system($export) unless $noexport;
 system("grep REPT $expfile");
 system("grep REPT $expfile | wc");
 
-my $caftag = "caftagfeature -tagid $tagid -vector $vectordb" .
-    (defined($minscore) ? " -minscore $minscore" : "") . 
-    " < $expfile  > $impfile";
+my $caftag = "caftagfeature -tagid $tagid -vector $vectordb "
+           . "-minscore $minscore < $expfile  > $impfile";
 
 print STDOUT "tagging caf file:\n$caftag\n\n";
 print STDOUT "Using previously tagged file $impfile\n\n" if $nomatch;
@@ -137,7 +149,7 @@ system("grep REPT $impfile | wc");
 
 my $import = "/software/arcturus/utils/new-contig-loader "
            . "-instance $instance -organism $organism "
-           . "-caf $impfile -noload -lrt -lct";
+           . "-caf $impfile -noload -lrt -lct -nsrt";
 
 print STDOUT "re-importing tags: $import\n";
 print STDOUT "repeat with -confirm switch\n" unless $confirm;
@@ -153,7 +165,7 @@ sub showUsage {
     print STDERR "$text\n\n" if $text;
 
     print STDERR "\nUsage:\n\n$0 -o [organism] -i [instance] -p [project:ALL]"
-                ."-v [vectors:repeats.dbs] -t [tagid:REPT] -m [minscore] "
+                ."-v [vectors:repeats.dbs] -t [tagid:REPT] -m [minscore:30] "
                 ."[-noexport:use existing export] [-nomatch:skip tagging] "
                 ."[-report] [-confirm:import result]";
     exit 0;

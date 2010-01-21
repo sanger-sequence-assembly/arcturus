@@ -4,7 +4,11 @@ use strict;
 
 use ArcturusDatabase;
 
+use Contig;
+
 use ContigFactory::ContigFactory;
+
+use TagFactory::TagFactory;
 
 use Logging;
 
@@ -17,6 +21,8 @@ my $DEBUG = 0;
 my ($organism,$instance);
 
 my ($project,$fopn, $contig,$focn,$fofn,$assembly);
+
+my $noscaffold;
 
 my ($minsize,$minread,$maxread);
 #my $ignoreblocked = 0;
@@ -46,7 +52,7 @@ my $splittags;   # comma-separated list of tag types which may be split ?
 my $masking;
 my $msymbol;
 
- my $metadataonly = 1; # ??
+my $metadataonly = 1; # ??
 
 my $cliplowquality; # delete high quality pads
 my $clipthreshold = 20;
@@ -58,8 +64,10 @@ my $lqhqpm;
 my $lqwindow;
 
 my $trimendregion;
-my $removebadreads;
+my $removelowqualityreads;
 my $undoreadedits;
+my $removeinvalidreads;
+my $restoremaskedreads;
 
 my $clipsymbol;    # ?
 
@@ -76,14 +84,15 @@ my $lqkeys      = "lowqualitysymbol|lqs|clipthreshold|cth";
 my $endclipkeys = "trimendregion|ter";
 my $tagkeys     = "notags|nt|includetags|it|excludetags|et|splittags|st";
 my $endonlykeys = "extractendregion|eer";
-my $paddedkeys  = "padded|p";
-my $screenkeys  = "undoedit|ue|removebadreads|rbr";
+my $paddedkeys  = "padded|P";
+my $screenkeys  = "undoedit|ue|removelowqualityreads|rlqr|removeinvalidreads|rir"
+                . "restoremaskedreads|rmr";
 
 my $validkeys  = "organism|o|instance|i|"                               # dbase
                . "contig|c|focn|fofn|project|p|fopn|assembly|a|accept|" # dataset
-               . "ignoreblocked|" # project status (of contigs)
+               . "ignoreblocked|noscaffold|ns|" # project status (of contigs)
                . "minlen|minsize|ms|minreads|min|maxreads|max|"  # constraints
-               . "format|caf|maf|fasta|embl|reverse|"                   # output format
+               . "format|caf|baf|maf|fasta|embl|reverse|"               # output format
 #   .|mask|symbol|shrink|"
                . "confirm|info|verbose|debug|help";                     # reporting
 
@@ -188,7 +197,7 @@ print STDERR "$nextword  matches  '$1'\n" if $verbose;
 
     if ($nextword eq '-format') {
         $preset = shift @ARGV;
-        unless ($preset =~ /^(caf|maf|fasta|embl)$/) {
+        unless ($preset =~ /^(caf|baf|maf|fasta|embl)$/) {
             &showUsage("Invalid output format $format");
         }
 # replace options by selected format and add 'file' option
@@ -196,10 +205,10 @@ print STDERR "$nextword  matches  '$1'\n" if $verbose;
         $validkeys =~ s/format\|//;
     }
 
-    if ($nextword =~ /^\-(caf|maf|fasta|embl|file)$/) {
+    if ($nextword =~ /^\-(caf|baf|maf|fasta|embl|file)$/) {
         $format = $1;
         $format = $preset if ($format eq 'file');
-        $validkeys =~ s/caf\|maf\|fasta\|embl\|/$format\|/;
+        $validkeys =~ s/caf\|baf\|maf\|fasta\|embl\|/$format\|/;
         $validkeys =~ s/file\|//; # presence implies previous 'format' key
 # read the filename
         $filename  = shift @ARGV;
@@ -208,6 +217,11 @@ print STDERR "$nextword  matches  '$1'\n" if $verbose;
         }
 # setup the valid keys for each data type
         if ($format eq 'caf') {
+            $validkeys .= "|noreads|nr|gap4name|g4n|readsonly|ro|"
+                       .  $tagkeys.'|'.$marklqkeys.'|'.$endclipkeys.'|'
+                       .  $paddedkeys.'|'.$screenkeys;
+	}
+        if ($format eq 'baf') {
             $validkeys .= "|noreads|nr|gap4name|g4n|readsonly|ro|"
                        .  $tagkeys.'|'.$marklqkeys.'|'.$endclipkeys.'|'
                        .  $paddedkeys.'|'.$screenkeys;
@@ -252,7 +266,7 @@ print STDERR "$nextword  matches  '$1'\n" if $verbose;
         $reverse  = 1;
     }
 
-    if ($nextword eq '-dopad' || $nextword eq '-dp') {
+    if ($nextword eq '-padded' || $nextword eq '-P') {
         $padded   = 1;
     }
          
@@ -260,10 +274,18 @@ print STDERR "$nextword  matches  '$1'\n" if $verbose;
 	$undoreadedits = 1;
     }
 
-    if ($nextword eq '-removebadreads' || $nextword eq '-rbr') {
-	$removebadreads = 1;
+    if ($nextword eq '-removelowqualityreads' || $nextword eq '-rbr') {
+	$removelowqualityreads = 1;
     }
-         
+
+    if ($nextword eq '-removeinvalidreads' || $nextword eq '-rir') {
+        $removeinvalidreads = 1;
+    }
+ 
+    if ($nextword eq '-restoremaskedreads' || $nextword eq '-rmr') {
+        $restoremaskedreads = 1;
+    }
+        
     if ($nextword eq '-gap4name'  || $nextword eq '-g4n') {
         $gap4name  = 1;
     }
@@ -291,11 +313,15 @@ print STDERR "$nextword  matches  '$1'\n" if $verbose;
         $excludetags = shift @ARGV;
     }            
 
-    if ($nextword eq '-splittags'    || $nextword eq '-st') {
+    if ($nextword eq '-splittags'      || $nextword eq '-st') {
         $splittags = shift @ARGV;
     }            
 
 #    $ignblocked   = 1            if ($nextword eq '-ignoreblocked');
+
+    if ($nextword eq '-noscaffold'     || $nextword eq '-ns') {
+        $noscaffold = 1;
+    }            
 
 # low quality treatment
 
@@ -368,8 +394,6 @@ print STDERR "$nextword  matches  '$1'\n" if $verbose;
     &showUsage(0) if ($nextword eq '-help');
 }
  
-&showUsage("Sorry, padded option not yet operational") if $padded;
- 
 #----------------------------------------------------------------
 # test input specification for completeness
 #----------------------------------------------------------------
@@ -391,8 +415,11 @@ $logger->setStandardFilter($filter) if defined($filter); # reporting level
 $logger->setBlock('debug',unblock=>1) if $debug;
 
 #$logger->setSpecialStream('some logfile');
+$logger->special("Special stream active");
 
 Contig->setLogger($logger);
+
+TagFactory->setLogger($logger);
  
 #----------------------------------------------------------------
 # get the database connection
@@ -424,6 +451,8 @@ my $URL = $adb->getURL;
 $logger->info("Database $URL opened succesfully");
 
 $adb->setLogger($logger);
+
+Contig->setLogger($logger);
  
 #----------------------------------------------------------------
 # get a list of contigs or projects to be exported
@@ -466,24 +495,27 @@ my $ignorecount = 0;
 my %contighash;
 my %projecthash;
 
+my %eoptions;
+$eoptions{noscaffold} = 1 if $noscaffold;
+
 while (@$contigs || @$projects) {
 
     unless (@$contigs) {
 # get contigs from the next project
         my $project = shift @$projects;
         my $pid = $project->getProjectID();
-        next if $projecthash{$pid}; # protect against duplicate project identifiers
-        my ($contigids,$status) = $project->fetchContigIDs(); 
+        next if $projecthash{$pid}; # protect against duplicate project identifiers 
+        my ($contigids,$status) = $project->getContigIDsForExport(%eoptions);
 # ?? IGNORE LOCKED should be an option ?
         unless ($contigids && @$contigids) {
 	    $logger->error("No contigs found or accessible for project "
                           .$project->getProjectName()." (id=$pid ? may be locked)");
-	    next;
+	    $contigids = [];
 	}
 
         my $projectname = $project->getProjectName();
         my $nrofcontigs = $project->getNumberOfContigs() || 0;
-        $logger->warning("Exporting project $projectname with $nrofcontigs contigs");
+        $logger->error("Exporting project $projectname with $nrofcontigs contigs");
 # print : exporting project  
         $projecthash{$pid}++;
         unless (scalar(@$contigids) == $nrofcontigs) {
@@ -492,11 +524,16 @@ while (@$contigs || @$projects) {
 	}
 	$contigs = $contigids;
 #	@$contigs = sort {$a <=> $b} @$contigids;
-        $logger->warning("project $projectname with ",noskip=>1) if $preview;
+        if ($preview) {
+            $logger->warning("project $projectname with ".scalar(@$contigs)
+                            ." contigs to be exported; repeat with '-confirm'");
+            undef @$contigs;
+	    next;
+	}
     }
 
-    if ($preview) {
-        $logger->warning(scalar(@$contigs) . " contigs to be exported");
+    elsif ($preview) {
+        $logger->warning(scalar(@$contigs) . " contigs to be exported; repeat with '-confirm'");
         undef @$contigs;
         next;
     }
@@ -507,7 +544,7 @@ while (@$contigs || @$projects) {
             $logger->error("Invalid or missing contig identifier");
             next;
         }
-# test for reversal (strippiong possible leading - sign from identifier)
+# test for reversal (stripping possible leading - sign from identifier)
         my $reverse = ($identifier =~ s/^\-//) ? 1 : 0;
 # protect against duplicate (input) contig identifiers
         if ($contighash{$identifier}) {
@@ -523,6 +560,7 @@ while (@$contigs || @$projects) {
         $coptions{contig_id} = $identifier if ($identifier !~ /\D/);
 # $options{ignoreblocked} = 1;
 
+        $logger->info("Getting contig $identifier");
         my $contig = $adb->getContig(%coptions) || 0;
         unless ($contig) {
             $logger->error("Contig $identifier not found ; "
@@ -530,7 +568,7 @@ while (@$contigs || @$projects) {
             $ignorecount++;
             next;
 	}
-        $logger->fine("Contig returned: $contig");
+        $logger->info("Contig returned: $contig");
 # test again for duplicates
         my $cid = $contig->getContigID();
         my $cnm = $contig->getContigName();
@@ -555,11 +593,18 @@ while (@$contigs || @$projects) {
             next;
 	}
 
-
-  $contig->getTags(1) unless $notags;
-  $contig->getMappings(1);
-  $contig->getStatistics();
-#  $contig->setMappings() if ($format eq 'embl');
+        unless ($notags) {
+            my $tags = $contig->getTags(1) || [];
+            if (($includetags || $excludetags) && !@$tags) {
+                 $logger->error("Contig $cnm has no tags");
+                 $contig->erase();
+                 next;
+	    }
+	}
+  
+# check here if these 
+#        $contig->getMappings(1);
+#        $contig->getStatistics();
 
 # ----------------- data manipulation before export ----------------------
 
@@ -604,6 +649,7 @@ print STDOUT "endRegionTrim; $contig  $clipped\n";
             my %lqoptions;
             $lqoptions{hqpm} = 0; # mark all "high" quality pads
             $lqoptions{minimum} = 0; # but keep all low quality bases
+            $lqoptions{padsymbol} = $lqsymbol if $lqsymbol;
             my ($newcontig,$status) = $contig->replaceLowQualityBases(%lqoptions);
             $contig = $newcontig if $newcontig;
 	}
@@ -612,40 +658,65 @@ print STDOUT "endRegionTrim; $contig  $clipped\n";
 
         if ($cliplowquality) {
             $logger->info("quality clipping");
-            if ($format eq 'embl') { # remove redundent stuff
-                $contig->addMapping(0);
-                $contig->addRead(0);
-            }
-            my %lqoptions;
-            $lqoptions{hqpm} = 0; # delete all "high" quality pads (and non ACGT)
-            $lqoptions{minimum} = 0; # but keep all low quality bases
+            my %lqoptions = (exportaschild=>1,components=>0);
+#            $lqoptions{hqpm} = 0; # delete all "high" quality pads (and non ACGT)
+#            $lqoptions{minimum} = 0; # but keep all low quality bases
 # these deal with tags under remapping
             $lqoptions{components} = 1;
-            $lqoptions{breaktags} = $splittags if $splittags;
-            $lqoptions{nomergetaglist} = 'REPT';
+#            $lqoptions{breaktags} = $splittags if $splittags;
+#            $lqoptions{nomergetaglist} = 'REPT';
 
-            my ($newcontig,$status) = $contig->deleteLowQualityBases(%lqoptions);
-            $contig = $newcontig;
+            my ($clippedcontig,$status) = $contig->deleteLowQualityBases(%lqoptions);
+
+	    if ($status && $clippedcontig ne $contig) {
+                my %tagoptions;
+		$tagoptions{finishing} = 'WARN,CSUB,REPT';
+                $tagoptions{annotation} = 'ANNO,CDS,CDSM,CHAD';
+                $clippedcontig->inheritTags(%tagoptions);
+                $contig->erase(); # garbage collection
+                $contig = $clippedcontig;
+    	    }
+	    elsif (!$status) {
+		$logger->severe("Failed to clip contig ".$contig->getContigName());
+	    }
         }
 
 # cleanup (remove low quality / very short reads) / unedit (replace edited reads by original)
 
-        if ($removebadreads) {
+        if ($removelowqualityreads) {
 # remove bad/short reads from the assembly
             my ($newcontig,$status) = $contig->deleteLowQualityReads();
+            $contig->erase(); # garbage collection
             $contig = $newcontig; # better checks
         }
 
         if ($undoreadedits) {
 # translate edited reads back to the original SCF
             my ($newcontig,$status) = $contig->undoReadEdits();
+            $contig->erase(); # garbage collection
             $contig = $newcontig;
 	}
 
+# remove invalid readnames
+
+        if ($removeinvalidreads) {
+            my ($newcontig,$status) = $contig->removeInvalidReadNames();
+	    $logger->warning($status);
+        }
+
+# restore masked reads
+
+        if ($restoremaskedreads) {
+            my $status = $contig->restoreMaskedReads();
+	    $logger->error("number of reads restored: $status");
+        }
+
 # padded : replace unpaddedcontig by padded version
 
-        if ($padded) {
+        if ($padded || $format eq 'baf') {
+$logger->info("padding $contig");
             $contig = $contig->toPadded();
+$logger->info("return $contig ".$contig->isPadded() || 'not padded!');
             unless ($contig) {
 	        $logger->info("Failed to pad $cnm");
                 $ignorecount++;
@@ -692,6 +763,7 @@ $logger->debug($c2cmapping->[0]->toString()) if $c2cmapping;
         $contig->setContigName($identifier) if ($identifier =~ /\D/);
 
         if ($format eq 'caf') {
+$logger->info("return $contig ".$contig->isPadded() || 'not padded!');
             $woptions{gap4name } = 1 if $gap4name;
             $woptions{noreads}   = 1 if $noreads;
             $woptions{readsonly} = 1 if $readsonly;
@@ -701,6 +773,17 @@ $logger->debug($c2cmapping->[0]->toString()) if $c2cmapping;
             $woptions{includetags} = $includetags if $includetags;
             $woptions{excludetags} = $excludetags if $excludetags;
             $err = $contig->writeToCaf($fhDNA,%woptions);
+	}
+
+        if ($format eq 'baf') {
+$logger->info("return $contig ".($contig->isPadded() ? 'padded' : 'not padded!'));
+            $woptions{gap4name } = 1 if $gap4name;
+            $woptions{noreads}   = 1 if $noreads;
+            $woptions{readsonly} = 1 if $readsonly;
+            $woptions{qualitymask} = $masking if $masking;
+            $woptions{qualitymask} = $msymbol if $msymbol; # overrides
+            $woptions{notags}      = 1 if $notags;
+            $err = $contig->writeToBaf($fhDNA,%woptions);
 	}
 
         elsif ($format eq 'fasta') {
@@ -726,6 +809,7 @@ $logger->debug($c2cmapping->[0]->toString()) if $c2cmapping;
 
         $errorcount++ if $err;
 
+        $contig->erase();
         undef $contig;
     }
     $contigs = []; # undef as an array
@@ -735,15 +819,21 @@ $adb->disconnect();
 
 # TO BE DONE: message and error testing
 
-$logger->warning("$ignorecount contigs have been ignored") if $ignorecount;
-
-$logger->warning("$exportcount contigs have been exported") if $exportcount;
-
-$logger->warning("NO contigs have been exported") unless $exportcount;
-
-$logger->warning("There were no errors") unless $errorcount;
-
-$logger->warning("$errorcount Errors found") if $errorcount;
+$logger->setPrefix("contig-export:");
+if (defined($filename) && !$filename) { # i.e. = 0
+    $logger->error("$ignorecount contigs have been ignored") if $ignorecount;
+    $logger->error("$exportcount contigs have been exported") if $exportcount;
+    $logger->error("NO contigs have been exported") unless $exportcount;
+    $logger->error("There were no errors") unless $errorcount;
+    $logger->error("$errorcount Errors found") if $errorcount;
+}
+else {
+    $logger->warning("$ignorecount contigs have been ignored") if $ignorecount;
+    $logger->warning("$exportcount contigs have been exported") if $exportcount;
+    $logger->warning("NO contigs have been exported") unless $exportcount;
+    $logger->warning("There were no errors") unless $errorcount;
+    $logger->warning("$errorcount Errors found") if $errorcount;
+}
 
 foreach my $handle ($fhDNA,$fhQTY,$fhRDS) {
     $handle->close() if $handle;
@@ -893,9 +983,9 @@ sub getfilehandles {
     my $filename = shift;
     my $quality = shift;
 
-# CAF format
-
     my ($fhDNA, $fhQLT, $fhRDS);
+
+# CAF format
 
     if ($format eq 'caf' && $filename) {
         $filename .= '.caf' unless ($filename =~ /\.caf$|null/);
@@ -903,6 +993,17 @@ sub getfilehandles {
         &showUsage("Failed to create CAF output file \"$filename\"") unless $fhDNA;
     }
     elsif ($format eq 'caf' && defined($filename)) { # = 0
+        $fhDNA = *STDOUT;
+    }
+
+# BAF format
+
+    if ($format eq 'baf' && $filename) {
+        $filename .= '.baf' unless ($filename =~ /\.baf$|null/);
+        $fhDNA = new FileHandle($filename, "w");
+        &showUsage("Failed to create CAF output file \"$filename\"") unless $fhDNA;
+    }
+    elsif ($format eq 'baf' && defined($filename)) { # = 0
         $fhDNA = *STDOUT;
     }
 
