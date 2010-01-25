@@ -29,7 +29,6 @@ import uk.ac.sanger.arcturus.utils.CheckVersion;
 public class Minerva {
 	private static Minerva instance = null;
 	protected ArcturusInstance[] ai = null;
-	protected String buildtime;
 	protected Map<String, MinervaFrame> frames = new HashMap<String, MinervaFrame>();
 
 	public static Minerva getInstance() {
@@ -40,24 +39,10 @@ public class Minerva {
 	}
 
 	private Minerva() {
-		try {
-			InputStream is = getClass().getResourceAsStream(
-					"/resources/buildtime.props");
-
-			if (is != null) {
-				Properties myprops = new Properties();
-
-				myprops.load(is);
-
-				is.close();
-			}
-		} catch (IOException ioe) {
-			// Do nothing
-		}
 	}
 
 	public String getBuildTime() {
-		return buildtime;
+		return Arcturus.getProperty(Arcturus.BUILD_DATE_KEY);
 	}
 
 	private String getStringParameter(String[] args, String key) {
@@ -126,9 +111,6 @@ public class Minerva {
 
 	private MinervaFrame createMinervaFrame(String name) {
 		String caption = "Minerva - " + name;
-
-		if (buildtime != null)
-			caption += " [" + buildtime + "]";
 
 		if (PeopleManager.isMasquerading())
 			caption += " [Masquerading as  "
@@ -270,12 +252,20 @@ public class Minerva {
 			super.setVisible(true);
 			toFront();
 		}
-	}
-
+	}	
+	
 	public static void displayHelp() {
+		String buildTime = Arcturus.getProperty(Arcturus.BUILD_DATE_KEY, "?");
+		String buildVersion = Arcturus.getProperty(Arcturus.BUILD_VERSION_KEY, "?");
+		
+		StringBuilder builder = new StringBuilder();
+		builder.append("SVN revision: ");
+		builder.append(buildVersion);
+		builder.append("\nDate: ");
+		builder.append(buildTime);
 		JOptionPane.showMessageDialog(null,
-				"The user will be shown some useful and helpful information",
-				"Don't panic!", JOptionPane.INFORMATION_MESSAGE, null);
+				builder.toString(),
+				"Build Information", JOptionPane.INFORMATION_MESSAGE, null);
 	}
 
 	public static Action getQuitAction() {

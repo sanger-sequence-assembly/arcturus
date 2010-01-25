@@ -1,26 +1,43 @@
 package uk.ac.sanger.arcturus;
 
-import java.io.IOException;
-import java.io.FileNotFoundException;
-import java.io.InputStream;
-import java.io.FileInputStream;
+import java.awt.GraphicsEnvironment;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.management.ManagementFactory;
 import java.net.BindException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.Properties;
-import java.util.logging.*;
-import java.awt.GraphicsEnvironment;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.FileHandler;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
 
 import javax.management.MBeanServer;
-import javax.management.remote.*;
+import javax.management.remote.JMXConnectorServer;
+import javax.management.remote.JMXConnectorServerFactory;
+import javax.management.remote.JMXServiceURL;
 
-import uk.ac.sanger.arcturus.logging.*;
+import uk.ac.sanger.arcturus.logging.JDBCLogHandler;
+import uk.ac.sanger.arcturus.logging.MailHandler;
+import uk.ac.sanger.arcturus.logging.MessageDialogHandler;
 
 public class Arcturus {
 	protected static final String PROJECT_PROPERTIES_FILE = ".arcturus.props";
+
+	public final static String BUILD_DATE_KEY = "build.date";
+	public final static String BUILD_VERSION_KEY = "build.version";
+
 
 	protected static Properties arcturusProps = new Properties(System
 			.getProperties());
@@ -131,8 +148,22 @@ public class Arcturus {
 			} else
 				dir = dir.getParentFile();
 		}
+		
+		loadBuildProperties();
 	}
 
+	private static void loadBuildProperties() {
+		try {
+			InputStream is = Arcturus.class.getResourceAsStream("/resources/build.props");
+			if (is != null) {
+				arcturusProps.load(is);
+				is.close();
+			}
+		} catch (IOException ioe) {
+			// Do nothing
+		}		
+	}
+	
 	private static void initialiseJMXRemoteServer() {
 		String hostname = "UNKNOWN";
 		
@@ -214,6 +245,11 @@ public class Arcturus {
 
 	public static String getProperty(String key) {
 		return arcturusProps.getProperty(key);
+	}
+	
+	public static String getProperty(String key, String defaultValue) {
+		String value = getProperty(key);
+		return (value == null) ? defaultValue : value;
 	}
 	
 	public static boolean getBoolean(String key) {
