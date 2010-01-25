@@ -36,10 +36,20 @@
 
   <!-- Target version of Java -->
   <property name="build.target" value="1.6" />
-
+  
+  <!-- Build properties -->
+  <property name="build.props.file" value="${resources.dir}/build.props" />
+  
+  <target name="setBuildVersion">
+    <echo file="${build.props.file}">build.date=${build.time}${line.separator}</echo>
+    <concat append="true" destfile="${build.props.file}">build.version=</concat>
+	<exec executable="svnversion" dir="${basedir}" output="${build.props.file}" append="true">
+	</exec>
+  </target>
+	
   <!-- Target to create the build directories prior to the -->
   <!-- compile target. -->
-  <target name="prepare">
+  <target name="prepare" depends="setBuildVersion">
     <mkdir dir="${build.dir}"/>
     <mkdir dir="${build.classes}"/>
     <mkdir dir="${build.lib}"/>
