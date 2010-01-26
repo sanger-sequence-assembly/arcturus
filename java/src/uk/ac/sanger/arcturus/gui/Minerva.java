@@ -255,14 +255,21 @@ public class Minerva {
 	}	
 	
 	public static void displayHelp() {
-		String buildTime = Arcturus.getProperty(Arcturus.BUILD_DATE_KEY, "?");
+		String buildDateTime = Arcturus.getProperty(Arcturus.BUILD_DATE_KEY, "?");
 		String buildVersion = Arcturus.getProperty(Arcturus.BUILD_VERSION_KEY, "?");
+		String buildBy = Arcturus.getProperty(Arcturus.BUILD_BY_KEY, "?");
+		String buildHost = Arcturus.getProperty(Arcturus.BUILD_HOST_KEY, "?");
 		
 		StringBuilder builder = new StringBuilder();
-		builder.append("SVN revision: ");
+		builder.append("Built by: ");
+		builder.append(buildBy);
+		builder.append("\non host: ");
+		builder.append(buildHost);
+		builder.append("\nat: ");
+		builder.append(buildDateTime);
+		builder.append("\nusing revision: ");
 		builder.append(buildVersion);
-		builder.append("\nDate: ");
-		builder.append(buildTime);
+
 		JOptionPane.showMessageDialog(null,
 				builder.toString(),
 				"Build Information", JOptionPane.INFORMATION_MESSAGE, null);

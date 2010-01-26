@@ -37,6 +37,8 @@ public class Arcturus {
 
 	public final static String BUILD_DATE_KEY = "build.date";
 	public final static String BUILD_VERSION_KEY = "build.version";
+	public final static String BUILD_BY_KEY = "build.by";
+	public final static String BUILD_HOST_KEY = "build.host";
 
 
 	protected static Properties arcturusProps = new Properties(System
