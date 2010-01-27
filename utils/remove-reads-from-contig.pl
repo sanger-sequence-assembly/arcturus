@@ -550,4 +550,9 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "    -readnames\t\tComma-separated list of readnames to be removed\n";
     print STDERR "\t\t\t(Names may include wildcards)\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "    -commit\t\tCommit the changes to the database (the default\n";
+    print STDERR "\t\t\tbehaviour is to run the changes within a transaction\n";
+    print STDERR "\t\t\tas a preview, and execute a rollback at the end)\n"
 }
