@@ -141,7 +141,7 @@
 		</format>
 	</test>
 
-	<test critical="YES">
+	<test critical="NO">
 		<description>
 			Do all sequences have quality clipping data?
 		</description>

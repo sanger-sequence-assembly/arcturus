@@ -27,5 +27,6 @@ public class ScaffoldManagerWorker extends SwingWorker<TreeModel,Void> {
 	
 	protected void done() {
 		parent.setModel(result);
+		parent.updateActions();
 	}
 }

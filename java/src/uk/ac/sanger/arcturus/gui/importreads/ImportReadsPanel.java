@@ -1,6 +1,8 @@
 package uk.ac.sanger.arcturus.gui.importreads;
 
 import uk.ac.sanger.arcturus.gui.*;
+import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectListModel;
+import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectProxy;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.utils.*;
 import uk.ac.sanger.arcturus.*;
@@ -182,7 +184,15 @@ public class ImportReadsPanel extends MinervaPanel {
 	}
 
 	public void refresh() {
-		plm.refresh();
+		if (plm != null) {
+			try {
+				plm.refresh();
+			} catch (SQLException sqle) {
+				Arcturus.logWarning(
+						"An error occurred when refreshing the project list",
+						sqle);
+			}
+		}
 	}
 
 	protected void closePanel() {
@@ -288,74 +298,6 @@ public class ImportReadsPanel extends MinervaPanel {
 		else {
 			lstProjects.setSelectedValue(proxy, true);
 			return true;
-		}
-	}
-
-	class ProjectListModel extends AbstractListModel {
-		ProjectProxy[] projects;
-		ArcturusDatabase adb;
-
-		public ProjectListModel(ArcturusDatabase adb) {
-			this.adb = adb;
-			refresh();
-		}
-
-		public void refresh() {
-			try {
-				Set projectset = adb.getAllProjects();
-
-				projects = new ProjectProxy[projectset.size()];
-
-				int i = 0;
-
-				for (Iterator iter = projectset.iterator(); iter.hasNext(); i++) {
-					Project project = (Project) iter.next();
-					projects[i] = new ProjectProxy(project);
-				}
-
-				Arrays.sort(projects);
-				fireContentsChanged(this, 0, projects.length);
-			} catch (SQLException sqle) {
-				Arcturus.logWarning("An error occurred when updating the project list", sqle);
-			}
-		}
-
-		public Object getElementAt(int index) {
-			return projects[index];
-		}
-
-		public int getSize() {
-			return projects.length;
-		}
-
-		public ProjectProxy getProjectProxyByName(String name) {
-			for (int i = 0; i < projects.length; i++)
-				if (projects[i].toString().equalsIgnoreCase(name))
-					return projects[i];
-
-			return null;
-		}
-	}
-
-	class ProjectProxy implements Comparable {
-		protected final Project project;
-
-		public ProjectProxy(Project project) {
-			this.project = project;
-		}
-
-		public Project getProject() {
-			return project;
-		}
-
-		public String toString() {
-			return project.getName();
-		}
-
-		public int compareTo(Object o) {
-			ProjectProxy that = (ProjectProxy) o;
-			return project.getName()
-					.compareToIgnoreCase(that.project.getName());
 		}
 	}
 
