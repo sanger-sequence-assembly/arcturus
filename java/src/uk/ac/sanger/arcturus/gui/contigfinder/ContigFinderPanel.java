@@ -215,7 +215,9 @@ public class ContigFinderPanel extends MinervaPanel {
 	}
 
 	private String contigInfo(Contig contig) {
-		return "Contig " + contig.getID() + " [" + contig.getLength() + " bp, "
+		return "Contig " + contig.getID() + " ["
+				+ contig.getName() + ", "
+				+ contig.getLength() + " bp, "
 				+ contig.getReadCount() + " reads, created "
 				+ contig.getCreated() + ", in project "
 				+ contig.getProject().getName() + "]";
