@@ -293,10 +293,11 @@ sub extendToFill {
 # extend first and last segment to fill a given range
     my $class = shift;
     my $regularmapping = shift;
-    my %options = @_;
+    my %options = @_;  
 
-    my $domain = uc($options{domain}) || 'X'; # default
-    my ($start,$final) = ($options{start},$options{finish});
+    my $domain = $options{domain} || 'X'; # default
+    my $start  = $options{start};
+    my $final  = $options{final};
 
     my $nrofsegments = $regularmapping->hasSegments();
 
@@ -304,25 +305,29 @@ sub extendToFill {
     foreach my $i (1 .. $nrofsegments) {
         my ($xs,$xf,$ys,$yf) = $regularmapping->getSegment($i);
 
-        if ($domain eq 'X') {
+        if (uc($domain) eq 'X') {
            ($xs,$xf,$ys,$yf) = ($xf,$xs,$yf,$ys) if ($xs > $xf);
-            if ($i == 1 && $start < $xs) {
+	    my $limit = $options{extendonly} ? $xs : $xf;
+            if ($i == 1 && defined($start) && $start < $limit) {
                 $xs = $start;
                 $ys = $regularmapping->getYforX($i,$xs,1); # extend         
 	    }
-            if ($i == $nrofsegments && $final > $xf) {
+	    $limit = $options{extendonly} ? $xf : $xs;
+            if ($i == $nrofsegments && defined($final) && $final > $limit) {
                 $xf = $final;
-                $ys = $regularmapping->getYforX($i,$xf,1);
+                $yf = $regularmapping->getYforX($i,$xf,1);
             }        
 	}
         else {
-            if ($i == 1 && $start < $ys) {
+	    my $limit = $options{extendonly} ? $ys : $yf;
+            if ($i == 1 && defined($start) && $start < $limit) {
                 $ys = $start;
-                $xs = $regularmapping->getYforX($i,$ys,1); # extend         
+                $xs = $regularmapping->getXforY($i,$ys,1); # extend 
 	    }
-            if ($i == $nrofsegments && $final > $yf) {
+	    $limit = $options{extendonly} ? $yf : $ys;
+            if ($i == $nrofsegments && defined($final) && $final > $limit) {
                 $yf = $final;
-                $xs = $regularmapping->getYforX($i,$yf,1);
+                $xf = $regularmapping->getXforY($i,$yf,1);
             }        
 	}
 
@@ -332,7 +337,9 @@ sub extendToFill {
     my $extendedmapping = new RegularMapping($alignmentsegment_arrayref);
     return undef unless $extendedmapping;
 # copy the mapping descriptors
-    $extendedmapping->setMappingName($regularmapping->getMappingName().'-extended');
+    my $mappingname = $regularmapping->getMappingName();
+    $mappingname .= "-adjusted" if $options{namechange};
+    $extendedmapping->setMappingName($mappingname);
     $extendedmapping->setSequenceID($regularmapping->getSequenceID('y'),'y'); # if any
     $extendedmapping->setSequenceID($regularmapping->getSequenceID('x'),'x'); # if any
     return $extendedmapping;
