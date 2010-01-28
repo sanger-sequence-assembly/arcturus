@@ -5,7 +5,6 @@ import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectListModel;
 import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectProxy;
 import uk.ac.sanger.arcturus.oligo.*;
-import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
 import javax.swing.*;
@@ -32,7 +31,9 @@ public class OligoFinderPanel extends MinervaPanel implements
 	protected JProgressBar pbarReadProgress = new JProgressBar();
 	protected JCheckBox cbSelectAll = new JCheckBox("All projects");
 	protected JCheckBox cbFreeReads = new JCheckBox("Scan free reads");
-	protected JCheckBox cbUseCachedFreeReads = new JCheckBox("Use cached free reads");
+	protected JCheckBox cbTerseList = new JCheckBox("I want a list of reads that I can cut and paste");
+	
+	private boolean terse;
 
 	protected ProjectListModel plm;
 
@@ -169,13 +170,10 @@ public class OligoFinderPanel extends MinervaPanel implements
 		cbFreeReads.addItemListener(new ItemListener() {
 			public void itemStateChanged(ItemEvent e) {
 				updateFindOligosButton();
-				updateUseCachedFreeReadsCheckbox();
 			}
 		});
 		
-		panel.add(cbUseCachedFreeReads);
-		cbUseCachedFreeReads.setSelected(false);
-		cbUseCachedFreeReads.setEnabled(false);
+		panel.add(cbTerseList);
 
 		add(panel);
 
@@ -348,14 +346,16 @@ public class OligoFinderPanel extends MinervaPanel implements
 		txtOligoList.setEditable(false);
 		searchInProgress = true;
 		updateFindOligosButton();
+		
+		terse = cbTerseList.isSelected();
 
 		Object[] selected = lstProjects.getSelectedValues();
 
-		Project[] projects = new Project[selected.length];
+		int[] projects = new int[selected.length];
 
 		for (int i = 0; i < selected.length; i++) {
 			ProjectProxy proxy = (ProjectProxy) selected[i];
-			projects[i] = proxy.getProject();
+			projects[i] = proxy.getProject().getID();
 		}
 
 		Oligo[] oligos = parseOligos(txtOligoList.getText());
@@ -370,9 +370,8 @@ public class OligoFinderPanel extends MinervaPanel implements
 		txtMessages.append("\n\n");
 
 		boolean freereads = cbFreeReads.isSelected();
-		boolean useCachedFreeReads = cbUseCachedFreeReads.isSelected();
 
-		Task task = new Task(finder, oligos, projects, freereads, useCachedFreeReads);
+		Task task = new Task(finder, oligos, projects, freereads);
 
 		task.setName("OligoSearch");
 		task.start();
@@ -381,22 +380,20 @@ public class OligoFinderPanel extends MinervaPanel implements
 	class Task extends Thread {
 		protected final OligoFinder finder;
 		protected final Oligo[] oligos;
-		protected final Project[] projects;
+		protected final int[] projects;
 		protected boolean freereads;
-		protected boolean useCachedFreeReads;
 		
-		public Task(OligoFinder finder, Oligo[] oligos, Project[] projects,
-				boolean freereads, boolean useCachedFreeReads) {
+		public Task(OligoFinder finder, Oligo[] oligos, int[] projects,
+				boolean freereads) {
 			this.finder = finder;
 			this.oligos = oligos;
 			this.projects = projects;
 			this.freereads = freereads;
-			this.useCachedFreeReads = useCachedFreeReads;
 		}
 
 		public void run() {
 			try {
-				finder.findMatches(oligos, projects, freereads, useCachedFreeReads);
+				finder.findMatches(oligos, projects, freereads);
 			} catch (SQLException sqle) {
 				Arcturus.logWarning("An error occurred whilst finding matches",
 						sqle);
@@ -448,7 +445,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 				break;
 
 			case OligoFinderEvent.ENUMERATING_FREE_READS:
-				postMessage("Making a list of free reads.  This may take some time.  Please be patient.\n");
+				postMessage("\nMaking a list of free reads.  This may take some time.  Please be patient.\n");
 				break;
 
 			case OligoFinderEvent.START_READS:
@@ -462,23 +459,15 @@ public class OligoFinderPanel extends MinervaPanel implements
 			case OligoFinderEvent.START_SEQUENCE:
 				break;
 
-			case OligoFinderEvent.HASH_MATCH:
-				if (showHashMatch)
-					postMessage("HASH MATCH: " + event.getOligo().getName()
-							+ " to contig " + event.getContig().getID()
-							+ " at " + event.getValue()
-							+ (event.isForward() ? "" : " REVERSED") + "\n");
-				break;
-
 			case OligoFinderEvent.FOUND_MATCH:
 				addMatch(event);
 				break;
 
 			case OligoFinderEvent.FINISH_SEQUENCE:
-				if (event.isContig()) {
+				if (event.getDNASequence().isContig()) {
 					bpdone += value;
 					incrementProgressBar(pbarContigProgress, bpdone);
-				} else if (event.isRead()) {
+				} else if (event.getDNASequence().isRead()) {
 					bpdone++;
 					incrementProgressBar(pbarReadProgress, bpdone);
 				}
@@ -487,13 +476,13 @@ public class OligoFinderPanel extends MinervaPanel implements
 			case OligoFinderEvent.FINISH_CONTIGS:
 				setProgressBarToDone(pbarContigProgress);
 				postMessage("Finished.\n");
-				reportMatches();
+				reportMatches(false);
 				break;
 
 			case OligoFinderEvent.FINISH_READS:
 				setProgressBarToDone(pbarReadProgress);
 				postMessage("Finished.\n");
-				reportMatches();
+				reportMatches(terse);
 				break;
 
 			case OligoFinderEvent.FINISH:
@@ -505,7 +494,6 @@ public class OligoFinderPanel extends MinervaPanel implements
 						searchInProgress = false;
 						updateFindOligosButton();
 						txtOligoList.setEditable(true);
-						updateUseCachedFreeReadsCheckbox();
 					}
 				});
 				break;
@@ -529,7 +517,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 		matchset.add(match);
 	}
 
-	protected void reportMatches() {
+	protected void reportMatches(boolean terseReport) {
 		Set<Oligo> oligoset = oligomatches.keySet();
 
 		if (oligoset.isEmpty()) {
@@ -541,11 +529,36 @@ public class OligoFinderPanel extends MinervaPanel implements
 
 			for (int i = 0; i < oligos.length; i++)
 				reportMatchesForOligo(oligos[i], (Set<OligoMatch>) oligomatches
-						.get(oligos[i]));
+						.get(oligos[i]), terseReport);
 		}
 	}
 
-	protected void reportMatchesForOligo(Oligo oligo, Set<OligoMatch> matchset) {
+	protected void reportMatchesForOligo(Oligo oligo, Set<OligoMatch> matchset, boolean terse) {
+		if (terse)
+			terseReportMatchesForOligo(oligo, matchset);
+		else
+			verboseReportMatchesForOligo(oligo, matchset);
+	}
+	
+	private void terseReportMatchesForOligo(Oligo oligo, Set<OligoMatch> matchset) {
+		SortedSet<String> sequenceNames = new TreeSet<String>();
+		
+		for (OligoMatch match : matchset) {
+			String seqname = match.getDNASequence().getName();
+			sequenceNames.add(seqname);
+		}
+		
+		int matches = sequenceNames.size();
+		
+		postMessage("\n\nOligo " + oligo.getName() + " matches " + matches
+				+ " sequences\n\n");
+
+		for (String seqname : sequenceNames) {
+			postMessage(seqname + "\n");
+		}
+	}
+
+	private void verboseReportMatchesForOligo(Oligo oligo, Set<OligoMatch> matchset) {
 		OligoMatch[] matches = (OligoMatch[]) matchset
 				.toArray(new OligoMatch[0]);
 
@@ -571,18 +584,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 				+ "\n");
 
 		for (int i = 0; i < matches.length; i++) {
-			Contig contig = matches[i].getContig();
-
-			if (contig != null)
-				postMessage("    CONTIG " + contig.getID() + " ("
-						+ contig.getName() + ", "
-						+ df.format(contig.getLength()) + " bp, in "
-						+ contig.getProject().getName() + ")");
-
-			Read read = matches[i].getRead();
-
-			if (read != null)
-				postMessage("    READ " + read.getName());
+			postMessage(matches[i].getDNASequence().toString());
 
 			postMessage(" from " + df.format(matches[i].getOffset() + 1)
 					+ " in ");
@@ -593,7 +595,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 
 	class OligoMatchComparator implements Comparator<OligoMatch> {
 		public int compare(OligoMatch m1, OligoMatch m2) {
-			int rc = m1.getID() - m2.getID();
+			int rc = m1.getDNASequence().getID() - m2.getDNASequence().getID();
 
 			if (rc != 0)
 				return rc;
@@ -637,13 +639,6 @@ public class OligoFinderPanel extends MinervaPanel implements
 			}
 		});
 
-	}
-	
-	protected void updateUseCachedFreeReadsCheckbox() {
-		boolean finderHasCachedReads = finder.hasCachedFreeReads();
-		boolean scanFreeReads = cbFreeReads.isSelected();
-		
-		cbUseCachedFreeReads.setEnabled(finderHasCachedReads && scanFreeReads);
 	}
 	
 	protected void updateFindOligosButton() {

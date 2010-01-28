@@ -6,7 +6,7 @@ import uk.ac.sanger.arcturus.database.*;
  * This class represents a sequence reading.
  */
 
-public class Read extends Core implements DNASequence {
+public class Read extends Core {
 	/**
 	 * A constant representing the forward strand of a sub-clone.
 	 */
