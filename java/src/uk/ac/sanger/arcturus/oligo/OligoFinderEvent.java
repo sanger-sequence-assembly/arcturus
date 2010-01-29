@@ -1,7 +1,5 @@
 package uk.ac.sanger.arcturus.oligo;
 
-import uk.ac.sanger.arcturus.data.*;
-
 public class OligoFinderEvent {
 	public static final int UNKNOWN = 0;
 	public static final int START_CONTIGS = 1;
@@ -11,9 +9,8 @@ public class OligoFinderEvent {
 	public static final int FINISH_SEQUENCE = 5;
 	public static final int FINISH_CONTIGS = 6;
 	public static final int FINISH_READS = 7; 
-	public static final int HASH_MATCH = 8;
-	public static final int ENUMERATING_FREE_READS = 9;
-	public static final int FINISH = 10;
+	public static final int ENUMERATING_FREE_READS = 8;
+	public static final int FINISH = 9;
 	
 	private OligoFinder source;
 	private int type = UNKNOWN;
@@ -46,22 +43,6 @@ public class OligoFinderEvent {
 	public int getType() { return type; }
 	
 	public Oligo getOligo() { return oligo; }
-	
-	public boolean isContig() {
-		return sequence != null && sequence instanceof Contig;
-	}
-	
-	public Contig getContig() { 
-		return (sequence != null && sequence instanceof Contig) ? (Contig)sequence : null;
-	}
-	
-	public boolean isRead() {
-		return sequence != null && sequence instanceof Read;
-	}
-	
-	public Read getRead() {
-		return (sequence != null && sequence instanceof Read) ? (Read)sequence : null;
-	}
 	
 	public DNASequence getDNASequence() {
 		return sequence;

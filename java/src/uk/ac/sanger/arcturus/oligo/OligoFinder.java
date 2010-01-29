@@ -2,10 +2,8 @@ package uk.ac.sanger.arcturus.oligo;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.data.*;
 
 import java.sql.*;
-import java.util.*;
 import java.util.zip.*;
 import java.io.UnsupportedEncodingException;
 
@@ -13,197 +11,140 @@ import java.util.regex.Pattern;
 import java.util.regex.Matcher;
 
 public class OligoFinder {
-	public static final int HASHSIZE = 10;
-
-	private static final boolean useRegex = Arcturus.getBoolean("oligofinder.useRegex");
-
-	private ArcturusDatabase adb;
 	private Connection conn = null;
-
-	private int hashsize = HASHSIZE;
-	private int hashmask = 0;
 
 	private OligoFinderEventListener listener;
 	private OligoFinderEvent event;
 
 	private Inflater decompresser = new Inflater();
-
-	private final String strConsensus = "select length,sequence from CONSENSUS where contig_id = ?";
-	private PreparedStatement pstmtConsensus;
-
-	private final String strSequence = "select seqlen,sequence from"
-			+ " SEQ2READ left join SEQUENCE using(seq_id) where read_id = ? order by seq_id limit 1";
-	private PreparedStatement pstmtSequence;
-
-	private Read[] cachedFreeReads = null;
+	
+	private int passValue;
+	
+	// The name of the temporary table for busy reads (reads which are in current contigs)
+	private final String BUSY_READS = "tmpBUSYREADS";
+	
+	// The name of the temporary table for free reads (reads which are not in current contigs)
+	private final String FREE_READS = "tmpFREEREADS";
+	
+	private final String CREATE_BUSY_READS_TABLE =
+		"create temporary table if not exists " + BUSY_READS + " (read_id int not null primary key)";
+	
+	private final String CREATE_FREE_READS_TABLE =
+		"create temporary table if not exists " + FREE_READS + " (read_id int not null primary key, readname char(64) not null)";
+	
+	private final String GET_PASS_VALUE = "select status_id from STATUS where name = ?";
+	
+	private final String EMPTY_BUSY_READS_TABLE = "delete from " + BUSY_READS;
+	private PreparedStatement pstmtEmptyBusyReadsTable;
+	
+	private final String EMPTY_FREE_READS_TABLE = "delete from " + FREE_READS;
+	private PreparedStatement pstmtEmptyFreeReadsTable;
+	
+	private final String POPULATE_BUSY_READS_TABLE = "insert into " + BUSY_READS + "(read_id)" +
+		" select distinct read_id from (CURRENTCONTIGS left join MAPPING using(contig_id)) left join SEQ2READ using (seq_id)";
+	private PreparedStatement pstmtPopulateBusyReadsTable;
+	
+	private final String POPULATE_FREE_READS_TABLE = "insert into " + FREE_READS + "(read_id,readname)" +
+		" select R.read_id,R.readname from READINFO R left join " + BUSY_READS + " using (read_id)" +
+		" where " + BUSY_READS + ".read_id is null and R.status = ?";
+	private PreparedStatement pstmtPopulateFreeReadsTable;
+	
+	private final String SUM_CONTIG_LENGTH_FOR_PROJECT = "select sum(length) from CURRENTCONTIGS where project_id = ?";
+	private PreparedStatement pstmtSumContigLengthForProject;
+	
+	private final String GET_CONTIG_SEQUENCES = "select CC.contig_id,CC.gap4name,CS.length,P.name,CS.sequence" + 
+		" from CURRENTCONTIGS CC left join (PROJECT P,CONSENSUS CS) using (contig_id)" +
+		" where CC.project_id=P.project_id and CC.project_id = ? order by CC.contig_id asc";
+	private PreparedStatement pstmtGetContigSequences;
+	
+	private final String GET_READ_SEQUENCES = "select R.read_id,R.readname,S.seqlen,null as project,S.sequence" +
+		" from " + FREE_READS + " R left join (SEQ2READ SR,SEQUENCE S) using(read_id)" +
+		" where SR.version=0 and SR.seq_id=S.seq_id order by R.read_id";
+	private PreparedStatement pstmtGetReadSequences;
 
 	public OligoFinder(ArcturusDatabase adb, OligoFinderEventListener listener) {
-		this.adb = adb;
-
-		initHash(HASHSIZE);
-
 		event = new OligoFinderEvent(this);
 
 		this.listener = listener;
 
 		try {
 			conn = adb.getPooledConnection(this);
+			
+			createTemporaryTables();
+			passValue = getPassValue();
 			prepareStatements();
 		} catch (SQLException sqle) {
-			Arcturus.logWarning("Error when opening or preparing connection",
+			Arcturus.logWarning("Error when initialising database connection",
 					sqle);
 		}
 	}
 
+	private int getPassValue() throws SQLException {
+		PreparedStatement pstmt = conn.prepareStatement(GET_PASS_VALUE);
+		
+		pstmt.setString(1, "PASS");
+		
+		ResultSet rs = pstmt.executeQuery();
+		
+		int rc = rs.next() ? rs.getInt(1) : -1;
+		
+		rs.close();
+		pstmt.close();
+		
+		return rc;
+	}
+
+	private void createTemporaryTables() throws SQLException {
+		Statement stmt = conn.createStatement();
+		stmt.execute(CREATE_BUSY_READS_TABLE);
+		stmt.execute(CREATE_FREE_READS_TABLE);
+		stmt.close();
+	}
+	
 	private void prepareStatements() throws SQLException {
-		pstmtConsensus = conn.prepareStatement(strConsensus);
-
-		pstmtSequence = conn.prepareStatement(strSequence);
-	}
-
-	private void initHash(int hashsize) {
-		this.hashsize = hashsize;
-
-		hashmask = 0;
-
-		for (int i = 0; i < hashsize; i++) {
-			hashmask |= 3 << (2 * i);
-		}
-	}
-
-	class Task extends Thread {
-		private Connection conn;
-
-		private final String strFreeReads = "select R.read_id,R.readname" +
-			" from FREEREADS FR left join (READINFO R, STATUS S)" +
-			" using (read_id) where R.status = S.status_id and S.name = 'PASS'";
+		pstmtEmptyBusyReadsTable = conn.prepareStatement(EMPTY_BUSY_READS_TABLE);
+		pstmtPopulateBusyReadsTable = conn.prepareStatement(POPULATE_BUSY_READS_TABLE);
 		
-		private PreparedStatement pstmtFreeReads;
+		pstmtEmptyFreeReadsTable = conn.prepareStatement(EMPTY_FREE_READS_TABLE);
+		pstmtPopulateFreeReadsTable = conn.prepareStatement(POPULATE_FREE_READS_TABLE);
 
-		Read[] reads = null;
-
-		public void run() {
-			Vector<Read> v = new Vector<Read>();
-
-			try {
-				conn = adb.getPooledConnection(this);
-
-				pstmtFreeReads = conn.prepareStatement(strFreeReads);
-
-				if (pstmtFreeReads.execute()) {
-					ResultSet rs = pstmtFreeReads.getResultSet();
-
-					if (rs != null) {
-						while (rs.next())
-							v.add(new Read(rs.getString(2), rs.getInt(1), null));
-					}
-
-					reads = (Read[]) v.toArray(new Read[0]);
-
-				}
-			} catch (SQLException sqle) {
-				Arcturus
-						.logWarning("Error whilst enumerating free reads", sqle);
-			} finally {
-				try {
-					conn.close();
-				} catch (SQLException sqle) {
-					Arcturus
-							.logWarning("Error whilst closing connection", sqle);
-				}
-			}
-		}
-
-		public Read[] getReads() {
-			return reads;
-		}
-
-		public int getReadCount() {
-			return (reads == null) ? 0 : reads.length;
-		}
+		pstmtSumContigLengthForProject = conn.prepareStatement(SUM_CONTIG_LENGTH_FOR_PROJECT);
+		
+		pstmtGetContigSequences = conn.prepareStatement(GET_CONTIG_SEQUENCES, ResultSet.TYPE_FORWARD_ONLY,
+	              ResultSet.CONCUR_READ_ONLY);
+		
+		pstmtGetContigSequences.setFetchSize(Integer.MIN_VALUE);
+		
+		pstmtGetReadSequences = conn.prepareStatement(GET_READ_SEQUENCES, ResultSet.TYPE_FORWARD_ONLY,
+	              ResultSet.CONCUR_READ_ONLY);
+		
+		pstmtGetReadSequences.setFetchSize(Integer.MIN_VALUE);
 	}
+	
+	private void closeStatements() throws SQLException {
+		pstmtEmptyBusyReadsTable.close();
+		pstmtPopulateBusyReadsTable.close();
+		
+		pstmtEmptyFreeReadsTable.close();
+		pstmtPopulateFreeReadsTable.close();
 
-	public boolean hasCachedFreeReads() {
-		return cachedFreeReads != null;
+		pstmtSumContigLengthForProject.close();
+		
+		pstmtGetContigSequences.close();
+		
+		pstmtGetReadSequences.close();		
 	}
-
-	public synchronized int findMatches(Oligo[] oligos, Contig[] contigs,
-			boolean searchFreeReads, boolean useCachedFreeReads)
+	
+	public synchronized int findMatches(Oligo[] oligos, int[] projectIDs,
+			boolean searchFreeReads)
 			throws SQLException {
-		System.err.println("Using " + (useRegex ? "regex" : "hashing") + " engine");
-		
 		int found = 0;
-		Task task = null;
-
-		if (searchFreeReads && (cachedFreeReads == null || !useCachedFreeReads)) {
-			task = new Task();
-			task.setName("OligoFinder:FreeReadSearch");
-			task.start();
-		}
-
-		prepareOligos(oligos);
-
-		if (contigs != null && contigs.length > 0) {
-			int totlen = 0;
-
-			for (int i = 0; i < contigs.length; i++)
-				totlen += contigs[i].getLength();
-
-			if (listener != null) {
-				event.setEvent(OligoFinderEvent.START_CONTIGS, null, null,
-						totlen, false);
-				listener.oligoFinderUpdate(event);
-			}
-
-			for (int i = 0; i < contigs.length; i++)
-				found += findMatches(oligos, contigs[i]);
-
-			if (listener != null) {
-				event.setEvent(OligoFinderEvent.FINISH_CONTIGS, null, null, -1,
-						false);
-				listener.oligoFinderUpdate(event);
-			}
-		}
-
-		if (searchFreeReads) {
-			if (task != null) {
-				try {
-					if (listener != null) {
-						event.setEvent(OligoFinderEvent.ENUMERATING_FREE_READS,
-								null, null, -1, false);
-						listener.oligoFinderUpdate(event);
-					}
-
-					task.join();
-				} catch (InterruptedException e) {
-					Arcturus
-							.logWarning(
-									"Interrupted whilst waiting for free-read eumerator to complete",
-									e);
-				}
-
-				cachedFreeReads = task.getReads();
-			}
-
-			int nreads = cachedFreeReads == null ? 0 : cachedFreeReads.length;
-
-			if (nreads > 0) {
-				if (listener != null) {
-					event.setEvent(OligoFinderEvent.START_READS, null, null,
-							nreads, false);
-					listener.oligoFinderUpdate(event);
-				}
-
-				for (int i = 0; i < cachedFreeReads.length; i++)
-					found += findMatches(oligos, cachedFreeReads[i]);
-
-				if (listener != null) {
-					event.setEvent(OligoFinderEvent.FINISH_READS, null, null,
-							-1, false);
-					listener.oligoFinderUpdate(event);
-				}
-			}
-		}
+		
+		if (projectIDs != null && projectIDs.length > 0)
+			found += findContigMatches(oligos, projectIDs);
+		
+		if (searchFreeReads)
+			found += findFreeReadMatches(oligos);
 
 		if (listener != null) {
 			event.setEvent(OligoFinderEvent.FINISH, null, null, -1, false);
@@ -212,9 +153,169 @@ public class OligoFinder {
 
 		return found;
 	}
+	
+	private int findContigMatches(Oligo[] oligos, int[] projectIDs) throws SQLException {
+		int totlen = getTotalContigLength(projectIDs);
 
-	private int findMatches(Oligo[] oligos, DNASequence dnaSequence)
-			throws SQLException {
+		if (listener != null) {
+			event.setEvent(OligoFinderEvent.START_CONTIGS, null, null,
+					totlen, false);
+			listener.oligoFinderUpdate(event);
+		}
+
+		int found = 0;
+		
+		for (int i = 0; i < projectIDs.length; i++)
+			found += findContigMatches(oligos, projectIDs[i]);
+
+		if (listener != null) {
+			event.setEvent(OligoFinderEvent.FINISH_CONTIGS, null, null, -1,
+					false);
+			listener.oligoFinderUpdate(event);
+		}
+
+		return found;
+	}
+	
+	private int findContigMatches(Oligo[] oligos, int projectID) throws SQLException {
+		pstmtGetContigSequences.setInt(1, projectID);
+		
+		ResultSet rs = pstmtGetContigSequences.executeQuery();
+		
+		int rc = processResultSet(rs, oligos, DNASequence.CONTIG);
+		
+		rs.close();
+		
+		return rc;
+	}
+	
+	private int getTotalContigLength(int[] projectIDs) throws SQLException {
+		int total = 0;
+		
+		for (int i = 0; i < projectIDs.length; i++)
+			total += getTotalContigLength(projectIDs[i]);
+		
+		return total;
+	}
+	
+	private int getTotalContigLength(int projectID) throws SQLException {
+		pstmtSumContigLengthForProject.setInt(1, projectID);
+		
+		ResultSet rs = pstmtSumContigLengthForProject.executeQuery();
+		
+		int totlen = rs.next() ? rs.getInt(1) : 0;
+		
+		rs.close();
+		
+		return totlen;
+	}
+
+	private int findFreeReadMatches(Oligo[] oligos) throws SQLException {
+		if (listener != null) {
+			event.setEvent(OligoFinderEvent.ENUMERATING_FREE_READS, null, null,
+					0, false);
+			listener.oligoFinderUpdate(event);
+		}
+		
+		int nreads = countFreeReads();
+		
+		if (listener != null) {
+			event.setEvent(OligoFinderEvent.START_READS, null, null,
+					nreads, false);
+			listener.oligoFinderUpdate(event);
+		}
+		
+		int found = scanFreeReads(oligos);
+
+		if (listener != null) {
+			event.setEvent(OligoFinderEvent.FINISH_READS, null, null,
+					-1, false);
+			listener.oligoFinderUpdate(event);
+		}
+
+		return found;
+	}
+
+	private int countFreeReads() throws SQLException {
+		updateBusyReadsTable();
+		return updateFreeReadsTable();
+	}
+	
+	private void updateBusyReadsTable() throws SQLException {
+		int rows = pstmtEmptyBusyReadsTable.executeUpdate();
+	
+		System.err.println("Deleted " + rows + " rows from busy reads table");
+		
+		long ticks = System.currentTimeMillis();
+		
+		rows = pstmtPopulateBusyReadsTable.executeUpdate();
+		
+		ticks = System.currentTimeMillis() - ticks;
+		
+		System.err.println("Busy reads table populated with " + rows + " rows in " + ticks + " ms");
+	}
+	
+	private int updateFreeReadsTable() throws SQLException {
+		int rows = pstmtEmptyFreeReadsTable.executeUpdate();
+		
+		System.err.println("Deleted " + rows + " rows from free reads table");
+		
+		pstmtPopulateFreeReadsTable.setInt(1, passValue);
+		
+		long ticks = System.currentTimeMillis();
+		
+		rows = pstmtPopulateFreeReadsTable.executeUpdate();
+		
+		ticks = System.currentTimeMillis() - ticks;
+		
+		System.err.println("Free reads table populated with " + rows + " rows in " + ticks + " ms");
+		
+		return rows;
+	}
+	
+	private int scanFreeReads(Oligo[] oligos) throws SQLException {
+		ResultSet rs = pstmtGetReadSequences.executeQuery();
+		
+		int rc = processResultSet(rs, oligos, DNASequence.READ);
+		
+		rs.close();
+		
+		return rc;
+	}
+	
+	private int processResultSet(ResultSet rs, Oligo[] oligos, int type) throws SQLException {
+		int total = 0;
+
+		while (rs.next()) {
+			int ID = rs.getInt(1);
+			String sequenceName = rs.getString(2);
+			int sequenceLength = rs.getInt(3);
+			String projectName = rs.getString(4);
+			byte[] sequence = rs.getBytes(5);
+			
+			sequence = inflate(sequence, sequenceLength);
+			
+			String dna = null;
+
+			try {
+				dna = new String(sequence, "US-ASCII");
+			} catch (UnsupportedEncodingException e) {
+				Arcturus.logWarning("Error whilst converting DNA sequence data to string", e);
+			}
+			
+			DNASequence dnaseq = (type == DNASequence.READ) ? DNASequence.createReadInstance(ID, sequenceName) :
+				DNASequence.createContigInstance(ID, sequenceName, sequenceLength, projectName);
+			
+			total += findMatches(oligos, dnaseq, dna);
+		}
+		
+		return total;
+	}
+	
+	private int findMatches(Oligo[] oligos, DNASequence dnaSequence, String sequence) {
+		if (sequence == null)
+			return 0;
+		
 		int found = 0;
 
 		if (listener != null) {
@@ -223,20 +324,10 @@ public class OligoFinder {
 			listener.oligoFinderUpdate(event);
 		}
 
-		String sequence = null;
-
-		if (dnaSequence instanceof Contig) {
-			Contig contig = (Contig) dnaSequence;
-			sequence = getConsensus(contig.getID());
-		} else if (dnaSequence instanceof Read) {
-			Read read = (Read) dnaSequence;
-			sequence = getReadSequence(read.getID());
-		}
-
 		if (sequence != null) {
 			event.setDNASequence(dnaSequence);
 			
-			found += useRegex ? findMatchesByRegex(oligos, sequence) : findMatchesByHash(oligos, sequence);
+			found += findMatchesByRegex(oligos, sequence);
 		}
 
 		int sequencelen = sequence == null ? 0 : sequence.length();
@@ -278,97 +369,6 @@ public class OligoFinder {
 		
 		return hits;
 	}
-
-	private int findMatchesByHash(Oligo[] oligos, String sequence) {
-		int hits = 0;
-		
-		int start_pos = 0;
-		int end_pos = 0;
-		int bases_in_hash = 0;
-		int hash = 0;
-		int sequencelen = sequence.length();
-
-		for (start_pos = 0; start_pos < sequencelen - hashsize + 1; start_pos++) {
-			char c = sequence.charAt(start_pos);
-
-			if (isValid(c)) {
-				while (end_pos < sequencelen && bases_in_hash < hashsize) {
-					char e = sequence.charAt(end_pos);
-
-					if (isValid(e)) {
-						hash = updateHash(hash, e);
-						bases_in_hash++;
-					}
-
-					end_pos++;
-				}
-
-				if (bases_in_hash == hashsize)
-					hits += processHashMatch(oligos, sequence, start_pos, hash);
-
-				bases_in_hash--;
-			}
-
-			if (bases_in_hash < 0)
-				bases_in_hash = 0;
-
-			if (end_pos < start_pos) {
-				end_pos = start_pos;
-				bases_in_hash = 0;
-			}
-		}
-
-		return hits;
-	}
-
-	private int processHashMatch(Oligo[] oligos,
-			String sequence, int start_pos, int hash) {
-		int hits = 0;
-		
-		for (int i = 0; i < oligos.length; i++) {
-			if (oligos[i] == null)
-				continue;
-
-			if (hash == oligos[i].getHash()) {
-				if (listener != null) {
-					event.setEvent(OligoFinderEvent.HASH_MATCH, oligos[i],
-							start_pos, true);
-					listener.oligoFinderUpdate(event);
-				}
-
-				if (testSequenceMatch(oligos[i], true, sequence,
-						start_pos))
-					hits++;
-			}
-
-			if (hash == oligos[i].getReverseHash()) {
-				if (listener != null) {
-					event.setEvent(OligoFinderEvent.HASH_MATCH, oligos[i],
-							start_pos, false);
-					listener.oligoFinderUpdate(event);
-				}
-
-				if (testSequenceMatch(oligos[i], false, sequence,
-						start_pos))
-					hits++;
-			}
-		}
-		
-		return hits;
-	}
-
-	private boolean testSequenceMatch(Oligo oligo, boolean forward,
-			String sequence, int offset) {
-		String oligoseq = forward ? oligo.getSequence() : oligo
-				.getReverseSequence();
-		
-		boolean match = comparePaddedSequence(oligoseq, sequence, offset);
-
-		if (match)
-			reportMatch(oligo, offset, forward);
-				
-		return match;
-	}
 	
 	private void reportMatch(Oligo oligo, int offset, boolean forward) {
 		if (listener != null) {
@@ -377,147 +377,6 @@ public class OligoFinder {
 			listener.oligoFinderUpdate(event);
 		}
 
-	}
-
-	private boolean comparePaddedSequence(String oligoseq, String sequence,
-			int offset) {
-		int seqlen = sequence.length();
-
-		if (offset + oligoseq.length() > seqlen)
-			return false;
-
-		for (int i = 0; i < oligoseq.length(); i++) {
-			char oc = Character.toUpperCase(oligoseq.charAt(i));
-
-			while (offset < seqlen && !isValid(sequence.charAt(offset)))
-				offset++;
-
-			if (offset < seqlen) {
-				char sc = Character.toUpperCase(sequence.charAt(offset));
-
-				if (oc != sc)
-					return false;
-
-				offset++;
-			} else
-				return false;
-		}
-
-		return true;
-	}
-
-	public int findMatches(Oligo[] oligos, Project[] projects,
-			boolean searchFreeReads, boolean useCachedFreeReads)
-			throws SQLException {
-		Contig[] contigs = getContigsForProjects(projects);
-
-		return findMatches(oligos, contigs, searchFreeReads, useCachedFreeReads);
-	}
-
-	private Contig[] getContigsForProjects(Project[] projects)
-			throws SQLException {
-		Set<Contig> contigs = new HashSet<Contig>();
-
-		for (int i = 0; i < projects.length; i++)
-			contigs.addAll(projects[i].getContigs(true));
-
-		return (Contig[]) contigs.toArray(new Contig[0]);
-	}
-
-	private void prepareOligos(Oligo[] oligos) {
-		for (int i = 0; i < oligos.length; i++) {
-			if (oligos[i] != null) {
-				if (!useRegex) {
-					oligos[i].setHash(hash(oligos[i].getSequence()));
-					oligos[i].setReverseHash(hash(oligos[i]
-							.getReverseSequence()));
-				}
-			}
-		}
-	}
-
-	private boolean isValid(char c) {
-		return c == 'A' || c == 'a' || c == 'C' || c == 'c' || c == 'G'
-				|| c == 'g' || c == 'T' || c == 't';
-	}
-
-	private int updateHash(int hash, char c) {
-		int value = hashCode(c);
-
-		hash <<= 2;
-
-		if (value > 0)
-			hash |= value;
-
-		return hash & hashmask;
-	}
-
-	private int hashCode(char c) {
-		switch (c) {
-			case 'A':
-			case 'a':
-				return 0;
-
-			case 'C':
-			case 'c':
-				return 1;
-
-			case 'G':
-			case 'g':
-				return 2;
-
-			case 'T':
-			case 't':
-				return 3;
-
-			default:
-				return 0;
-		}
-	}
-
-	private int hash(String oligo) {
-		int value = 0;
-
-		for (int i = 0; i < hashsize; i++) {
-			value <<= 2;
-			value |= hashCode(oligo.charAt(i));
-		}
-
-		return value & hashmask;
-	}
-
-	private String getConsensus(int contig_id) throws SQLException {
-		return getDNASequence(pstmtConsensus, contig_id);
-	}
-
-	private String getReadSequence(int readid) throws SQLException {
-		return getDNASequence(pstmtSequence, readid);
-	}
-
-	private String getDNASequence(PreparedStatement pstmt, int seqid)
-			throws SQLException {
-		pstmt.setInt(1, seqid);
-
-		ResultSet rs = pstmt.executeQuery();
-
-		byte[] buffer;
-
-		if (rs.next()) {
-			int seqlen = rs.getInt(1);
-			buffer = inflate(rs.getBytes(2), seqlen);
-		} else
-			buffer = null;
-
-		rs.close();
-
-		if (buffer == null)
-			return null;
-
-		try {
-			return new String(buffer, "US-ASCII");
-		} catch (UnsupportedEncodingException uee) {
-			return null;
-		}
 	}
 
 	private byte[] inflate(byte[] cdata, int length) {
@@ -530,6 +389,7 @@ public class OligoFinder {
 		byte[] data = new byte[length];
 
 		decompresser.setInput(cdata, 0, cdata.length);
+		
 		try {
 			decompresser.inflate(data, 0, data.length);
 		} catch (DataFormatException dfe) {
@@ -550,6 +410,7 @@ public class OligoFinder {
 
 	private void closeConnection() throws SQLException {
 		if (conn != null) {
+			closeStatements();
 			conn.close();
 			conn = null;
 		}

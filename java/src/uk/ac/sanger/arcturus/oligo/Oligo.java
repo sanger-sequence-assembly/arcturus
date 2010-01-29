@@ -10,8 +10,6 @@ public class Oligo implements Comparable {
 	private String name;
 	private String sequence;
 	private String revsequence;
-	private int hash = -1;
-	private int revhash = -1;
 	
 	private boolean palindrome = false;
 	
@@ -35,14 +33,6 @@ public class Oligo implements Comparable {
 	public String getSequence() { return sequence; }
 	
 	public String getReverseSequence() { return revsequence; }
-	
-	public void setHash(int hash) { this.hash = hash; }
-	
-	public int getHash() { return hash; }
-	
-	public void setReverseHash(int revhash) { this.revhash = revhash; }
-	
-	public int getReverseHash() { return revhash; }
 	
 	public int getLength() { return sequence.length(); }
 	
