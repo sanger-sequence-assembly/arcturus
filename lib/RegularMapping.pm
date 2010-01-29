@@ -316,6 +316,25 @@ sub getYforX {
     return $y;
 }
 
+sub getOffsetForSegment {
+    my $this = shift;
+    my $segmentnumber = shift;
+
+    return undef unless $this->hasSegments($segmentnumber);
+
+    my $canonicalsegment = $this->{canonicalsegments}->[$segmentnumber-1];
+
+    my $offset = $canonicalsegment->getOffset();
+
+    if ($this->isCounterAligned()) {
+        $offset = $this->getCanonicalOffsetX() + $this->getCanonicalOffsetY() - $offset;
+    }
+    else {
+        $offset = $this->getCanonicalOffsetX() - $this->getCanonicalOffsetY() + $offset;
+    }
+    return $offset;
+}
+
 #-------------------------------------------------------------------
 # tracking of alignment segments (re: multiply operation)
 #-------------------------------------------------------------------
@@ -343,12 +362,25 @@ sub isEqual {
     return MappingFactory::isEqual($mapping,$compare,@_);
 }
 
-sub compare { # TO TEST OBSOLETE?
+#sub compare { # TO TEST OBSOLETE?
 # compare this Mapping instance with input Mapping at the segment level
-    my $mapping = shift;
-    my $compare = shift;
+#    my $mapping = shift;
+#    my $compare = shift;
 #    return MappingFactory::compare($mapping,$compare);
-    return $mapping->multiply($compare->inverse(),@_); # test
+#    return $mapping->multiply($compare->inverse(),@_); # test
+#}
+
+sub isIdentity {
+# return true if the mapping has one segment starting at 1 and longer
+# than the specified minimum length
+    my $this = shift;
+    my $size = shift;
+
+    my $numberofsegments = $this->hasSegments() || 0;
+    return 0 unless ($numberofsegments == 1 || $size);
+
+    my $segmentlength = $this->{canonicalsegments}->[0]->[2];
+    return ($size > $segmentlength) ? 0 : 1;
 }
 
 #-------------------------------------------------------------------
@@ -432,16 +464,17 @@ sub sliceArray { # TO TEST
 
 #-------------------------------------------------------------------
 
-sub expand { # TO TEST
-# extend first and last segment to fill a given range in Y-domain
+sub adjust { # TO TEST
+# extend or truncate first and last segment to fill a given range in Y-domain
     my $this = shift;
     my $scfstart = shift;
     my $scffinal = shift;
+    my %options = @_; # domain, namechange
 # return a new mapping via MappingFactory
-    my %options = (domain => 'Y');
+    $options{domain} = 'Y' unless defined $options{domain};
     $options{start} = $scfstart if $scfstart;
     $options{final} = $scffinal if $scffinal;
-    return MappingFactory->extendToFill($this,%options);
+    return MappingFactory->mask($this,%options);
 }
 
 #-------------------------------------------------------------------
