@@ -258,15 +258,17 @@ sub isEqual {
 # compare the two input Mappings for equality; the comparison is made 
 # based on the checksum, which must be equal. In the X-domain we allow
 # a linear shift (re: read-to-contig mappings, where X-domain is on the
-# contig and Y-domain is on the read). If a test is to be made on the
-# Y-domain instead, compare the inverses of the input mappings.
+# contig and Y-domain is on the read). 
+
+# Note : if a test is to be made on the X-domain instead, 
+# compare the inverses of the input mappings.
+
     my $mapping = shift;
     my $compare = shift;
     
 #   verifyParameter($mapping,'isEqual','RegularMapping');
 #   verifyParameter($compare,'isEqual','RegularMapping');
 
-#print STDOUT "MappingFactory->isEqual: $mapping, $compare\n";
     my $checksumm = $mapping->getCheckSum() || 0;
     my $checksumc = $compare->getCheckSum() || 0;
 
@@ -279,7 +281,8 @@ sub isEqual {
 # now determine the offset for the X-domain, considering the alignment direction
             my $mappingoffsetx = $mapping->getCanonicalOffsetX();
             my $compareoffsetx = $compare->getCanonicalOffsetX();
-            $mappingoffsetx = -$mappingoffsetx if ($alignment < 0);
+            $compareoffsetx = -$compareoffsetx if ($alignment < 0);
+#            $mappingoffsetx = -$mappingoffsetx if ($alignment < 0);
             return 1, $alignment,($mappingoffsetx - $compareoffsetx);  # sign TO BE tested
 	}
     }
@@ -289,15 +292,18 @@ sub isEqual {
 
 #-------------------------------------------------------------------
 
-sub extendToFill {
-# extend first and last segment to fill a given range
+sub mask {
+# mask a mapping in specified domain to fill a given range
+# optionally extend first and last segment to fill range overflow
     my $class = shift;
     my $regularmapping = shift;
     my %options = @_;  
 
-    my $domain = $options{domain} || 'X'; # default
-    my $start  = $options{start};
-    my $final  = $options{final};
+    my $domain = $options{domain} || 'Y'; # default domain (eg read)
+    my $start  = $options{start}; # ignore if undefined
+    my $final  = $options{final}; # ignore if undefined
+    my $extend = $options{noextend} ? 1 : 0; # default extend
+    $start = 1 if (defined($start) && $start < 1); # protection
 
     my $nrofsegments = $regularmapping->hasSegments();
 
@@ -307,28 +313,36 @@ sub extendToFill {
 
         if (uc($domain) eq 'X') {
            ($xs,$xf,$ys,$yf) = ($xf,$xs,$yf,$ys) if ($xs > $xf);
-	    my $limit = $options{extendonly} ? $xs : $xf;
-            if ($i == 1 && defined($start) && $start < $limit) {
-                $xs = $start;
-                $ys = $regularmapping->getYforX($i,$xs,1); # extend         
+            if (defined($start)) {
+                next if ($start > $xf); # skip segment completely outside masked region
+                if ($extend && $i == 1 && $start < $xs || $start > $xs) { # mask the segment or extend first
+                    $xs = $start;
+                    $ys = $regularmapping->getYforX($i,$xs,1); # extend
+		} # else leave segment unchanged 
 	    }
-	    $limit = $options{extendonly} ? $xf : $xs;
-            if ($i == $nrofsegments && defined($final) && $final > $limit) {
-                $xf = $final;
-                $yf = $regularmapping->getYforX($i,$xf,1);
-            }        
+            if (defined($final)) {
+                next if ($final < $xs); # skip segment completely outside masked region
+                if ($extend && $i == $nrofsegments && $final > $xf || $final < $xf) { # mask or extend last
+                    $xf = $final;
+                    $yf = $regularmapping->getYforX($i,$xf,1);       
+		} # else leave segment unchanged 
+	    }
 	}
         else {
-	    my $limit = $options{extendonly} ? $ys : $yf;
-            if ($i == 1 && defined($start) && $start < $limit) {
-                $ys = $start;
-                $xs = $regularmapping->getXforY($i,$ys,1); # extend 
+            if (defined($start)) {
+                next if ($start > $yf); # skip segment completely outside masked region
+                if ($extend && $i == 1 && $start < $ys || $start > $ys) { # mask the segment or extend first
+                    $ys = $start;
+                    $xs = $regularmapping->getXforY($i,$ys,1); # extend
+		} # else leave segment unchanged 
 	    }
-	    $limit = $options{extendonly} ? $yf : $ys;
-            if ($i == $nrofsegments && defined($final) && $final > $limit) {
-                $yf = $final;
-                $xf = $regularmapping->getXforY($i,$yf,1);
-            }        
+            if (defined($final)) {
+                next if ($final < $ys); # skip segment completely outside masked region
+                if ($extend && $i == $nrofsegments && $final > $yf || $final < $yf) { # mask or extend last
+                    $yf = $final;
+                    $xf = $regularmapping->getXforY($i,$yf,1);       
+		} # else leave segment unchanged 
+	    }
 	}
 
         push @$alignmentsegment_arrayref, [($xs,$xf,$ys,$yf)];
