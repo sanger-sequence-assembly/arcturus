@@ -45,6 +45,8 @@ public class ConsensusReadImporterPanel extends MinervaPanel {
 	protected MinervaAbstractAction actionImportReads;
 	
 	protected File fileToImport = null;
+	
+	private JFileChooser chooser = new JFileChooser();
 
 	public ConsensusReadImporterPanel(MinervaTabbedPane parent,
 			ArcturusDatabase adb) {
@@ -53,6 +55,8 @@ public class ConsensusReadImporterPanel extends MinervaPanel {
 		createActions();
 		
 		createMenus();
+		
+		initialiseFileChooser();
 		
 		btnChooseFile = new JButton(actionChooseFile);
 		btnImportReads = new JButton(actionImportReads);
@@ -76,6 +80,17 @@ public class ConsensusReadImporterPanel extends MinervaPanel {
 		add(createMessagePanel());
 		
 		getPrintAction().setEnabled(false);
+	}
+	
+	private void initialiseFileChooser() {	
+		File userDirectory = new File(System.getProperty("user.dir"));
+		
+		chooser.setCurrentDirectory(userDirectory);
+		
+		chooser.setMultiSelectionEnabled(false);
+		
+		FileFilter filter = new FileNameExtensionFilter("FASTA file", "fas", "fa", "fna", "seq");
+		chooser.addChoosableFileFilter(filter);
 	}
 	
 	private JPanel createChooseFilePanel() {
@@ -156,21 +171,12 @@ public class ConsensusReadImporterPanel extends MinervaPanel {
 	}
 	
 	private void chooseFile() {
-		JFileChooser chooser = new JFileChooser();
-		
-		chooser.setMultiSelectionEnabled(false);
-		
-		File cwd = new File(System.getProperty("user.dir"));
-		chooser.setCurrentDirectory(cwd);
-		
-		FileFilter filter = new FileNameExtensionFilter("FASTA file", "fas", "fa", "fna", "seq");
-		chooser.addChoosableFileFilter(filter);
 
 		int returnVal = chooser.showOpenDialog(null);
 
 		if (returnVal == JFileChooser.APPROVE_OPTION) {
 			fileToImport = chooser.getSelectedFile();
-			
+		
 			txtFilename.setText(fileToImport.getAbsolutePath());
 			
 			actionImportReads.setEnabled(true);
