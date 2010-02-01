@@ -1,8 +1,5 @@
-ARCTURUS SEQUENCE-TO-CONTIG ALIGNMENT GEOMETRY
-==============================================
-
-Original scheme
----------------
+Original mapping scheme
+-----------------------
 
 rs = SEGMENT.rstart
 cs = SEGMENT.cstart
@@ -21,6 +18,27 @@ cs = SEGMENT.cstart
 
 Canonical mapping scheme
 ------------------------
+
+OVERALL MAPPING
+
+r0 = SEQ2CONTIG.roffset
+rl = CANONICALMAPPING.rspan
+
+c0 = SEQ2CONTIG.coffset
+cl = CANONICALMAPPING.cspan
+
+
+                  r0+1                       r0+rl
+                  +---------------------------->         Co-aligned read
+
+                  c0+1                       c0+cl
+    --------------+----------------------------+-------> Contig
+                  c0-cl                      c0-1
+
+                  <----------------------------+         Counter-aligned read
+                  r0+1                       r0+rl
+
+INDIVIDUAL SEGMENT
 
 r0 = SEQ2CONTIG.roffset
 c0 = SEQ2CONTIG.coffset
