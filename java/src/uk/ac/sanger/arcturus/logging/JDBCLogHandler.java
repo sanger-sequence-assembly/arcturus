@@ -113,11 +113,8 @@ public class JDBCLogHandler extends Handler {
 			
 			pstmtInsertRecord.setString(9, username);
 			
-			String revision = Arcturus.getProperty(Arcturus.BUILD_VERSION_KEY);
-			if (revision == null)
-				pstmtInsertRecord.setNull(10, Types.LONGVARCHAR);
-			else
-				pstmtInsertRecord.setString(10, revision);
+			String revision = Arcturus.getProperty(Arcturus.BUILD_VERSION_KEY, "[NOT KNOWN]");
+			pstmtInsertRecord.setString(10, revision);
 			
 			int rc = pstmtInsertRecord.executeUpdate();
 			
