@@ -4,6 +4,9 @@ use strict;
 
 use ArcturusDatabase;
 
+use constant WORKING_VERSION => '0';
+use constant BACKUP_VERSION => 'Z';
+
 # export a single project or a scaffold from arcturus into a gap4 database
 
 # script to be run from directory where gap4 database is to be created 
@@ -219,6 +222,54 @@ if ( -f "${gap4name}.$version.BUSY") {
 # or, change name?
     exit 1;
 }
+
+#------------------------------------------------------------------------------
+# backup working version (zero)
+#------------------------------------------------------------------------------
+
+my $backup_db = $gap4name . '.' . BACKUP_VERSION;
+my $backup_busy_file = $backup_db . '.BUSY';
+my $backup_aux_file = $backup_db . '.aux';
+
+my $working_db = $gap4name . '.' . WORKING_VERSION;
+my $working_busy_file = $working_db . '.BUSY';
+
+if (-f $working_db && $version ne BACKUP_VERSION) {
+    print STDOUT "Backing up version " . WORKING_VERSION . " to " . BACKUP_VERSION . "\n";
+
+    if (-f $working_busy_file) {
+	print STDERR "!! -- Version " . WORKING_VERSION . " is BUSY; backup cannot be made --\n";
+            print STDERR "!! -- Export of $gap4name.$version aborted --\n";
+            exit 1;
+    }
+
+    if (-f $backup_db) {
+        if ( -f $backup_busy_file) {
+            print STDERR "!! -- Version " . BACKUP_VERSION . " is BUSY; backup cannot be made --\n";
+            print STDERR "!! -- Export of $gap4name.$version aborted --\n";
+            exit 1;
+        }
+
+        system ("rmdb $gap4name " . BACKUP_VERSION);
+
+        unless ($? == 0) {
+            print STDERR "!! -- FAILED to remove existing $backup_db ($?) --\n"; 
+            print STDERR "!! -- Export of $gap4name.$version aborted --\n";
+            exit 1;
+        }
+    }
+
+    system ("cpdb $gap4name " . WORKING_VERSION . " $gap4name " . BACKUP_VERSION);
+
+    unless (-f $backup_db && -f $backup_aux_file) {
+        print STDERR "!! -- WARNING: failed to back up $gap4name " . WORKING_VERSION . " --\n";
+	print STDERR "!! -- Export of $gap4name.$version aborted --\n";
+	exit 1;
+    }
+
+    print STDOUT "Successfully backed up version " . WORKING_VERSION . " to " . BACKUP_VERSION . "\n\n";
+}
+
 
 #------------------------------------------------------------------------------
 # update consensus for the project
@@ -471,9 +522,11 @@ sub showusage {
     print STDERR "\n";
     print STDERR "Export a project or scaffold from Arcturus project to a specified Gap database\n";
     print STDERR "\n";
-    print STDERR "script to run in directory of Gap4 database\n";
+    print STDERR "The script must be run in the directory containing the Gap4 database\n";
     print STDERR "\n";
-    print STDERR "default export is of database 'project.0'\n";
+    print STDERR "Default export is of database 'project.0'\n";
+    print STDERR "\n";
+    print STDERR "A backup copy will be made to 'project." . BACKUP_VERSION . "'\n";
     print STDERR "\n";
     print STDERR "MANDATORY PARAMETERS:\n";
     unless ($organism && $instance) {
