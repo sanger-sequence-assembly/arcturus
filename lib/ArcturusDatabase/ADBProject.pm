@@ -2032,6 +2032,9 @@ sub getLockedStatus {
         $lockstatus = 2;
     }
     elsif ($projectinfo[0] || $projectinfo[1]) {
+# ensure that both fields are defined
+        $projectinfo[0] = 'undefined' unless $projectinfo[0]; 
+        $projectinfo[1] = 'undefined' unless $projectinfo[1]; 
         $lockstatus = 1;
     }
 
