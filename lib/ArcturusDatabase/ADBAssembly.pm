@@ -273,6 +273,7 @@ sub putScaffoldForImportID {
 
     my $status = 0;
     foreach my $member (@$scaffold) {
+        next unless ($member->[1] > 0); # protection against undefined contig_id
         my @idata = @$member; # length 3
         push @idata,'forward' unless (scalar(@idata) >= 3); # should be caught by Scaffold class
         push @idata,undef unless (scalar(@idata) >= 4); # should be caught by Scaffold class
@@ -298,8 +299,8 @@ sub getScaffoldForProject {
               . "  from CONTIGORDER join SCAFFOLD using (scaffold_id)"
               . " where SCAFFOLD.import_id in ($subquery)"
 #             . "   and SCAFFOLD.source = 'Arcturus contig-loader'"
+#              . "   and contig_id in (select contig_id from CURRENTCONTIGS)"
               . " order by position";
-
 # either build a scaffold object or put an ordered list of contig_ids in Project
 
     my $dbh = $this->getConnection();
@@ -307,12 +308,12 @@ sub getScaffoldForProject {
     my $sth = $dbh->prepare_cached($query);
 
     my $rc = $sth->execute($project_id) || &queryFailed($query,$project_id);
-
     $project->addContigID(undef,scaffold=>1); # clear any
     while (my @ary = $sth->fetchrow_array()) {
         $ary[0] = -$ary[0] if ($ary[2] eq 'reverse');
         $project->addContigID($ary[0],scaffold=>1);
     }
+    $sth->finish();
 # on exit the project instance contains the list of ordered contig_ids
     return $rc;
 }
