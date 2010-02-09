@@ -76,6 +76,9 @@ public class MailHandler extends Handler {
 			
 			sb.append("Hostname: " + hostname + "\n\n");
 			
+			String revision = Arcturus.getProperty(Arcturus.BUILD_VERSION_KEY, "[NOT KNOWN]");
+			sb.append("Revision: " + revision + "\n\n");
+			
 			sb.append(subject + "\n\n");
 			
 			sb.append("The logger is " + record.getLoggerName() + "\n");
@@ -132,6 +135,31 @@ public class MailHandler extends Handler {
 		for (int i = 0; i < ste.length; i++)
 			sb.append(i + ": " + ste[i].getClassName() + " " +
 					ste[i].getMethodName() + " line " + ste[i].getLineNumber() + "\n");
+	}
 	
+	public static void main(String[] args) {
+		if (args.length == 0) {
+			System.err.println("Please provide a recipient email address when running this test");
+			System.exit(0);
+		}
+		
+		Logger logger = Logger.getLogger("uk.ac.sanger.arcturus");
+
+		logger.setUseParentHandlers(false);
+
+		MailHandler mailhandler = new MailHandler(args[0]);
+		
+		mailhandler.setLevel(Level.WARNING);
+		
+		logger.addHandler(mailhandler);
+
+		try {
+			throw new Exception("Something bad happened");
+		}
+		catch (Exception e) {
+			logger.log(Level.WARNING, e.getMessage(), e);
+		}
+		
+		System.exit(0);
 	}
 }

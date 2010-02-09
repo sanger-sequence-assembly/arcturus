@@ -5,6 +5,8 @@ import java.sql.*;
 import java.io.*;
 import java.util.*;
 
+import uk.ac.sanger.arcturus.Arcturus;
+
 public class JDBCLogHandler extends Handler {
 	protected Connection conn;
 	protected PreparedStatement pstmtInsertRecord;
@@ -65,8 +67,8 @@ public class JDBCLogHandler extends Handler {
 		setWaitTimeout(5*24*3600);
 		
 		String query =
-			"INSERT INTO LOGRECORD(time,sequence,logger,level,class,method,thread,message,user,host,connid)" +
-			" VALUES(?,?,?,?,?,?,?,?,?,substring_index(user(),'@',-1),connection_id())";
+			"INSERT INTO LOGRECORD(time,sequence,logger,level,class,method,thread,message,user,host,connid,revision)" +
+			" VALUES(?,?,?,?,?,?,?,?,?,substring_index(user(),'@',-1),connection_id(),?)";
 		
 		pstmtInsertRecord = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
 		
@@ -110,6 +112,9 @@ public class JDBCLogHandler extends Handler {
 			pstmtInsertRecord.setString(8, message);
 			
 			pstmtInsertRecord.setString(9, username);
+			
+			String revision = Arcturus.getProperty(Arcturus.BUILD_VERSION_KEY, "[NOT KNOWN]");
+			pstmtInsertRecord.setString(10, revision);
 			
 			int rc = pstmtInsertRecord.executeUpdate();
 			
