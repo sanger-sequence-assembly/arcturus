@@ -271,22 +271,9 @@ public class OligoFinder {
 				
 				done = true;
 			}
-			catch (SQLTransactionRollbackException stre) {
-				try {
-					tries++;
-					Thread.sleep(retryInterval);
-				} catch (InterruptedException ie) {
-					return rows;
-				}
-			}
 			catch (SQLException sqle) {
-				if (sqle.getErrorCode() == MysqlErrorNumbers.ER_LOCK_WAIT_TIMEOUT) {
-					// In the event of a lock wait timeout, InnoDB only rolls back the
-					// statement which caused the timeout, so we must explicitly
-					// roll back the entire transaction before re-trying.
-					
-					conn.rollback();
-					
+				if (sqle instanceof SQLTransactionRollbackException || 
+						sqle.getErrorCode() == MysqlErrorNumbers.ER_LOCK_WAIT_TIMEOUT) {
 					try {
 						tries++;
 						Thread.sleep(retryInterval);
