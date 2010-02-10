@@ -218,14 +218,14 @@ public class TestContigManager4 {
 									System.out.println("Mapping " + imap
 											+ " : seq_id=" + sequence.getID()
 											+ ", cstart="
-											+ mapping.getContigStart()
+											+ mapping.getContigStartPosition()
 											+ ", cfinish="
-											+ mapping.getContigFinish()
+											+ mapping.getContigEndPosition()
 											+ ", sense="
 											+ (forward ? "forward" : "reverse")
 											+ ", read=" + read.getName());
 
-									Segment segments[] = mapping.getSegments();
+									Segment[] segments = (Segment[]) mapping.getSegments();
 
 									if (segments != null) {
 										for (int iseg = 0; iseg < segments.length; iseg++) {
@@ -341,8 +341,8 @@ public class TestContigManager4 {
 		int cpos, rdleft, rdright, oldrdleft, oldrdright;
 		int maxdepth = -1;
 
-		int cstart = mappings[0].getContigStart();
-		int cfinal = mappings[0].getContigFinish();
+		int cstart = mappings[0].getContigStartPosition();
+		int cfinal = mappings[0].getContigEndPosition();
 
 		for (int i = 0; i < mappings.length; i++) {
 			if (mappings[i].getSequence() == null
@@ -351,11 +351,11 @@ public class TestContigManager4 {
 					|| mappings[i].getSegments() == null)
 				return false;
 
-			if (mappings[i].getContigStart() < cstart)
-				cstart = mappings[i].getContigStart();
+			if (mappings[i].getContigStartPosition() < cstart)
+				cstart = mappings[i].getContigStartPosition();
 
-			if (mappings[i].getContigFinish() > cfinal)
-				cfinal = mappings[i].getContigFinish();
+			if (mappings[i].getContigEndPosition() > cfinal)
+				cfinal = mappings[i].getContigEndPosition();
 		}
 
 		int truecontiglength = 1 + cfinal - cstart;
@@ -365,11 +365,11 @@ public class TestContigManager4 {
 
 		for (cpos = cstart, rdleft = 0, oldrdleft = 0, rdright = -1, oldrdright = -1; cpos <= cfinal; cpos++) {
 			while ((rdleft < nreads)
-					&& (mappings[rdleft].getContigFinish() < cpos))
+					&& (mappings[rdleft].getContigEndPosition() < cpos))
 				rdleft++;
 
 			while ((rdright < nreads - 1)
-					&& (mappings[rdright + 1].getContigStart() <= cpos))
+					&& (mappings[rdright + 1].getContigStartPosition() <= cpos))
 				rdright++;
 
 			int depth = 1 + rdright - rdleft;

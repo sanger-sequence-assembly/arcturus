@@ -1,4 +1,4 @@
-package uk.ac.sanger.arcturus.test;
+package uk.ac.sanger.arcturus.utils;
 
 import java.io.*;
 import java.sql.SQLException;
@@ -77,7 +77,7 @@ public class CAFWriter {
 	}
 
 	private void writeAssembledFrom(Mapping mapping) {
-		Segment[] rawsegments = mapping.getSegments();
+		Segment[] rawsegments = (Segment[]) mapping.getSegments();
 
 		for (int i = 0; i < rawsegments.length; i++)
 			segments[i] = rawsegments[i];

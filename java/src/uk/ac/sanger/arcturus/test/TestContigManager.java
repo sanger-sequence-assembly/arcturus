@@ -296,8 +296,8 @@ public class TestContigManager {
 				byte[] dna = sequence.getDNA();
 				if (dna != null)
 					ps.println("  Length: " + dna.length);
-				ps.println("  Extent: " + mapping.getContigStart() + " to "
-						+ mapping.getContigFinish());
+				ps.println("  Extent: " + mapping.getContigStartPosition() + " to "
+						+ mapping.getContigEndPosition());
 				ps.println("  Sense:  " + (forward ? "Forward" : "Reverse"));
 
 				Segment[] segments = mapping.getSegments();

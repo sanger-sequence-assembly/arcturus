@@ -806,7 +806,7 @@ public class ContigManager extends AbstractManager {
 
 		ResultSet rs = pstmtAlignToSCF.executeQuery();
 
-		Vector alignments = new Vector();
+		Vector<SortableAlignToSCF> alignments = new Vector<SortableAlignToSCF>();
 
 		while (rs.next()) {
 			int seq_id = rs.getInt(1);
@@ -826,7 +826,7 @@ public class ContigManager extends AbstractManager {
 
 		Arrays.sort(array);
 
-		alignments.clear();
+		Vector<AlignToSCF> alignments2 = new Vector<AlignToSCF>();
 
 		int current_seq_id = -1;
 
@@ -840,15 +840,15 @@ public class ContigManager extends AbstractManager {
 
 			if ((next_seq_id != current_seq_id) && (current_seq_id > 0)) {
 				AlignToSCF a2scf[] = new AlignToSCF[alignments.size()];
-				alignments.toArray(a2scf);
+				alignments2.toArray(a2scf);
 				Arrays.sort(a2scf, alignToSCFComparator);
 				Mapping mapping = (Mapping) mapmap.get(new Integer(
 						current_seq_id));
 				mapping.getSequence().setAlignToSCF(a2scf);
-				alignments.clear();
+				alignments2.clear();
 			}
 
-			alignments.add(new AlignToSCF(seqstart, scfstart, length));
+			alignments2.add(new AlignToSCF(seqstart, scfstart, length));
 
 			current_seq_id = next_seq_id;
 
@@ -1256,11 +1256,8 @@ public class ContigManager extends AbstractManager {
 		}
 	}
 
-	class AlignToSCFComparator implements Comparator {
-		public int compare(Object o1, Object o2) {
-			AlignToSCF aligntoscf1 = (AlignToSCF) o1;
-			AlignToSCF aligntoscf2 = (AlignToSCF) o2;
-
+	class AlignToSCFComparator implements Comparator<AlignToSCF> {
+		public int compare(AlignToSCF aligntoscf1, AlignToSCF aligntoscf2) {
 			int diff = aligntoscf1.getStartInSequence()
 					- aligntoscf2.getStartInSequence();
 
@@ -1279,7 +1276,7 @@ public class ContigManager extends AbstractManager {
 	class MappingComparator implements Comparator<Mapping> {
 		public int compare(Mapping mapping1, Mapping mapping2) {
 
-			int diff = mapping1.getContigStart() - mapping2.getContigStart();
+			int diff = mapping1.getContigStartPosition() - mapping2.getContigStartPosition();
 
 			return diff;
 		}
@@ -1293,12 +1290,9 @@ public class ContigManager extends AbstractManager {
 		}
 	}
 
-	class SegmentComparatorByContigPosition implements Comparator {
-		public int compare(Object o1, Object o2) {
-			Segment segment1 = (Segment) o1;
-			Segment segment2 = (Segment) o2;
-
-			int diff = segment1.getContigStart() - segment2.getContigStart();
+	class SegmentComparatorByContigPosition implements Comparator<Segment> {
+		public int compare(Segment s1, Segment s2) {
+			int diff = s1.getContigStart() - s2.getContigStart();
 
 			return diff;
 		}

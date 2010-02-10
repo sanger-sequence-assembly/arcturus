@@ -291,8 +291,8 @@ public class TestContigManager5 implements ContigProcessor {
 		int cpos, rdleft, rdright, oldrdleft, oldrdright;
 		int maxdepth = -1;
 
-		int cstart = mappings[0].getContigStart();
-		int cfinal = mappings[0].getContigFinish();
+		int cstart = mappings[0].getContigStartPosition();
+		int cfinal = mappings[0].getContigEndPosition();
 
 		for (int i = 0; i < mappings.length; i++) {
 			if (mappings[i].getSequence() == null
@@ -301,11 +301,11 @@ public class TestContigManager5 implements ContigProcessor {
 					|| mappings[i].getSegments() == null)
 				return false;
 
-			if (mappings[i].getContigStart() < cstart)
-				cstart = mappings[i].getContigStart();
+			if (mappings[i].getContigStartPosition() < cstart)
+				cstart = mappings[i].getContigStartPosition();
 
-			if (mappings[i].getContigFinish() > cfinal)
-				cfinal = mappings[i].getContigFinish();
+			if (mappings[i].getContigEndPosition() > cfinal)
+				cfinal = mappings[i].getContigEndPosition();
 		}
 
 		int truecontiglength = 1 + cfinal - cstart;
@@ -315,11 +315,11 @@ public class TestContigManager5 implements ContigProcessor {
 
 		for (cpos = cstart, rdleft = 0, oldrdleft = 0, rdright = -1, oldrdright = -1; cpos <= cfinal; cpos++) {
 			while ((rdleft < nreads)
-					&& (mappings[rdleft].getContigFinish() < cpos))
+					&& (mappings[rdleft].getContigEndPosition() < cpos))
 				rdleft++;
 
 			while ((rdright < nreads - 1)
-					&& (mappings[rdright + 1].getContigStart() <= cpos))
+					&& (mappings[rdright + 1].getContigStartPosition() <= cpos))
 				rdright++;
 
 			int depth = 1 + rdright - rdleft;

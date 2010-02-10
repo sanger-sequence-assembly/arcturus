@@ -328,27 +328,26 @@ public class CalculateConsensus {
 		if (contig == null || contig.getMappings() == null)
 			return false;
 
-		Mapping[] mappings = contig.getMappings();
+		ReadToContigMapping[] mappings = contig.getMappings();
 		int cpos, rdleft, rdright, oldrdleft, oldrdright;
 
-		int cstart = mappings[0].getContigStart();
-		int cfinal = mappings[0].getContigFinish();
+		int cstart = mappings[0].getContigStartPosition();
+		int cfinal = mappings[0].getContigEndPosition();
 
-		Vector<Mapping> normalReads = new Vector<Mapping>();
-		Vector<Mapping> longReads = new Vector<Mapping>();
+		Vector<ReadToContigMapping> normalReads = new Vector<ReadToContigMapping>();
+		Vector<ReadToContigMapping> longReads = new Vector<ReadToContigMapping>();
 
 		for (int i = 0; i < mappings.length; i++) {
 			if (mappings[i].getSequence() == null
 					|| mappings[i].getSequence().getDNA() == null
-					|| mappings[i].getSequence().getQuality() == null
-					|| mappings[i].getSegments() == null)
+					|| mappings[i].getSequence().getQuality() == null)
 				return false;
 
-			if (mappings[i].getContigStart() < cstart)
-				cstart = mappings[i].getContigStart();
+			if (mappings[i].getContigStartPosition() < cstart)
+				cstart = mappings[i].getContigStartPosition();
 
-			if (mappings[i].getContigFinish() > cfinal)
-				cfinal = mappings[i].getContigFinish();
+			if (mappings[i].getContigEndPosition() > cfinal)
+				cfinal = mappings[i].getContigEndPosition();
 
 			Read read = mappings[i].getSequence().getRead();
 
@@ -387,11 +386,11 @@ public class CalculateConsensus {
 
 		for (cpos = cstart, rdleft = 0, oldrdleft = 0, rdright = -1, oldrdright = -1; cpos <= cfinal; cpos++) {
 			while ((rdleft < nreads)
-					&& (mappings[rdleft].getContigFinish() < cpos))
+					&& (mappings[rdleft].getContigEndPosition() < cpos))
 				rdleft++;
 
 			while ((rdright < nreads - 1)
-					&& (mappings[rdright + 1].getContigStart() <= cpos))
+					&& (mappings[rdright + 1].getContigStartPosition() <= cpos))
 				rdright++;
 
 			int depth = 1 + rdright - rdleft;
@@ -415,7 +414,7 @@ public class CalculateConsensus {
 				processMapping(mappings[rdid], cpos);
 
 			// Process the oversize (consensus) reads
-			for (Mapping mapping : longReads)
+			for (ReadToContigMapping mapping : longReads)
 				processMapping(mapping, cpos);
 
 			try {
@@ -449,36 +448,24 @@ public class CalculateConsensus {
 		return true;
 	}
 
-	private void processMapping(Mapping mapping, int cpos) {
-		int rpos = -1;
-		int qual = -1;
+	private void processMapping(ReadToContigMapping mapping, int cpos) {
+		BaseWithQuality bq = mapping.getBaseAndQualityByContigPosition(cpos);
+
+		char base = bq.getBase();
 		
-		try {
-			rpos = mapping.getReadOffset(cpos);
-
-			qual = (rpos >= 0) ? mapping.getQuality(rpos) : mapping
-					.getPadQuality(cpos);
-		} catch (ArrayIndexOutOfBoundsException e) {
-			e.printStackTrace();
-			System.err.println("Mapping " + mapping +", cpos " + cpos);
-			System.exit(1);
-		}
-
+		int qual = bq.getQuality();
+		
 		if (qual <= 0)
 			return;
 
 		Read read = mapping.getSequence().getRead();
 
-		// In the Gap4 consensus algorithm, "strand" refers to the
-		// read-to-contig
-		// alignment direction, not the physical strand from which the
-		// read has
+		// In the Gap4 consensus algorithm, "strand" refers to the read-to-contig
+		// alignment direction, not the physical strand from which the read has
 		// been sequenced.
 		int strand = mapping.isForward() ? Read.FORWARD : Read.REVERSE;
 
 		int chemistry = read == null ? Read.UNKNOWN : read.getChemistry();
-
-		char base = (rpos >= 0) ? mapping.getBase(rpos) : '*';
 
 		algorithm.addBase(base, qual, strand, chemistry);
 	}

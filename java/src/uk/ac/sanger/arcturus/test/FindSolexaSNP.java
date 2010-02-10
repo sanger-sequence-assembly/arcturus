@@ -225,7 +225,7 @@ public class FindSolexaSNP {
 		int nreads = mappings.length;
 		int cpos, rdleft, rdright, oldrdleft, oldrdright;
 
-		int cstart = mappings[0].getContigStart();
+		int cstart = mappings[0].getContigStartPosition();
 		int cfinal = mappings[0].getContigFinish();
 
 		for (int i = 0; i < mappings.length; i++) {
@@ -235,8 +235,8 @@ public class FindSolexaSNP {
 					|| mappings[i].getSegments() == null)
 				return false;
 
-			if (mappings[i].getContigStart() < cstart)
-				cstart = mappings[i].getContigStart();
+			if (mappings[i].getContigStartPosition() < cstart)
+				cstart = mappings[i].getContigStartPosition();
 
 			if (mappings[i].getContigFinish() > cfinal)
 				cfinal = mappings[i].getContigFinish();
@@ -257,7 +257,7 @@ public class FindSolexaSNP {
 				rdleft++;
 
 			while ((rdright < nreads - 1)
-					&& (mappings[rdright + 1].getContigStart() <= cpos))
+					&& (mappings[rdright + 1].getContigStartPosition() <= cpos))
 				rdright++;
 
 			int depth = 1 + rdright - rdleft;

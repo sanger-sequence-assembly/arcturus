@@ -10,7 +10,7 @@ package uk.ac.sanger.arcturus.data;
  * greater detail.
  */
 
-public class Mapping {
+public class Mapping implements ReadToContigMapping {
 	protected Sequence sequence;
 	protected int cstart;
 	protected int cfinish;
@@ -116,7 +116,7 @@ public class Mapping {
 	 * @return the start position of the alignment on the contig.
 	 */
 
-	public int getContigStart() {
+	public int getContigStartPosition() {
 		return cstart;
 	}
 
@@ -126,7 +126,7 @@ public class Mapping {
 	 * @return the end position of the alignment on the contig.
 	 */
 
-	public int getContigFinish() {
+	public int getContigEndPosition() {
 		return cfinish;
 	}
 
@@ -146,7 +146,7 @@ public class Mapping {
 	 * @return the array of Segment objects for this alignment.
 	 */
 
-	public Segment[] getSegments() {
+	protected Segment[] getSegments() {
 		return segments;
 	}
 
@@ -157,11 +157,11 @@ public class Mapping {
 	 *            the array of Segment objects for this alignment.
 	 */
 
-	public void setSegments(Segment[] segments) {
-		this.segments = segments;
+	protected void setSegments(Segment[] segments) {
+		this.segments = (Segment[]) segments;
 
 		if (segments != null)
-			java.util.Arrays.sort(segments);
+				java.util.Arrays.sort(segments);
 	}
 
 	/**
@@ -172,7 +172,7 @@ public class Mapping {
 	 *         contains.
 	 */
 
-	public int getSegmentCount() {
+	protected int getSegmentCount() {
 		if (segments != null) {
 			int count = 0;
 			for (int i = 0; i < segments.length; i++)
@@ -196,7 +196,7 @@ public class Mapping {
 	 *         be correctly specified when the Mapping object is created.
 	 */
 
-	public boolean addSegment(Segment segment) {
+	protected boolean addSegment(Segment segment) {
 		if (nsegs < segments.length) {
 			segments[nsegs++] = segment;
 			java.util.Arrays.sort(segments, 0, nsegs);
@@ -385,5 +385,27 @@ public class Mapping {
 		text += "]";
 
 		return text;
+	}
+
+	public BaseWithQuality getBaseAndQualityByContigPosition(int cpos) {
+		int rpos = getReadOffset(cpos);
+		
+		char base = rpos < 0 ? BaseWithQuality.STAR : getBase(rpos);
+		
+		int quality = rpos < 0 ? getPadQuality(cpos) : getQuality(rpos);
+		
+		return new BaseWithQuality(base, quality);
+	}
+
+	public BaseWithQuality getBaseAndQualityByReadPosition(int rpos) {
+		char base = getBase(rpos);
+		int quality = getQuality(rpos);
+		return new BaseWithQuality(base, quality);
+	}
+
+	@Override
+	public AssembledFrom[] getAssembledFromRecords() {
+		// TODO Auto-generated method stub
+		return null;
 	}
 }

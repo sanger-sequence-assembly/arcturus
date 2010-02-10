@@ -8,7 +8,7 @@ package uk.ac.sanger.arcturus.data;
  * length. The direction is a property of the parent Mapping.
  */
 
-public class Segment implements java.lang.Comparable {
+public class Segment {
 	protected int cstart;
 	protected int rstart;
 	protected int length;
