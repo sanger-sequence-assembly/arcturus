@@ -10,6 +10,8 @@ import java.io.UnsupportedEncodingException;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
 
+import com.mysql.jdbc.MysqlErrorNumbers;
+
 public class OligoFinder {
 	private Connection conn = null;
 
@@ -19,6 +21,9 @@ public class OligoFinder {
 	private Inflater decompresser = new Inflater();
 	
 	private int passValue;
+	
+	private final int RETRY_INTERVAL = 10000;
+	private final int RETRY_ATTEMPTS = 5;
 	
 	// The name of the temporary table for busy reads (reads which are in current contigs)
 	private final String BUSY_READS = "tmpBUSYREADS";
@@ -241,36 +246,59 @@ public class OligoFinder {
 		return updateFreeReadsTable();
 	}
 	
-	private void updateBusyReadsTable() throws SQLException {
-		int rows = pstmtEmptyBusyReadsTable.executeUpdate();
+	private int retryDatabaseOperation(PreparedStatement emptyStatement, PreparedStatement populateStatement, int retryInterval, int retryAttempts)
+		throws SQLException {
+		int rows = -1;
+		
+		boolean done = false;
+		int tries = 0;
+		
+		while (!done && tries < retryAttempts) {
+			try {
+				System.err.println("Attempt #" + (tries+1));
+				
+				rows = emptyStatement.executeUpdate();
+				
+				System.err.println("\tDeleted " + rows + " rows");
+				
+				long ticks = System.currentTimeMillis();
+
+				rows = populateStatement.executeUpdate();
+
+				ticks = System.currentTimeMillis() - ticks;
+				
+				System.err.println("\tTable populated with " + rows + " rows in " + ticks + " ms");
+				
+				done = true;
+			}
+			catch (SQLException sqle) {
+				if (sqle instanceof SQLTransactionRollbackException || 
+						sqle.getErrorCode() == MysqlErrorNumbers.ER_LOCK_WAIT_TIMEOUT) {
+					try {
+						tries++;
+						Thread.sleep(retryInterval);
+					} catch (InterruptedException ie) {
+						return rows;
+					}				
+				} else
+					throw sqle;
+			}
+		}
+		
+		return rows;
+	}
 	
-		System.err.println("Deleted " + rows + " rows from busy reads table");
-		
-		long ticks = System.currentTimeMillis();
-		
-		rows = pstmtPopulateBusyReadsTable.executeUpdate();
-		
-		ticks = System.currentTimeMillis() - ticks;
-		
-		System.err.println("Busy reads table populated with " + rows + " rows in " + ticks + " ms");
+	private int updateBusyReadsTable() throws SQLException {
+		System.err.println("\nUpdating busy reads table ...");
+		return retryDatabaseOperation(pstmtEmptyBusyReadsTable, pstmtPopulateBusyReadsTable, RETRY_INTERVAL, RETRY_ATTEMPTS);
 	}
 	
 	private int updateFreeReadsTable() throws SQLException {
-		int rows = pstmtEmptyFreeReadsTable.executeUpdate();
-		
-		System.err.println("Deleted " + rows + " rows from free reads table");
-		
+		System.err.println("\nUpdating free reads table ...");
+
 		pstmtPopulateFreeReadsTable.setInt(1, passValue);
-		
-		long ticks = System.currentTimeMillis();
-		
-		rows = pstmtPopulateFreeReadsTable.executeUpdate();
-		
-		ticks = System.currentTimeMillis() - ticks;
-		
-		System.err.println("Free reads table populated with " + rows + " rows in " + ticks + " ms");
-		
-		return rows;
+
+		return retryDatabaseOperation(pstmtEmptyFreeReadsTable, pstmtPopulateFreeReadsTable, RETRY_INTERVAL, RETRY_ATTEMPTS);
 	}
 	
 	private int scanFreeReads(Oligo[] oligos) throws SQLException {

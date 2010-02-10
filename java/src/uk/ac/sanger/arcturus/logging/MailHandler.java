@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.logging;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.sql.SQLException;
 import java.util.logging.*;
 import javax.mail.*;
 import javax.mail.internet.*;
@@ -129,6 +130,13 @@ public class MailHandler extends Handler {
 			sb.append(": " + thrown.getMessage());
 		
 		sb.append("\n");
+		
+		if (thrown instanceof SQLException) {
+			SQLException sqle = (SQLException)thrown;
+			
+			sb.append("\nSQL error code : " + sqle.getErrorCode() + "\n");
+			sb.append("SQL state : " + sqle.getSQLState() + "\n");
+		}
 
 		sb.append("\nSTACK TRACE:\n\n");
 		

@@ -1,5 +1,6 @@
 package uk.ac.sanger.arcturus.logging;
 
+import java.sql.SQLException;
 import java.util.logging.*;
 import javax.swing.*;
 
@@ -50,6 +51,13 @@ public class MessageDialogHandler extends Handler {
 
 				sb.append(throwable.getClass().getName() + ": "
 						+ throwable.getMessage() + "\n");
+				
+				if (throwable instanceof SQLException) {
+					SQLException sqle = (SQLException)throwable;
+					
+					sb.append("\nSQL error code : " + sqle.getErrorCode() + "\n");
+					sb.append("SQL state : " + sqle.getSQLState() + "\n");
+				}
 
 				StackTraceElement[] ste = throwable.getStackTrace();
 
