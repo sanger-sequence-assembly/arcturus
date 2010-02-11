@@ -51,7 +51,7 @@ public class ConsensusReadImporter {
 	
 	private PreparedStatement pstmtInsertSeq2Read = null;
 	private static final String INSERT_SEQ2READ = "insert into SEQ2READ(read_id, seq_id,version)" +
-		" values (?,?,1)";
+		" values (?,?,0)";
 	
 	private PreparedStatement pstmtInsertReadTag = null;
 	private static final String INSERT_READTAG = "insert into READTAG(seq_id,tagtype,pstart,pfinal,comment)" +
