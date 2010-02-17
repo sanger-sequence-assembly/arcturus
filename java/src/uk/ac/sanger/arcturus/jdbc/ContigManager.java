@@ -24,9 +24,6 @@ public class ContigManager extends AbstractManager {
 	protected PreparedStatement pstmtContigData = null;
 	protected PreparedStatement pstmtCurrentContigData = null;
 	protected PreparedStatement pstmtCountMappings = null;
-	protected PreparedStatement pstmtMappingData = null;
-	protected PreparedStatement pstmtCountSegments = null;
-	protected PreparedStatement pstmtSegmentData = null;
 	protected PreparedStatement pstmtSequenceData = null;
 	protected PreparedStatement pstmtReadAndTemplateData = null;
 	protected PreparedStatement pstmtQualityClipping = null;
@@ -56,6 +53,8 @@ public class ContigManager extends AbstractManager {
 
 	protected Map<Integer, String> svectorByID = new HashMap<Integer, String>();
 	protected Map<Integer, String> cvectorByID = new HashMap<Integer, String>();
+	
+	protected MappingManager mappingManager;
 
 	/**
 	 * Creates a new ContigManager to provide contig management services to an
@@ -75,6 +74,8 @@ public class ContigManager extends AbstractManager {
 
 		preloadSequencingVectors();
 		preloadCloningVectors();
+		
+		mappingManager = new MappingManager(adb);
 	}
 
 	public void clearCache() {
@@ -97,22 +98,6 @@ public class ContigManager extends AbstractManager {
 		query = "select count(*) from MAPPING where contig_id = ?";
 
 		pstmtCountMappings = conn.prepareStatement(query);
-
-		query = "select count(*) from MAPPING left join SEGMENT using(mapping_id) where contig_id = ?";
-
-		pstmtCountSegments = conn.prepareStatement(query);
-
-		query = "select MAPPING.seq_id,cstart,cfinish,direction,seqlen"
-				+ " from MAPPING left join SEQUENCE using(seq_id)"
-				+ " where contig_id=?";
-
-		pstmtMappingData = conn.prepareStatement(query);
-
-		query = "select seq_id,SEGMENT.cstart,rstart,length "
-				+ " from MAPPING left join SEGMENT using(mapping_id) "
-				+ " where contig_id = ?";
-
-		pstmtSegmentData = conn.prepareStatement(query);
 
 		query = "select MAPPING.seq_id,seqlen,sequence,quality "
 				+ " from MAPPING left join SEQUENCE using(seq_id) "
@@ -356,15 +341,7 @@ public class ContigManager extends AbstractManager {
 			Mapping mappings[] = contig.getMappings();
 
 			if (mappings == null) {
-				int nMappings = getMappingCount(contig_id);
-
-				/*
-				 * Create an empty array of Mapping objects.
-				 */
-
-				mappings = new Mapping[nMappings];
-
-				getMappings(contig_id, mappings);
+				mappings = getMappings(contig_id, options);
 
 				Arrays.sort(mappings, mappingComparator);
 
@@ -375,9 +352,6 @@ public class ContigManager extends AbstractManager {
 
 			if ((options & ArcturusDatabase.CONTIG_MAPPINGS_READS_AND_TEMPLATES) != 0)
 				getReadAndTemplateData(contig_id, mapmap);
-
-			if ((options & ArcturusDatabase.CONTIG_MAPPING_SEGMENTS) != 0)
-				getSegmentData(contig_id, mapmap);
 
 			if ((options & ArcturusDatabase.CONTIG_SEQUENCE_DNA_AND_QUALITY) != 0)
 				getSequenceData(contig_id, mapmap);
@@ -398,61 +372,9 @@ public class ContigManager extends AbstractManager {
 			loadTagsForContig(contig);
 	}
 
-	private int getMappingCount(int contig_id) throws SQLException {
-		pstmtCountMappings.setInt(1, contig_id);
-
-		ResultSet rs = pstmtCountMappings.executeQuery();
-
-		rs.next();
-
-		int nMappings = rs.getInt(1);
-
-		rs.close();
-
-		return nMappings;
-	}
-
-	private void getMappings(int contig_id, Mapping[] mappings)
+	private Mapping[] getMappings(int contig_id, int mode)
 			throws SQLException {
-		int nMappings = mappings.length;
-
-		pstmtMappingData.setInt(1, contig_id);
-
-		event.begin("Execute mapping query", nMappings);
-		fireEvent(event);
-
-		ResultSet rs = pstmtMappingData.executeQuery();
-
-		event.end();
-		fireEvent(event);
-
-		int kMapping = 0;
-
-		event.begin("Creating mappings", nMappings);
-		fireEvent(event);
-
-		while (rs.next()) {
-			int seq_id = rs.getInt(1);
-			int cstart = rs.getInt(2);
-			int cfinish = rs.getInt(3);
-			boolean forward = rs.getString(4).equalsIgnoreCase("Forward");
-			int length = rs.getInt(5);
-
-			Sequence sequence = adb.findOrCreateSequence(seq_id, length);
-
-			mappings[kMapping++] = new Mapping(sequence, cstart, cfinish,
-					forward);
-
-			if ((kMapping % 10) == 0) {
-				event.working(kMapping);
-				fireEvent(event);
-			}
-		}
-
-		event.end();
-		fireEvent(event);
-
-		rs.close();
+		return mappingManager.getMappings(contig_id, mode);
 	}
 
 	private void getReadAndTemplateData(int contig_id, Map mapmap)
@@ -513,117 +435,6 @@ public class ContigManager extends AbstractManager {
 		fireEvent(event);
 
 		rs.close();
-	}
-
-	private int getSegmentCount(int contig_id) throws SQLException {
-		pstmtCountSegments.setInt(1, contig_id);
-
-		ResultSet rs = pstmtCountSegments.executeQuery();
-
-		rs.next();
-
-		int nSegments = rs.getInt(1);
-
-		rs.close();
-
-		return nSegments;
-	}
-
-	private void getSegmentData(int contig_id, Map mapmap) throws SQLException {
-		int nSegments = getSegmentCount(contig_id);
-
-		int nMappings = mapmap.size();
-
-		Vector<Segment> segv = new Vector<Segment>(1000, 1000);
-
-		pstmtSegmentData.setInt(1, contig_id);
-
-		event.begin("Execute segment query", nMappings);
-		fireEvent(event);
-
-		ResultSet rs = pstmtSegmentData.executeQuery();
-
-		event.end();
-		fireEvent(event);
-
-		event.begin("Loading segments", nSegments);
-		fireEvent(event);
-
-		SortableSegment segments[] = new SortableSegment[nSegments];
-
-		int kSegment = 0;
-
-		while (rs.next()) {
-			int seq_id = rs.getInt(1);
-			int cstart = rs.getInt(2);
-			int rstart = rs.getInt(3);
-			int length = rs.getInt(4);
-
-			segments[kSegment++] = new SortableSegment(seq_id, cstart, rstart,
-					length);
-
-			if ((kSegment % 50) == 0) {
-				event.working(kSegment);
-				fireEvent(event);
-			}
-		}
-
-		rs.close();
-
-		event.end();
-		fireEvent(event);
-
-		event.begin("Sorting segments", nSegments);
-		fireEvent(event);
-
-		Arrays.sort(segments);
-
-		event.end();
-		fireEvent(event);
-
-		int current_seq_id = 0;
-
-		event.begin("Processing segments", nSegments);
-		fireEvent(event);
-
-		for (kSegment = 0; kSegment < nSegments; kSegment++) {
-			int next_seq_id = segments[kSegment].seq_id;
-			int cstart = segments[kSegment].cstart;
-			int rstart = segments[kSegment].rstart;
-			int length = segments[kSegment].length;
-
-			if ((next_seq_id != current_seq_id) && (current_seq_id > 0)) {
-				Segment segs[] = new Segment[segv.size()];
-				segv.toArray(segs);
-				Arrays.sort(segs, segmentComparator);
-				Mapping mapping = (Mapping) mapmap.get(new Integer(
-						current_seq_id));
-				mapping.setSegments(segs);
-				segv.clear();
-			}
-
-			segv.add(new Segment(cstart, rstart, length));
-
-			current_seq_id = next_seq_id;
-
-			if ((kSegment % 50) == 0) {
-				event.working(kSegment);
-				fireEvent(event);
-			}
-		}
-
-		Segment segs[] = new Segment[segv.size()];
-
-		segv.toArray(segs);
-
-		Arrays.sort(segs, segmentComparator);
-
-		Mapping mapping = (Mapping) mapmap.get(new Integer(current_seq_id));
-		mapping.setSegments(segs);
-
-		event.end();
-		fireEvent(event);
-
 	}
 
 	private void getSequenceData(int contig_id, Map mapmap)
