@@ -1,5 +1,7 @@
 package uk.ac.sanger.arcturus.data;
 
+import java.util.Arrays;
+
 /**
  * An object which represents an alignment of a read to a contig.
  * 
@@ -10,13 +12,12 @@ package uk.ac.sanger.arcturus.data;
  * greater detail.
  */
 
-public class Mapping implements ReadToContigMapping {
+public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 	protected Sequence sequence;
 	protected int cstart;
 	protected int cfinish;
 	protected boolean forward;
 	protected Segment[] segments;
-	protected int nsegs;
 
 	/**
 	 * Constructs a mapping from the specified sequence, contig start and end
@@ -44,8 +45,7 @@ public class Mapping implements ReadToContigMapping {
 		this.cstart = cstart;
 		this.cfinish = cfinish;
 		this.forward = forward;
-		this.segments = new Segment[numsegs];
-		nsegs = 0;
+		setSegments(null);
 	}
 
 	/**
@@ -71,14 +71,7 @@ public class Mapping implements ReadToContigMapping {
 		this.cstart = cstart;
 		this.cfinish = cfinish;
 		this.forward = forward;
-		this.segments = segments;
-
-		if (segments == null)
-			nsegs = 0;
-		else {
-			java.util.Arrays.sort(segments);
-			nsegs = segments.length;
-		}
+		setSegments(segments);
 	}
 
 	/**
@@ -157,11 +150,11 @@ public class Mapping implements ReadToContigMapping {
 	 *            the array of Segment objects for this alignment.
 	 */
 
-	protected void setSegments(Segment[] segments) {
-		this.segments = (Segment[]) segments;
+	public void setSegments(Segment[] segments) {
+		this.segments = segments;
 
 		if (segments != null)
-				java.util.Arrays.sort(segments);
+				Arrays.sort(segments);
 	}
 
 	/**
@@ -173,36 +166,16 @@ public class Mapping implements ReadToContigMapping {
 	 */
 
 	protected int getSegmentCount() {
-		if (segments != null) {
+		if (segments == null)
+			return 0;
+		else {
 			int count = 0;
 			for (int i = 0; i < segments.length; i++)
 				if (segments[i] != null)
 					count++;
 
 			return count;
-		} else
-			return nsegs;
-	}
-
-	/**
-	 * Adds a Segment object to the array of segments for this alignment.
-	 * 
-	 * @param segment
-	 *            the Segment object to be added to this alignment.
-	 * 
-	 * @return true if the segment was successfully added; otherwise, false. A
-	 *         false value will be returned when the array becomes full. There
-	 *         is currently no mechanism to extend the array, so the size must
-	 *         be correctly specified when the Mapping object is created.
-	 */
-
-	protected boolean addSegment(Segment segment) {
-		if (nsegs < segments.length) {
-			segments[nsegs++] = segment;
-			java.util.Arrays.sort(segments, 0, nsegs);
-			return true;
-		} else
-			return false;
+		}
 	}
 
 	/**
@@ -407,5 +380,9 @@ public class Mapping implements ReadToContigMapping {
 	public AssembledFrom[] getAssembledFromRecords() {
 		// TODO Auto-generated method stub
 		return null;
+	}
+
+	public int compareTo(Mapping that) {
+		return this.cstart - that.cstart;
 	}
 }
