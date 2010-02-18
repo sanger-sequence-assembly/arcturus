@@ -7,12 +7,6 @@ use CanonicalSegment;
 use Digest::MD5 qw(md5 md5_hex md5_base64);
 
 #-------------------------------------------------------------------
-# Class variable
-#-------------------------------------------------------------------
-
-my $CANONICALMAPPING_HASHREF = {}; # cache
-
-#-------------------------------------------------------------------
 # Constructor new 
 #-------------------------------------------------------------------
 
@@ -31,15 +25,24 @@ sub new {
 # cache look up
 #-----------------------------------------------------------------------------
 
+my $CANONICALMAPPING_HASHREF = {}; # cache
+
+my $BUILDCACHE = 1; # default enable usage
+
 sub lookup { 
 # class method: retrieve a cached mapping keyed on the checksum
     my $class = shift;
     my $checksum = shift || 0;
-#print STDOUT "Probe cache for checksum ".sprintf("%vd",$checksum)."\n";
     return $CANONICALMAPPING_HASHREF->{$checksum};
 }
 
-sub cache { # returns the size of the cache (test/monitoring)
+sub cache { 
+# class method: returns the size of the cache
+    my $class = shift;
+    my %options = @_; # disable=>, reset=>
+# optionally disables/resets cache; default enables cache
+    $BUILDCACHE = $options{disable} ? 0 : 1;
+    $CANONICALMAPPING_HASHREF = {} if $options{reset};
     return scalar(keys %$CANONICALMAPPING_HASHREF);
 }
 
@@ -75,12 +78,13 @@ sub setCheckSum {
     my $checksum = shift || return undef;
     $this->{segmentchecksum} = $checksum;
 # check if a cached version of the mapping already exists
-    return 0 if $this->lookup($checksum);
-# add instance to cache
+    return 0 unless $BUILDCACHE;
+    return 0 if $this->lookup($checksum); # already cached
+# add instance to cache 
     $CANONICALMAPPING_HASHREF->{$checksum} = $this;
-#print STDOUT "CM $this added to cache for checksum ".sprintf("%vd",$checksum)."\n";
     return 1;
 }
+
 
 sub getCheckSum {
     my $this = shift;
