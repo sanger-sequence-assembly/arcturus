@@ -1999,6 +1999,7 @@ sub parseRead {
 
 # parse the file until the next blank record
 
+    my $readlength = 0;
     my $isUnpadded = 1;
     my $sequencingvector;
     my $tagpositiontest;
@@ -2061,6 +2062,7 @@ sub parseRead {
                 if ($isUnpadded && $entry == 2) {
                     $logger->info("Edited read $readname detected ($line)");
                 }
+                $readlength = $positions[1] if ($positions[1] > $readlength);
             }
             else {
                 $logger->severe("Invalid alignment: ($line) $record",2);
@@ -2124,6 +2126,7 @@ $logger->error("This line extention block should NOT be activated : $fline $reco
                               . $read->getReadName() . " : ".($msg || ''));
                 $logger->info($tag->writeToCaf(0));
             }
+	    $readlength = $trpf if ($trpf > $readlength);
         }
 
 # most of the following is not operational
@@ -2136,15 +2139,13 @@ $logger->error("This line extention block should NOT be activated : $fline $reco
             $logger->fine("($line) READ tag ignored: $record");
         }
      
-        elsif ($record =~ /Note\sINFO\s(.*)$/) {
-# TO BE COMPLETED
-	    my $trpf = $read->getSequenceLength();
-#            my $tag = new Tag('readtag');
-#            $tag->setType($type);
-#            $tag->setPosition($trps,$trpf);
-#            $tag->setStrand('Forward');
-#            $tag->setTagComment($info);
-  	    $logger->info("NOTE detected but not processed ($line): $record");
+        elsif ($record =~ /Note\s(.*)$/i) {
+            my $info = $1;
+# don't try to get the read length via getSequenceLength, because that may load DNA and
+# interfere with the record read order
+            $readlength = 1 unless $readlength;
+	    my $tag = TagFactory->makeReadTag('NOTE',1,$readlength,TagComment => $info);
+            $read->addTag($tag);
         }
 
         elsif ($record =~ /SCF|Pro|Temp|Ins|Dye|Pri|Str|Clo|Seq|Lig|Pro|Asp|Bas/) {
@@ -2233,7 +2234,6 @@ $logger->error("This line extention block should NOT be activated : $fline $reco
 
 	else {
             $logger->warning("($line) not recognized : $record");
-
         }
     }
 
