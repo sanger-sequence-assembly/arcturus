@@ -171,15 +171,23 @@ public class ConsensusReadImporterPanel extends MinervaPanel {
 	}
 	
 	private void chooseFile() {
-
 		int returnVal = chooser.showOpenDialog(null);
 
 		if (returnVal == JFileChooser.APPROVE_OPTION) {
 			fileToImport = chooser.getSelectedFile();
 		
-			txtFilename.setText(fileToImport.getAbsolutePath());
+			if (fileToImport.exists()  && fileToImport.canRead()) {
+				txtFilename.setText(fileToImport.getAbsolutePath());
 			
-			actionImportReads.setEnabled(true);
+				actionImportReads.setEnabled(true);
+			} else {
+				if (!fileToImport.exists())
+					JOptionPane.showMessageDialog(this, "The file " + fileToImport + " does not exist",
+						"File does not exist", JOptionPane.ERROR_MESSAGE);
+				else
+					JOptionPane.showMessageDialog(this, "The file " + fileToImport + " exists\nbut you don't have permission to read it",
+							"File cannot be read", JOptionPane.ERROR_MESSAGE);
+			}
 		}
 	}
 
