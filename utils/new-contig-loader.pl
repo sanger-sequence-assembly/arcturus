@@ -99,6 +99,7 @@ my $manglereadname = '\.[pq][12]k\.[\w\-]+';
 
 my $loglevel;             
 my $logfile;
+my $mapfile;
 #my $outfile;
 my $outfile = "contigloader";
 my $minerva;
@@ -147,7 +148,7 @@ my $validkeys  = "organism|o|instance|i|"
                . "assembly|a|noscaffold|ns|scaffoldfile|sf|"
 
                . "outputfile|out|log|minerva|verbose|info|debug|"
-               . "memory|timing|benchmark|help|h";
+               . "memory|timing|benchmark|help|h|mapfile";
 
 #------------------------------------------------------------------------------
 # parse the command line input; options overwrite eachother; order is important
@@ -367,6 +368,7 @@ while (my $nextword = shift @ARGV) {
 
     $logfile          = shift @ARGV  if ($nextword eq '-log');
     $outfile          = shift @ARGV  if ($nextword eq '-out');
+    $mapfile          = shift @ARGV  if ($nextword eq '-mapfile');
 
     &showUsage(0) if ($nextword eq '-h' || $nextword eq '-help');
 }
@@ -405,6 +407,17 @@ if ($debug) {
 }
 
 $logger->listStreams() if defined $loglevel; # test
+
+#----------------------------------------------------------------
+# open file handle for CAF contig name to Arcturus ID mapping
+#----------------------------------------------------------------
+
+my $fhMapfile;
+
+if (defined($mapfile)) {
+    $fhMapfile = new FileHandle($mapfile, "w");
+    $fhMapfile->autoflush(1);
+}
 
 #----------------------------------------------------------------
 # get the database connection
@@ -1015,6 +1028,11 @@ print STDOUT " end no frugal scan\n";
                 $lastinsertedcontig = $added;
                 $logger->info("Contig $identifier with $nr reads :"
                              ." status $added, $msg");
+
+		# Record the mapping from CAF contig name to Arcturus ID, if 
+		# the user specified a map file
+		print $fhMapfile "$identifier $added\n" if defined($fhMapfile);
+
 #                $loaded++ unless ...;
 # replace the input rank by the scaffold ranking, or, if absent by the nextrank count
                 if ($scaffold) {
@@ -1224,6 +1242,8 @@ foreach my $user (@$addressees) {
     &sendMessage($user, $message, $instance) if $message;
 }
 
+# Close the CAF contig name to Arcturus ID map file, if it was opened
+$fhMapfile->close() if defined($fhMapfile);
 
 exit 0 if $loaded;  # no errors and contigs loaded
 
@@ -1746,6 +1766,8 @@ sub showUsage {
     print STDERR "-debug\t\t(no value) you don't want to do this\n";
     print STDERR "\n";
     print STDERR "-gap4name\tname entered in database import log for origin of data\n";
+    print STDERR "\n";
+    print STDERR "-mapfile\tName of output file for CAF contig name to Arcturus ID mappings\n";
     print STDERR "\n";
 #    print STDERR "-safemode\tread the last contig back from the database to confirm storage\n";
     print STDERR "\n";
