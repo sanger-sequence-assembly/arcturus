@@ -226,7 +226,7 @@ if ( -f "${gap4name}.B.BUSY") {
 
 # determine if script run in standard mode
 
-my $nonstandard = ($gap4name ne $projectname || $version ne '0') ? 1 : 0;
+my $nonstandard = (uc($gap4name) ne uc($projectname) || $version ne '0') ? 1 : 0;
 print STDOUT "$0 running in non-standard mode\n" if $nonstandard;
 
 # check age
@@ -296,7 +296,7 @@ unless ($? == 0) {
 #------------------------------------------------------------------------------
 
 unless ($version eq "B" || $nonstandard) {
-    print STDOUT "Backing up version $version to B\n";
+    print STDOUT "Backing up version $version to $gap4name.B\n";
     if (-f "$gap4name.B") {
 # extra protection against busy B version preventing the backup
         if ( -f "${gap4name}.B.BUSY") {
@@ -320,6 +320,7 @@ unless ($version eq "B" || $nonstandard) {
         }
     }       
 }
+
 #------------------------------------------------------------------------------
 # extract contig order from the Gap4 database
 #------------------------------------------------------------------------------
