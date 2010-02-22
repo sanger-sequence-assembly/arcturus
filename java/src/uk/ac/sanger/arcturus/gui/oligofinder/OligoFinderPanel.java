@@ -434,23 +434,28 @@ public class OligoFinderPanel extends MinervaPanel implements
 	public void oligoFinderUpdate(OligoFinderEvent event) {
 		int type = event.getType();
 		int value = event.getValue();
+		
+		Date now = new Date();
 
 		switch (type) {
 			case OligoFinderEvent.START_CONTIGS:
 				oligomatches.clear();
 				bpdone = 0;
 				initProgressBar(pbarContigProgress, value);
+				postMessage("\nTIMESTAMP: " + now + "\n");
 				postMessage("\nStarting oligo search in " + df.format(value)
 						+ " bp of contig consensus sequence\n");
 				break;
 
 			case OligoFinderEvent.ENUMERATING_FREE_READS:
+				postMessage("\nTIMESTAMP: " + now + "\n");
 				postMessage("\nMaking a list of free reads.  This may take some time.  Please be patient.\n");
 				break;
 
 			case OligoFinderEvent.START_READS:
 				oligomatches.clear();
 				bpdone = 0;
+				postMessage("\nTIMESTAMP: " + now + "\n");
 				initProgressBar(pbarReadProgress, value);
 				postMessage("\nStarting oligo search in " + df.format(value)
 						+ " free reads\n");
