@@ -395,13 +395,13 @@ print STDERR "Changing access provileges on Gap4 database\n";
 # marking project as exported (only in standard export mode)
 #------------------------------------------------------------------------------
 
-unless ($scaffold || $projectname ne $gap4name || $version ne 'A') {
+unless ($scaffold || uc($projectname) ne uc($gap4name) || $version ne 'A') {
 
     print STDERR "Marking project $projectname as exported\n";
 
     my $marker_script =  "${arcturus_home}/utils/project-export-marker";
     $marker_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
-    system ("$marker_script -i $instance -o $organism -p $projectname "
+    system ("$marker_script -i $instance -o $organism -p ${gap4name} "
 	   ."-file $pwd/${gap4name}.$version");
 
     if ($?) {
