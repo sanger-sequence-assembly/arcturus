@@ -118,6 +118,8 @@ my $dbport = $dsb->getAttribute("port");
 my $dbuser = $dsb->getAttribute("user");
 my $dbpass = $dsb->getAttribute("password");
 
+my %projects;
+
 if (defined($projectsfile) && -f $projectsfile) {
     open(PROJECTS, $projectsfile) || die "Could not open project list file $projects";
 
@@ -125,15 +127,20 @@ if (defined($projectsfile) && -f $projectsfile) {
 
     while (my $line = <PROJECTS>) {
 	chop($line);
-	push @projects, $line;
+
+	my ($projectname,$directory) = split(/,/, $line);
+
+	$directory = $repository . '/split/' . $projectname unless defined($directory);
+
+        $projects{$projectname} = $directory;
     }
 
     close(PROJECTS);
+}
 
-    if (defined($projects)) {
-	$projects .= ',' . join(',', @projects);
-    } else {
-	$projects = join(',', @projects);
+if (defined($projects)) {
+    foreach my $projectname (split(/,/,$projects)) {
+	$projects{$projectname} = $repository . '/split/' . $projectname;
     }
 }
 
@@ -321,22 +328,29 @@ unless ($skipdbsteps) {
     
     $sth = $dbh->prepare($query);
     &db_die("Failed to prepare query \"$query\"");
+
+    my $directory = $projects{'BIN'};
+
+    $directory = $repository . '/split/BIN' unless defined($directory);
     
-    $sth->execute($assembly_id, 'BIN', $me, $repository . "/split/BIN");
+    $sth->execute($assembly_id, 'BIN', $me, $directory);
     &db_die("Failed to execute query \"$query\" for BIN");
     
     $sth->execute($assembly_id, 'PROBLEMS', $me, undef);
     &db_die("Failed to execute query \"$query\" for PROBLEMS");
     
     print STDERR "OK\n\n";
+
+    delete $projects{'BIN'};
     
-    if (defined($projects)) {
+    if (scalar keys %projects) {
 	print STDERR "### Creating user-specified projects ...\n";
 	
-	foreach my $project (split(/,/, $projects)) {
-	    $sth->execute($assembly_id, $project, $me, $repository . "/split/" . $project);
-	    &db_die("Failed to execute query \"$query\" for $project");
-	    print STDERR "\t$project\n";
+	foreach my $projectname (sort keys %projects) {
+	    my $directory = $projects{$projectname};
+	    $sth->execute($assembly_id, $projectname, $me, $directory);
+	    &db_die("Failed to execute query \"$query\" for $projectname");
+	    print STDERR "\t$projectname\n";
 	}
 	
 	print STDERR "\nOK\n\n";

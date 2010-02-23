@@ -13,7 +13,7 @@ MYSQL_INSTANCE=arct
 #########################################################################
 ###             These settings are specific to ZGTC                   ###
 #########################################################################
-CLONE_LIST_FILE=CloneList.txt
+CLONE_LIST_FILE=CloneListWithDirectories.txt
 CONTIG_TO_CLONE_MAP=Contigs_To_Clones
 
 #########################################################################
@@ -98,5 +98,4 @@ ${SCRIPT_HOME}/create-new-organism.pl \
     -subdir $subdir \
     -description "$description" \
     -repository $reposdir \
-    -projects POOL \
     -projectsfile $projects
