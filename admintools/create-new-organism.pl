@@ -28,6 +28,7 @@ my $description;
 my $template;
 
 my $projects;
+my $projectsfile;
 
 my $appendtofile;
 
@@ -55,6 +56,8 @@ while (my $nextword = shift @ARGV) {
     $description = shift @ARGV if ($nextword eq '-description');
 
     $projects = shift @ARGV if ($nextword eq '-projects');
+
+    $projectsfile = shift @ARGV if ($nextword eq '-projectsfile');
 
     $appendtofile = shift @ARGV if ($nextword eq '-appendtofile');
 
@@ -114,6 +117,25 @@ my $dbhost = $dsb->getAttribute("serverName");
 my $dbport = $dsb->getAttribute("port");
 my $dbuser = $dsb->getAttribute("user");
 my $dbpass = $dsb->getAttribute("password");
+
+if (defined($projectsfile) && -f $projectsfile) {
+    open(PROJECTS, $projectsfile) || die "Could not open project list file $projects";
+
+    my @projects;
+
+    while (my $line = <PROJECTS>) {
+	chop($line);
+	push @projects, $line;
+    }
+
+    close(PROJECTS);
+
+    if (defined($projects)) {
+	$projects .= ',' . join(',', @projects);
+    } else {
+	$projects = join(',', @projects);
+    }
+}
 
 unless ($skipdbsteps) {
     my $users_and_roles = &getUsersAndRoles($dsa);
@@ -651,4 +673,7 @@ sub showUsage {
     print STDERR "    -nocreatedatabase\tDatabase already exists, do not create it\n";
     print STDERR "    -skipdbsteps\tSkip the MySQL steps\n";
     print STDERR "    -appendtofile\tAppend the organism name to this file\n";
+    print STDERR "    -projects\t\tProjects to add to the database\n";
+    print STDERR "    -projectsfile\tFile containing list of projects to add to the database\n";
+
 }
