@@ -98,5 +98,5 @@ ${SCRIPT_HOME}/create-new-organism.pl \
     -subdir $subdir \
     -description "$description" \
     -repository $reposdir \
-    -projects $poolname \
+    -projects POOL \
     -projectsfile $projects
