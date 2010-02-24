@@ -11,6 +11,9 @@ use Term::ReadKey;
 
 use DataSource;
 
+# LDAP error code returned when we try to create an entry which already exists
+use constant ALREADY_EXISTS => 68;
+
 my $instance;
 my $organism;
 my $repository;
@@ -421,8 +424,12 @@ my $result = $ldap->add($dn,
 		     );
 
 if ($result->code) {
-    print STDERR " FAILED: ", $result->error, "\n";
-    exit(1);
+    if ($result->code == ALREADY_EXISTS) {
+	print STDERR "WARNING: the LDAP entry already exists\n"
+    } else {
+	print STDERR "LDAP FAILURE: ", $result->error, "\n";
+	exit($result->code);
+    }
 } else {
     print STDERR " OK\n";
 }
@@ -443,7 +450,7 @@ if (defined($appendtofile)) {
     }
 }
 
-print STDERR "\nTHE SCRIPT HAS COMPLETED\n";
+print STDERR "\nAN ARCTURUS DATABASE HAS BEEN CREATED FOR instance=$instance organism=$organism\n";
 
 exit(0);
 
