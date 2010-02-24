@@ -203,13 +203,21 @@ echo "LDAP sub-directory    $subdir"
 echo "Description           $description"
 echo "----------------------------------------------------------"
 
-echo -n "Is this correct? [yes/no] > "
-read yorn
+###
+### If the script is not running in batch mode, then ask the user
+### to confirm the input
+###
 
-if [ "x$yorn" != "xyes" ]
+if [ "x$LSB_JOBID" == "x" ]
 then
-    echo "Exiting without creating the new database"
-    exit 1
+    echo -n "Is this correct? [yes/no] > "
+    read yorn
+
+    if [ "x$yorn" != "xyes" ]
+	then
+	echo "Exiting without creating the new database"
+	exit 1
+    fi
 fi
 
 ${SCRIPT_HOME}/create-new-organism.pl \
