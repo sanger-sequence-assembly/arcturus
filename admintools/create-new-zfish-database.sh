@@ -60,8 +60,8 @@ LDAP_URL="ldap://ldap.internal.sanger.ac.uk/"
 LDAP_ROOT_DN="cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk"
 LDAP_USER=${ARCTURUS_LDAP_USERNAME-"uid=${USER},ou=people,dc=sanger,dc=ac,dc=uk"}
 
-INSTANCE=${ARCTURUS_INSTANCE-test}
-MYSQL_INSTANCE=${ARCTURUS_MYSQL_INSTANCE-arct}
+INSTANCE=${ARCTURUS_INSTANCE-pathogen}
+MYSQL_INSTANCE=${ARCTURUS_MYSQL_INSTANCE-arcp}
 
 #########################################################################
 ###             These settings are specific to ZGTC                   ###
