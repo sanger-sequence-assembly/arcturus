@@ -1322,6 +1322,9 @@ sub testreadsindatabase {
     my $crn = $options{consensusread};
     my $nac = $options{noaspedcheck};
 
+    my $readstobeloaded = $stillmissingreads;
+    my $readsloaded = 0;
+
     while (@$stillmissing) {
         my @nameblock = splice @$stillmissing,0,1000;
 	$logger->info("extracting next ".scalar(@nameblock)." reads");
@@ -1330,11 +1333,11 @@ sub testreadsindatabase {
     	    $logger->warning("FAILED to fetch any reads");
 	    next;
 	}
-	$logger->warning(scalar(@$reads)." reads to be loaded into database ");
+	$logger->info(scalar(@$reads)." reads to be loaded into database ");
 
         foreach my $read (@$reads) {
             my $readname = $read->getReadName();
-            $logger->warning("read to be stored ($readload) : $readname");
+            $logger->info("read to be stored ($readload) : $readname");
             if ($read->isEdited()) {
                 undef $read->{alignToTrace};
                 $logger->info("required un-edit edited read $readname");
@@ -1385,7 +1388,10 @@ sub testreadsindatabase {
 		next;
 	    }
             $stillmissingreads--;
+	    $readsloaded++;
         }
+
+	$logger->warning("Loaded $readsloaded reads of $readstobeloaded");
     }
     return $stillmissingreads; # number of reads still missing
 }
