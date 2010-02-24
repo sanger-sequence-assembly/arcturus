@@ -16,32 +16,11 @@ Contigs_To_Clones
 
 and a file named assembly_contig.caf or assembly_contig.caf.gz
 
-The user can specify the Arcturus alias which is to be given to the new
-database as a command line argument.  If no argument is present, the script
-will prompt the user to enter one.
+MANDATORY PARAMETERS
 
-It then carries out four steps:
-
-1. Find the repository directories corresponding to the clones listed in 
-   CloneList.txt using pfind
-
-2. Create the Arcturus MySQL database and LDAP entry for the new database
-
-3. Import the assembly from the CAF file
-
-4. Re-assign the contigs listed in Contigs_To_Clones to their respective
-   projects
-
-The following environment variables may be set before running the script:
-
-ARCTURUS_INSTANCE
-
-ARCTURUS_MYSQL_INSTANCE
-
-ARCTURUS_LDAP_USERNAME
-
-ARCTURUS_LDAP_PASSWORD
-
+    -instance         Arcturus instance name [pathogen,test,...]
+    -pool             Name of pooled assembly
+    -mysql-instance   Arcturus MySQL instance [arcp,hlmp,arct,...]
 EOF
 }
 
@@ -60,9 +39,6 @@ LDAP_URL="ldap://ldap.internal.sanger.ac.uk/"
 LDAP_ROOT_DN="cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk"
 LDAP_USER=${ARCTURUS_LDAP_USERNAME-"uid=${USER},ou=people,dc=sanger,dc=ac,dc=uk"}
 
-INSTANCE=${ARCTURUS_INSTANCE-pathogen}
-MYSQL_INSTANCE=${ARCTURUS_MYSQL_INSTANCE-arcp}
-
 #########################################################################
 ###             These settings are specific to ZGTC                   ###
 #########################################################################
@@ -73,20 +49,104 @@ CONTIG_TO_CLONE_MAP=Contigs_To_Clones
 ###             Start of main script                                  ###
 #########################################################################
 
-if [ $# -lt 1 ]
+until [ -z "$1" ]
+do
+  keyword=$1
+  shift
+
+  case "$keyword" in
+      "-instance" )
+	  instance=$1
+	  shift
+	  ;;
+
+      "-pool" )
+	  poolname=$1
+	  shift
+	  ;;
+
+      "-mysql-instance" | "-mysql_instance" )
+	  node=$1
+	  shift
+	  ;;
+
+      "-subdir" )
+	  subdir=$1
+	  shift
+	  ;;
+
+      "-help" | "--help" | "-h" )
+	  showHelp
+	  exit 0
+	  ;;
+
+      * )
+	  echo Unknown option : $keyword
+	  exit 1
+	  ;;
+  esac
+done
+
+if [ "x" == "x$poolname" ]
 then
     echo -n "Enter pool name > "
     read poolname
-else
-    if [ $1 == "-help" ]
-    then
-	showHelp
-	exit 0
+fi
+
+if [ "x" == "x$instance" ]
+then
+    echo -n "Enter Arcturus instance [pathogen,test,...] > "
+    read instance
+fi
+
+if [ "x" == "x$node" ]
+then
+    echo -n "Enter MySQL instance [arcp,hlmp,arct,...] > "
+    read node
+fi
+
+if [ "x" == "x$subdir" ]
+then
+    subdir=vertebrates/Zebrafish/Pools
+fi
+
+reposdir=`pwd`
+
+dbname=$poolname
+
+description="Zebrafish pooled BAC assembly ${poolname}"
+
+echo "----- Summary of input -----------------------------------"
+echo "Arcturus instance     $instance"
+echo "Pool name             $poolname"
+echo "Repository location   $reposdir"
+echo "MySQL instance        $node"
+echo "MySQL database        $dbname"
+echo "LDAP sub-directory    $subdir"
+echo "Description           $description"
+echo "----------------------------------------------------------"
+
+###
+### If the script is not running in batch mode, then ask the user
+### to confirm the input
+###
+
+if [ "x$LSB_JOBID" == "x" ]
+then
+    echo -n "Is this correct? [yes/no] > "
+    read yorn
+
+    if [ "x$yorn" != "xyes" ]
+	then
+	echo "Exiting without creating the new database"
+	exit 1
     else
-	poolname=$1
-	echo Got pool name $poolname from command-line arguments
+	echo ''
     fi
 fi
+
+echo ''
+echo STAGE 1 : CHECKING FOR INPUT FILES
 
 ###
 ### Test for existence of key input files
@@ -157,7 +217,7 @@ fi
 ###
 
 echo ''
-echo STAGE 1 : FINDING DIRECTORIES FOR PROJECTS
+echo STAGE 2 : FINDING DIRECTORIES FOR PROJECTS
 
 CLONE_LIST_WITH_DIRS=${TMP}/CloneListWithDirectories.txt
 
@@ -179,46 +239,7 @@ projects=${CLONE_LIST_WITH_DIRS}
 ###
 
 echo ''
-echo STAGE 2 : CREATING THE ARCTURUS DATABASE
-
-instance=${INSTANCE}
-
-reposdir=`pwd`
-
-node=${MYSQL_INSTANCE}
-
-dbname=$poolname
-
-subdir=Zebrafish/Pools
-
-description="Zebrafish pooled BAC assembly ${poolname}"
-
-echo "----- Summary of input -----------------------------------"
-echo "Arcturus instance     $instance"
-echo "Pool name             $poolname"
-echo "Repository location   $reposdir"
-echo "MySQL instance        $node"
-echo "MySQL database        $dbname"
-echo "LDAP sub-directory    $subdir"
-echo "Description           $description"
-echo "----------------------------------------------------------"
-
-###
-### If the script is not running in batch mode, then ask the user
-### to confirm the input
-###
-
-if [ "x$LSB_JOBID" == "x" ]
-then
-    echo -n "Is this correct? [yes/no] > "
-    read yorn
-
-    if [ "x$yorn" != "xyes" ]
-	then
-	echo "Exiting without creating the new database"
-	exit 1
-    fi
-fi
+echo STAGE 3 : CREATING THE ARCTURUS DATABASE
 
 ${SCRIPT_HOME}/create-new-organism.pl \
     -instance $instance \
@@ -246,7 +267,7 @@ fi
 ###
 
 echo ''
-echo STAGE 3 : IMPORTING THE ASSEMBLY CAF FILE
+echo STAGE 4 : IMPORTING THE ASSEMBLY CAF FILE
 
 MAPFILE=${TMP}/contigs.map
 
@@ -277,7 +298,7 @@ sort -b -k1 ${MAPFILE} > ${MAPFILE_SORTED}
 join -j 1 -o 1.2,2.2 ${MAPFILE_SORTED} ${CONTIG_TO_CLONE_MAP_SORTED} > ${CONTIG_ID_TO_CLONE_MAP}
 
 echo ''
-echo STAGE 4 : ASSIGNING CONTIGS TO CLONES
+echo STAGE 5 : ASSIGNING CONTIGS TO CLONES
 
 ${UTILS_DIR}/assign-contigs-to-projects \
     -instance $instance \
