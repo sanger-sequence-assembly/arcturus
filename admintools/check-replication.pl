@@ -110,16 +110,18 @@ sub checkSlave {
 
 	&checkMaster($master);
 
-	print "\tLog file on slave is ", $row->{'Master_Log_File'},
-	" read to ",$row->{'Read_Master_Log_Pos'},
+	print "\tI/O thread log file on slave is ", $row->{'Master_Log_File'},
+	" read to ",$row->{'Read_Master_Log_Pos'},"\n";
+
+	print "\tSQL thread log file on slave is ", $row->{'Relay_Master_Log_File'},
 	", executed to ", $row->{'Exec_Master_Log_Pos'}, "\n";
 
 	my $iostatus = $row->{'Slave_IO_Running'};
 
 	if ($iostatus eq 'Yes') {
-	    print "\tIO thread is running\n";
+	    print "\tI/O thread is running\n";
 	} else {
-	    print "\t***** IO thread is NOT running *****\n";
+	    print "\t***** I/O thread is NOT running *****\n";
 	}
 
 	my $sqlstatus = $row->{'Slave_SQL_Running'};
