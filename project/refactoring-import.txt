@@ -1,0 +1,228 @@
+Arcturus Project
+================
+
+
+Refactoring the import process
+------------------------------
+
+
+The contig import process consists of a number of operations to 
+build Contig instances from a data source, to test and to store them 
+in the database. The only data source currently catered for is the
+depadded CAF flat file. The operations needed to link a new contig
+to its predecessor(s) and to process contig tags are at the moment
+convoluted in the import process and are in need to be separated
+out to simplify it and make the whole operation more robust and 
+improve maintenablity of the code base.
+
+Therefore, the import process needs to be refactured with the testing,
+linking, project allocation and tag processing more isolated from the 
+actual loading.
+
+The current sequence of basic events is as follows:
+
+a) Build an inventory of objects on the input source:
+
+ - Parse the CAF file and make an inventory list of positions of the
+   primary objects (contigs and reads).
+ - Check if all reads listed on the file are stored in the database;
+   retrieve missing reads from the Traceserver and any read not found
+   there from the data source (the caf file).
+
+b) Extract the Contigs and present to the database handle for loading:
+
+ - Extract each contig in turn from the datasource, with its Reads and
+   read mappings, and its contig Tags. Identify the read sequence 
+   version of each Read (by using a checksum comparison) and keep only 
+   read-sequence versions which are new.
+ - Test the contig for completeness (e.g. its mappings and reads must 
+   correspond one-to-one).
+ - Test if the contig is new, based on a checksum comparison of read
+   sequence identifiers and a comparison of individual mappings. If the 
+   contig is identical to an already existing one in the latest generation,
+   then only process its contig tags (if any) and exit the database handle.
+
+  (The following steps, therefore, apply to new contigs) 
+ - For new contigs find its predecessor(s) (parents) in the database
+   and establish the mapping between the contig and each parent. Test
+   the quality of the link; "dodgy" mappings are kept as mappings without
+   segments (to signal the existence of a link); "valid" links can have
+   one or more mappings with at least one segment each.
+ - Propagate tags from the parent contig(s) (using the now established 
+   contig-to-parent mappings).
+ - Determine to which project the new contig belongs (possibly invoking the
+   project-inheritance mechanism).
+ - Load into the database the contig metadata, its read-to-contig mappings, 
+   any contig-to-parent mappings and the contig tags, all wrapped up in one
+   transaction.
+
+c) Process read tags:
+
+ - Load any newly presented read tags.
+ - In (default) "synchronize" mode, deprecate read tags which are in the 
+   database but do not occur on the datasource (except for some specific
+   protected tag types, i.p. oligo tags).
+
+
+The refactored version of the process outlined above will have three
+main components (contig loading, the linking and the tag processing separated 
+out and packaged into distinct operations:  
+
+I  Build Contig instances from the input source and load :
+
+a) Build an inventory of objects on the input source:
+
+ - Parse the CAF file and make an inventory list of positions of the
+   primary objects (contigs and reads).
+ - Check if all reads listed on the file are stored in the database;
+   retrieve missing reads from the Traceserver and any read not found
+   there from the data source (the caf file).
+
+b) Build a graph of links between the contig of the datasource and existing
+   contigs in the database:
+
+ - For each contig in turn retrieve a list of its readnames from the inventory
+   (don't build the Read and Mapping instances here) and find its parents (if 
+   any) with a straightforward query based on shared readnames. Contigs without 
+   a parent or with more than one parent, are new; contigs with only one parent 
+   may be new.
+
+c) Extract the Contigs and present new ones to the database handle for loading:
+
+ - Extract each contig in turn from the datasource, with its Reads and read
+   Mappings, and its contig Tags. Identify the read sequence version of each 
+   Read (by using a checksum comparison) and keep only those read-sequence 
+   versions which are new (to limit memory use i.p,. for large contigs).
+ - Test the contig for completeness and e.g. contiguous read tiling.
+ - If the contig has only one parent determine if it is identical to that parent.
+   If not, it is a new contig; only continue with new contigs.
+ - Add to the contig for each parent listed in the graph an empty contig-to-parent 
+   mapping which will act as a place holder.
+ - Load into the database the contig metadata, its read-to-contig mappings, and
+   any (but empty) contig-to-parent mappings, to mark at this stage the existence
+   of a link, all wrapped up in one transaction.
+
+d) Process the contig and read tags:
+
+ - Load contig tags on the new contigs or new contig tags (if any) on existing 
+   contigs.
+ - Load any newly presented read tags and in (default) "synchronize" mode, 
+   deprecate read tags which are in the database but do not occur on the 
+   datasource (except for some specific protected tag types, i.p. oligo tags).
+
+II Establish the details of contig-to-parent mappings: 
+
+ - Go through each of the contigs just loaded and determine the mapping to
+   each of its parents by using the linking algorithm based on the placement
+   of shared reads. Replace the placeholder mapping if the link thus found 
+   is well defined; ignore "dodgy" links. Store the mapping(s) in the database.
+
+III Go through each of those contigs and for those with more than one parent
+   determine the project to which the contig is allocated using the chosen 
+   inheritance model (e.g using the length and/or the number of shared reads 
+   in its parents). Update the contig metadata.
+
+IV Go through each of those contigs and for those where parent-to-contig 
+   mappings are established and propagate tags on the parent (possibly of 
+   selected tag types). Store the inherited tags in the database.
+
+Of the last three steps, II is the most computationally intensive and II, III 
+and IV may be combined to wrap the updates to the database in one transaction.
+
+
+
+Ed Zuiderwijk
+
+03 11 2009
+
+#---------------------------------------------------------------------------------------
+
+
+More details added 26 02 2010
+=============================
+
+The current import process:
+
+  I Parse import file/device (caf) to make inventory of contigs & reads,
+    and determine import order
+
+ II Check reads and load missing reads into database
+
+Then, for each contig do: 
+
+III Extract contig with reads and mappings; determine read sequence IDs
+    using preloaded version hash keyed on read names.
+
+IV  Test Contig for completeness
+
+ V  Present to database for loading
+
+  a find missing readIDs, store new versions of reads
+
+  b test if contig is new; if it is go to VI
+
+  c find parents and link contig to parents; add
+    contig-to-parent mappings
+
+  d determine project to assign to
+
+  e propagate tags
+
+  f load contig, contig-to-contig mappings, tags in one transaction
+
+ VI process contig tags and read tags
+
+VII add import marker to db Table
+
+VIII send messages
+
+IX  do read consistency test
+
+
+
+
+The new schedule:
+
+  I parse input file/device to make inventory, register import order
+    (no change for caf, adapt for SAM?)
+
+ II Process reads:
+    a) load missing reads (if any); screen for invalid read names
+    b) determine seq_ids based on sequence/quality checksums keyed on
+       readnames; can be done in batches.
+    c) load new read versions
+    d) build readname-seq_id link table
+    e) process readtags
+
+III Extract contigs: 
+    (for each contig do)
+    a) build mappings to get canonical mappings & checksum
+    b) identify canonical mapping IDs; load new canonical mappings (new)
+    c) add read sequence id to mappings; discard reads
+    d) test completeness: all mappings should have seq_id and
+       nr of mappings should equal nr of reads.
+
+IV  Build graph of relationship between contigs and parents:
+    (for each contig do)
+    a) test database for matching seq_id checksum
+    b) if found, test for equality; if equal add contig_id & next contig 
+    c) find parents using shared readnames
+    d) extract parents and mappings (by delayed loading)
+    e) determine links to parents, add valid links as contig-to-contig 
+       mappings
+    f) inherit tags
+    g) determine project to assign contig to; add as Project instance
+    h) keep track of readcounts in parents and new contigs
+    (end do)
+    i) analyse graph and readcounts; test for inconsistencies, small
+       contigs overwriting large ones etc; if problems abort
+
+ Va Add contigtags for contigs which have a contig ID 
+
+ Vb Insert contig data for new contigs in one transaction: metadata,
+    seq-to-contig mappings, contig-to-contig mappings, tags
+   
+ VI Add import marker
+
+VII Send mail messages
+ 

@@ -1,0 +1,151 @@
+Arcturus Project
+================
+
+Redesigning the representation and storage of read-to-contig Mappings
+---------------------------------------------------------------------
+
+I The current representation and storage of read-to-contig mappings
+  -----------------------------------------------------------------
+
+Mappings are stored in two tables: MAPPING and SEGMENT
+
+The MAPPING tables has one entry for each read-to-contig mapping; the
+SEGMENT table stores mapping segments for each mapping. A mapping can
+have 1 or many segments: heavily padded assemblies have mappings with 
+many segments.
+
+The quantity of data stored in this way scales roughly as:
+
+total number of r2c mappings                                   (MAPPING)
+total number of r2c mappings x average nr-segments per mapping (SEGMENT)  
+ 
+The current schema for this model:
+
+MAPPING: contig_id  
+         seq_id
+         mapping_id  : primary (auto-incremented) key
+         cstart      : derived data from range covered by segments
+         cfinish     : ibid
+         direction   : alignment direction
+
+SEGMENT: mapping_id
+         cstart      : starting position of segment on contig
+         rstart      : corresponding position on read
+         length
+
+On retrieval the alignment segments cstart-cfinish (on the contig) and 
+rstart-rfinish (on the read) are reconstructed as:
+
+         cstart ; cfinish = cstart + length - 1 if direction > 0
+         cstart ; cfinish = cstart - length + 1 if direction < 0
+
+         rstart ; rfinish = rstart + length - 1
+
+This way of storing mappings has been adequate for the relatively small 
+assembly projects, up to several tens of megabase) handled by Arcturus up to
+now. However, it is not the most efficient way of storing because of the 
+inherent redundancy of mapping information:  
+
+Once a read is assembled in a contig, it is likely to find that same read 
+assembled with the same mapping, apart from from some linear transformation, 
+in the descendants of that contig. This is particularly so for short
+new-technology reads, for which this way of storage is actually very wasteful
+and, therefore, for the large Helminths project under way is leading to 
+scaling problems.
+
+Therefore, an improved method of storing read-to-contig mappings is required
+which eliminates the redundency. The new method will (as a bonus) also 
+provides a fast way to test mappings for equality.
+
+
+
+II The new representation
+   ----------------------
+
+In this model there are three tables: SEQ2CONTIG, CANONICALMAPPING and 
+CANONICALSEGMENT, with the latter table's format as before but with a subtly 
+different content. 
+The information in the original MAPPING table is extended with two offset
+parameters and spread out over the new SEQ2CONTIG and CANONICALMAPPING tables.
+
+What we store in CANONICALMAPPING and CANONICALSEGMENT is what we could call a 
+"normalised", canonical mapping from which the actual mapping can be constructed 
+with simple linear transformations. This enables us to store the unique details 
+of the mapping segments only once, the first time it appears in a 
+read-to-contig mapping anywhere. Moreover, the same canonical mapping can be shared 
+by different reads.
+
+The quantity of data stored in this way scales roughly as:
+
+total number of s2c mappings (as before)                          (SEQ2CONTIG)
+total number of templates                                   (CANONICALMAPPING)  
+total number of templates x average nr-segments per mapping (CANONICALSEGMENT)
+
+In the most extreme unlikely case, with every mapping defining a new
+canonical mapping, the new model scales very similarly to the current way 
+of storing mappings, but more realistically the number of templates will 
+grow only very slowly once a substantial set is stored, in particular 
+towards the final stages of a finishing project. I intend to do some 
+tests but expect the canonical mapping database to scale with something 
+like log(nr-assembled-reads).
+
+The gory details:
+----------------
+
+SEQ2CONTIG:         contig_id    : combination contig_id,seq_id as unioque key
+                    seq_id       :
+                    mapping_id   : of the canonical mapping, indexed (non-unique)
+                    direction    : alignment direction
+                    coffset      : contig offset between actual mapping and its template
+                    roffset      : ibid for read
+ 
+CANONICALMAPPING:   mapping_id   : of the canonical mapping, primary auto-incremented key
+                    cfinish      : derived data from contig range covered by canonical segments
+                    rfinish      : derived data from read range covered by canonical segments
+                    checksum     : md5 checksum of sorted (and concatenated) segment info 
+                                   (binary(16), indexed)
+
+CANONICALSEGMENT:   mapping_id
+                    cstart       : starting position of template segment on contig
+                    rstart       : corresponding position on read
+                    length
+ 
+On retrieval the alignment segments are reconstructed as:
+
+            cstart  -> coffset + cstart                if direction > 0
+            cfinish -> coffset + cstart + length - 1   if direction > 0
+
+            cstart  -> coffset - cstart                if direction < 0
+            cfinish -> coffset - cstart - length + 1   if direction < 0
+
+            rstart  -> rstart + roffset 
+            rfinish -> rstart + roffset + length - 1
+
+The contig and read ranges are recovered as: coffset+1 to coffset+cfinish
+                                        and: roffset+1 to roffset+rfinish
+
+
+Different combinations of coffset and roffset define different mappings, all
+sharing the same canonical mapping. Identifying the existence (or not) of a 
+template in the database is done by a lookup of the checksum.
+ 
+
+Changes required to the Database Schema
+---------------------------------------
+
+- the MAPPING is renamed to SEQ2CONTIG
+- the SEQ2CONTIG table has two new columns for the offset
+- the SEQ2CONTIG table has the mapping_id index changed from unique to non-unique
+
+- a new CANONICALMAPPING table replaces the original one with mapping_id as primary key
+- the checksum column is binary(16) with a unique index
+
+- the CANONICALSEGMENT table format is the same as for the current SEGMENT table
+
+- a new foreign key constraint applies to CANONICALMAPPING and SEQ2CONTIG on mapping_id 
+
+
+
+Ed Zuiderwijk
+
+03-11-2009
