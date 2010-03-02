@@ -66,7 +66,7 @@ sub getSegmentLength {
 
 sub getOffset {
     my $this = shift;
-    return $this->[0] - $this->[1];
+    return $this->[0] - $this->[1]; # x-domain position - y-domain position
 #    return $this->[1] - $this->[0]; ?
 }
 
