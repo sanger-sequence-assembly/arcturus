@@ -39,7 +39,6 @@ sub putReadMappingsForContig {
 #   verifyParameter($contig,'putReadMappingsForContig');
 
     my $regularmappings = $contig->getMappings();
-#print STDERR "ENTER putReadMappingsForContig for ".scalar(@$regularmappings)." mappings\n";
 
     return 0 unless ($regularmappings && @$regularmappings);
 
@@ -48,7 +47,6 @@ sub putReadMappingsForContig {
     my $dbh = $this->getConnection();
 
     &getCanonicalIDsForRegularMappings($dbh,$regularmappings,%options);
-#print STDERR "returned from getCanonicalIDsForRegularMappings\n";
 
 # write the mappings to database in blocks (one record per mapping)
 
@@ -84,7 +82,6 @@ sub putReadMappingsForContig {
         $success = 0 unless &bulkinsert($dbh,$accumulatedinsert);
     }
 
-print STDOUT "EXIT putReadMappingsForContig success $success\n";
     return $success;
 }
 
@@ -173,14 +170,7 @@ sub getCanonicalIDsForRegularMappings {
 
 # identify existing checksums in the database; set hash entry for those found to ID
 
-    my @checksumlist = sort keys %$checksum_hashref;
-
-    my $notfound = &probeCheckSumIDs($dbh,\@checksumlist,$checksum_hashref);
-#print STDOUT "RETURN from probeCheckSumIDs: notfound $notfound\n";
-#foreach my $key (keys %$checksum_hashref) {
-#    print STDOUT "ID not found $checksum_hashref->{$key}\n" unless $checksum_hashref->{$key};
-#    print STDOUT "ID found $checksum_hashref->{$key}\n" if $checksum_hashref->{$key};
-#}
+    my $notfound = &probeCheckSumIDs($dbh,$checksum_hashref);
 
 # identify new mappings (having the checksum hash entry still undefined)
 
@@ -204,23 +194,20 @@ sub getCanonicalIDsForRegularMappings {
 	    next;
 	}
         next if $newcanonicalmapping_hashref->{$checksum}++; # only keep the first occurrance
-#print STDOUT "new canonical mapping $canonicalmapping\n";
         push @$newcanonicalmapping_arrayref,$canonicalmapping;
     }
 
 # insert the new canonical mappings into the database
 
-    &putCanonicalMappings($dbh,$newcanonicalmapping_arrayref);
+    &putNewCanonicalMappings($dbh,$newcanonicalmapping_arrayref);
 
-#print STDOUT "RETURN putCanonicalMappings, EXIT getCanonicalIDsForRegularMappings\nreport $report\n";
     return $report;
 }
 
-sub putCanonicalMappings {
+sub putNewCanonicalMappings {
 # private helper method: insert new canonical mappings into the database
     my $dbh = shift;
     my $canonicalmapping_arrayref = shift;
-#print STDOUT "ENTER putCanonicalMappings @$canonicalmapping_arrayref\n";
 
 # first enter the canonical metadata and get a mapping identifier
 
@@ -237,10 +224,6 @@ sub putCanonicalMappings {
         my @data = ($canonicalmapping->getSpanX(),
                     $canonicalmapping->getSpanY(),
                     $canonicalmapping->getCheckSum());
-#unless ($TEST) {
-#    print STDOUT "mapping $minsert: $data[0],$data[1]\n"; 
-#    $canonicalmapping->setMappingID($canonicalmapping); next;
-#}
 
         my $rc = $sth->execute(@data) || &queryFailed($minsert,@data);
 
@@ -259,36 +242,20 @@ sub putCanonicalMappings {
     my $blocksize = 100;
     my $accumulated = 0;
     my $accumulatedinsert = $sinsert;
-#print STDOUT "inserting canonical SEGMENTs\n";
 
- #   my $lastmapping = pop @$canonicalmapping_arrayref;
- #   foreach my $canonicalmapping (@$canonicalmapping_arrayref,$lastmapping) {
     foreach my $canonicalmapping (@$canonicalmapping_arrayref) {
         my $mid = $canonicalmapping->getMappingID();
         next unless $mid;
         my $segments = $canonicalmapping->getSegments();
-#        my $mbreak = ($canonicalmapping eq $lastmapping) ? 1 : 0;
-#        my $lastsegment = pop @$segments;
-#        foreach my $segment (@$segments,$lastsegment) {
         foreach my $segment (@$segments) {
             my $xstart = $segment->getXstart();
             my $ystart = $segment->getYstart();
             my $length = $segment->getSegmentLength();
             $accumulatedinsert .= "," if $accumulated++;
             $accumulatedinsert .= "($mid,$xstart,$ystart,$length)";
-#           my $sbreak = ($segment eq $lastsegment) ? 1 : 0;
-#            next unless ($accumulated >= $blocksize || $mbreak && $sbreak);
             next unless ($accumulated >= $blocksize);
 # the preset number of inserts has been reached: execute the query
             $failed++ unless &bulkinsert($dbh,$accumulatedinsert);
-#if ($TEST) {
-#            my $sth = $dbh->prepare($accumulatedinsert);
-#            my $rc = $sth->execute() || &queryFailed($accumulatedinsert);
-#            $failed++ unless $rc;
-#            $sth->finish();
-#} else {
-#    print STDOUT "segment insert:\n$accumulatedinsert\n";
-#} # end TEST
 # prepare for new insert
             $accumulatedinsert = $sinsert;
             $accumulated = 0;
@@ -299,11 +266,86 @@ sub putCanonicalMappings {
    
     if ($accumulated) {
         $failed++ unless &bulkinsert($dbh,$accumulatedinsert);
-#print STDOUT "MAY NOT HAPPEN AT ALL : accumulated query $accumulated\n"; exit;
-#        my $sth = $dbh->prepare($accumulatedinsert);
-#        my $rc = $sth->execute() || &queryFailed($accumulatedinsert);
-#        $failed++ unless $rc;
-#        $sth->finish();
+    }
+
+    return $failed;
+}
+
+# alternative
+sub putCanonicalMappings {
+# private helper method: insert new canonical mappings into the database
+    my $dbh = shift;
+    my $canonicalmapping_arrayref = shift;
+
+# first enter the canonical metadata and get a mapping identifier
+
+    my $minsert = "insert into CANONICALMAPPING (checksum,cspan,rspan) "
+                . "values ";
+
+    my $blocksize = 100;
+
+    my $accumulated = 0;
+    my $accumulatedinsert = $minsert;
+
+    my $checksum_hashref = {};
+    foreach my $canonicalmapping (@$canonicalmapping_arrayref) {
+# protect against empty mappings
+        next unless $canonicalmapping->hasSegments();
+        my $cs = $canonicalmapping->getCheckSum();
+        my $sx = $canonicalmapping->getSpanX();
+        my $sy = $canonicalmapping->getSpanY();
+        $checksum_hashref->{$cs} = 0;
+        $accumulatedinsert .= "," if $accumulated++;
+        $accumulatedinsert .= "($cs,$sx,$sy)";
+        next unless ($accumulated >= $blocksize);
+# the preset number of inserts has been reached: execute the query
+        &bulkinsert($dbh,$accumulatedinsert);
+# prepare for new insert
+        $accumulatedinsert = $minsert;
+        $accumulated = 0;
+    }
+
+    &bulkinsert($dbh,$accumulatedinsert) if $accumulated;
+
+# here again use probe to retrieve the IDs of the just entered checksums
+
+    my $failed = &probeCheckSumIDs($dbh,$checksum_hashref);
+# if failed, there are still undefined IDs left, hence the foregoing inserts failed
+
+# then insert the segments in batches of 100 
+    
+    my $sinsert = "insert into CANONICALSEGMENT (mapping_id,cstart,rstart,length) "
+                . "values "; # to be inserted in blocks
+
+    $accumulated = 0;
+    $accumulatedinsert = $sinsert;
+
+    foreach my $canonicalmapping (@$canonicalmapping_arrayref) {
+#        my $mid = $canonicalmapping->getMappingID(); # CHANGE to hashref
+	my $cs = $canonicalmapping->getCheckSum();
+        my $mid = $checksum_hashref->{$cs}; # CHANGE to hashref
+        next unless $mid;
+        $canonicalmapping->setMappingID($mid);
+        my $segments = $canonicalmapping->getSegments();
+        foreach my $segment (@$segments) {
+            my $xstart = $segment->getXstart();
+            my $ystart = $segment->getYstart();
+            my $length = $segment->getSegmentLength();
+            $accumulatedinsert .= "," if $accumulated++;
+            $accumulatedinsert .= "($mid,$xstart,$ystart,$length)";
+            next unless ($accumulated >= $blocksize);
+# the preset number of inserts has been reached: execute the query
+            $failed++ unless &bulkinsert($dbh,$accumulatedinsert);
+# prepare for new insert
+            $accumulatedinsert = $sinsert;
+            $accumulated = 0;
+	}
+    }
+
+# if there is anything left ...
+   
+    if ($accumulated) {
+        $failed++ unless &bulkinsert($dbh,$accumulatedinsert);
     }
 
     return $failed;
@@ -312,24 +354,25 @@ sub putCanonicalMappings {
 sub probeCheckSumIDs {
 # private helper method : retrieve checksum and ID for an input list of checksums
     my $dbh = shift; # database handle
-    my $csa = shift; # array ref to list of checksum values to be retrieved
-    my $csh = shift; # hash ref for values which are retrieved
-    my %options = @_;
+    my $checksum_hashref = shift; # hash keyed on checksum values to be retrieved
+    my %options = @_; # blocksize
 
     my $blocksize = $options{blocksize} || 1000;
 
+    my @checksumlist = sort keys %$checksum_hashref;
+
     my $bquery = "select mapping_id,checksum from CANONICALMAPPING where checksum in ";
 
-    my $notretrieved = scalar(@$csa);
+    my $notretrieved = scalar(@checksumlist);
 
-    while (my $checksumsleft = scalar(@$csa)) {
+    while (my $checksumsleft = scalar(@checksumlist)) {
         $blocksize = $checksumsleft if ($blocksize > $checksumsleft);
-        my @block = splice @$csa, 0, $blocksize;
+        my @block = splice @checksumlist, 0, $blocksize;
         my $select = $bquery."('". join("'),('", @block) ."')";
         my $sth = $dbh->prepare($select);
         my $rc = $sth->execute() || &queryFailed($select) && next;
-	while (my ($id, $csum) = $sth->fetchrow_array()) {
-	    $csh->{$csum} = $id;
+	while (my ($id, $checksum) = $sth->fetchrow_array()) {
+	    $checksum_hashref->{$checksum} = $id;
             $notretrieved--;
 	}
         $sth->finish();
@@ -350,7 +393,7 @@ sub bulkinsert {
 }
 
 #-----------------------------------------------------------------------------
-# retrieval of mappings
+# retrieval of mappings; (delayed) retrieval of mapping segments
 #-----------------------------------------------------------------------------
 
 sub newgetReadMappingsForContig {
@@ -403,23 +446,19 @@ print STDERR "newgetReadMappingsForContig TO BE DEVELOPED and tested for speed\n
 # probe the cache for presence of the canonical mapping to ensure unique instances
         my $canonicalmapping = CanonicalMapping->lookup($cs);
         if ($canonicalmapping) {
-# if the mapping ID is not defined (i.e. mapping was not built from database), assign
+# if the mapping ID is not defined (i.e. cached mapping was not built from database), assign
             unless ($canonicalmapping->getMappingID()) {
-#print STDERR "canonical mapping ID $mid assigned for $rnm found in cache\n";
-#                $canonicalmapping->setMappingID($mid);
+                $canonicalmapping->setMappingID($mid); # completes the canonical mapping
+	    }
 # optionally verify the cached version against the database parameters (test mode)
-                if ($verifycache) {
-                    my $verified = 1;
-                    $verified = 0 unless ($xs == $canonicalmapping->getSpanX());
-                    $verified = 0 unless ($ys == $canonicalmapping->getSpanY());
-                    $verified = 0 unless ($cs == $canonicalmapping->getCheckSum());
+            if ($verifycache && !&verifyCanonicalMappingProperties($canonicalmapping,
+                                                                   $mid,$cs,$xs,$ys)) {
 # failure to verify signals inconsistency between mapping and database version; abort?
-                    unless ($verified) {
-                        $sth->finish();
-                        die "Inconsistency between canonical mapping for $rnm "
-			  . "and database (mapping ID $mid)";
-		    }
-		}
+                $sth->finish();
+                my $msg = "Inconsistency between cached canonical mapping for read $rnm "
+                        . "and database (mapping ID $mid)";
+                print STDERR "$msg\n";
+                return 0;
 	    }
 	}
 	else {
@@ -449,6 +488,101 @@ print STDERR "Loading mapping segments DONE\n";
     return;
 }
 
+sub newgetContigMappingsForContig {
+# adds an array of contig-to-contig MAPPINGS to the input Contig instance
+    my $this = shift;
+    my $contig = shift;
+    my %options = @_;
+print STDERR "newgetContigMappingsForContig TO BE DEVELOPED\n";
+# TO BE DEVELOPED
+    &verifyParameter($contig,"getContigMappingsForContig");
+                
+    return if $contig->hasContigToContigMappings(); # already done
+
+    return unless $contig->getContigID(); # must have contig ID defined and > 0
+
+    my $verifycache = $options{verify}; # test cached canonical mappings against database
+
+    my $logger = $this->verifyLogger("getContigMappingsForContig");
+
+    my $mquery = "select age,parent_id,coffset,poffset,direction,"
+               . "       CANONICALMAPPING.mapping_id,checksum,cspan,rspan" 
+               . "  from CANONICALMAPPING, C2CMAPPING"
+               . " where contig_id = ?"
+               . "   and CANONICALMAPPING.mapping_id = C2CMAPPING.mapping_id"
+               . " order by coffset";
+#                 " order by ".($options{orderbyparent} ? 'parent_id,coffset' : 'coffset');
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($mquery);
+
+    my $cid = $contig->getContigID();
+
+    my $rows = $sth->execute($cid) || &queryFailed($mquery,$cid);
+
+    my @mappings;
+    my $mappings = {}; # to identify mapping instance with mapping ID
+    my $generation;
+    my $canonicalmapping_hashref = {};
+    my $canonicalmapping_arrayref = [];
+    while(my ($age, $pid, $xo, $yo, $dir, $mid, $cs, $xs, $ys) = $sth->fetchrow_array()) {
+# intialise and add readname and sequence ID
+        my $regularmapping = new RegularMapping(undef,empty=>1);
+        $regularmapping->setSequenceID($pid);       
+        $regularmapping->setCanonicalOffsetX($xo);
+        $regularmapping->setCanonicalOffsetY($yo);
+        $regularmapping->setAlignmentDirection($dir);
+        $regularmapping->setHostSequenceID($cid);
+# add the mapping to the contig
+        $contig->addMapping($regularmapping);
+# probe the cache for presence of the canonical mapping to ensure unique instances
+        my $canonicalmapping = CanonicalMapping->lookup($cs);
+        if ($canonicalmapping) {
+# if the mapping ID is not defined (i.e. mapping was not built from database), assign
+            unless ($canonicalmapping->getMappingID()) {
+                $canonicalmapping->setMappingID($mid); # completes the canonical mapping
+	    }
+# optionally verify the cached version against the database parameters (test mode)
+            if ($verifycache && !&verifyCanonicalMappingProperties($canonicalmapping,
+                                                                   $mid,$cs,$xs,$ys)) {
+# failure to verify signals inconsistency between mapping and database version; abort?
+                $sth->finish();
+                my $msg = "Inconsistency between cached canonical mapping for contig $pid "
+                        . "and database (mapping ID $mid)";
+                $logger->error($msg);
+                exit 0;
+            }
+	}
+	else {
+# the canonical mapping was not found in the cache: build it and add to cache
+            $canonicalmapping = new CanonicalMapping();
+            $canonicalmapping->setMappingID($mid);
+            $canonicalmapping->setSpanX($xs);
+            $canonicalmapping->setSpanY($ys);
+            $canonicalmapping->setCheckSum($cs); # also caches
+	}
+        $regularmapping->setCanonicalMapping($canonicalmapping);
+# use the hash to accumulate unique canonicalmappings
+        next if $canonicalmapping_hashref->{$canonicalmapping}++;
+        push @$canonicalmapping_arrayref,$canonicalmapping;
+# do an age consistence check for this mapping
+        $generation = $age unless defined ($generation);
+        next if ($generation == $age);
+        $logger->severe("Inconsistent generation in links for contig $cid");
+    }
+    $sth->finish();
+
+    &fetchMappingSegmentsForCanonicalMappings($dbh,$canonicalmapping_arrayref);
+
+    return $generation;
+}
+
+sub getTagMappingsForContig {
+    print STDERR "TO BE DEVELOPED\n";
+}
+
+
 sub getCanonicalSegmentsForRegularMappings {
 # (delayed) loading of canonical mapping segments using Mapping ID
     my $this = shift;
@@ -477,97 +611,6 @@ print STDERR "getCanonicalSegmentsForRegularMappings: fetching mapping segments\
     &fetchMappingSegmentsForCanonicalMappings($dbh,$canonicalmapping_arrayref);
 }
 
-
-sub newgetContigMappingsForContig {
-# adds an array of contig-to-contig MAPPINGS to the input Contig instance
-    my $this = shift;
-    my $contig = shift;
-    my %options = @_;
-print STDERR "newgetContigMappingsForContig TO BE DEVELOPED\n";
-# TO BE DEVELOPED
-    &verifyParameter($contig,"getContigMappingsForContig");
-                
-    return if $contig->hasContigToContigMappings(); # already done
-
-    return unless $contig->getContigID(); # must have contig ID defined and > 0
-
-    my $log = $this->verifyLogger("getContigMappingsForContig");
-
-    my $mquery = "select age,parent_id,mapping_id," .
-                 "       cstart,cfinish,direction" .
-                 "  from C2CMAPPING" .
-                 " where contig_id = ?" .
-                 " order by ".($options{orderbyparent} ? "parent_id,cstart" : "cstart");
- 
-    my $squery = "select C2CSEGMENT.mapping_id,C2CSEGMENT.cstart," .
-                 "       C2CSEGMENT.pstart,length" .
-                 "  from C2CMAPPING join C2CSEGMENT using (mapping_id)".
-                 " where C2CMAPPING.contig_id = ?";
-
-    my $dbh = $this->getConnection();
-
-# 1) pull out the mapping_ids
-
-    my $sth = $dbh->prepare_cached($mquery);
-
-    my $cid = $contig->getContigID();
-
-    my $rows = $sth->execute($cid) || &queryFailed($mquery,$cid);
-
-    my @mappings;
-    my $mappings = {}; # to identify mapping instance with mapping ID
-    my $generation;
-    while(my ($age,$pid, $mid, $cs, $cf, $dir) = $sth->fetchrow_array()) {
-# protect against empty contig-to-contig links 
-        $dir = 'Forward' unless defined($dir);
-# intialise and add parent name and parent ID as sequence ID
-        my $mapping = new Mapping();
-#        $mapping->setMappingName(sprintf("contig%08d",$pid)); # to the parent
-        $mapping->setMappingName("contig_".sprintf("%08d",$pid)); # the parent
-        $mapping->setSequenceID($pid);
-        $mapping->setAlignmentDirection($dir);
-        $mapping->setMappingID($mid);
-        $mapping->setHostSequenceID($cid);
-# add Mapping instance to output list and hash list keyed on mapping ID
-        push @mappings, $mapping;
-        $mappings->{$mid} = $mapping;
-# add remainder of data (cstart, cfinish) ?
-# do an age consistence check for this mapping
-        $generation = $age unless defined ($generation);
-        next if ($generation == $age);
-        $log->severe("Inconsistent generation in links for contig $cid");
-    }
-    $sth->finish();
-
-# 2) pull out the segments
-
-    $sth = $dbh->prepare($squery);
-
-    $sth->execute($cid) || &queryFailed($squery,$cid);
-
-    while(my @ary = $sth->fetchrow_array()) {
-        my ($mappingid, $cstart, $rpstart, $length) = @ary;
-        if (my $mapping = $mappings->{$mappingid}) {
-            $mapping->addAlignmentFromDatabase($cstart, $rpstart, $length);
-        }
-        else {
-# what if not? (should not occur at all)
-            $log->severe("Missing Mapping instance for ID $mappingid");
-        }
-    }
-
-    $sth->finish();
-
-    $contig->addContigToContigMapping([@mappings]);
-
-    return $generation;
-}
-
-sub getTagMappingsForContig {
-    print STDERR "TO BE DEVELOPED\n";
-}
-
-
 #-----------------------------------------------------------------------------
 # private
 #-----------------------------------------------------------------------------
@@ -578,7 +621,6 @@ sub fetchMappingSegmentsForCanonicalMappings {
     my $canonicalmapping_arrayref = shift;
     my %options = @_; # blocksize, force
 
-#print STDERR "fetchMappingSegmentsForCanonicalMappings TO BE DEVELOPED\n";
 # make an inventory of mappings; mapping IDs have to be unique
 
     my $report = '';
@@ -617,6 +659,19 @@ sub fetchMappingSegmentsForCanonicalMappings {
     }
 
     return $report;
+}
+
+sub verifyCanonicalMappingProperties {
+# private, verify properties against input mapping
+    my ($canonicalmapping,$id,$cs,$xs,$ys) = @_;
+
+    my $verified = 1;
+    $verified = 0 unless ($id == $canonicalmapping->getMappingID());
+    $verified = 0 unless ($xs == $canonicalmapping->getSpanX());
+    $verified = 0 unless ($ys == $canonicalmapping->getSpanY());
+    $verified = 0 unless ($cs == $canonicalmapping->getCheckSum());
+
+    return $verified;
 }
 
 #-----------------------------------------------------------------------------
