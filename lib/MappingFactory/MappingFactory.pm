@@ -38,15 +38,21 @@ sub build {
 
 # only allow empty mapping to be built if explicitly specified: read-contig 
 # and tag-contig mappings cannot be empty; contig-contig mappings can
- 
-   unless ($segment_arrayref && @$segment_arrayref) {
+
+    if ($segment_arrayref && ref($segment_arrayref) ne 'ARRAY') {
+	$STATUS .= "build list is not an array of arrays";
+	return undef;
+    }
+
+    unless ($segment_arrayref && @$segment_arrayref) {
 	$STATUS = "Empty build list";
 	return undef unless $options{empty}; # allow empty mapping
         my $emptymapping = new CanonicalMapping();
         my $checksum = $emptymapping->getCheckSum();
 # setting the checksum adds the canonical mapping, IF NEW, to the cache
         my $cachedmapping = $emptymapping->lookup($checksum);
-        return $cachedmapping,0,0,1;
+        $emptymapping = $cachedmapping if $cachedmapping;
+        return $emptymapping,0,0,1;
     }
 
 # check the alignments for consistency of alignment direction
@@ -54,7 +60,7 @@ sub build {
     my $alignment = &verifyAlignmentSegments($segment_arrayref); # also sorts
 # test alignment, must be +1 or -1
     unless ($alignment) {
-	$STATUS .= "Invalid or inconsistent alignments in build list";
+	$STATUS .= "invalid data in build list";
 	return undef;
         
     }
@@ -110,7 +116,7 @@ sub build {
     }
 
     my $checksum = $canonicalmapping->getCheckSum();
-# setting the checksum adds the canonical mapping, IF NEW, to the cache
+# setting the checksum adds the canonical mapping, IF NEW, to the cache, if enabled
     my $cachedmapping = $canonicalmapping->lookup($checksum);
     if ($cachedmapping && $cachedmapping ne $canonicalmapping) { 
 # check span against existing value (optional)
@@ -147,9 +153,20 @@ sub verifyAlignmentSegments {
 
     foreach my $segment (@$segment_arrayref) {
 # check alignment of segment; align on x-domain
+        unless (ref($segment) eq 'ARRAY') {
+            $STATUS = "Input list is not an Array of Arrays; ";
+            return undef;
+	}
         my ($xs, $xf, $ys, $yf) = @$segment;
+# check if all positions are specified > 0
+        foreach my $position (@$segment) {
+            next if ($position > 0);
+	    $STATUS = "Invalid position(s) in alignment segment @$segment; ";
+            return undef;
+	}
+# check equality of segment size in both domains
         unless (abs($xf-$xs) == abs($yf - $ys)) {
-	    print STDOUT "Invalid alignment segment @$segment\n";
+	    $STATUS = "Invalid segment size alignment segment @$segment; ";
             return undef;
 	}
         next unless ($xs > $xf);
@@ -265,6 +282,7 @@ sub isEqual {
 
     my $mapping = shift;
     my $compare = shift;
+    my %options = @_; # full=>1 to include testing Canonical Mapping
     
 #   verifyParameter($mapping,'isEqual','RegularMapping');
 #   verifyParameter($compare,'isEqual','RegularMapping');
@@ -274,6 +292,12 @@ sub isEqual {
 
     my $alignment = ($mapping->isCounterAligned() == $compare->isCounterAligned()) ? 1 : -1;
 
+    if ($options{full}) {
+        my $cmapping = $mapping->getCanonicalMapping();
+        my $ccompare = $compare->getCanonicalMapping();
+#print STDERR "canonicals: $cmapping $ccompare\n";
+        return 0 unless ($cmapping eq $ccompare);
+    }    
 
     if ($checksumm && $checksumc && $checksumm eq $checksumc) {
 # test equality in the Y domain
@@ -282,12 +306,12 @@ sub isEqual {
             my $mappingoffsetx = $mapping->getCanonicalOffsetX();
             my $compareoffsetx = $compare->getCanonicalOffsetX();
             $compareoffsetx = -$compareoffsetx if ($alignment < 0);
-#            $mappingoffsetx = -$mappingoffsetx if ($alignment < 0);
+#? $mappingoffsetx = -$mappingoffsetx if ($alignment < 0);
             return 1, $alignment,($mappingoffsetx - $compareoffsetx);  # sign TO BE tested
 	}
     }
 
-    return 0,0,0; # mappings differ 
+    return 0; # mappings differ 
 }
 
 #-------------------------------------------------------------------
@@ -367,10 +391,10 @@ sub copy {
     my $class = shift;
 # return a copy of this mapping or a segment as a new mapping
     my $regularmapping = shift;
-    my %options = @_;
+    my %options = @_; # append=>..
 
     my $copyname = $regularmapping->getMappingName();
-    $copyname .= $options{extend} if $options{extend};
+    $copyname .= $options{append} if $options{append};
 
     my $copy = $regularmapping->new(undef,empty=>1);
 
@@ -466,7 +490,7 @@ sub multiply {
 # returns a mapping without segments if product is empty
     my $rmapping = shift; # mapping R
     my $tmapping = shift; # mapping T
-    my %options = @_; # e.g. bridgegap=>1  tracksegments=> 0,1,2,3 backskip after
+    my %options = @_; # e.g. bridgegap=>1  tracksegments=> 0,1,2,3 backskip after empty
 
 # align the mappings such that the Y (mapped) domain of R and the 
 # X domain of T are both ordered according to segment position 
@@ -574,7 +598,11 @@ sub multiply {
 
 # build the product mapping from the collected product segments
 
-    my %coptions = (bridgegap => $options{bridgegap});
+    my %coptions;
+    foreach my $optionname ('bridgegap','empty') {
+        $coptions{$optionname} = $options{$optionname};
+    }
+#    my %coptions = (bridgegap => $options{bridgegap});
 
     my $product = new RegularMapping($productsegment_arrayref,%coptions);
     return 0 unless $product;
