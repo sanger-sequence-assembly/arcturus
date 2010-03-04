@@ -293,7 +293,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 			ContigTransferTableModel model = (ContigTransferTableModel) getModel();
 			
 			for (int i = 0; i < rows.length; i++)
-				requests[i] = model.getRequestForRow(i);
+				requests[i] = model.getRequestForRow(rows[i]);
 			
 			ProgressMonitor monitor = new ProgressMonitor(window,
 					"Processing contig transfer requests",
