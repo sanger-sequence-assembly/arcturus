@@ -10,7 +10,7 @@ my $project = 'ALL';
 
 my $vectordb = 'repeats.dbs'; # default
 
-my $minscore;
+my $minscore; # default undefined
 
 my $tagid = 'REPT';
 
@@ -102,8 +102,20 @@ $adb->disconnect();
 
 #----------------------------------------------------------------
 
-my $expfile = "/tmp/".lc($organism)."-$project.depad.exp.caf";
-my $impfile = "/tmp/".lc($organism)."-$project.depad.imp.caf";
+my $expfile = "/tmp/".lc($organism);
+my $impfile = "/tmp/".lc($organism);
+
+# if the whole process is done in one, add process ID ($$) to file names
+
+unless ($noexport || $nomatch || !$confirm) {
+    $expfile .= "-$$";
+    $impfile .= "-$$";
+}
+
+$expfile .= "-$project.depad.exp.caf";
+$impfile .= "-$project.depad.imp.caf";
+
+# export the specified projects
 
 my $export = "/software/arcturus/utils/project-export "
            . "-instance $instance -organism $organism "
@@ -111,11 +123,12 @@ my $export = "/software/arcturus/utils/project-export "
            . "-caf $expfile -gap4name";
 
 # test stuff
-# my $alter  =  "/nfs/team81/ejz/arcturus/utils/new-contig-export.pl "
+# my $alter  =  "$ENV{HOME}/arcturus/dev/utils/new-contig-export.pl "
 #            . "-instance $instance -organism $organism "
 #            . "-project $project -confirm "
 #           . "-project $project -ignore problems,trash "
 #           . "-caf $expfile -notags";
+# $export = $alter;
 
 print STDOUT "\nexporting from Arcturus:\n$export\n";
 print STDOUT "Using previously exported file $expfile\n\n" if $noexport;
@@ -137,7 +150,7 @@ system("grep REPT $impfile | wc");
 
 my $import = "/software/arcturus/utils/new-contig-loader "
            . "-instance $instance -organism $organism "
-           . "-caf $impfile -noload -lrt -lct";
+           . "-caf $impfile -noload -lrt -lct -nsrt";
 
 print STDOUT "re-importing tags: $import\n";
 print STDOUT "repeat with -confirm switch\n" unless $confirm;
