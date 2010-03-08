@@ -200,7 +200,7 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 	}
 	
 	private void doContigSearch() {
-		String text = txtContig.getText();
+		String text = txtContig.getText().trim();
 		
 		ScaffoldContigFinderWorker worker = new ScaffoldContigFinderWorker(adb, this, text);
 		
