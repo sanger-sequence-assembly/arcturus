@@ -4,10 +4,14 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.ComponentOrientation;
+import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.Enumeration;
 import java.util.List;
 
 import uk.ac.sanger.arcturus.gui.*;
@@ -28,6 +32,10 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 	private JTree tree= new JTree();
 
 	private JLabel lblWait = new JLabel("Please wait whilst the scaffold tree is retrieved");
+	
+	private JButton btnSearch = new JButton("Search");
+	
+	private JTextField txtContig = new JTextField(30);
 
 	protected ContigTransferMenu xferMenu;
 
@@ -62,6 +70,12 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 		});
 
 		tree.setCellRenderer(new MyRenderer());
+		
+		btnSearch.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				doContigSearch();
+			}			
+		});
 		
 		lblWait.setForeground(Color.RED);
 		lblWait.setHorizontalAlignment(SwingConstants.CENTER);
@@ -170,8 +184,27 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 			JScrollPane treepane = new JScrollPane(tree);
 			removeAll();
 			add(treepane, BorderLayout.CENTER);
+			
+			JPanel buttonPanel = new JPanel(new FlowLayout());
+			
+			JLabel label = new JLabel("Search for contig: ");
+			
+			buttonPanel.add(label);
+			buttonPanel.add(txtContig);
+			buttonPanel.add(btnSearch);
+			
+			add(buttonPanel, BorderLayout.NORTH);
+			
 			revalidate();
 		}
+	}
+	
+	private void doContigSearch() {
+		String text = txtContig.getText();
+		
+		ScaffoldContigFinderWorker worker = new ScaffoldContigFinderWorker(adb, this, text);
+		
+		worker.execute();
 	}
 
 	protected boolean addClassSpecificFileMenuItems(JMenu menu) {
@@ -233,5 +266,9 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 
 	public void projectChanged(ProjectChangeEvent event) {
 		refresh();
+	}
+	
+	public JTree getTree() {
+		return tree;
 	}
 }
