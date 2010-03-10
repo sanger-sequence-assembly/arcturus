@@ -12,6 +12,7 @@ import uk.ac.sanger.arcturus.test.CAFWriter;
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.data.Contig;
+import uk.ac.sanger.arcturus.data.Project;
 
 public class ContigTable extends SortableTable {
 	public final static int BY_ROW_NUMBER = 1;
@@ -106,7 +107,10 @@ public class ContigTable extends SortableTable {
 					if (i > 0)
 						ps.print('\n');
 					
-					ps.println(">contig" + df.format(contig.getID()));
+					Project project = contig.getProject();
+					
+					ps.println(">contig" + df.format(contig.getID()) + (project != null ? " project=" + project.getName() : "") +
+							" length=" + contig.getLength() + " reads=" + contig.getReadCount());
 					
 					for (int j = 0; j < dna.length; j += 50) {
 						int sublen = (j + 50 < dna.length) ? 50 : dna.length - j;
