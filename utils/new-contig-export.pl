@@ -1054,11 +1054,12 @@ sub writeplacements {
 
     my $count = 0;
     foreach my $mapping (@$mappings) {
-        my @crange = $mapping->getObjectRange() || ('unknown');
-        my @rrange = $mapping->getMappedRange() || ('unknown');
+        my @crange = $mapping->getObjectRange();
+        $crange[0] = 'undef' unless @crange;
+        my @rrange = $mapping->getMappedRange();
+        $rrange[0] = 'undef' unless @rrange;
         my $readname = $mapping->getMappingName();
         $readname =~ s/(\S+)\s.*$/$1/;
-#        $readname =~ s/\s+x\sT\s*//;
         my $alignment = $mapping->getAlignment() || 'U';
         $alignment = $direction{$alignment} if $direction{$alignment}; 
         print $FILE "$contigname  $readname  @crange  @rrange  $alignment\n";
