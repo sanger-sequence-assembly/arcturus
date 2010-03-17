@@ -11,6 +11,7 @@ public class OligoFinderEvent {
 	public static final int FINISH_READS = 7; 
 	public static final int ENUMERATING_FREE_READS = 8;
 	public static final int FINISH = 9;
+	public static final int MESSAGE = 10;
 	
 	private OligoFinder source;
 	private int type = UNKNOWN;
@@ -18,6 +19,7 @@ public class OligoFinderEvent {
 	private DNASequence sequence;
 	private int value;
 	private boolean forward;
+	private String message;
 	
 	public OligoFinderEvent(OligoFinder source) {
 		this.source = source;
@@ -37,6 +39,11 @@ public class OligoFinderEvent {
 		this.value = value;
 		this.forward = forward;
 	}
+	
+	public void setEvent(int type, String message) {
+		this.type = type;
+		this.message = message;
+	}
 
 	public OligoFinder getSource() { return source; }
 	
@@ -55,4 +62,8 @@ public class OligoFinderEvent {
 	public int getValue() { return value; }
 	
 	public boolean isForward() { return forward; } 
+	
+	public String getMessage() {
+		return message;
+	}
 }

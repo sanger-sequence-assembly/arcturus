@@ -25,6 +25,8 @@ public class OligoFinder {
 	private final int RETRY_INTERVAL = 10000;
 	private final int RETRY_ATTEMPTS = 5;
 	
+	//private int oldTransactionIsolationLevel;
+	
 	// The name of the temporary table for busy reads (reads which are in current contigs)
 	private final String BUSY_READS = "tmpBUSYREADS";
 	
@@ -32,10 +34,12 @@ public class OligoFinder {
 	private final String FREE_READS = "tmpFREEREADS";
 	
 	private final String CREATE_BUSY_READS_TABLE =
-		"create temporary table if not exists " + BUSY_READS + " (read_id int not null primary key)";
+		"create temporary table if not exists " + BUSY_READS +
+			" (read_id int not null primary key) ENGINE=InnoDB";
 	
 	private final String CREATE_FREE_READS_TABLE =
-		"create temporary table if not exists " + FREE_READS + " (read_id int not null primary key, readname char(64) not null)";
+		"create temporary table if not exists " + FREE_READS +
+			" (read_id int not null primary key, readname char(64) not null) ENGINE=InnoDB";
 	
 	private final String GET_PASS_VALUE = "select status_id from STATUS where name = ?";
 	
@@ -74,6 +78,10 @@ public class OligoFinder {
 
 		try {
 			conn = adb.getPooledConnection(this);
+			
+			//oldTransactionIsolationLevel = conn.getTransactionIsolation();
+			
+			//conn.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
 			
 			createTemporaryTables();
 			passValue = getPassValue();
@@ -230,7 +238,10 @@ public class OligoFinder {
 			listener.oligoFinderUpdate(event);
 		}
 		
-		int found = scanFreeReads(oligos);
+		int found = 0;
+		
+		if (nreads > 0)
+			found = scanFreeReads(oligos);
 
 		if (listener != null) {
 			event.setEvent(OligoFinderEvent.FINISH_READS, null, null,
@@ -242,24 +253,27 @@ public class OligoFinder {
 	}
 
 	private int countFreeReads() throws SQLException {
-		updateBusyReadsTable();
-		return updateFreeReadsTable();
+		int busyreads = updateBusyReadsTable();
+		
+		if (busyreads < 0)
+			return -1;
+		else
+			return updateFreeReadsTable();
 	}
 	
 	private int retryDatabaseOperation(PreparedStatement emptyStatement, PreparedStatement populateStatement, int retryInterval, int retryAttempts)
 		throws SQLException {
 		int rows = -1;
 		
-		boolean done = false;
-		int tries = 0;
+		int tries = 1;
 		
-		while (!done && tries < retryAttempts) {
+		while (tries <= retryAttempts) {
 			try {
-				System.err.println("Attempt #" + (tries+1));
+				logMessage("Attempt #" + tries);
 				
 				rows = emptyStatement.executeUpdate();
 				
-				System.err.println("\tDeleted " + rows + " rows");
+				logMessage("Deleted " + rows + " rows");
 				
 				long ticks = System.currentTimeMillis();
 
@@ -267,13 +281,15 @@ public class OligoFinder {
 
 				ticks = System.currentTimeMillis() - ticks;
 				
-				System.err.println("\tTable populated with " + rows + " rows in " + ticks + " ms");
+				logMessage("Table populated with " + rows + " rows in " + ticks + " ms");
 				
-				done = true;
+				return rows;
 			}
 			catch (SQLException sqle) {
-				if (sqle instanceof SQLTransactionRollbackException || 
-						sqle.getErrorCode() == MysqlErrorNumbers.ER_LOCK_WAIT_TIMEOUT) {
+				boolean nonfatal = sqle instanceof SQLTransactionRollbackException || 
+					sqle.getErrorCode() == MysqlErrorNumbers.ER_LOCK_WAIT_TIMEOUT;
+				
+				if (nonfatal && tries < retryAttempts) {
 					try {
 						tries++;
 						Thread.sleep(retryInterval);
@@ -289,16 +305,23 @@ public class OligoFinder {
 	}
 	
 	private int updateBusyReadsTable() throws SQLException {
-		System.err.println("\nUpdating busy reads table ...");
+		logMessage("Updating busy reads table ...");
 		return retryDatabaseOperation(pstmtEmptyBusyReadsTable, pstmtPopulateBusyReadsTable, RETRY_INTERVAL, RETRY_ATTEMPTS);
 	}
 	
 	private int updateFreeReadsTable() throws SQLException {
-		System.err.println("\nUpdating free reads table ...");
+		logMessage("Updating free reads table ...");
 
 		pstmtPopulateFreeReadsTable.setInt(1, passValue);
 
 		return retryDatabaseOperation(pstmtEmptyFreeReadsTable, pstmtPopulateFreeReadsTable, RETRY_INTERVAL, RETRY_ATTEMPTS);
+	}
+	
+	private void logMessage(String message) {
+		if (listener != null) {
+			event.setEvent(OligoFinderEvent.MESSAGE, message);
+			listener.oligoFinderUpdate(event);
+		}
 	}
 	
 	private int scanFreeReads(Oligo[] oligos) throws SQLException {
@@ -439,6 +462,7 @@ public class OligoFinder {
 	private void closeConnection() throws SQLException {
 		if (conn != null) {
 			closeStatements();
+			//conn.setTransactionIsolation(oldTransactionIsolationLevel);
 			conn.close();
 			conn = null;
 		}
