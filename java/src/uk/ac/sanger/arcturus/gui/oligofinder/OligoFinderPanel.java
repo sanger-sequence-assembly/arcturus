@@ -503,6 +503,10 @@ public class OligoFinderPanel extends MinervaPanel implements
 				});
 				break;
 
+			case OligoFinderEvent.MESSAGE:
+				postMessage("\n{MESSAGE [" + now + "] : " + event.getMessage() + "}\n");
+				break;
+				
 			default:
 				break;
 		}
