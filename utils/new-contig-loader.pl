@@ -45,6 +45,8 @@ my $maxnrofreads;           # maximum number of reads required in a contig
 my $withoutparents;
 
 my $breakcontig = 1;        # on consistence test failure try to split contig
+my $repairmode;             # special flag to activate repair of mismatch between reads 
+                            # and mappings which may occur on e.g. Arachne assemblies
 
 my $origin;
 my $acceptpadded = 0;       # 1 to allow a padded assembly
@@ -95,6 +97,10 @@ my $autolockmode = 1;
 my $rejectreadname = '\.[pq][12]k\.[\w\-]+';
 my $manglereadname = '\.[pq][12]k\.[\w\-]+';
 
+# filter for reads on input caf file
+
+my $ignorereadnamelike;
+
 # output
 
 my $loglevel;             
@@ -107,6 +113,8 @@ my $mail;
 
 my $debug = 0;
 my $usage;
+
+my $production = ($0 =~ /ejz/) ? 0 : 1;
 
 #------------------------------------------------------------------------------
 
@@ -128,9 +136,11 @@ my $validkeys  = "organism|o|instance|i|"
                . "blocksize|bs|"
 
                . "padded|safemode|maximum|minimum|filter|withoutparents|wp|"
-               . "testcontig|tc|noload|notest|parseonly|nobreak|consensus|"
+               . "testcontig|tc|noload|notest|parseonly|po|nobreak|consensus|"
+               . "repairmode|rm|"
 # beware! may allow loading corrupted reads
                . "acceptclippedcapillaryreads|accr|rejectreadname|rrn|" # beware!
+               . "ignorereadnamelike|irnl|"
 
                . "noloadreads|nlr|doloadreads|dlr|"
                . "consensusreadname|crn|noaspedcheck|nac|"
@@ -147,8 +157,8 @@ my $validkeys  = "organism|o|instance|i|"
                . "projectlock|pl|dounlock|project|p|noprojectlock|npl|"
                . "assembly|a|noscaffold|ns|scaffoldfile|sf|"
 
-               . "outputfile|out|log|minerva|verbose|info|debug|"
-               . "memory|timing|benchmark|help|h|mapfile";
+               . "outputfile|out|log|mapfile|minerva|verbose|info|debug|"
+               . "memory|timing|benchmark|help|h";
 
 #------------------------------------------------------------------------------
 # parse the command line input; options overwrite eachother; order is important
@@ -231,6 +241,10 @@ while (my $nextword = shift @ARGV) {
         $rejectreadname = shift @ARGV;
     }
 
+    if ($nextword eq "-ignorereadnamelike" || $nextword eq "-irnl") {
+        $ignorereadnamelike = shift @ARGV;
+    }
+
     $consensus        = 1  if ($nextword eq '-consensus');
 
     if ($nextword eq '-nl' || $nextword eq '-noload') {
@@ -238,6 +252,7 @@ while (my $nextword = shift @ARGV) {
         $loadcontigtags = 0;
 	$readload       = 0;
         $loadreadtags   = 0;
+        $syncreadtags   = 0;
     }
     elsif ($nextword eq '-nt' || $nextword eq '-notest') { # redundent
         $contigtest     = 0;            
@@ -255,6 +270,11 @@ while (my $nextword = shift @ARGV) {
     $origin             = shift @ARGV  if ($nextword eq '-origin');
     $safemode           = 1            if ($nextword eq '-safemode');
     $breakcontig        = 0            if ($nextword eq '-nobreak');
+
+    if ($nextword eq '-rm'  || $nextword eq '-repairmode') {
+	$repairmode     = 1;
+    }
+   
 
 # loading (missing) reads from input file
 
@@ -407,6 +427,10 @@ if ($debug) {
 }
 
 $logger->listStreams() if defined $loglevel; # test
+
+if ($syncreadtags && !$production) {
+    $logger->warning("BEWARE: read tag synchronization active");
+}
 
 #----------------------------------------------------------------
 # open file handle for CAF contig name to Arcturus ID mapping
@@ -706,12 +730,13 @@ if ($frugal) { # this whole block should go to a contig "factory"
 	}
         elsif ($objecttype =~ /read/) {
 # filter readnames to avoid loading unwanted reads into arcturus
-            if ($manglereadname && $objectname =~ /$manglereadname/) {
-                $logger->severe("The assembly contains reads mangled by the Newbler asssembler");
-		$logger->severe("Loading is aborted");
-  	        $adb->disconnect();
-	        exit 1;
-            }
+#            if ($manglereadname && $objectname =~ /$manglereadname/) {
+#                $logger->severe("The assembly contains reads mangled by the Newbler asssembler");
+#		$logger->severe("Offending read: $objectname");
+#		$logger->severe("Loading is aborted");
+#  	        $adb->disconnect();
+#	        exit 1;
+#            }
             if ($rejectreadname && $objectname =~ /$rejectreadname/) {
 		$logger->warning("read $objectname was rejected");
                 next;
@@ -743,22 +768,41 @@ if ($frugal) { # this whole block should go to a contig "factory"
     if (@readnames) {
 
         my %toptions = (readload=>$readload);
-        $toptions{consensusread} = $consensusread if $consensusread;
-        $toptions{noaspedcheck}  = $noaspedcheck  if $noaspedcheck;
-        my $missing = &testreadsindatabase(\@readnames,%toptions);
+        $toptions{consensusread}  = $consensusread      if $consensusread;
+        $toptions{noaspedcheck}   = $noaspedcheck       if $noaspedcheck;
+        $toptions{manglereadname} = $manglereadname     if $manglereadname;
+
+        my $readnames = \@readnames;
+        if (defined $ignorereadnamelike) { # apply filter to readnames
+# ignorereadnamelike option suppresses autoloading and must be accompanied by cleanup of contig
+            $ignorereadnamelike =~ s/[\:\;\,]+/|/g;
+            $ignorereadnamelike = wq($ignorereadnamelike);
+            my @filteredreadnames;
+            foreach my $readname (@readnames) {
+                if ($readname =~ /$ignorereadnamelike/) {
+		    $logger->info("read $readname will be ignored");
+		    next;
+		}
+                push @filteredreadnames,$readname;
+	    }
+            $readnames = \@filteredreadnames if @filteredreadnames;
+	}
+
+        my $missing = &testreadsindatabase($readnames,%toptions);
+
         if ($missing) {
    	    $logger->warning("$missing reads still missing");
 # abort in this case
 	    $adb->disconnect();
-	    exit 1;
+	    exit 1 if ($readload && $contigload);
 	}
-
-	$logger->warning("All reads identified in database");
+        else {
+  	    $logger->warning("All reads identified in database");
+	}
 
 # here build the read/version hashes for reads in the list, or defer to later
 
         unless ($uservhashlocal) {
-#$logger->warning("building read version hash 1");
            ($readversionhash,$missing) = $adb->getReadVersionHash(\@readnames);
             if ($missing && @$missing) {
         	$logger->warning(scalar(@$missing)." reads still missing "
@@ -769,6 +813,8 @@ if ($frugal) { # this whole block should go to a contig "factory"
     }
     else {
         $logger->warning("CAF file $caffilename has no reads");
+	$adb->disconnect();
+	exit 1;
     }
 
     @contiginventory = @contignames;
@@ -858,7 +904,6 @@ while (!$fullscan) {
                 undef @reads;
                 undef $ereads;
 	    }
-# HERE FILTER out unwanted reads?
             $logger->monitor("after extract",memory=>1,timing=>1) if $usage;
         }
         else {
@@ -1003,6 +1048,33 @@ print STDOUT " end no frugal scan\n";
 	    }
         }
 
+        if ($repairmode) {
+# test contig here to effectuate repairs
+            unless ($contig->isValid(forimport => 1, repair => 1)) {
+		$logger->error("Contig $identifier could not be repaired");
+		next;
+	    }
+            $nr = $contig->getNumberOfReads(); # could have changed
+	}
+
+# if reads are to be ignored, remove them from the contig
+
+        if ($ignorereadnamelike) {
+# remove reads with names matching a particular string or pattern 
+            my @toberemoved;
+            my $reads = $contig->getReads();
+            foreach my $read (@$reads) {
+                my $readname = $read->getReadName();
+                next unless ($readname =~ /$ignorereadnamelike/);
+                push @toberemoved,$readname; 
+            }            
+            $logger->warning("reads to be removed from contig $identifier: @toberemoved");
+            my ($newcontig, $msg) = $contig->removeNamedReads([@toberemoved]);
+            $logger->warning("contig status returned: $msg");
+            next unless $newcontig;
+            $contig = $newcontig;
+	}
+
 # &testeditedconsensusreads($contig); 
 
         if ($contigload) {
@@ -1018,6 +1090,7 @@ print STDOUT " end no frugal scan\n";
 	    $loptions{acceptversionzero} = 1 if $acceptversionzero;
 	    $loptions{annotation} = $annotationtags if $annotationtags;
 	    $loptions{finishing} = $finishingtags if $finishingtags;
+            $loptions{loadreadsequence} = 1 if $readload;
 
             $logger->monitor("before loading ($nr) ",memory=>1,timing=>1) if $usage;
             my ($added,$msg) = $adb->putContig($contig, $project,%loptions);
@@ -1028,11 +1101,11 @@ print STDOUT " end no frugal scan\n";
                 $lastinsertedcontig = $added;
                 $logger->info("Contig $identifier with $nr reads :"
                              ." status $added, $msg");
-
-		# Record the mapping from CAF contig name to Arcturus ID, if 
-		# the user specified a map file
+                $logger->special("Contig $identifier with $nr reads :"
+                                ." status $added, $msg");
+            # Record the mapping from CAF contig name to Arcturus ID, if 
+            # the user specified a map file
 		print $fhMapfile "$identifier $added\n" if defined($fhMapfile);
-
 #                $loaded++ unless ...;
 # replace the input rank by the scaffold ranking, or, if absent by the nextrank count
                 if ($scaffold) {
@@ -1054,7 +1127,8 @@ print STDOUT " end no frugal scan\n";
 # add contig_id, rank in current scaffold, parent ids (if any);    
             }
             else {
-                $logger->warning("Contig $identifier with $nr reads was not added:"
+
+                $logger->warning("WARNING! Contig $identifier with $nr reads was NOT ADDED :"
                                 ."\n$msg",preskip=>1);
                 $missed++;
 # for discontinuous contigs: try break
@@ -1081,7 +1155,12 @@ print STDOUT " end no frugal scan\n";
 		    $contig->erase(); # enable garbage collection
                     next;
    	        }
-# $adb->clearLastContig(); ?
+                   
+                if ($loglevel) { # debugging option for failed contig
+                    $contig->setSequence();
+                    $contig->writeToCaf(*STDOUT);
+                    next;
+	        }
             }
 #$logger->monitor("memory usage after loading contig ".$contig->getContigName(),memory=>1);
         }
@@ -1112,7 +1191,7 @@ print STDOUT " end no frugal scan\n";
                     $logger->warning($line);
 		}
                 $contig->setContigID($added) if $added;
-                my $diagnose =($contigtest > 1) ? 2 : 0;
+                my $diagnose =($contigtest > 1 || $debug) ? 2 : 0;
 		$contig->isValid(diagnose=>$diagnose);
 	        if ($contig->hasContigToContigMappings()) {
                     $logger->warning($contig->getContigName()
@@ -1132,7 +1211,12 @@ print STDOUT " end no frugal scan\n";
             }
 	    else {
                 my $diagnosis = $contig->getStatus();
-                $logger->severe("Invalid contig $identifier: $diagnosis");
+                $logger->severe("Invalid contig $identifier: $diagnosis");               
+                if ($loglevel) { # debugging option for failed contig
+                    $contig->setSequence();
+                    $contig->writeToCaf(*STDOUT);
+                    next;
+	        }
 	    }
         }
 
@@ -1185,6 +1269,7 @@ if (@$reads && keys %readtagoptions) {
 
 $logger->warning("$loaded contigs loaded");
 $logger->warning("$missed contigs skipped") if $missed;
+$logger->special("$missed contigs skipped") if $missed;
 
 # ad import mark on the project
 
@@ -1268,6 +1353,8 @@ sub testreadsindatabase {
     
     $logger->warning(scalar(@$missingreads)." missing reads identified");
 
+    $logger->warning("$missingreads->[0] ... $missingreads->[$#$missingreads]");
+
     return scalar(@$missingreads) unless $options{readload};
 
     $logger->warning("Trying to load ".scalar(@$missingreads)." missing reads");
@@ -1321,6 +1408,7 @@ sub testreadsindatabase {
 
     my $crn = $options{consensusread};
     my $nac = $options{noaspedcheck};
+    my $manglereadname = $options{manglereadname};
 
     my $readstobeloaded = $stillmissingreads;
     my $readsloaded = 0;
@@ -1333,16 +1421,26 @@ sub testreadsindatabase {
     	    $logger->warning("FAILED to fetch any reads");
 	    next;
 	}
-	$logger->info(scalar(@$reads)." reads to be loaded into database ");
+	$logger->warning(scalar(@$reads)." reads to be loaded into database ");
 
         foreach my $read (@$reads) {
             my $readname = $read->getReadName();
-            $logger->info("read to be stored ($readload) : $readname");
+            $logger->warning("read to be stored ($readload) : $readname");
             if ($read->isEdited()) {
                 undef $read->{alignToTrace};
                 $logger->info("required un-edit edited read $readname");
 #                next; # ignore here, or override ?
  	    }
+# do not load anything that looks like a mangled read in order not to contamionate raw data            
+            if ($manglereadname && $readname =~ /$manglereadname/) {
+                $logger->severe("The assembly contains reads mangled by the Newbler asssembler");
+		$logger->severe("Offending read: $readname");
+		$logger->severe("Loading will be aborted");
+#  	        $adb->disconnect();
+#	        exit 1;
+		next;
+            }
+
 
 # move most of this to ReadFactory ? 
             unless ($read->getStrand()) {
@@ -1382,6 +1480,11 @@ sub testreadsindatabase {
             }
 
             next unless $readload;
+# AD HOC fix for zebrafish; TO BE REMOVED LATER
+if ($read->getPrimer() eq 'Custom_primer') {
+    $logger->special("Custom_primer adjusted");
+    $read->setPrimer('Custom');
+}
             my ($status,$msg) = $adb->putRead($read,%loadoptions);
             unless ($status) {
 		$logger->warning("FAILED to load read $readname : ".$msg);
@@ -1390,9 +1493,9 @@ sub testreadsindatabase {
             $stillmissingreads--;
 	    $readsloaded++;
         }
-
 	$logger->warning("Loaded $readsloaded reads of $readstobeloaded");
     }
+
     return $stillmissingreads; # number of reads still missing
 }
 
@@ -1747,6 +1850,8 @@ sub showUsage {
     print STDERR "-nb\t\t(nobreak) accept only contigs with continuous coverage\n";
     print STDERR "\n";
     print STDERR "-bs\t\t(blocksize) process the contigs in blocks of size specified\n";
+    print STDERR "\n";
+    print STDERR "-rm\t\t(repairmode) repair possible mismatch between reads and mappings\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS for testing:\n";
     print STDERR "\n";
