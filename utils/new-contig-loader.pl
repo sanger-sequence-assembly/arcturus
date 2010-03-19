@@ -94,7 +94,7 @@ my $autolockmode = 1;
 
 # filter for mixed assembly capilary reads
 
-my $rejectreadname = '\.[pq][12]k\.[\w\-]+';
+my $rejectreadname;
 my $manglereadname = '\.[pq][12]k\.[\w\-]+';
 
 # filter for reads on input caf file
