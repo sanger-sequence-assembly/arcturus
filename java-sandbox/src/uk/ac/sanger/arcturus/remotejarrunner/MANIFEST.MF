@@ -1,0 +1,3 @@
+Manifest-Version: 1.0
+Main-Class: uk.ac.sanger.arcturus.remotejarrunner.RemoteJarRunner
+Class-Path: lib/jlfgr-1_0.jar lib/mysql-connector-java-5.1.6-bin.jar lib/oracle-jdbc.jar lib/activation.jar lib/javamail.jar lib/jmxremote_optional.jar lib/trilead-ssh2-build213.jar
