@@ -5,6 +5,7 @@ import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectListModel;
 import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectProxy;
 import uk.ac.sanger.arcturus.oligo.*;
+import uk.ac.sanger.arcturus.oligo.OligoFinderEvent.Type;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
 import javax.swing.*;
@@ -432,13 +433,13 @@ public class OligoFinderPanel extends MinervaPanel implements
 	}
 
 	public void oligoFinderUpdate(OligoFinderEvent event) {
-		int type = event.getType();
+		Type type = event.getType();
 		int value = event.getValue();
 		
 		Date now = new Date();
 
 		switch (type) {
-			case OligoFinderEvent.START_CONTIGS:
+			case START_CONTIGS:
 				oligomatches.clear();
 				bpdone = 0;
 				initProgressBar(pbarContigProgress, value);
@@ -447,12 +448,12 @@ public class OligoFinderPanel extends MinervaPanel implements
 						+ " bp of contig consensus sequence\n");
 				break;
 
-			case OligoFinderEvent.ENUMERATING_FREE_READS:
+			case ENUMERATING_FREE_READS:
 				postMessage("\nTIMESTAMP: " + now + "\n");
 				postMessage("\nMaking a list of free reads.  This may take some time.  Please be patient.\n");
 				break;
 
-			case OligoFinderEvent.START_READS:
+			case START_READS:
 				oligomatches.clear();
 				bpdone = 0;
 				postMessage("\nTIMESTAMP: " + now + "\n");
@@ -461,14 +462,14 @@ public class OligoFinderPanel extends MinervaPanel implements
 						+ " free reads\n");
 				break;
 
-			case OligoFinderEvent.START_SEQUENCE:
+			case START_SEQUENCE:
 				break;
 
-			case OligoFinderEvent.FOUND_MATCH:
+			case FOUND_MATCH:
 				addMatch(event);
 				break;
 
-			case OligoFinderEvent.FINISH_SEQUENCE:
+			case FINISH_SEQUENCE:
 				if (event.getDNASequence().isContig()) {
 					bpdone += value;
 					incrementProgressBar(pbarContigProgress, bpdone);
@@ -478,19 +479,19 @@ public class OligoFinderPanel extends MinervaPanel implements
 				}
 				break;
 
-			case OligoFinderEvent.FINISH_CONTIGS:
+			case FINISH_CONTIGS:
 				setProgressBarToDone(pbarContigProgress);
 				postMessage("Finished.\n");
 				reportMatches(false);
 				break;
 
-			case OligoFinderEvent.FINISH_READS:
+			case FINISH_READS:
 				setProgressBarToDone(pbarReadProgress);
 				postMessage("Finished.\n");
 				reportMatches(terse);
 				break;
 
-			case OligoFinderEvent.FINISH:
+			case FINISH:
 				SwingUtilities.invokeLater(new Runnable() {
 					public void run() {
 						actionFindOligos.setEnabled(true);
@@ -503,8 +504,12 @@ public class OligoFinderPanel extends MinervaPanel implements
 				});
 				break;
 
-			case OligoFinderEvent.MESSAGE:
+			case MESSAGE:
 				postMessage("\n{MESSAGE [" + now + "] : " + event.getMessage() + "}\n");
+				break;
+				
+			case EXCEPTION:
+				postMessage("***** WARNING [" + now + "] : " + event.getMessage() + " *****");
 				break;
 				
 			default:

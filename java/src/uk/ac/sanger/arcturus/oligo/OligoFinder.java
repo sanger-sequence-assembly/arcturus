@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.oligo;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.oligo.OligoFinderEvent.Type;
 
 import java.sql.*;
 import java.util.zip.*;
@@ -22,8 +23,8 @@ public class OligoFinder {
 	
 	private int passValue;
 	
-	private final int RETRY_INTERVAL = 10000;
-	private final int RETRY_ATTEMPTS = 5;
+	private final int RETRY_INTERVAL = 10;
+	private final int MAX_RETRY_ATTEMPTS = 5;
 	
 	//private int oldTransactionIsolationLevel;
 	
@@ -160,7 +161,7 @@ public class OligoFinder {
 			found += findFreeReadMatches(oligos);
 
 		if (listener != null) {
-			event.setEvent(OligoFinderEvent.FINISH, null, null, -1, false);
+			event.setEvent(Type.FINISH, null, null, -1, false);
 			listener.oligoFinderUpdate(event);
 		}
 
@@ -171,7 +172,7 @@ public class OligoFinder {
 		int totlen = getTotalContigLength(projectIDs);
 
 		if (listener != null) {
-			event.setEvent(OligoFinderEvent.START_CONTIGS, null, null,
+			event.setEvent(Type.START_CONTIGS, null, null,
 					totlen, false);
 			listener.oligoFinderUpdate(event);
 		}
@@ -182,7 +183,7 @@ public class OligoFinder {
 			found += findContigMatches(oligos, projectIDs[i]);
 
 		if (listener != null) {
-			event.setEvent(OligoFinderEvent.FINISH_CONTIGS, null, null, -1,
+			event.setEvent(Type.FINISH_CONTIGS, null, null, -1,
 					false);
 			listener.oligoFinderUpdate(event);
 		}
@@ -225,7 +226,7 @@ public class OligoFinder {
 
 	private int findFreeReadMatches(Oligo[] oligos) throws SQLException {
 		if (listener != null) {
-			event.setEvent(OligoFinderEvent.ENUMERATING_FREE_READS, null, null,
+			event.setEvent(Type.ENUMERATING_FREE_READS, null, null,
 					0, false);
 			listener.oligoFinderUpdate(event);
 		}
@@ -233,7 +234,7 @@ public class OligoFinder {
 		int nreads = countFreeReads();
 		
 		if (listener != null) {
-			event.setEvent(OligoFinderEvent.START_READS, null, null,
+			event.setEvent(Type.START_READS, null, null,
 					nreads, false);
 			listener.oligoFinderUpdate(event);
 		}
@@ -244,7 +245,7 @@ public class OligoFinder {
 			found = scanFreeReads(oligos);
 
 		if (listener != null) {
-			event.setEvent(OligoFinderEvent.FINISH_READS, null, null,
+			event.setEvent(Type.FINISH_READS, null, null,
 					-1, false);
 			listener.oligoFinderUpdate(event);
 		}
@@ -261,11 +262,16 @@ public class OligoFinder {
 			return updateFreeReadsTable();
 	}
 	
+	private boolean isNonFatalException(SQLException e) {
+		return e instanceof SQLTransactionRollbackException || 
+			e.getErrorCode() == MysqlErrorNumbers.ER_LOCK_WAIT_TIMEOUT;
+	}
+	
 	private int retryDatabaseOperation(PreparedStatement emptyStatement, PreparedStatement populateStatement, int retryInterval, int retryAttempts)
 		throws SQLException {
 		int rows = -1;
 		
-		int tries = 1;
+		int tries = 0;
 		
 		while (tries <= retryAttempts) {
 			try {
@@ -286,16 +292,30 @@ public class OligoFinder {
 				return rows;
 			}
 			catch (SQLException sqle) {
-				boolean nonfatal = sqle instanceof SQLTransactionRollbackException || 
-					sqle.getErrorCode() == MysqlErrorNumbers.ER_LOCK_WAIT_TIMEOUT;
-				
-				if (nonfatal && tries < retryAttempts) {
-					try {
+				if (isNonFatalException(sqle)) {
+					if (tries < retryAttempts) {
 						tries++;
-						Thread.sleep(retryInterval);
-					} catch (InterruptedException ie) {
-						return rows;
-					}				
+						
+						try {
+							if (listener != null) {
+								event.setEvent(Type.MESSAGE, "The database is busy.  Minerva will wait for " + retryInterval + " seconds and try again.");
+								event.setException(sqle);
+								listener.oligoFinderUpdate(event);
+							}		
+							
+							long ticks = 1000 * retryInterval;
+							Thread.sleep(ticks);
+						} catch (InterruptedException ie) {
+						}
+					} else {
+						if (listener != null) {
+							event.setEvent(Type.EXCEPTION, "Minerva cannot enumerate the free reads because the database is busy.\nPlease try again in a few minutes.");
+							event.setException(sqle);
+							listener.oligoFinderUpdate(event);
+						}		
+						
+						return -1;
+					}
 				} else
 					throw sqle;
 			}
@@ -306,7 +326,7 @@ public class OligoFinder {
 	
 	private int updateBusyReadsTable() throws SQLException {
 		logMessage("Updating busy reads table ...");
-		return retryDatabaseOperation(pstmtEmptyBusyReadsTable, pstmtPopulateBusyReadsTable, RETRY_INTERVAL, RETRY_ATTEMPTS);
+		return retryDatabaseOperation(pstmtEmptyBusyReadsTable, pstmtPopulateBusyReadsTable, RETRY_INTERVAL, MAX_RETRY_ATTEMPTS);
 	}
 	
 	private int updateFreeReadsTable() throws SQLException {
@@ -314,12 +334,12 @@ public class OligoFinder {
 
 		pstmtPopulateFreeReadsTable.setInt(1, passValue);
 
-		return retryDatabaseOperation(pstmtEmptyFreeReadsTable, pstmtPopulateFreeReadsTable, RETRY_INTERVAL, RETRY_ATTEMPTS);
+		return retryDatabaseOperation(pstmtEmptyFreeReadsTable, pstmtPopulateFreeReadsTable, RETRY_INTERVAL, MAX_RETRY_ATTEMPTS);
 	}
 	
 	private void logMessage(String message) {
 		if (listener != null) {
-			event.setEvent(OligoFinderEvent.MESSAGE, message);
+			event.setEvent(Type.MESSAGE, message);
 			listener.oligoFinderUpdate(event);
 		}
 	}
@@ -370,7 +390,7 @@ public class OligoFinder {
 		int found = 0;
 
 		if (listener != null) {
-			event.setEvent(OligoFinderEvent.START_SEQUENCE, null, dnaSequence,
+			event.setEvent(Type.START_SEQUENCE, null, dnaSequence,
 					0, false);
 			listener.oligoFinderUpdate(event);
 		}
@@ -384,7 +404,7 @@ public class OligoFinder {
 		int sequencelen = sequence == null ? 0 : sequence.length();
 
 		if (listener != null) {
-			event.setEvent(OligoFinderEvent.FINISH_SEQUENCE, null,
+			event.setEvent(Type.FINISH_SEQUENCE, null,
 					sequencelen, false);
 			listener.oligoFinderUpdate(event);
 		}
@@ -423,7 +443,7 @@ public class OligoFinder {
 	
 	private void reportMatch(Oligo oligo, int offset, boolean forward) {
 		if (listener != null) {
-			event.setEvent(OligoFinderEvent.FOUND_MATCH, oligo,
+			event.setEvent(Type.FOUND_MATCH, oligo,
 					offset, forward);
 			listener.oligoFinderUpdate(event);
 		}
