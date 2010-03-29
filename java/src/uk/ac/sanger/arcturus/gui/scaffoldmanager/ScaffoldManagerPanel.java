@@ -11,6 +11,7 @@ import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.File;
 import java.util.Enumeration;
 import java.util.List;
 
@@ -38,6 +39,8 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 	private JTextField txtContig = new JTextField(30);
 
 	protected ContigTransferMenu xferMenu;
+
+	protected MinervaAbstractAction actionExportAsFasta;
 
 	public ScaffoldManagerPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
 		super(parent, adb);
@@ -90,6 +93,17 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 		boolean noneSelected = nrows == 0;
 		
 		xferMenu.setEnabled(!noneSelected);
+
+		if (noneSelected)
+			actionExportAsFasta.setEnabled(false);
+		else {
+			DefaultMutableTreeNode node = (DefaultMutableTreeNode)tree.getLastSelectedPathComponent();
+			
+			boolean canExport = node instanceof ScaffoldNode || node instanceof SuperscaffoldNode ||
+				node instanceof AssemblyNode;
+
+			actionExportAsFasta.setEnabled(canExport);
+		}
 	}
 
 	private final Color PALE_PINK = new Color(0xFF, 0xCC, 0xCC);
@@ -218,6 +232,46 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 	}
 
 	protected void createActions() {
+		actionExportAsFasta = new MinervaAbstractAction("Export as FASTA",
+				null, "Export contigs as FASTA", new Integer(KeyEvent.VK_F),
+				KeyStroke.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK | ActionEvent.ALT_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				exportAsFasta();
+			}
+		};
+	}
+
+	private void exportAsFasta() {
+		DefaultMutableTreeNode node = (DefaultMutableTreeNode)tree.getLastSelectedPathComponent();
+		
+		if (node == null) {
+			JOptionPane.showMessageDialog(this, "No valid node is selected.  This should not happen.",
+					"No node selected", JOptionPane.ERROR_MESSAGE);			
+			return;
+		}
+		
+		JFileChooser chooser = new JFileChooser();
+		
+		File dir = new File(System.getProperty("user.dir"));
+		
+		chooser.setCurrentDirectory(dir);
+		
+		chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+		
+		chooser.setMultiSelectionEnabled(false);
+		
+		if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+			dir = chooser.getSelectedFile();
+			
+			if (dir.canWrite()) {
+				ScaffoldExportWorker worker = new ScaffoldExportWorker(this, dir, node);
+			
+				worker.execute();
+			} else
+				JOptionPane.showMessageDialog(this,
+						"The selected directory (" + dir.getAbsolutePath() + ") is read-only.",
+						"The directory is read-only.", JOptionPane.ERROR_MESSAGE);
+		}
 	}
 
 	protected void createClassSpecificMenus() {
@@ -231,6 +285,8 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 		contigMenu.add(xferMenu);
 		
 		xferMenu.refreshMenu();
+		
+		contigMenu.add(actionExportAsFasta);
 	}
 
 	protected void doPrint() {

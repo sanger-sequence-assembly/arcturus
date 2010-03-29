@@ -120,18 +120,19 @@ public class ScaffoldHandler extends DefaultHandler {
 				break;
 
 			case SCAFFOLD:
+				int scaffoldID = getIntegerAttribute(attrs, "id", -1);
 				String sSense = attrs.getValue("sense");
 				boolean sForward = sSense.equalsIgnoreCase("F");
-				scaffoldNode = new ScaffoldNode(sForward);
+				scaffoldNode = new ScaffoldNode(scaffoldID, sForward);
 				break;
 
 			case CONTIG:
-				int id = getIntegerAttribute(attrs, "id", -1);
+				int contigID = getIntegerAttribute(attrs, "id", -1);
 				Contig contig = null;
 				boolean current = false;
 				try {
-					contig = adb.getContigByID(id);
-					current = adb.isCurrentContig(id);
+					contig = adb.getContigByID(contigID);
+					current = adb.isCurrentContig(contigID);
 				} catch (SQLException e) {
 					Arcturus.logWarning(e);
 				} catch (DataFormatException e) {
