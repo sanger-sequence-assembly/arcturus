@@ -196,7 +196,7 @@ The new schedule:
 
 III Extract contigs: 
     (for each contig do)
-    a) build mappings to get canonical mappings & checksum
+    a) build mappings to get canonical mappings & checksums
     b) identify canonical mapping IDs; load new canonical mappings (new)
     c) add read sequence id to mappings; discard reads
     d) test completeness: all mappings should have seq_id and
@@ -205,24 +205,33 @@ III Extract contigs:
 IV  Build graph of relationship between contigs and parents:
     (for each contig do)
     a) test database for matching seq_id checksum
-    b) if found, test for equality; if equal add contig_id & next contig 
-    c) find parents using shared readnames
-    d) extract parents and mappings (by delayed loading)
-    e) determine links to parents, add valid links as contig-to-contig 
-       mappings
-    f) inherit tags
+    b) if found, test for equality; if equal, next contig unless contig tags
+       have changed (then add contig_id);
+    (for each of the remaining contigs do)
+    c) find parents using shared readnames; determine nr of reads in common
+    d) put an empty contig-to-contigmapping as place holder
+
+V   Analyse graph of parent-contig relationships:
+    a) test graph for consistency, small contigs overwriting large ones etc;
+    b) abort loading with error message on any inconsistency
+
+VI  Complete parent to contig links
+    (for each new contig do)
+    a) obtain parent_id from placeholder mapping
+    b) extract parents and mappings (by delayed loading)
+    c) determine links to parents, add valid links as contig-to-contig 
+       mapping(s) replacing the placeholder mapping
+    d) inherit tags, if any
     g) determine project to assign contig to; add as Project instance
-    h) keep track of readcounts in parents and new contigs
-    (end do)
-    i) analyse graph and readcounts; test for inconsistencies, small
-       contigs overwriting large ones etc; if problems abort
 
- Va Add contigtags for contigs which have a contig ID 
-
- Vb Insert contig data for new contigs in one transaction: metadata,
-    seq-to-contig mappings, contig-to-contig mappings, tags
+VII In one transaction:
+    a) insert contigs without already defined contig_id (i.e. the new contigs)
+       1) metadata (a.o. project_id); obtain contig_id
+       2) seq2contig records
+       3) parent2contig mappings
+    b) add/synchronize contig tags
    
- VI Add import marker
+VIII Add import marker
 
-VII Send mail messages
+IX  Send mail messages
  
