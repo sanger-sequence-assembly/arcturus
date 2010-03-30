@@ -1,6 +1,5 @@
 package uk.ac.sanger.arcturus.gui.scaffoldmanager;
 
-import java.awt.Toolkit;
 import java.io.*;
 import java.sql.SQLException;
 import java.text.DecimalFormat;
@@ -16,6 +15,7 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.gui.scaffoldmanager.ScaffoldManagerPanel.FastaMode;
 import uk.ac.sanger.arcturus.gui.scaffoldmanager.node.AssemblyNode;
 import uk.ac.sanger.arcturus.gui.scaffoldmanager.node.ContigNode;
 import uk.ac.sanger.arcturus.gui.scaffoldmanager.node.GapNode;
@@ -31,20 +31,26 @@ public class ScaffoldExportWorker extends
 	
 	private JPanel parent;
 	
+	private FastaMode mode;
+	
 	private DecimalFormat format;
 
-	int totalScaffolds = 0;
-	int totalContigs = 0;
-	int totalContigLength = 0;
+	private int totalScaffolds = 0;
+	private int totalContigs = 0;
+	private int totalContigLength = 0;
 	
-	int countScaffolds = 0;
-	int countContigs = 0;
-	int countContigLength = 0;
+	private int countScaffolds = 0;
+	private int countContigs = 0;
+	private int countContigLength = 0;
+	
+	private StringBuilder scaffoldSequence;
+	private int agpLineNumber;
 
-	public ScaffoldExportWorker(JPanel parent, File dir, DefaultMutableTreeNode root) {
+	public ScaffoldExportWorker(JPanel parent, FastaMode mode, File dir, DefaultMutableTreeNode root) {
 		this.dir = dir;
 		this.root = root;
 		this.parent = parent;
+		this.mode = mode;
 		
 		format = new DecimalFormat("00000000");
 	}
@@ -114,24 +120,25 @@ public class ScaffoldExportWorker extends
 	private void exportScaffold(ScaffoldNode node) throws IOException, SQLException  {
 		countScaffolds++;
 		
-		String stem = "scaffold" + format.format(node.getID());
+		String scaffoldName = "scaffold" + format.format(node.getID());
 		
-		String fastaFilename = stem + ".fas";
-		String agpFilename = stem + ".agp";
-		String imageFilename = stem + ".list";
+		String fastaFilename = scaffoldName + ".fas";
+		
+		String listFilename = scaffoldName + (mode == FastaMode.SEPARATE_CONTIGS ? ".list" : ".agp"); 
 		
 		File fastaFile = new File(dir, fastaFilename);
-		File agpFile = new File(dir, agpFilename);
-		File imageFile = new File(dir, imageFilename);
+		File listFile = new File(dir, listFilename);
 		
 		PrintWriter fastaWriter
 			   = new PrintWriter(new BufferedWriter(new FileWriter(fastaFile)));
 		
-		PrintWriter agpWriter = null;
-		//   = new PrintWriter(new BufferedWriter(new FileWriter(agpFile)));
+		PrintWriter listWriter
+		   = new PrintWriter(new BufferedWriter(new FileWriter(listFile)));
 		
-		PrintWriter imageWriter
-		   = new PrintWriter(new BufferedWriter(new FileWriter(imageFile)));
+		if (mode == FastaMode.CONCATENATE_CONTIGS) {
+			scaffoldSequence = new StringBuilder();
+			agpLineNumber = 0;
+		}
 		
 		Enumeration children = node.children();
 		
@@ -139,27 +146,42 @@ public class ScaffoldExportWorker extends
 			DefaultMutableTreeNode childNode = (DefaultMutableTreeNode) children.nextElement();
 			
 			if (childNode instanceof ContigNode)
-				exportContig((ContigNode)childNode, stem, fastaWriter, agpWriter, imageWriter);
+				exportContig((ContigNode)childNode, scaffoldName, fastaWriter, listWriter);
 			else if (childNode instanceof GapNode)
-				exportGap((GapNode)childNode, stem, fastaWriter, agpWriter, imageWriter);
+				exportGap((GapNode)childNode, scaffoldName, fastaWriter, listWriter);
+		}
+		
+		if (mode == FastaMode.CONCATENATE_CONTIGS) {
+			fastaWriter.println(">" + scaffoldName);
+			writeFastaSequence(fastaWriter, scaffoldSequence.toString());
 		}
 
 		fastaWriter.close();
-		//agpWriter.close();
-		imageWriter.close();
+		listWriter.close();
 		
 		publish(new ScaffoldExportMessage(countScaffolds, countContigs, countContigLength));
 	}
 
-	private void exportGap(GapNode childNode, String stem,
-			PrintWriter fastaWriter, PrintWriter agpWriter,
-			PrintWriter imageWriter) {
-		
+	private void exportGap(GapNode childNode, String scaffoldName,
+			PrintWriter fastaWriter, PrintWriter listWriter) {
+		if (mode == FastaMode.CONCATENATE_CONTIGS) {
+			int gapLength = childNode.length();
+			
+			int cstart = 1 + scaffoldSequence.length();
+			int cend = cstart + gapLength - 1;
+			
+			for (int i = 0; i < gapLength; i++)
+				scaffoldSequence.append('N');
+			
+			agpLineNumber++;
+			
+			listWriter.println(scaffoldName + "\t" + cstart + "\t" + cend + "\t" + agpLineNumber +
+					"\tN\t" + gapLength + "\tfragment\tyes");
+		}
 	}
 
-	private void exportContig(ContigNode childNode, String stem,
-			PrintWriter fastaWriter, PrintWriter agpWriter,
-			PrintWriter imageWriter) throws IOException, SQLException {
+	private void exportContig(ContigNode childNode, String scaffoldName,
+			PrintWriter fastaWriter, PrintWriter listWriter) throws IOException, SQLException {
 		Contig contig = childNode.getContig();
 		
 		boolean forward = childNode.isForward();
@@ -177,21 +199,39 @@ public class ScaffoldExportWorker extends
 		if (!forward)
 			sequence = reverseComplement(sequence);
 		
-		String contigName = "contig" + format.format(contig.getID()) + (forward ? "" : ".R");
+		String contigName = "contig" + format.format(contig.getID());
 		
-		fastaWriter.println(">" + contigName + " length=" + contig.getLength() + " reads=" + contig.getReadCount());
-		
-		for (int j = 0; j < sequence.length(); j += 50) {
-			int sublen = (j + 50 < sequence.length()) ? 50 : sequence.length() - j;
-			fastaWriter.println(sequence.substring(j, j + sublen));
+		switch (mode) {
+			case SEPARATE_CONTIGS:
+				if (!forward)
+					contigName += ".R"; 
+				
+				fastaWriter.println(">" + contigName + " length=" + contig.getLength() + " reads=" + contig.getReadCount());
+				writeFastaSequence(fastaWriter, sequence);
+				listWriter.println(contigName + "\t" + scaffoldName);
+				break;
+				
+			case CONCATENATE_CONTIGS:
+				int cstart = 1 + scaffoldSequence.length();
+				int cend = cstart + sequence.length() - 1;
+				agpLineNumber++;
+				scaffoldSequence.append(sequence);
+				listWriter.println(scaffoldName + "\t" + cstart + "\t" + cend + "\t" + agpLineNumber +
+						"\tA\t" + contigName + "\t1\t" + sequence.length() + "\t" + (forward ? '+' : '-'));
+				break;
 		}
-
-		imageWriter.println(contigName + "\t" + stem);
 		
 		countContigs++;
 		countContigLength += contig.getLength();
 		
 		contig.setConsensus(null, null);
+	}
+	
+	private void writeFastaSequence(PrintWriter fastaWriter, String sequence) {	
+		for (int j = 0; j < sequence.length(); j += 50) {
+			int sublen = (j + 50 < sequence.length()) ? 50 : sequence.length() - j;
+			fastaWriter.println(sequence.substring(j, j + sublen));
+		}
 	}
 	
 	private String reverseComplement(String str) {

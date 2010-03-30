@@ -9,10 +9,7 @@ import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.io.File;
-import java.util.Enumeration;
 import java.util.List;
 
 import uk.ac.sanger.arcturus.gui.*;
@@ -29,7 +26,10 @@ import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
 import javax.swing.tree.*;
 
-public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeEventListener, ContigTransferSource {
+public class ScaffoldManagerPanel extends MinervaPanel
+	implements ProjectChangeEventListener, ContigTransferSource {
+	public enum FastaMode { SEPARATE_CONTIGS, CONCATENATE_CONTIGS }
+	
 	private JTree tree= new JTree();
 
 	private JLabel lblWait = new JLabel("Please wait whilst the scaffold tree is retrieved");
@@ -40,7 +40,8 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 
 	protected ContigTransferMenu xferMenu;
 
-	protected MinervaAbstractAction actionExportAsFasta;
+	protected MinervaAbstractAction actionExportAsSeparateFasta;
+	protected MinervaAbstractAction actionExportAsConcatenatedFasta;
 
 	public ScaffoldManagerPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
 		super(parent, adb);
@@ -94,15 +95,17 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 		
 		xferMenu.setEnabled(!noneSelected);
 
-		if (noneSelected)
-			actionExportAsFasta.setEnabled(false);
-		else {
+		if (noneSelected) {
+			actionExportAsSeparateFasta.setEnabled(false);
+			actionExportAsConcatenatedFasta.setEnabled(false);
+		} else {
 			DefaultMutableTreeNode node = (DefaultMutableTreeNode)tree.getLastSelectedPathComponent();
 			
 			boolean canExport = node instanceof ScaffoldNode || node instanceof SuperscaffoldNode ||
 				node instanceof AssemblyNode;
 
-			actionExportAsFasta.setEnabled(canExport);
+			actionExportAsSeparateFasta.setEnabled(canExport);
+			actionExportAsConcatenatedFasta.setEnabled(canExport);
 		}
 	}
 
@@ -232,16 +235,28 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 	}
 
 	protected void createActions() {
-		actionExportAsFasta = new MinervaAbstractAction("Export as FASTA",
-				null, "Export contigs as FASTA", new Integer(KeyEvent.VK_F),
+		String text = "Export scaffolds to FASTA as individual contigs";
+		
+		actionExportAsSeparateFasta = new MinervaAbstractAction(text,
+				null, text, new Integer(KeyEvent.VK_F),
 				KeyStroke.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK | ActionEvent.ALT_MASK)) {
 			public void actionPerformed(ActionEvent e) {
-				exportAsFasta();
+				exportAsFasta(FastaMode.SEPARATE_CONTIGS);
+			}
+		};
+		
+		text = "Export scaffolds to FASTA as concatenated contigs";
+		
+		actionExportAsConcatenatedFasta = new MinervaAbstractAction(text,
+				null, text, new Integer(KeyEvent.VK_G),
+				KeyStroke.getKeyStroke(KeyEvent.VK_G, ActionEvent.CTRL_MASK | ActionEvent.ALT_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				exportAsFasta(FastaMode.CONCATENATE_CONTIGS);
 			}
 		};
 	}
 
-	private void exportAsFasta() {
+	private void exportAsFasta(FastaMode mode) {
 		DefaultMutableTreeNode node = (DefaultMutableTreeNode)tree.getLastSelectedPathComponent();
 		
 		if (node == null) {
@@ -264,7 +279,7 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 			dir = chooser.getSelectedFile();
 			
 			if (dir.canWrite()) {
-				ScaffoldExportWorker worker = new ScaffoldExportWorker(this, dir, node);
+				ScaffoldExportWorker worker = new ScaffoldExportWorker(this, mode, dir, node);
 			
 				worker.execute();
 			} else
@@ -286,7 +301,8 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 		
 		xferMenu.refreshMenu();
 		
-		contigMenu.add(actionExportAsFasta);
+		contigMenu.add(actionExportAsSeparateFasta);
+		contigMenu.add(actionExportAsConcatenatedFasta);
 	}
 
 	protected void doPrint() {
