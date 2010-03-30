@@ -301,6 +301,8 @@ public class ScaffoldManagerPanel extends MinervaPanel
 		
 		xferMenu.refreshMenu();
 		
+		contigMenu.addSeparator();
+		
 		contigMenu.add(actionExportAsSeparateFasta);
 		contigMenu.add(actionExportAsConcatenatedFasta);
 	}
