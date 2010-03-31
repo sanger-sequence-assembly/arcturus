@@ -235,21 +235,17 @@ public class ScaffoldManagerPanel extends MinervaPanel
 	}
 
 	protected void createActions() {
-		String text = "Export scaffolds to FASTA as individual contigs";
-		
-		actionExportAsSeparateFasta = new MinervaAbstractAction(text,
-				null, text, new Integer(KeyEvent.VK_F),
-				KeyStroke.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK | ActionEvent.ALT_MASK)) {
+		actionExportAsSeparateFasta = new MinervaAbstractAction("For gap closure",
+				null, "Export selected scaffold(s) as separate contigs", new Integer(KeyEvent.VK_G),
+				KeyStroke.getKeyStroke(KeyEvent.VK_G, ActionEvent.CTRL_MASK | ActionEvent.ALT_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				exportAsFasta(FastaMode.SEPARATE_CONTIGS);
 			}
 		};
 		
-		text = "Export scaffolds to FASTA as concatenated contigs";
-		
-		actionExportAsConcatenatedFasta = new MinervaAbstractAction(text,
-				null, text, new Integer(KeyEvent.VK_G),
-				KeyStroke.getKeyStroke(KeyEvent.VK_G, ActionEvent.CTRL_MASK | ActionEvent.ALT_MASK)) {
+		actionExportAsConcatenatedFasta = new MinervaAbstractAction("For annotation",
+				null, "Export selected scaffold(s) as concatenated contigs", new Integer(KeyEvent.VK_N),
+				KeyStroke.getKeyStroke(KeyEvent.VK_N, ActionEvent.CTRL_MASK | ActionEvent.ALT_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				exportAsFasta(FastaMode.CONCATENATE_CONTIGS);
 			}
@@ -290,21 +286,28 @@ public class ScaffoldManagerPanel extends MinervaPanel
 	}
 
 	protected void createClassSpecificMenus() {
+		createScaffoldMenu();
 		createContigMenu();
 	}
 
 	protected void createContigMenu() {
-		JMenu contigMenu = createMenu("Contigs", KeyEvent.VK_C, "Contigs");
+		JMenu contigMenu = createMenu("Contigs", KeyEvent.VK_C, "Operations on contigs");
 		menubar.add(contigMenu);
 
 		contigMenu.add(xferMenu);
 		
 		xferMenu.refreshMenu();
+	}
+	
+	protected void createScaffoldMenu() {
+		JMenu scaffoldMenu = createMenu("Scaffolds", KeyEvent.VK_S, "Operations on scaffolds");
+		menubar.add(scaffoldMenu);
 		
-		contigMenu.addSeparator();
+		JMenu exportMenu = new JMenu("Export as FASTA"); 
+		scaffoldMenu.add(exportMenu);
 		
-		contigMenu.add(actionExportAsSeparateFasta);
-		contigMenu.add(actionExportAsConcatenatedFasta);
+		exportMenu.add(actionExportAsSeparateFasta);
+		exportMenu.add(actionExportAsConcatenatedFasta);
 	}
 
 	protected void doPrint() {
