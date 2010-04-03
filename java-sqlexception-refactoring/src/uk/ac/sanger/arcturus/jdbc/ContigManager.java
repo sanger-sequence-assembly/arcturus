@@ -1,8 +1,8 @@
 package uk.ac.sanger.arcturus.jdbc;
 
-import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.database.ContigProcessor;
 
 import java.sql.*;
@@ -62,19 +62,24 @@ public class ContigManager extends AbstractManager {
 	 * ArcturusDatabase object.
 	 */
 
-	public ContigManager(ArcturusDatabase adb) throws SQLException {
+	public ContigManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		this.adb = adb;
 
 		event = new ManagerEvent(this);
 
 		conn = adb.getConnection();
 
-		prepareStatements();
-
 		hashByID = new HashMap<Integer, Contig>();
 
-		preloadSequencingVectors();
-		preloadCloningVectors();
+		try {
+			prepareStatements();
+
+			preloadSequencingVectors();
+			preloadCloningVectors();
+		}
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e, "Failed to initialise the contig manager", conn, adb);
+		}
 	}
 
 	public void clearCache() {
@@ -239,13 +244,12 @@ public class ContigManager extends AbstractManager {
 		rs.close();
 	}
 
-	public Contig getContigByReadName(String readname) throws SQLException,
-		DataFormatException {
+	public Contig getContigByReadName(String readname) throws ArcturusDatabaseException {
 		return getContigByReadName(readname, ArcturusDatabase.CONTIG_BASIC_DATA);
 	}
 	
-	public Contig getContigByReadName(String readname, int options) throws SQLException,
-		DataFormatException {
+	public Contig getContigByReadName(String readname, int options) throws ArcturusDatabaseException {
+		try {
 		pstmtContigIDFromReadname.setString(1, readname);
 		
 		ResultSet rs = pstmtContigIDFromReadname.executeQuery();
@@ -255,15 +259,18 @@ public class ContigManager extends AbstractManager {
 		rs.close();
 		
 		return contig_id < 0 ? null : getContigByID(contig_id, options);
+		}
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e, "Failed to get contig by readname=\"" + readname + "\"", conn, adb);
+		}
 	}
 	
-	public Contig getContigByID(int contig_id) throws SQLException,
-			DataFormatException {
+	public Contig getContigByID(int contig_id) throws ArcturusDatabaseException {
 		return getContigByID(contig_id, ArcturusDatabase.CONTIG_BASIC_DATA);
 	}
 
 	public Contig getContigByID(int contig_id, int options)
-			throws SQLException, DataFormatException {
+			throws ArcturusDatabaseException {
 		Contig contig = (Contig) hashByID.get(new Integer(contig_id));
 
 		if (contig == null)
@@ -275,7 +282,7 @@ public class ContigManager extends AbstractManager {
 	}
 
 	private Contig loadContigByID(int contig_id, int options)
-			throws SQLException, DataFormatException {
+			throws ArcturusDatabaseException {
 		Contig contig = createContig(contig_id);
 
 		if (contig != null)
@@ -284,36 +291,42 @@ public class ContigManager extends AbstractManager {
 		return contig;
 	}
 
-	private Contig createContig(int contig_id) throws SQLException {
+	private Contig createContig(int contig_id) throws ArcturusDatabaseException {
 		Contig contig = null;
 
-		pstmtContigData.setInt(1, contig_id);
+		try {
+			pstmtContigData.setInt(1, contig_id);
 
-		ResultSet rs = pstmtContigData.executeQuery();
+			ResultSet rs = pstmtContigData.executeQuery();
 
-		if (rs.next()) {
-			String gap4name = rs.getString(1);
-			int ctglen = rs.getInt(2);
-			int nreads = rs.getInt(3);
-			java.util.Date created = rs.getTimestamp(4);
-			java.util.Date updated = rs.getTimestamp(5);
-			int project_id = rs.getInt(6);
+			if (rs.next()) {
+				String gap4name = rs.getString(1);
+				int ctglen = rs.getInt(2);
+				int nreads = rs.getInt(3);
+				java.util.Date created = rs.getTimestamp(4);
+				java.util.Date updated = rs.getTimestamp(5);
+				int project_id = rs.getInt(6);
 
-			Project project = adb.getProjectByID(project_id);
+				Project project = adb.getProjectByID(project_id);
 
-			contig = new Contig(gap4name, contig_id, ctglen, nreads, created,
-					updated, project, adb);
+				contig = new Contig(gap4name, contig_id, ctglen, nreads,
+						created, updated, project, adb);
 
-			registerNewContig(contig);
+				registerNewContig(contig);
 
-			event.setMessage("Contig " + contig_id + " : " + ctglen + " bp, "
-					+ nreads + " reads");
-			event.setState(ManagerEvent.START);
-			fireEvent(event);
-		} else
-			return null;
+				event.setMessage("Contig " + contig_id + " : " + ctglen
+						+ " bp, " + nreads + " reads");
+				event.setState(ManagerEvent.START);
+				fireEvent(event);
+			} else
+				return null;
 
-		rs.close();
+			rs.close();
+		} catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to create contig by ID=" + contig_id,
+					conn, adb);
+		}
 
 		return contig;
 	}
@@ -322,10 +335,11 @@ public class ContigManager extends AbstractManager {
 		hashByID.put(new Integer(contig.getID()), contig);
 	}
 	
-	private void updateBasicContigData(Contig contig) throws SQLException {
+	private void updateBasicContigData(Contig contig) throws ArcturusDatabaseException {
 		if (contig == null)
 			return;
 		
+		try {
 		pstmtContigData.setInt(1, contig.getID());
 
 		ResultSet rs = pstmtContigData.executeQuery();
@@ -341,10 +355,15 @@ public class ContigManager extends AbstractManager {
 		}
 		
 		rs.close();
+		}
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to update basic contig data for " + contig,
+					conn, adb);			
+		}
 	}
 
-	public void updateContig(Contig contig, int options) throws SQLException,
-			DataFormatException {
+	public void updateContig(Contig contig, int options) throws ArcturusDatabaseException {
 		if (options == ArcturusDatabase.CONTIG_BASIC_DATA) {
 			updateBasicContigData(contig);
 			return;
@@ -398,177 +417,209 @@ public class ContigManager extends AbstractManager {
 			loadTagsForContig(contig);
 	}
 
-	private int getMappingCount(int contig_id) throws SQLException {
-		pstmtCountMappings.setInt(1, contig_id);
+	private int getMappingCount(int contig_id) throws ArcturusDatabaseException {
+		try {
+			pstmtCountMappings.setInt(1, contig_id);
 
-		ResultSet rs = pstmtCountMappings.executeQuery();
+			ResultSet rs = pstmtCountMappings.executeQuery();
 
-		rs.next();
+			rs.next();
 
-		int nMappings = rs.getInt(1);
+			int nMappings = rs.getInt(1);
 
-		rs.close();
+			rs.close();
 
-		return nMappings;
+			return nMappings;
+		} catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to get mapping count for contig ID= " + contig_id,
+					conn, adb);			
+		}
 	}
 
 	private void getMappings(int contig_id, Mapping[] mappings)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		int nMappings = mappings.length;
 
-		pstmtMappingData.setInt(1, contig_id);
+		try {
+			pstmtMappingData.setInt(1, contig_id);
 
-		event.begin("Execute mapping query", nMappings);
-		fireEvent(event);
+			event.begin("Execute mapping query", nMappings);
+			fireEvent(event);
 
-		ResultSet rs = pstmtMappingData.executeQuery();
+			ResultSet rs = pstmtMappingData.executeQuery();
 
-		event.end();
-		fireEvent(event);
+			event.end();
+			fireEvent(event);
 
-		int kMapping = 0;
+			int kMapping = 0;
 
-		event.begin("Creating mappings", nMappings);
-		fireEvent(event);
+			event.begin("Creating mappings", nMappings);
+			fireEvent(event);
 
-		while (rs.next()) {
-			int seq_id = rs.getInt(1);
-			int cstart = rs.getInt(2);
-			int cfinish = rs.getInt(3);
-			boolean forward = rs.getString(4).equalsIgnoreCase("Forward");
-			int length = rs.getInt(5);
+			while (rs.next()) {
+				int seq_id = rs.getInt(1);
+				int cstart = rs.getInt(2);
+				int cfinish = rs.getInt(3);
+				boolean forward = rs.getString(4).equalsIgnoreCase("Forward");
+				int length = rs.getInt(5);
 
-			Sequence sequence = adb.findOrCreateSequence(seq_id, length);
+				Sequence sequence = adb.findOrCreateSequence(seq_id, length);
 
-			mappings[kMapping++] = new Mapping(sequence, cstart, cfinish,
-					forward);
+				mappings[kMapping++] = new Mapping(sequence, cstart, cfinish,
+						forward);
 
-			if ((kMapping % 10) == 0) {
-				event.working(kMapping);
-				fireEvent(event);
+				if ((kMapping % 10) == 0) {
+					event.working(kMapping);
+					fireEvent(event);
+				}
 			}
+
+			event.end();
+			fireEvent(event);
+
+			rs.close();
+		} catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to get mappings for contig ID= " + contig_id,
+					conn, adb);			
 		}
-
-		event.end();
-		fireEvent(event);
-
-		rs.close();
 	}
 
 	private void getReadAndTemplateData(int contig_id, Map mapmap)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		int nMappings = mapmap.size();
 
-		pstmtReadAndTemplateData.setInt(1, contig_id);
+		try {
+			pstmtReadAndTemplateData.setInt(1, contig_id);
 
-		event.begin("Execute read/template data query", nMappings);
-		fireEvent(event);
+			event.begin("Execute read/template data query", nMappings);
+			fireEvent(event);
 
-		ResultSet rs = pstmtReadAndTemplateData.executeQuery();
+			ResultSet rs = pstmtReadAndTemplateData.executeQuery();
 
-		event.end();
-		fireEvent(event);
+			event.end();
+			fireEvent(event);
 
-		event.begin("Loading read and template data", nMappings);
-		fireEvent(event);
+			event.begin("Loading read and template data", nMappings);
+			fireEvent(event);
 
-		int kMapping = 0;
+			int kMapping = 0;
 
-		while (rs.next()) {
-			int index = 1;
+			while (rs.next()) {
+				int index = 1;
 
-			int seq_id = rs.getInt(index++);
-			int read_id = rs.getInt(index++);
-			String readname = rs.getString(index++);
-			String strand = rs.getString(index++);
-			String chemistry = rs.getString(index++);
-			String primer = rs.getString(index++);
-			java.util.Date asped = rs.getTimestamp(index++);
-			int template_id = rs.getInt(index++);
-			String templatename = rs.getString(index++);
-			int ligation_id = rs.getInt(index++);
+				int seq_id = rs.getInt(index++);
+				int read_id = rs.getInt(index++);
+				String readname = rs.getString(index++);
+				String strand = rs.getString(index++);
+				String chemistry = rs.getString(index++);
+				String primer = rs.getString(index++);
+				java.util.Date asped = rs.getTimestamp(index++);
+				int template_id = rs.getInt(index++);
+				String templatename = rs.getString(index++);
+				int ligation_id = rs.getInt(index++);
 
-			Ligation ligation = adb.getLigationByID(ligation_id);
+				Ligation ligation = adb.getLigationByID(ligation_id);
 
-			Template template = adb.findOrCreateTemplate(template_id,
-					templatename, ligation);
+				Template template = adb.findOrCreateTemplate(template_id,
+						templatename, ligation);
 
-			Read read = adb.findOrCreateRead(read_id, readname, template,
-					asped, strand, primer, chemistry);
+				Read read = adb.findOrCreateRead(read_id, readname, template,
+						asped, strand, primer, chemistry);
 
-			Mapping mapping = (Mapping) mapmap.get(new Integer(seq_id));
-			Sequence sequence = mapping.getSequence();
+				Mapping mapping = (Mapping) mapmap.get(new Integer(seq_id));
+				Sequence sequence = mapping.getSequence();
 
-			sequence.setRead(read);
+				sequence.setRead(read);
 
-			kMapping++;
+				kMapping++;
 
-			if ((kMapping % 10) == 0) {
-				event.working(kMapping);
-				fireEvent(event);
+				if ((kMapping % 10) == 0) {
+					event.working(kMapping);
+					fireEvent(event);
+				}
 			}
+
+			event.end();
+			fireEvent(event);
+
+			rs.close();
+		} catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to get read and template data for contig ID= " + contig_id,
+					conn, adb);			
 		}
-
-		event.end();
-		fireEvent(event);
-
-		rs.close();
 	}
 
-	private int getSegmentCount(int contig_id) throws SQLException {
-		pstmtCountSegments.setInt(1, contig_id);
+	private int getSegmentCount(int contig_id) throws ArcturusDatabaseException {
+		try {
+			pstmtCountSegments.setInt(1, contig_id);
 
-		ResultSet rs = pstmtCountSegments.executeQuery();
+			ResultSet rs = pstmtCountSegments.executeQuery();
 
-		rs.next();
+			rs.next();
 
-		int nSegments = rs.getInt(1);
+			int nSegments = rs.getInt(1);
 
-		rs.close();
+			rs.close();
 
-		return nSegments;
+			return nSegments;
+		} catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to get segment count for contig ID= " + contig_id,
+					conn, adb);			
+		}
 	}
 
-	private void getSegmentData(int contig_id, Map mapmap) throws SQLException {
+	private void getSegmentData(int contig_id, Map mapmap) throws ArcturusDatabaseException {
 		int nSegments = getSegmentCount(contig_id);
 
 		int nMappings = mapmap.size();
 
 		Vector<Segment> segv = new Vector<Segment>(1000, 1000);
+		SortableSegment segments[] = null;
 
-		pstmtSegmentData.setInt(1, contig_id);
+		try {
+			pstmtSegmentData.setInt(1, contig_id);
 
-		event.begin("Execute segment query", nMappings);
-		fireEvent(event);
+			event.begin("Execute segment query", nMappings);
+			fireEvent(event);
 
-		ResultSet rs = pstmtSegmentData.executeQuery();
+			ResultSet rs = pstmtSegmentData.executeQuery();
 
-		event.end();
-		fireEvent(event);
+			event.end();
+			fireEvent(event);
 
-		event.begin("Loading segments", nSegments);
-		fireEvent(event);
+			event.begin("Loading segments", nSegments);
+			fireEvent(event);
 
-		SortableSegment segments[] = new SortableSegment[nSegments];
+			segments = new SortableSegment[nSegments];
 
-		int kSegment = 0;
+			int kSegment = 0;
 
-		while (rs.next()) {
-			int seq_id = rs.getInt(1);
-			int cstart = rs.getInt(2);
-			int rstart = rs.getInt(3);
-			int length = rs.getInt(4);
+			while (rs.next()) {
+				int seq_id = rs.getInt(1);
+				int cstart = rs.getInt(2);
+				int rstart = rs.getInt(3);
+				int length = rs.getInt(4);
 
-			segments[kSegment++] = new SortableSegment(seq_id, cstart, rstart,
-					length);
+				segments[kSegment++] = new SortableSegment(seq_id, cstart,
+						rstart, length);
 
-			if ((kSegment % 50) == 0) {
-				event.working(kSegment);
-				fireEvent(event);
+				if ((kSegment % 50) == 0) {
+					event.working(kSegment);
+					fireEvent(event);
+				}
 			}
-		}
 
-		rs.close();
+			rs.close();
+		}
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to get segment data for contig ID= " + contig_id,
+					conn, adb);						
+		}
 
 		event.end();
 		fireEvent(event);
@@ -586,7 +637,7 @@ public class ContigManager extends AbstractManager {
 		event.begin("Processing segments", nSegments);
 		fireEvent(event);
 
-		for (kSegment = 0; kSegment < nSegments; kSegment++) {
+		for (int kSegment = 0; kSegment < nSegments; kSegment++) {
 			int next_seq_id = segments[kSegment].seq_id;
 			int cstart = segments[kSegment].cstart;
 			int rstart = segments[kSegment].rstart;
@@ -627,54 +678,66 @@ public class ContigManager extends AbstractManager {
 	}
 
 	private void getSequenceData(int contig_id, Map mapmap)
-			throws SQLException, DataFormatException {
+			throws ArcturusDatabaseException {
 		int nMappings = mapmap.size();
 
-		pstmtSequenceData.setInt(1, contig_id);
+		try {
+			pstmtSequenceData.setInt(1, contig_id);
 
-		event.begin("Execute sequence query", nMappings);
-		fireEvent(event);
+			event.begin("Execute sequence query", nMappings);
+			fireEvent(event);
 
-		ResultSet rs = pstmtSequenceData.executeQuery();
+			ResultSet rs = pstmtSequenceData.executeQuery();
 
-		event.end();
-		fireEvent(event);
+			event.end();
+			fireEvent(event);
 
-		event.begin("Loading sequences", nMappings);
-		fireEvent(event);
+			event.begin("Loading sequences", nMappings);
+			fireEvent(event);
 
-		int kMapping = 0;
+			int kMapping = 0;
 
-		while (rs.next()) {
-			int seq_id = rs.getInt(1);
+			while (rs.next()) {
+				int seq_id = rs.getInt(1);
 
-			Mapping mapping = (Mapping) mapmap.get(new Integer(seq_id));
-			Sequence sequence = mapping.getSequence();
+				Mapping mapping = (Mapping) mapmap.get(new Integer(seq_id));
+				Sequence sequence = mapping.getSequence();
 
-			int seqlen = rs.getInt(2);
+				int seqlen = rs.getInt(2);
 
-			byte[] cdna = rs.getBytes(3);
+				byte[] cdna = rs.getBytes(3);
 
-			byte[] dna = inflate(cdna, seqlen);
+				byte[] dna = inflate(cdna, seqlen);
 
-			sequence.setDNA(dna);
+				sequence.setDNA(dna);
 
-			byte[] cqual = rs.getBytes(4);
+				byte[] cqual = rs.getBytes(4);
 
-			byte[] qual = inflate(cqual, seqlen);
+				byte[] qual = inflate(cqual, seqlen);
 
-			sequence.setQuality(qual);
+				sequence.setQuality(qual);
 
-			if ((kMapping % 10) == 0) {
-				event.working(kMapping);
-				fireEvent(event);
+				if ((kMapping % 10) == 0) {
+					event.working(kMapping);
+					fireEvent(event);
+				}
 			}
+
+			event.end();
+			fireEvent(event);
+
+			rs.close();
 		}
-
-		event.end();
-		fireEvent(event);
-
-		rs.close();
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to fetch sequence data for contig ID= " + contig_id,
+					conn, adb);									
+		}
+		catch (DataFormatException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to decompress sequence data for contig ID= " + contig_id,
+					conn, adb);									
+		}
 	}
 
 	private byte[] inflate(byte[] cdata, int length) throws DataFormatException {
@@ -704,129 +767,160 @@ public class ContigManager extends AbstractManager {
 	}
 
 	private void getSequenceVectorData(int contig_id, Map mapmap)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		event.begin("Loading sequence vector data", 0);
 		fireEvent(event);
 
-		pstmtSequenceVector.setInt(1, contig_id);
+		try {
+			pstmtSequenceVector.setInt(1, contig_id);
 
-		ResultSet rs = pstmtSequenceVector.executeQuery();
+			ResultSet rs = pstmtSequenceVector.executeQuery();
 
-		while (rs.next()) {
-			int seq_id = rs.getInt(1);
-			int svector_id = rs.getInt(2);
-			int svleft = rs.getInt(3);
-			int svright = rs.getInt(4);
+			while (rs.next()) {
+				int seq_id = rs.getInt(1);
+				int svector_id = rs.getInt(2);
+				int svleft = rs.getInt(3);
+				int svright = rs.getInt(4);
 
-			Mapping mapping = (Mapping) mapmap.get(new Integer(seq_id));
+				Mapping mapping = (Mapping) mapmap.get(new Integer(seq_id));
 
-			Sequence sequence = mapping.getSequence();
+				Sequence sequence = mapping.getSequence();
 
-			String svector = (String) svectorByID.get(new Integer(svector_id));
+				String svector = (String) svectorByID.get(new Integer(
+						svector_id));
 
-			Clipping clipping = new Clipping(Clipping.SVEC, svector, svleft,
-					svright);
+				Clipping clipping = new Clipping(Clipping.SVEC, svector,
+						svleft, svright);
 
-			if (svleft == 1)
-				sequence.setSequenceVectorClippingLeft(clipping);
-			else
-				sequence.setSequenceVectorClippingRight(clipping);
+				if (svleft == 1)
+					sequence.setSequenceVectorClippingLeft(clipping);
+				else
+					sequence.setSequenceVectorClippingRight(clipping);
+			}
+
+			rs.close();
 		}
-
-		rs.close();
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to fetch sequence vector data for contig ID= " + contig_id,
+					conn, adb);												
+		}
 
 		event.end();
 		fireEvent(event);
 	}
 
 	private void getCloningVectorData(int contig_id, Map mapmap)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		event.begin("Loading cloning vector data", 0);
 		fireEvent(event);
 
-		pstmtCloningVector.setInt(1, contig_id);
+		try {
+			pstmtCloningVector.setInt(1, contig_id);
 
-		ResultSet rs = pstmtCloningVector.executeQuery();
+			ResultSet rs = pstmtCloningVector.executeQuery();
 
-		while (rs.next()) {
-			int seq_id = rs.getInt(1);
-			int cvector_id = rs.getInt(2);
-			int cvleft = rs.getInt(3);
-			int cvright = rs.getInt(4);
+			while (rs.next()) {
+				int seq_id = rs.getInt(1);
+				int cvector_id = rs.getInt(2);
+				int cvleft = rs.getInt(3);
+				int cvright = rs.getInt(4);
 
-			Mapping mapping = (Mapping) mapmap.get(new Integer(seq_id));
+				Mapping mapping = (Mapping) mapmap.get(new Integer(seq_id));
 
-			Sequence sequence = mapping.getSequence();
+				Sequence sequence = mapping.getSequence();
 
-			String cvector = (String) cvectorByID.get(new Integer(cvector_id));
+				String cvector = (String) cvectorByID.get(new Integer(
+						cvector_id));
 
-			sequence.setCloningVectorClipping(new Clipping(Clipping.CVEC,
-					cvector, cvleft, cvright));
+				sequence.setCloningVectorClipping(new Clipping(Clipping.CVEC,
+						cvector, cvleft, cvright));
+			}
+
+			rs.close();
 		}
-
-		rs.close();
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to fetch cloning vector data for contig ID= " + contig_id,
+					conn, adb);												
+		}
+		
 
 		event.end();
 		fireEvent(event);
 	}
 
 	private void getQualityClippingData(int contig_id, Map mapmap)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		event.begin("Loading quality clipping data", 0);
 		fireEvent(event);
 
-		pstmtQualityClipping.setInt(1, contig_id);
+		try {
+			pstmtQualityClipping.setInt(1, contig_id);
 
-		ResultSet rs = pstmtQualityClipping.executeQuery();
+			ResultSet rs = pstmtQualityClipping.executeQuery();
 
-		while (rs.next()) {
-			int seq_id = rs.getInt(1);
-			int qleft = rs.getInt(2);
-			int qright = rs.getInt(3);
+			while (rs.next()) {
+				int seq_id = rs.getInt(1);
+				int qleft = rs.getInt(2);
+				int qright = rs.getInt(3);
 
-			Mapping mapping = (Mapping) mapmap.get(new Integer(seq_id));
+				Mapping mapping = (Mapping) mapmap.get(new Integer(seq_id));
 
-			Sequence sequence = mapping.getSequence();
+				Sequence sequence = mapping.getSequence();
 
-			sequence.setQualityClipping(new Clipping(Clipping.QUAL, null,
-					qleft, qright));
+				sequence.setQualityClipping(new Clipping(Clipping.QUAL, null,
+						qleft, qright));
+			}
+
+			rs.close();
 		}
-
-		rs.close();
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to fetch quality clipping data for contig ID= " + contig_id,
+					conn, adb);												
+		}
 
 		event.end();
 		fireEvent(event);
 	}
 
-	private void getAlignToSCF(int contig_id, Map mapmap) throws SQLException {
+	private void getAlignToSCF(int contig_id, Map mapmap) throws ArcturusDatabaseException {
 		event.begin("Loading AlignToSCF data", 0);
 		fireEvent(event);
 
-		pstmtAlignToSCF.setInt(1, contig_id);
+		Vector<SortableAlignToSCF> rawAlignments = new Vector<SortableAlignToSCF>();
 
-		ResultSet rs = pstmtAlignToSCF.executeQuery();
+		try {
+			pstmtAlignToSCF.setInt(1, contig_id);
 
-		Vector alignments = new Vector();
+			ResultSet rs = pstmtAlignToSCF.executeQuery();
 
-		while (rs.next()) {
-			int seq_id = rs.getInt(1);
-			int seqstart = rs.getInt(2);
-			int scfstart = rs.getInt(3);
-			int length = rs.getInt(4);
+			while (rs.next()) {
+				int seq_id = rs.getInt(1);
+				int seqstart = rs.getInt(2);
+				int scfstart = rs.getInt(3);
+				int length = rs.getInt(4);
 
-			alignments.add(new SortableAlignToSCF(seq_id, seqstart, scfstart,
-					length));
+				rawAlignments.add(new SortableAlignToSCF(seq_id, seqstart,
+						scfstart, length));
+			}
+
+			rs.close();
+		}
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to fetch quality clipping data for contig ID= " + contig_id,
+					conn, adb);												
 		}
 
-		rs.close();
+		SortableAlignToSCF[] array = new SortableAlignToSCF[rawAlignments.size()];
 
-		SortableAlignToSCF[] array = new SortableAlignToSCF[alignments.size()];
-
-		alignments.toArray(array);
+		rawAlignments.toArray(array);
 
 		Arrays.sort(array);
 
-		alignments.clear();
+		Vector<AlignToSCF> alignments = new Vector<AlignToSCF>();
 
 		int current_seq_id = -1;
 
@@ -886,9 +980,10 @@ public class ContigManager extends AbstractManager {
 		}
 	}
 
-	private void loadConsensusForContig(Contig contig) throws SQLException {
+	private void loadConsensusForContig(Contig contig) throws ArcturusDatabaseException {
 		int contig_id = contig.getID();
 
+		try {
 		pstmtConsensus.setInt(1, contig_id);
 		ResultSet rs = pstmtConsensus.executeQuery();
 
@@ -901,33 +996,48 @@ public class ContigManager extends AbstractManager {
 		}
 
 		rs.close();
+		}
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to fetch consensus data for contig ID=" + contig.getID(),
+					conn, adb);											
+		}
 	}
 
 	private void setContigConsensusFromRawData(Contig contig, int seqlen,
-			byte[] cdna, byte[] cqual) {
+			byte[] cdna, byte[] cqual) throws ArcturusDatabaseException {
 		byte[] dna = new byte[seqlen];
 
+		decompresser.setInput(cdna, 0, cdna.length);
+		
 		try {
-			decompresser.setInput(cdna, 0, cdna.length);
 			decompresser.inflate(dna, 0, dna.length);
-			decompresser.reset();
-		} catch (DataFormatException dfe) {
-			dna = null;
+		} catch (DataFormatException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to decompress DNA data for contig ID=" + contig.getID(),
+					conn, adb);								
 		}
+		
+		decompresser.reset();
+
 		byte[] qual = new byte[seqlen];
 
+		decompresser.setInput(cqual, 0, cqual.length);
+		
 		try {
-			decompresser.setInput(cqual, 0, cqual.length);
 			decompresser.inflate(qual, 0, qual.length);
-			decompresser.reset();
-		} catch (DataFormatException dfe) {
-			qual = null;
+		} catch (DataFormatException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to decompress quality data for contig ID=" + contig.getID(),
+					conn, adb);								
 		}
+		
+		decompresser.reset();
 
 		contig.setConsensus(dna, qual);
 	}
 
-	private void loadTagsForContig(Contig contig) throws SQLException {
+	private void loadTagsForContig(Contig contig) throws ArcturusDatabaseException {
 		int contig_id = contig.getID();
 
 		Vector<Tag> tags = contig.getTags();
@@ -935,42 +1045,56 @@ public class ContigManager extends AbstractManager {
 		if (tags != null)
 			tags.clear();
 
-		pstmtTags.setInt(1, contig_id);
-		ResultSet rs = pstmtTags.executeQuery();
+		try {
+			pstmtTags.setInt(1, contig_id);
+			ResultSet rs = pstmtTags.executeQuery();
 
-		while (rs.next()) {
-			String type = rs.getString(1);
-			int cstart = rs.getInt(2);
-			int cfinal = rs.getInt(3);
-			String comment = rs.getString(4);
-			
-			Tag tag = new Tag(type, cstart, cfinal, comment);
+			while (rs.next()) {
+				String type = rs.getString(1);
+				int cstart = rs.getInt(2);
+				int cfinal = rs.getInt(3);
+				String comment = rs.getString(4);
 
-			contig.addTag(tag);
+				Tag tag = new Tag(type, cstart, cfinal, comment);
+
+				contig.addTag(tag);
+			}
+
+			rs.close();
 		}
-
-		rs.close();
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to load tags for contig ID=" + contig.getID(),
+					conn, adb);											
+		}
 	}
 
 	public int countContigsByProject(int project_id, int minlen)
-			throws SQLException {
-		pstmtCountContigsByProject.setInt(1, project_id);
-		pstmtCountContigsByProject.setInt(2, minlen);
-
-		ResultSet rs = pstmtCountContigsByProject.executeQuery();
-
+			throws ArcturusDatabaseException {
 		int count = 0;
 
-		if (rs.next())
-			count = rs.getInt(1);
+		try {
+			pstmtCountContigsByProject.setInt(1, project_id);
+			pstmtCountContigsByProject.setInt(2, minlen);
 
-		rs.close();
+			ResultSet rs = pstmtCountContigsByProject.executeQuery();
+
+			if (rs.next())
+				count = rs.getInt(1);
+
+			rs.close();
+		}
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to count contigs for project ID=" + project_id,
+					conn, adb);											
+		}
 
 		return count;
 	}
 
 	public Set<Contig> getContigsByProject(int project_id, int options, int minlen)
-			throws SQLException, DataFormatException {
+			throws ArcturusDatabaseException {
 		ContigSetBuilder csb = new ContigSetBuilder();
 
 		processContigsByProject(project_id, options, minlen, csb);
@@ -979,7 +1103,7 @@ public class ContigManager extends AbstractManager {
 	}
 
 	public int processContigsByProject(int project_id, int options, int minlen,
-			ContigProcessor processor) throws SQLException, DataFormatException {
+			ContigProcessor processor) throws ArcturusDatabaseException {
 		int nContigs = countContigsByProject(project_id, minlen);
 
 		if (nContigs == 0)
@@ -990,46 +1114,53 @@ public class ContigManager extends AbstractManager {
 
 		Project project = adb.getProjectByID(project_id);
 
-		pstmtContigsByProject.setInt(1, project_id);
-		pstmtContigsByProject.setInt(2, minlen);
-
-		ResultSet rs = pstmtContigsByProject.executeQuery();
-
 		int count = 0;
 		int processed = 0;
 
-		while (rs.next()) {
-			int contig_id = rs.getInt(1);
+		try {
+			pstmtContigsByProject.setInt(1, project_id);
+			pstmtContigsByProject.setInt(2, minlen);
 
-			Contig contig = (Contig) hashByID.get(new Integer(contig_id));
+			ResultSet rs = pstmtContigsByProject.executeQuery();
 
-			java.util.Date updated = rs.getTimestamp(6);
+			while (rs.next()) {
+				int contig_id = rs.getInt(1);
 
-			if (contig == null) {
-				String gap4name = rs.getString(2);
-				int ctglen = rs.getInt(3);
-				int nreads = rs.getInt(4);
-				java.util.Date created = rs.getTimestamp(5);
+				Contig contig = (Contig) hashByID.get(new Integer(contig_id));
 
-				contig = new Contig(gap4name, contig_id, ctglen, nreads,
-						created, updated, project, adb);
+				java.util.Date updated = rs.getTimestamp(6);
 
-				registerNewContig(contig);
-			} else {
-				contig.setProject(project);
-				contig.setUpdated(updated);
+				if (contig == null) {
+					String gap4name = rs.getString(2);
+					int ctglen = rs.getInt(3);
+					int nreads = rs.getInt(4);
+					java.util.Date created = rs.getTimestamp(5);
+
+					contig = new Contig(gap4name, contig_id, ctglen, nreads,
+							created, updated, project, adb);
+
+					registerNewContig(contig);
+				} else {
+					contig.setProject(project);
+					contig.setUpdated(updated);
+				}
+
+				updateContig(contig, options);
+
+				if (processor.processContig(contig))
+					processed++;
+
+				event.working(++count);
+				fireEvent(event);
 			}
 
-			updateContig(contig, options);
-
-			if (processor.processContig(contig))
-				processed++;
-
-			event.working(++count);
-			fireEvent(event);
+			rs.close();
 		}
-
-		rs.close();
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to process contigs for project ID=" + project_id,
+					conn, adb);														
+		}
 
 		event.end();
 		fireEvent(event);
@@ -1037,67 +1168,87 @@ public class ContigManager extends AbstractManager {
 		return processed;
 	}
 
-	public boolean isCurrentContig(int contigid) throws SQLException {
-		pstmtCurrentContigData.setInt(1, contigid);
+	public boolean isCurrentContig(int contig_id) throws ArcturusDatabaseException {
+		try {
+			pstmtCurrentContigData.setInt(1, contig_id);
 
-		ResultSet rs = pstmtCurrentContigData.executeQuery();
+			ResultSet rs = pstmtCurrentContigData.executeQuery();
 
-		boolean found = rs.next();
+			boolean found = rs.next();
 
-		rs.close();
+			rs.close();
 
-		return found;
-	}
-
-	public int[] getCurrentContigIDList() throws SQLException {
-		String query = "select count(*) from CURRENTCONTIGS";
-
-		Statement stmt = conn.createStatement();
-
-		ResultSet rs = stmt.executeQuery(query);
-
-		int ncontigs = 0;
-
-		if (rs.next()) {
-			ncontigs = rs.getInt(1);
+			return found;
 		}
-
-		rs.close();
-
-		if (ncontigs == 0)
-			return null;
-
-		int[] ids = new int[ncontigs];
-
-		query = "select contig_id from CURRENTCONTIGS";
-
-		rs = stmt.executeQuery(query);
-
-		int j = 0;
-
-		while (rs.next() && j < ncontigs)
-			ids[j++] = rs.getInt(1);
-
-		rs.close();
-		stmt.close();
-
-		return ids;
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to test whether contig ID=" + contig_id + " is current",
+					conn, adb);															
+		}
 	}
 
-	public int countCurrentContigs(int minlen) throws SQLException {
-		pstmtCountCurrentContigs.setInt(1, minlen);
+	public int[] getCurrentContigIDList() throws ArcturusDatabaseException {
+		try {
+			String query = "select count(*) from CURRENTCONTIGS";
 
-		ResultSet rs = pstmtCountCurrentContigs.executeQuery();
+			Statement stmt = conn.createStatement();
 
-		int nContigs = rs.next() ? rs.getInt(1) : 0;
+			ResultSet rs = stmt.executeQuery(query);
 
-		rs.close();
+			int ncontigs = 0;
 
-		return nContigs;
+			if (rs.next()) {
+				ncontigs = rs.getInt(1);
+			}
+
+			rs.close();
+
+			if (ncontigs == 0)
+				return null;
+
+			int[] ids = new int[ncontigs];
+
+			query = "select contig_id from CURRENTCONTIGS";
+
+			rs = stmt.executeQuery(query);
+
+			int j = 0;
+
+			while (rs.next() && j < ncontigs)
+				ids[j++] = rs.getInt(1);
+
+			rs.close();
+			stmt.close();
+
+			return ids;
+		}
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to fetch current contig ID list",
+					conn, adb);																		
+		}
 	}
 
-	public Set getCurrentContigs(int options, int minlen) throws SQLException,
-			DataFormatException {
+	public int countCurrentContigs(int minlen) throws ArcturusDatabaseException {
+		try {
+			pstmtCountCurrentContigs.setInt(1, minlen);
+
+			ResultSet rs = pstmtCountCurrentContigs.executeQuery();
+
+			int nContigs = rs.next() ? rs.getInt(1) : 0;
+
+			rs.close();
+
+			return nContigs;
+		}
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to count current contigs",
+					conn, adb);																					
+		}
+	}
+
+	public Set getCurrentContigs(int options, int minlen) throws ArcturusDatabaseException {
 		ContigSetBuilder csb = new ContigSetBuilder();
 
 		processCurrentContigs(options, minlen, csb);
@@ -1106,7 +1257,7 @@ public class ContigManager extends AbstractManager {
 	}
 
 	public int processCurrentContigs(int options, int minlen,
-			ContigProcessor processor) throws SQLException, DataFormatException {
+			ContigProcessor processor) throws ArcturusDatabaseException {
 		int nContigs = countCurrentContigs(minlen);
 
 		if (nContigs == 0)
@@ -1115,44 +1266,52 @@ public class ContigManager extends AbstractManager {
 		event.begin("Processing contigs with minlen=" + minlen, nContigs);
 		fireEvent(event);
 
-		pstmtCurrentContigs.setInt(1, minlen);
-
-		ResultSet rs = pstmtCurrentContigs.executeQuery();
-
-		int count = 0;
 		int processed = 0;
 
-		while (rs.next()) {
-			int contig_id = rs.getInt(1);
+		try {
+			pstmtCurrentContigs.setInt(1, minlen);
 
-			Contig contig = (Contig) hashByID.get(new Integer(contig_id));
+			ResultSet rs = pstmtCurrentContigs.executeQuery();
 
-			if (contig == null) {
-				String gap4name = rs.getString(2);
-				int ctglen = rs.getInt(3);
-				int nreads = rs.getInt(4);
-				java.util.Date created = rs.getTimestamp(5);
-				java.util.Date updated = rs.getTimestamp(6);
-				int project_id = rs.getInt(7);
+			int count = 0;
 
-				Project project = adb.getProjectByID(project_id);
+			while (rs.next()) {
+				int contig_id = rs.getInt(1);
 
-				contig = new Contig(gap4name, contig_id, ctglen, nreads,
-						created, updated, project, adb);
+				Contig contig = (Contig) hashByID.get(new Integer(contig_id));
 
-				registerNewContig(contig);
+				if (contig == null) {
+					String gap4name = rs.getString(2);
+					int ctglen = rs.getInt(3);
+					int nreads = rs.getInt(4);
+					java.util.Date created = rs.getTimestamp(5);
+					java.util.Date updated = rs.getTimestamp(6);
+					int project_id = rs.getInt(7);
+
+					Project project = adb.getProjectByID(project_id);
+
+					contig = new Contig(gap4name, contig_id, ctglen, nreads,
+							created, updated, project, adb);
+
+					registerNewContig(contig);
+				}
+
+				updateContig(contig, options);
+
+				if (processor.processContig(contig))
+					processed++;
+
+				event.working(++count);
+				fireEvent(event);
 			}
 
-			updateContig(contig, options);
-
-			if (processor.processContig(contig))
-				processed++;
-
-			event.working(++count);
-			fireEvent(event);
+			rs.close();
 		}
-
-		rs.close();
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to process current contigs",
+					conn, adb);																								
+		}
 
 		event.end();
 		fireEvent(event);
@@ -1160,29 +1319,35 @@ public class ContigManager extends AbstractManager {
 		return processed;
 	}
 	
-	public Set<Contig> getChildContigs(Contig parent) throws SQLException {
+	public Set<Contig> getChildContigs(Contig parent) throws ArcturusDatabaseException {
 		if (parent == null)
 			return null;
 		
 		HashSet<Contig> children = new HashSet<Contig>();
 		
-		pstmtChildContigs.setInt(1, parent.getID());
-		
-		ResultSet rs = pstmtChildContigs.executeQuery();
-		
-		while (rs.next()) {
-			int contig_id = rs.getInt(1);
-			
-			Contig child = null;
-			
-			try {
-				child = getContigByID(contig_id, ArcturusDatabase.CONTIG_BASIC_DATA);
-			} catch (DataFormatException e) {
-				Arcturus.logWarning("An error occurred when loading contig " + contig_id, e);
+		try {
+			pstmtChildContigs.setInt(1, parent.getID());
+
+			ResultSet rs = pstmtChildContigs.executeQuery();
+
+			while (rs.next()) {
+				int contig_id = rs.getInt(1);
+
+				Contig child = null;
+
+				child = getContigByID(contig_id,
+						ArcturusDatabase.CONTIG_BASIC_DATA);
+
+				if (child != null)
+					children.add(child);
 			}
 			
-			if (child != null)
-				children.add(child);
+			rs.close();
+		}
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to fetch children of contig ID=" + parent.getID(),
+					conn, adb);																											
 		}
 		
 		return children;
@@ -1256,15 +1421,9 @@ public class ContigManager extends AbstractManager {
 		}
 	}
 
-	class AlignToSCFComparator implements Comparator {
-		public int compare(Object o1, Object o2) {
-			AlignToSCF aligntoscf1 = (AlignToSCF) o1;
-			AlignToSCF aligntoscf2 = (AlignToSCF) o2;
-
-			int diff = aligntoscf1.getStartInSequence()
-					- aligntoscf2.getStartInSequence();
-
-			return diff;
+	class AlignToSCFComparator implements Comparator<AlignToSCF> {
+		public int compare(AlignToSCF a1, AlignToSCF a2) {
+			return a1.getStartInSequence() - a2.getStartInSequence();
 		}
 
 		public boolean equals(Object obj) {
@@ -1293,12 +1452,9 @@ public class ContigManager extends AbstractManager {
 		}
 	}
 
-	class SegmentComparatorByContigPosition implements Comparator {
-		public int compare(Object o1, Object o2) {
-			Segment segment1 = (Segment) o1;
-			Segment segment2 = (Segment) o2;
-
-			int diff = segment1.getContigStart() - segment2.getContigStart();
+	class SegmentComparatorByContigPosition implements Comparator<Segment> {
+		public int compare(Segment s1, Segment s2) {
+			int diff = s1.getContigStart() - s2.getContigStart();
 
 			return diff;
 		}
@@ -1312,7 +1468,7 @@ public class ContigManager extends AbstractManager {
 		}
 	}
 
-	public void preload() throws SQLException {
+	public void preload() throws ArcturusDatabaseException {
 		// This method does nothing, as we never want to preload all contigs.
 	}
 }
