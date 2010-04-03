@@ -3,12 +3,13 @@ package uk.ac.sanger.arcturus.jdbc;
 import java.sql.*;
 import java.util.*;
 
-import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.people.*;
 import uk.ac.sanger.arcturus.people.role.*;
 
 public class UserManager extends AbstractManager {
+	private ArcturusDatabase adb;
 	private Connection conn;
 	private PreparedStatement pstmtRoleByName;
 	private Map<String, Role> roleMap = new HashMap<String, Role>();
@@ -22,15 +23,25 @@ public class UserManager extends AbstractManager {
 	 *            the ArcturusDatabase object to which this manager belongs.
 	 */
 
-	public UserManager(ArcturusDatabase adb) throws SQLException {
+	public UserManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
+		this.adb = adb;
+		
 		conn = adb.getConnection();
 
-		String query = "select role from USER where username = ?";
-		pstmtRoleByName = conn.prepareStatement(query);
+		try {
+			prepareStatements();
+		} catch (SQLException e) {
+			throw new ArcturusDatabaseException(e, "Failed to initialise the user manager", conn, adb);
+		}
 
 		populateRoleMap();
 
 		getAllUsers(true);
+	}
+	
+	private void prepareStatements() throws SQLException {
+		String query = "select role from USER where username = ?";
+		pstmtRoleByName = conn.prepareStatement(query);		
 	}
 
 	private void populateRoleMap() {
@@ -45,7 +56,7 @@ public class UserManager extends AbstractManager {
 	public void clearCache() {
 	}
 	
-	public void preload() throws SQLException {
+	public void preload() throws ArcturusDatabaseException {
 		getAllUsers(true);
 	}
 
@@ -53,13 +64,14 @@ public class UserManager extends AbstractManager {
 		return roleMap.get(rolename);
 	}
 
-	public Person[] getAllUsers(boolean includeNobody) throws SQLException {
+	public Person[] getAllUsers(boolean includeNobody) throws ArcturusDatabaseException {
 		String query = "select username,role from USER";
+		
+		Vector<Person> people = new Vector<Person>();
 
+		try {
 		Statement stmt = conn.createStatement();
 		ResultSet rs = stmt.executeQuery(query);
-
-		Vector<Person> people = new Vector<Person>();
 
 		while (rs.next()) {
 			String username = rs.getString(1);
@@ -82,6 +94,10 @@ public class UserManager extends AbstractManager {
 
 		rs.close();
 		stmt.close();
+		}
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e, "Failed to get all users", conn, adb);
+		}
 
 		if (includeNobody)
 			people.add(PeopleManager.createPerson(Person.NOBODY));
@@ -93,7 +109,7 @@ public class UserManager extends AbstractManager {
 		return allusers;
 	}
 
-	public Person findUser(String username) {
+	public Person findUser(String username) throws ArcturusDatabaseException {
 		if (username == null)
 			return null;
 
@@ -117,7 +133,7 @@ public class UserManager extends AbstractManager {
 
 			person.setRole(role);
 		} catch (SQLException e) {
-			Arcturus.logWarning("Error when fetching role for \"" + username + "\"", e);
+			throw new ArcturusDatabaseException(e, "Failed to find user UID=" + username, conn, adb);
 		}
 
 		personMap.put(username, person);
@@ -125,7 +141,7 @@ public class UserManager extends AbstractManager {
 		return person;
 	}
 
-	public Person findMe() {
+	public Person findMe() throws ArcturusDatabaseException {
 		String myUID = PeopleManager.getEffectiveUID();
 		return findUser(myUID);
 	}
@@ -148,7 +164,7 @@ public class UserManager extends AbstractManager {
 				|| role instanceof Administrator;
 	}
 
-	public boolean hasFullPrivileges() throws SQLException {
+	public boolean hasFullPrivileges() throws ArcturusDatabaseException {
 		return hasFullPrivileges(findMe())
 				&& !Boolean.getBoolean("minerva.noadmin");
 	}
@@ -166,7 +182,7 @@ public class UserManager extends AbstractManager {
 				|| role instanceof Administrator;
 	}
 
-	public boolean isCoordinator() {
+	public boolean isCoordinator() throws ArcturusDatabaseException {
 		return isCoordinator(findMe())
 				&& !Boolean.getBoolean("minerva.noadmin");
 	}

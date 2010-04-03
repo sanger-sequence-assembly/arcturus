@@ -5,7 +5,6 @@ import java.sql.Connection;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
-import java.util.zip.DataFormatException;
 
 import javax.sql.DataSource;
 
@@ -233,19 +232,18 @@ public interface ArcturusDatabase {
 	public Sequence findOrCreateSequence(int seq_id, int length);
 
 	public Contig getContigByID(int id, int options)
-			throws ArcturusDatabaseException, DataFormatException;
+			throws ArcturusDatabaseException;
 
-	public Contig getContigByID(int id) throws ArcturusDatabaseException,
-			DataFormatException;
+	public Contig getContigByID(int id) throws ArcturusDatabaseException;
 
 	public Contig getContigByReadName(String readname, int options)
-			throws ArcturusDatabaseException, DataFormatException;
+			throws ArcturusDatabaseException;
 
 	public Contig getContigByReadName(String readname)
-			throws ArcturusDatabaseException, DataFormatException;
+			throws ArcturusDatabaseException;
 
 	public void updateContig(Contig contig, int options)
-			throws ArcturusDatabaseException, DataFormatException;
+			throws ArcturusDatabaseException;
 
 	public boolean isCurrentContig(int contigid) throws ArcturusDatabaseException;
 
@@ -256,16 +254,15 @@ public interface ArcturusDatabase {
 	public int countCurrentContigs() throws ArcturusDatabaseException;
 
 	public int processCurrentContigs(int options, int minlen,
-			ContigProcessor processor) throws ArcturusDatabaseException, DataFormatException;
+			ContigProcessor processor) throws ArcturusDatabaseException;
 
 	public int processCurrentContigs(int options,
-			ContigProcessor processor) throws ArcturusDatabaseException, DataFormatException;
+			ContigProcessor processor) throws ArcturusDatabaseException;
 
 	public Set getCurrentContigs(int options, int minlen)
-			throws ArcturusDatabaseException, DataFormatException;
+			throws ArcturusDatabaseException;
 
-	public Set getCurrentContigs(int options) throws ArcturusDatabaseException,
-			DataFormatException;
+	public Set getCurrentContigs(int options) throws ArcturusDatabaseException;
 
 	public int countContigsByProject(int project_id, int minlen)
 			throws ArcturusDatabaseException;
@@ -274,17 +271,16 @@ public interface ArcturusDatabase {
 			throws ArcturusDatabaseException;
 
 	public int processContigsByProject(int project_id, int options,
-			int minlen, ContigProcessor processor) throws ArcturusDatabaseException,
-			DataFormatException;
+			int minlen, ContigProcessor processor) throws ArcturusDatabaseException;
 
 	public int processContigsByProject(int project_id, int options,
-			ContigProcessor processor) throws ArcturusDatabaseException, DataFormatException;
+			ContigProcessor processor) throws ArcturusDatabaseException;
 
 	public Set<Contig> getContigsByProject(int project_id,
-			int options, int minlen) throws ArcturusDatabaseException, DataFormatException;
+			int options, int minlen) throws ArcturusDatabaseException;
 
 	public Set getContigsByProject(int project_id, int options)
-			throws ArcturusDatabaseException, DataFormatException;
+			throws ArcturusDatabaseException;
 
 	public Set<Contig> getChildContigs(Contig parent)
 			throws ArcturusDatabaseException;
@@ -403,18 +399,18 @@ public interface ArcturusDatabase {
 
 	public boolean hasFullPrivileges() throws ArcturusDatabaseException;
 
-	public boolean isCoordinator(Person person);
+	public boolean isCoordinator(Person person) throws ArcturusDatabaseException;
 
-	public boolean isCoordinator();
+	public boolean isCoordinator() throws ArcturusDatabaseException;
 
 	public Person[] getAllUsers(boolean includeNobody)
 			throws ArcturusDatabaseException;
 
 	public Person[] getAllUsers() throws ArcturusDatabaseException;
 
-	public Person findUser(String username);
+	public Person findUser(String username) throws ArcturusDatabaseException;
 
-	public Person findMe();
+	public Person findMe() throws ArcturusDatabaseException;
 
 	public boolean isMe(Person person);
 
@@ -490,5 +486,5 @@ public interface ArcturusDatabase {
 	public void notifyProjectChangeEventListeners(
 			ProjectChangeEvent event, Class listenerClass);
 
-	public String[] getAllDirectories();
+	public String[] getAllDirectories() throws ArcturusDatabaseException;
 }

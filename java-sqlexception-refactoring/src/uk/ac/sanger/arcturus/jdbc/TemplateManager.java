@@ -3,6 +3,7 @@ package uk.ac.sanger.arcturus.jdbc;
 import uk.ac.sanger.arcturus.data.Template;
 import uk.ac.sanger.arcturus.data.Ligation;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import java.sql.*;
 import java.util.*;
@@ -14,7 +15,8 @@ import java.util.*;
 public class TemplateManager extends AbstractManager {
 	private ArcturusDatabase adb;
 	private Connection conn;
-	private HashMap hashByID, hashByName;
+	private HashMap<Integer, Template> hashByID;
+	private HashMap<String, Template> hashByName;
 	private PreparedStatement pstmtByID, pstmtByName;
 
 	/**
@@ -25,19 +27,27 @@ public class TemplateManager extends AbstractManager {
 	 *            the ArcturusDatabase object to which this manager belongs.
 	 */
 
-	public TemplateManager(ArcturusDatabase adb) throws SQLException {
+	public TemplateManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		this.adb = adb;
 
-		conn = adb.getConnection();
+		hashByID = new HashMap<Integer, Template>();
+		hashByName = new HashMap<String, Template>();
 
+		conn = adb.getConnection();
+		
+		try {
+			prepareStatements();
+		} catch (SQLException e) {
+			throw new ArcturusDatabaseException(e, "Failed to initialise the contig manager", conn, adb);
+		}
+	}
+	
+	private void prepareStatements() throws SQLException {
 		String query = "select name,ligation_id from TEMPLATE where template_id = ?";
 		pstmtByID = conn.prepareStatement(query);
 
 		query = "select template_id,ligation_id from TEMPLATE where name = ?";
 		pstmtByName = conn.prepareStatement(query);
-
-		hashByID = new HashMap();
-		hashByName = new HashMap();
 	}
 
 	public void clearCache() {
@@ -56,7 +66,7 @@ public class TemplateManager extends AbstractManager {
 	 * @return the template identified by the specified name.
 	 */
 
-	public Template getTemplateByName(String name) throws SQLException {
+	public Template getTemplateByName(String name) throws ArcturusDatabaseException {
 		return getTemplateByName(name, true);
 	}
 
@@ -77,7 +87,7 @@ public class TemplateManager extends AbstractManager {
 	 */
 
 	public Template getTemplateByName(String name, boolean autoload)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		Object obj = hashByName.get(name);
 
 		return (obj == null && autoload) ? loadTemplateByName(name)
@@ -95,7 +105,7 @@ public class TemplateManager extends AbstractManager {
 	 * @return the template with the specified identifer.
 	 */
 
-	public Template getTemplateByID(int id) throws SQLException {
+	public Template getTemplateByID(int id) throws ArcturusDatabaseException {
 		return getTemplateByID(id, true);
 	}
 
@@ -116,45 +126,59 @@ public class TemplateManager extends AbstractManager {
 	 */
 
 	public Template getTemplateByID(int id, boolean autoload)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		Object obj = hashByID.get(new Integer(id));
 
 		return (obj == null && autoload) ? loadTemplateByID(id)
 				: (Template) obj;
 	}
 
-	private Template loadTemplateByName(String name) throws SQLException {
-		pstmtByName.setString(1, name);
-		ResultSet rs = pstmtByName.executeQuery();
-
+	private Template loadTemplateByName(String name) throws ArcturusDatabaseException {
 		Template template = null;
 
-		if (rs.next()) {
-			int id = rs.getInt(1);
-			int ligation_id = rs.getInt(2);
-			template = createAndRegisterNewTemplate(name, id, ligation_id);
+		try {
+			pstmtByName.setString(1, name);
+			ResultSet rs = pstmtByName.executeQuery();
+
+			if (rs.next()) {
+				int id = rs.getInt(1);
+				int ligation_id = rs.getInt(2);
+				template = createAndRegisterNewTemplate(name, id, ligation_id);
+			}
+
+			rs.close();
+		}
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e, "Failed to load template by name=\"" + name + "\"", conn, adb);
 		}
 
 		return template;
 	}
 
-	private Template loadTemplateByID(int id) throws SQLException {
-		pstmtByID.setInt(1, id);
-		ResultSet rs = pstmtByID.executeQuery();
-
+	private Template loadTemplateByID(int id) throws ArcturusDatabaseException {
 		Template template = null;
 
-		if (rs.next()) {
-			String name = rs.getString(1);
-			int ligation_id = rs.getInt(2);
-			template = createAndRegisterNewTemplate(name, id, ligation_id);
-		}
+		try {
+			pstmtByID.setInt(1, id);
+			ResultSet rs = pstmtByID.executeQuery();
 
+			if (rs.next()) {
+				String name = rs.getString(1);
+				int ligation_id = rs.getInt(2);
+				template = createAndRegisterNewTemplate(name, id, ligation_id);
+			}
+
+			rs.close();
+		}
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e, "Failed to load template by ID=" + id, conn, adb);
+		}
+		
 		return template;
 	}
 
 	private Template createAndRegisterNewTemplate(String name, int id,
-			int ligation_id) throws SQLException {
+			int ligation_id) throws ArcturusDatabaseException {
 		Ligation ligation = adb.getLigationByID(ligation_id);
 
 		Template template = new Template(name, id, ligation, adb);
@@ -175,9 +199,10 @@ public class TemplateManager extends AbstractManager {
 	 * Pre-loads all available templates into the cache.
 	 */
 
-	public void preload() throws SQLException {
+	public void preload() throws ArcturusDatabaseException {
 		String query = "select template_id,name,ligation_id from TEMPLATE";
 
+		try {
 		Statement stmt = conn.createStatement();
 
 		ResultSet rs = stmt.executeQuery(query);
@@ -191,6 +216,10 @@ public class TemplateManager extends AbstractManager {
 
 		rs.close();
 		stmt.close();
+		}
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e, "Failed to preload templates", conn, adb);
+		}
 	}
 
 	/**
