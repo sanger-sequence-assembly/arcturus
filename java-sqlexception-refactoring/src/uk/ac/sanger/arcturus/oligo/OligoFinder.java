@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.oligo;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.oligo.OligoFinderEvent.Type;
 
 import java.sql.*;
@@ -72,7 +73,7 @@ public class OligoFinder {
 		" where SR.version=0 and SR.seq_id=S.seq_id order by R.read_id";
 	private PreparedStatement pstmtGetReadSequences;
 
-	public OligoFinder(ArcturusDatabase adb, OligoFinderEventListener listener) {
+	public OligoFinder(ArcturusDatabase adb, OligoFinderEventListener listener) throws ArcturusDatabaseException {
 		event = new OligoFinderEvent(this);
 
 		this.listener = listener;
@@ -88,8 +89,8 @@ public class OligoFinder {
 			passValue = getPassValue();
 			prepareStatements();
 		} catch (SQLException sqle) {
-			Arcturus.logWarning("Error when initialising database connection",
-					sqle);
+			throw new ArcturusDatabaseException(sqle, "Error when initialising database connection",
+					conn);
 		}
 	}
 
