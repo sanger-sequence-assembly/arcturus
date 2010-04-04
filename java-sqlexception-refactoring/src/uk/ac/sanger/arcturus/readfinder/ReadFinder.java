@@ -130,17 +130,14 @@ public class ReadFinder {
 					boolean forward = rs2.getString(4).equalsIgnoreCase(
 							"forward");
 
-					try {
-						Contig contig = adb.getContigByID(contigid,
-								ArcturusDatabase.CONTIG_BASIC_DATA);
-						event.setContigAndMapping(read, contig, cstart,
-								cfinish, forward);
+					Contig contig = adb.getContigByID(contigid,
+							ArcturusDatabase.CONTIG_BASIC_DATA);
+					
+					event.setContigAndMapping(read, contig, cstart,
+							cfinish, forward);
 
-						if (listener != null)
-							listener.readFinderUpdate(event);
-					} catch (DataFormatException dfe) {
-						Arcturus.logWarning("Error fetching contig data", dfe);
-					}
+					if (listener != null)
+						listener.readFinderUpdate(event);
 				}
 
 				rs2.close();
