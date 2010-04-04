@@ -179,7 +179,7 @@ public class Project extends Core {
 		return owner;
 	}
 
-	public void setOwner(String owner) {
+	public void setOwner(String owner) throws ArcturusDatabaseException {
 		this.owner = adb.findUser(owner);
 	}
 
@@ -219,7 +219,7 @@ public class Project extends Core {
 		this.lockowner = lockowner;
 	}
 
-	public void setLockOwner(String lockowner) {
+	public void setLockOwner(String lockowner) throws ArcturusDatabaseException {
 		this.lockowner = adb.findUser(lockowner);
 	}
 
@@ -239,7 +239,7 @@ public class Project extends Core {
 		return creator;
 	}
 
-	public void setCreator(String creator) {
+	public void setCreator(String creator) throws ArcturusDatabaseException {
 		this.creator = adb.findUser(creator);
 	}
 
@@ -319,12 +319,9 @@ public class Project extends Core {
 	}
 
 	public Set<Contig> getContigs(boolean refresh) throws ArcturusDatabaseException {
-		try {
-			if (refresh && adb != null)
-				contigs = adb.getContigsByProject(ID,
-						ArcturusDatabase.CONTIG_BASIC_DATA, 0);
-		} catch (DataFormatException dfe) { /* This is never going to happen */
-		}
+		if (refresh && adb != null)
+			contigs = adb.getContigsByProject(ID,
+					ArcturusDatabase.CONTIG_BASIC_DATA, 0);
 
 		return contigs;
 	}
