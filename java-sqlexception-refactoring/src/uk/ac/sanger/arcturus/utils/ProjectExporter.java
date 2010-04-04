@@ -1,7 +1,6 @@
 package uk.ac.sanger.arcturus.utils;
 
 import java.io.*;
-import java.sql.SQLException;
 
 import javax.naming.NamingException;
 
@@ -69,15 +68,7 @@ public class ProjectExporter {
 		if (ai == null)
 			return;
 		
-		ArcturusDatabase adb = null;
-		
-		try {
-			adb = ai.findArcturusDatabase(organismName);
-		} catch (NamingException e) {
-			throw new ArcturusDatabaseException(e, "Failed to find Arcturus database for instance=\"" + instanceName + "\" organism=\"" + organismName + "\"");
-		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to find Arcturus database for instance=\"" + instanceName + "\" organism=\"" + organismName + "\"");
-		}
+		ArcturusDatabase adb = ai.findArcturusDatabase(organismName);
 		
 		if (adb == null)
 			return;
