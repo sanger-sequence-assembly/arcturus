@@ -1186,8 +1186,9 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	 * @param e the SQLException which was thrown in the auxiliary object.
 	 * @param message an explanatory message provided by the method in which the exception was thrown.
 	 * @param conn the Connection object associated with the exception.
-	 * @source the auxiliary objec whose method caused the exception to be thrown. 
+	 * @source the auxiliary object whose method caused the exception to be thrown. 
 	 *
+	 * @throws ArcturusDatabaseException if it is not possible to recover from the underlying SQLException.
 	 */
 	
 	public void handleSQLException(SQLException e, String message,
