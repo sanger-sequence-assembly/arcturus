@@ -64,7 +64,7 @@ public class ContigTransferRequestManager {
 		try {
 			prepareStatements();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to initialise the contig transfer request manager", conn, adb);
+			adb.handleSQLException(e, "Failed to initialise the contig transfer request manager", conn, adb);
 
 		}
 		
@@ -149,37 +149,38 @@ public class ContigTransferRequestManager {
 	public ContigTransferRequest[] getContigTransferRequestsByUser(Person user,
 			int mode) throws ArcturusDatabaseException {
 		PreparedStatement pstmt;
-
+		ContigTransferRequest[] transfers = null;
+		
 		try {
-		switch (mode) {
-			default:
-			case ArcturusDatabase.USER_IS_REQUESTER:
-				pstmt = pstmtByRequester;
-				pstmt.setString(1, user.getUID());
-				pstmt.setString(2, user.getUID());
-				break;
+			switch (mode) {
+				default:
+				case ArcturusDatabase.USER_IS_REQUESTER:
+					pstmt = pstmtByRequester;
+					pstmt.setString(1, user.getUID());
+					pstmt.setString(2, user.getUID());
+					break;
 
-			case ArcturusDatabase.USER_IS_CONTIG_OWNER:
-				pstmt = pstmtByContigOwner;
-				pstmt.setString(1, user.getUID());
-				break;
+				case ArcturusDatabase.USER_IS_CONTIG_OWNER:
+					pstmt = pstmtByContigOwner;
+					pstmt.setString(1, user.getUID());
+					break;
 
-			case ArcturusDatabase.USER_IS_ADMINISTRATOR:
-				pstmt = pstmtAllRequests;
-				break;
-		}
+				case ArcturusDatabase.USER_IS_ADMINISTRATOR:
+					pstmt = pstmtAllRequests;
+					break;
+			}
 
-		ResultSet rs = pstmt.executeQuery();
+			ResultSet rs = pstmt.executeQuery();
 
-		ContigTransferRequest[] transfers = getTransfersFromResultSet(rs);
+			transfers = getTransfersFromResultSet(rs);
 
-		rs.close();
-
-		return transfers;
+			rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to fetch contig transfer requests for user " + user.getName(), conn, adb);
+			adb.handleSQLException(e, "Failed to fetch contig transfer requests for user " + user.getName(), conn, adb);
 		}
+
+		return transfers;
 	}
 
 	protected ContigTransferRequest[] getTransfersFromResultSet(ResultSet rs)
@@ -239,7 +240,7 @@ public class ContigTransferRequestManager {
 			}
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to fetch contig transfer requests", conn, adb);
+			adb.handleSQLException(e, "Failed to fetch contig transfer requests", conn, adb);
 		}
 
 		ContigTransferRequest[] array = v.toArray(new ContigTransferRequest[0]);
@@ -248,21 +249,23 @@ public class ContigTransferRequestManager {
 
 	public ContigTransferRequest findContigTransferRequest(int requestId)
 			throws ArcturusDatabaseException {
+		ContigTransferRequest[] transfers = null;
+		
 		try {
-		pstmtByID.setInt(1, requestId);
+			pstmtByID.setInt(1, requestId);
 
-		ResultSet rs = pstmtByID.executeQuery();
+			ResultSet rs = pstmtByID.executeQuery();
 
-		ContigTransferRequest[] transfers = getTransfersFromResultSet(rs);
+			transfers = getTransfersFromResultSet(rs);
 
-		rs.close();
+			rs.close();
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to fetch contig transfer request ID=" + requestId, conn, adb);
+		}
 
 		return (transfers == null || transfers.length == 0) ? null
 				: transfers[0];
-		}
-		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to fetch contig transfer request ID=" + requestId, conn, adb);
-		}
 	}
 
 	public ContigTransferRequest createContigTransferRequest(Person requester,
@@ -333,6 +336,8 @@ public class ContigTransferRequestManager {
 			throws ContigTransferRequestException, ArcturusDatabaseException {
 		adb.updateContig(contig, ArcturusDatabase.CONTIG_BASIC_DATA);
 		
+		ContigTransferRequest request = null;
+		
 		try {
 			pstmtInsertNewRequest.setInt(1, contig.getID());
 			pstmtInsertNewRequest.setInt(2, contig.getProject().getID());
@@ -351,17 +356,17 @@ public class ContigTransferRequestManager {
 
 			rs.close();
 
-			ContigTransferRequest request = findContigTransferRequest(requestId);
+			request = findContigTransferRequest(requestId);
 
 			notifier.notifyRequestStatusChange(requester, request,
 					ContigTransferRequest.UNKNOWN);
-
-			return request;
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to create contig transfer request for " + requester.getName() +
+			adb.handleSQLException(e, "Failed to create contig transfer request for " + requester.getName() +
 					" to move contig " + contig.getID() + " to project ID=" + toProject.getID() , conn, adb);
 		}
+
+		return request;
 	}
 
 	protected void checkForExistingRequests(int contigId)
@@ -375,20 +380,22 @@ public class ContigTransferRequestManager {
 
 	protected int countActiveRequestsForContig(int contigId)
 			throws ArcturusDatabaseException {
+		int count = 0;
+		
 		try {
-		pstmtCountActiveRequestsByContigId.setInt(1, contigId);
+			pstmtCountActiveRequestsByContigId.setInt(1, contigId);
 
-		ResultSet rs = pstmtCountActiveRequestsByContigId.executeQuery();
+			ResultSet rs = pstmtCountActiveRequestsByContigId.executeQuery();
 
-		int count = rs.next() ? rs.getInt(1) : 0;
+			count = rs.next() ? rs.getInt(1) : 0;
 
-		rs.close();
-
-		return count;
+			rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to count active requests for contig ID=" + contigId, conn, adb);
+			adb.handleSQLException(e, "Failed to count active requests for contig ID=" + contigId, conn, adb);
 		}
+
+		return count;
 	}
 
 	protected void checkIsCurrentContig(int contigId)
@@ -577,17 +584,22 @@ public class ContigTransferRequestManager {
 
 	protected boolean markRequestAsFailed(ContigTransferRequest request)
 			throws ArcturusDatabaseException {
+		boolean success = false;
+		
 		try {
 			pstmtMarkRequestAsFailed.setInt(1, request.getRequestID());
-			if (pstmtMarkRequestAsFailed.executeUpdate() == 1) {
-				request.setStatus(ContigTransferRequest.FAILED);
-				return true;
-			} else
-				return false;
+			
+			success = pstmtMarkRequestAsFailed.executeUpdate() == 1;
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to mark request ID=" + request.getRequestID() + " as failed" , conn, adb);
+			adb.handleSQLException(e, "Failed to mark request ID=" + request.getRequestID() + " as failed" , conn, adb);
 		}
+		
+		if (success) {
+			request.setStatus(ContigTransferRequest.FAILED);
+			return true;
+		} else
+			return false;
 	}
 
 	public void reviewContigTransferRequest(ContigTransferRequest request,
@@ -651,7 +663,7 @@ public class ContigTransferRequestManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to confirm project is still valid for request ID=" + request.getRequestID(), conn, adb);
+			adb.handleSQLException(e, "Failed to confirm project is still valid for request ID=" + request.getRequestID(), conn, adb);
 		}
 
 		Project fromProject = request.getOldProject();
@@ -740,7 +752,7 @@ public class ContigTransferRequestManager {
 			rc = pstmtUpdateRequestStatus.executeUpdate();
 		}
 			catch (SQLException e) {
-				throw new ArcturusDatabaseException(e, "Failed to update status for request ID=" + request.getRequestID(), conn, adb);
+				adb.handleSQLException(e, "Failed to update status for request ID=" + request.getRequestID(), conn, adb);
 		}
 
 		if (rc != 1)
@@ -757,7 +769,7 @@ public class ContigTransferRequestManager {
 				pstmtSetClosedDate.executeUpdate();
 			}
 			catch (SQLException e) {
-				throw new ArcturusDatabaseException(e, "Failed to set closed date for request ID=" + request.getRequestID(), conn, adb);
+				adb.handleSQLException(e, "Failed to set closed date for request ID=" + request.getRequestID(), conn, adb);
 		}
 		}
 
@@ -850,7 +862,7 @@ public class ContigTransferRequestManager {
 			}
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to execute request ID=" + request.getRequestID(), conn, adb);
+			adb.handleSQLException(e, "Failed to execute request ID=" + request.getRequestID(), conn, adb);
 		}
 	}
 
@@ -867,8 +879,8 @@ public class ContigTransferRequestManager {
 			throws ContigTransferRequestException, ArcturusDatabaseException {
 		Project project = (mode == SOURCE_PROJECT) ? request.getOldProject() : request.getNewProject();
 		
-		boolean lockdateNull;
-		boolean lockownerNull;
+		boolean lockdateNull = false;
+		boolean lockownerNull = false;
 		
 		try {
 			pstmtCheckProjectLock.setInt(1, project.getID());
@@ -886,7 +898,7 @@ public class ContigTransferRequestManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to execute request ID=" + request.getRequestID(), conn, adb);
+			adb.handleSQLException(e, "Failed to execute request ID=" + request.getRequestID(), conn, adb);
 		}
 
 		if (lockdateNull && lockownerNull)
@@ -995,7 +1007,7 @@ public class ContigTransferRequestManager {
 			rs.close();		
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to move contigs from project ID=" + fromProject.getID() +
+			adb.handleSQLException(e, "Failed to move contigs from project ID=" + fromProject.getID() +
 					" to project ID=" + toProject.getID(), conn, adb);
 		}
 	

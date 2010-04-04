@@ -38,7 +38,7 @@ public class TemplateManager extends AbstractManager {
 		try {
 			prepareStatements();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to initialise the contig manager", conn, adb);
+			adb.handleSQLException(e, "Failed to initialise the contig manager", conn, adb);
 		}
 	}
 	
@@ -149,7 +149,7 @@ public class TemplateManager extends AbstractManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to load template by name=\"" + name + "\"", conn, adb);
+			adb.handleSQLException(e, "Failed to load template by name=\"" + name + "\"", conn, adb);
 		}
 
 		return template;
@@ -171,7 +171,7 @@ public class TemplateManager extends AbstractManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to load template by ID=" + id, conn, adb);
+			adb.handleSQLException(e, "Failed to load template by ID=" + id, conn, adb);
 		}
 		
 		return template;
@@ -218,7 +218,7 @@ public class TemplateManager extends AbstractManager {
 		stmt.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to preload templates", conn, adb);
+			adb.handleSQLException(e, "Failed to preload templates", conn, adb);
 		}
 	}
 

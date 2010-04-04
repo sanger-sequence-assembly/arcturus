@@ -33,7 +33,7 @@ public class LigationManager extends AbstractManager {
 		try {
 			pstmtByID = conn.prepareStatement(query);
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to prepare \"" + query + "\"", conn, adb);
+			adb.handleSQLException(e, "Failed to prepare \"" + query + "\"", conn, adb);
 
 		}
 
@@ -41,7 +41,7 @@ public class LigationManager extends AbstractManager {
 		try {
 			pstmtByName = conn.prepareStatement(query);
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to prepare \"" + query + "\"", conn, adb);
+			adb.handleSQLException(e, "Failed to prepare \"" + query + "\"", conn, adb);
 
 		}
 
@@ -82,7 +82,7 @@ public class LigationManager extends AbstractManager {
 						sihigh);
 			}
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to fetch ligation by name=\"" + name + "\"", conn, adb);
+			adb.handleSQLException(e, "Failed to fetch ligation by name=\"" + name + "\"", conn, adb);
 		}
 		
 
@@ -105,7 +105,7 @@ public class LigationManager extends AbstractManager {
 						sihigh);
 			}
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to fetch ligation by ID=\"" + id + "\"", conn, adb);
+			adb.handleSQLException(e, "Failed to fetch ligation by ID=\"" + id + "\"", conn, adb);
 		}
 
 		return ligation;
@@ -143,7 +143,7 @@ public class LigationManager extends AbstractManager {
 			rs.close();
 			stmt.close();
 		}catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to preload ligations", conn, adb);
+			adb.handleSQLException(e, "Failed to preload ligations", conn, adb);
 		} 
 	}
 }

@@ -35,7 +35,7 @@ public class ReadManager extends AbstractManager {
 		try {
 			prepareStatements();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to initialise the read manager", conn, adb);
+			adb.handleSQLException(e, "Failed to initialise the read manager", conn, adb);
 		}
 	}
 	
@@ -96,7 +96,7 @@ public class ReadManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to load read by name=\"" + name + "\"", conn, adb);
+			adb.handleSQLException(e, "Failed to load read by name=\"" + name + "\"", conn, adb);
 		}
 
 		return read;
@@ -122,7 +122,7 @@ public class ReadManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to load read by ID=" + id, conn, adb);
+			adb.handleSQLException(e, "Failed to load read by ID=" + id, conn, adb);
 		}
 
 		return read;
@@ -155,7 +155,7 @@ public class ReadManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to load reads by template ID=" + template_id, conn, adb);
+			adb.handleSQLException(e, "Failed to load reads by template ID=" + template_id, conn, adb);
 		}
 
 		return newreads;
@@ -243,7 +243,7 @@ public class ReadManager extends AbstractManager {
 			rs.close();
 			stmt.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to preload reads", conn, adb);
+			adb.handleSQLException(e, "Failed to preload reads", conn, adb);
 		}
 	}
 
@@ -266,6 +266,8 @@ public class ReadManager extends AbstractManager {
 	}
 
 	public int[] getUnassembledReadIDList() throws ArcturusDatabaseException {
+		int[] ids = null;
+		
 		try {
 			Statement stmt = conn.createStatement();
 
@@ -303,7 +305,7 @@ public class ReadManager extends AbstractManager {
 
 			rs = stmt.executeQuery(query);
 
-			int[] ids = new int[nreads];
+			ids = new int[nreads];
 
 			int j = 0;
 
@@ -313,10 +315,10 @@ public class ReadManager extends AbstractManager {
 			rs.close();
 
 			stmt.close();
-
-			return ids;
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to get unassembled read ID lists", conn, adb);
+			adb.handleSQLException(e, "Failed to get unassembled read ID lists", conn, adb);
 		}
+
+		return ids;
 	}
 }

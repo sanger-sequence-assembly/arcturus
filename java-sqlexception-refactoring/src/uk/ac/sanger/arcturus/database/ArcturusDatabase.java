@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.database;
 
 import java.io.IOException;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -487,4 +488,7 @@ public interface ArcturusDatabase {
 			ProjectChangeEvent event, Class listenerClass);
 
 	public String[] getAllDirectories() throws ArcturusDatabaseException;
+	
+	public void handleSQLException(SQLException e, String message, Connection conn, Object source)
+			throws ArcturusDatabaseException;
 }

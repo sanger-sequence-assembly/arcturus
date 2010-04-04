@@ -33,14 +33,14 @@ public class AssemblyManager extends AbstractManager {
 		try {
 			pstmtByID = conn.prepareStatement(query);
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to prepare \"" + query + "\"", conn, adb);
+			adb.handleSQLException(e, "Failed to prepare \"" + query + "\"", conn, this);
 		}
 
 		query = "select assembly_id,updated,created,creator from ASSEMBLY where name = ?";
 		try {
 			pstmtByName = conn.prepareStatement(query);
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to prepare \"" + query + "\"", conn, adb);
+			adb.handleSQLException(e, "Failed to prepare \"" + query + "\"", conn, this);
 		}
 	}
 
@@ -60,7 +60,7 @@ public class AssemblyManager extends AbstractManager {
 			try {
 				return autoload ? loadAssemblyByID(id) : null;
 			} catch (SQLException e) {
-				throw new ArcturusDatabaseException(e, "Failed to get assembly by ID=" + id, conn, adb);
+				adb.handleSQLException(e, "Failed to get assembly by ID=" + id, conn, this);
 			}
 
 		Assembly assembly = (Assembly) obj;
@@ -90,11 +90,11 @@ public class AssemblyManager extends AbstractManager {
 	}
 
 	public Assembly getAssemblyByName(String name) throws ArcturusDatabaseException {
+		Assembly assembly = null;
+
 		try {
 			pstmtByName.setString(1, name);
 			ResultSet rs = pstmtByName.executeQuery();
-
-			Assembly assembly = null;
 
 			if (rs.next()) {
 				int assembly_id = rs.getInt(1);
@@ -112,12 +112,12 @@ public class AssemblyManager extends AbstractManager {
 			}
 
 			rs.close();
-
-			return assembly;
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to get assembly by name=" + name, conn, adb);			
+			adb.handleSQLException(e, "Failed to get assembly by name=" + name, conn, this);			
 		}
+
+		return assembly;
 	}
 
 	private Assembly createAndRegisterNewAssembly(String name, int id,
@@ -166,8 +166,8 @@ public class AssemblyManager extends AbstractManager {
 			rs.close();
 			stmt.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
-					"Failed to preload assemblies", conn, adb);
+			adb.handleSQLException(e,
+					"Failed to preload assemblies", conn, this);
 		}
 	}
 
@@ -201,8 +201,8 @@ public class AssemblyManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
-					"Failed to refresh assemblies", conn, adb);
+			adb.handleSQLException(e,
+					"Failed to refresh assemblies", conn, this);
 		}
 	}
 

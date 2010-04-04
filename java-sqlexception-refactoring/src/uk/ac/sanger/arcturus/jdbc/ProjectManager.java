@@ -50,7 +50,7 @@ public class ProjectManager extends AbstractManager {
 		try {
 			prepareStatements();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to initialise the project manager", conn, adb);
+			adb.handleSQLException(e, "Failed to initialise the project manager", conn, adb);
 		}
 	}
 	
@@ -165,7 +165,7 @@ public class ProjectManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to load project by ID=" + id, conn, adb);
+			adb.handleSQLException(e, "Failed to load project by ID=" + id, conn, adb);
 		}
 
 		return project;
@@ -213,7 +213,7 @@ public class ProjectManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to load project by name=" + name, conn, adb);
+			adb.handleSQLException(e, "Failed to load project by name=" + name, conn, adb);
 		}
 
 		return project;
@@ -284,7 +284,7 @@ public class ProjectManager extends AbstractManager {
 			rs.close();
 			stmt.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to preload projects", conn, adb);
+			adb.handleSQLException(e, "Failed to preload projects", conn, adb);
 		}
 	}
 
@@ -361,7 +361,7 @@ public class ProjectManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to refresh project ID=" + project.getID(), conn, adb);
+			adb.handleSQLException(e, "Failed to refresh project ID=" + project.getID(), conn, adb);
 		}
 	}
 
@@ -428,7 +428,7 @@ public class ProjectManager extends AbstractManager {
 
 			pstmtSetAssemblyForProject.executeUpdate();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to set assembly ID=" + assembly.getID() + " for project ID=" + project.getID(), conn, adb);
+			adb.handleSQLException(e, "Failed to set assembly ID=" + assembly.getID() + " for project ID=" + project.getID(), conn, adb);
 		}
 
 	}
@@ -467,7 +467,7 @@ public class ProjectManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to get summary for project ID=" + project.getID(), conn, adb);
+			adb.handleSQLException(e, "Failed to get summary for project ID=" + project.getID(), conn, adb);
 		}
 	}
 
@@ -543,7 +543,7 @@ public class ProjectManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to get summary for projects", conn, adb);
+			adb.handleSQLException(e, "Failed to get summary for projects", conn, adb);
 		}
 
 		return map;
@@ -612,7 +612,7 @@ public class ProjectManager extends AbstractManager {
 
 			rc = pstmtUnlockProject.executeUpdate();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to unlock project ID=" + project.getID(), conn, adb);
+			adb.handleSQLException(e, "Failed to unlock project ID=" + project.getID(), conn, adb);
 		}
 	
 		if (rc == 1)
@@ -641,7 +641,7 @@ public class ProjectManager extends AbstractManager {
 
 			rc = pstmtLockProject.executeUpdate();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to lock project ID=" + project.getID(), conn, adb);
+			adb.handleSQLException(e, "Failed to lock project ID=" + project.getID(), conn, adb);
 		}
 	
 		if (rc == 1)
@@ -673,7 +673,7 @@ public class ProjectManager extends AbstractManager {
 
 			rc = pstmtLockProjectForOwner.executeUpdate();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to lock project ID=" + project.getID() + " for owner", conn, adb);
+			adb.handleSQLException(e, "Failed to lock project ID=" + project.getID() + " for owner", conn, adb);
 		}
 
 		if (rc == 1)
@@ -702,7 +702,7 @@ public class ProjectManager extends AbstractManager {
 
 			rc = pstmtLockProject.executeUpdate();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to lock project ID=" + project.getID() + " for user UID=" + person.getUID(), conn, adb);
+			adb.handleSQLException(e, "Failed to lock project ID=" + project.getID() + " for user UID=" + person.getUID(), conn, adb);
 		}
 
 		if (rc == 1)
@@ -724,7 +724,7 @@ public class ProjectManager extends AbstractManager {
 
 			rc = pstmtUnlockProject.executeUpdate();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to unlock project ID=" + project.getID() + " for export", conn, adb);
+			adb.handleSQLException(e, "Failed to unlock project ID=" + project.getID() + " for export", conn, adb);
 		}
 
 		if (rc == 1)
@@ -749,7 +749,7 @@ public class ProjectManager extends AbstractManager {
 
 			rc = pstmtLockProject.executeUpdate();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to lock project ID=" + project.getID() + " for export", conn, adb);
+			adb.handleSQLException(e, "Failed to lock project ID=" + project.getID() + " for export", conn, adb);
 		}
 
 		if (rc == 1)
@@ -783,7 +783,7 @@ public class ProjectManager extends AbstractManager {
 
 			rc = pstmtSetProjectOwner.executeUpdate();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to set owner for project ID=" + project.getID() + " to " +
+			adb.handleSQLException(e, "Failed to set owner for project ID=" + project.getID() + " to " +
 					(nobody ? "NULL" : person.getUID()), conn, adb);
 		}
 
@@ -828,7 +828,7 @@ public class ProjectManager extends AbstractManager {
 
 			rc = pstmtCreateNewProject.executeUpdate();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to create a new project with assembly ID=" + assembly.getID() +
+			adb.handleSQLException(e, "Failed to create a new project with assembly ID=" + assembly.getID() +
 					", name=\"" + name + "\", creator=" + creator + ", owner=" + owner + ", directory=" + directory, conn, adb);
 		}
 	
@@ -876,7 +876,7 @@ public class ProjectManager extends AbstractManager {
 		
 			rc = pstmtChangeProjectStatus.executeUpdate();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to change status of project ID=" + project.getID(), conn, adb);
+			adb.handleSQLException(e, "Failed to change status of project ID=" + project.getID(), conn, adb);
 		}
 	
 		if (rc == 1) {

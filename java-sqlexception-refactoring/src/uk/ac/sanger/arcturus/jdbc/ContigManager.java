@@ -78,7 +78,7 @@ public class ContigManager extends AbstractManager {
 			preloadCloningVectors();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to initialise the contig manager", conn, adb);
+			adb.handleSQLException(e, "Failed to initialise the contig manager", conn, adb);
 		}
 	}
 
@@ -249,20 +249,25 @@ public class ContigManager extends AbstractManager {
 	}
 	
 	public Contig getContigByReadName(String readname, int options) throws ArcturusDatabaseException {
+		Contig contig = null;
+		
 		try {
-		pstmtContigIDFromReadname.setString(1, readname);
-		
-		ResultSet rs = pstmtContigIDFromReadname.executeQuery();
-		
-		int contig_id = rs.next() ? rs.getInt(1) : -1;
-		
-		rs.close();
-		
-		return contig_id < 0 ? null : getContigByID(contig_id, options);
+			pstmtContigIDFromReadname.setString(1, readname);
+
+			ResultSet rs = pstmtContigIDFromReadname.executeQuery();
+
+			int contig_id = rs.next() ? rs.getInt(1) : -1;
+
+			rs.close();
+
+			if (contig_id > 0)
+				contig = getContigByID(contig_id, options);
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to get contig by readname=\"" + readname + "\"", conn, adb);
+			adb.handleSQLException(e, "Failed to get contig by readname=\"" + readname + "\"", conn, adb);
 		}
+		
+		return contig;
 	}
 	
 	public Contig getContigByID(int contig_id) throws ArcturusDatabaseException {
@@ -323,7 +328,7 @@ public class ContigManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to create contig by ID=" + contig_id,
 					conn, adb);
 		}
@@ -357,7 +362,7 @@ public class ContigManager extends AbstractManager {
 		rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to update basic contig data for " + contig,
 					conn, adb);			
 		}
@@ -418,6 +423,8 @@ public class ContigManager extends AbstractManager {
 	}
 
 	private int getMappingCount(int contig_id) throws ArcturusDatabaseException {
+		int count = 0;
+		
 		try {
 			pstmtCountMappings.setInt(1, contig_id);
 
@@ -425,16 +432,17 @@ public class ContigManager extends AbstractManager {
 
 			rs.next();
 
-			int nMappings = rs.getInt(1);
+			count = rs.getInt(1);
 
 			rs.close();
 
-			return nMappings;
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to get mapping count for contig ID= " + contig_id,
 					conn, adb);			
 		}
+		
+		return count;
 	}
 
 	private void getMappings(int contig_id, Mapping[] mappings)
@@ -480,7 +488,7 @@ public class ContigManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to get mappings for contig ID= " + contig_id,
 					conn, adb);			
 		}
@@ -546,13 +554,15 @@ public class ContigManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to get read and template data for contig ID= " + contig_id,
 					conn, adb);			
 		}
 	}
 
 	private int getSegmentCount(int contig_id) throws ArcturusDatabaseException {
+		int count = 0;
+		
 		try {
 			pstmtCountSegments.setInt(1, contig_id);
 
@@ -560,16 +570,17 @@ public class ContigManager extends AbstractManager {
 
 			rs.next();
 
-			int nSegments = rs.getInt(1);
+			count = rs.getInt(1);
 
 			rs.close();
 
-			return nSegments;
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to get segment count for contig ID= " + contig_id,
 					conn, adb);			
 		}
+
+		return count;
 	}
 
 	private void getSegmentData(int contig_id, Map mapmap) throws ArcturusDatabaseException {
@@ -616,7 +627,7 @@ public class ContigManager extends AbstractManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to get segment data for contig ID= " + contig_id,
 					conn, adb);						
 		}
@@ -729,7 +740,7 @@ public class ContigManager extends AbstractManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to fetch sequence data for contig ID= " + contig_id,
 					conn, adb);									
 		}
@@ -801,7 +812,7 @@ public class ContigManager extends AbstractManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to fetch sequence vector data for contig ID= " + contig_id,
 					conn, adb);												
 		}
@@ -840,7 +851,7 @@ public class ContigManager extends AbstractManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to fetch cloning vector data for contig ID= " + contig_id,
 					conn, adb);												
 		}
@@ -876,7 +887,7 @@ public class ContigManager extends AbstractManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to fetch quality clipping data for contig ID= " + contig_id,
 					conn, adb);												
 		}
@@ -909,7 +920,7 @@ public class ContigManager extends AbstractManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to fetch quality clipping data for contig ID= " + contig_id,
 					conn, adb);												
 		}
@@ -998,7 +1009,7 @@ public class ContigManager extends AbstractManager {
 		rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to fetch consensus data for contig ID=" + contig.getID(),
 					conn, adb);											
 		}
@@ -1063,7 +1074,7 @@ public class ContigManager extends AbstractManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to load tags for contig ID=" + contig.getID(),
 					conn, adb);											
 		}
@@ -1085,7 +1096,7 @@ public class ContigManager extends AbstractManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to count contigs for project ID=" + project_id,
 					conn, adb);											
 		}
@@ -1157,7 +1168,7 @@ public class ContigManager extends AbstractManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to process contigs for project ID=" + project_id,
 					conn, adb);														
 		}
@@ -1169,25 +1180,29 @@ public class ContigManager extends AbstractManager {
 	}
 
 	public boolean isCurrentContig(int contig_id) throws ArcturusDatabaseException {
+		boolean found = false;
+		
 		try {
 			pstmtCurrentContigData.setInt(1, contig_id);
 
 			ResultSet rs = pstmtCurrentContigData.executeQuery();
 
-			boolean found = rs.next();
+			found = rs.next();
 
 			rs.close();
-
-			return found;
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to test whether contig ID=" + contig_id + " is current",
 					conn, adb);															
 		}
+
+		return found;
 	}
 
 	public int[] getCurrentContigIDList() throws ArcturusDatabaseException {
+		int[] ids = null;
+		
 		try {
 			String query = "select count(*) from CURRENTCONTIGS";
 
@@ -1206,7 +1221,7 @@ public class ContigManager extends AbstractManager {
 			if (ncontigs == 0)
 				return null;
 
-			int[] ids = new int[ncontigs];
+			ids = new int[ncontigs];
 
 			query = "select contig_id from CURRENTCONTIGS";
 
@@ -1219,33 +1234,35 @@ public class ContigManager extends AbstractManager {
 
 			rs.close();
 			stmt.close();
-
-			return ids;
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to fetch current contig ID list",
 					conn, adb);																		
 		}
+
+		return ids;
 	}
 
 	public int countCurrentContigs(int minlen) throws ArcturusDatabaseException {
+		int count = 0;
+		
 		try {
 			pstmtCountCurrentContigs.setInt(1, minlen);
 
 			ResultSet rs = pstmtCountCurrentContigs.executeQuery();
 
-			int nContigs = rs.next() ? rs.getInt(1) : 0;
+			count = rs.next() ? rs.getInt(1) : 0;
 
 			rs.close();
-
-			return nContigs;
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to count current contigs",
 					conn, adb);																					
 		}
+
+		return count;
 	}
 
 	public Set getCurrentContigs(int options, int minlen) throws ArcturusDatabaseException {
@@ -1308,7 +1325,7 @@ public class ContigManager extends AbstractManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to process current contigs",
 					conn, adb);																								
 		}
@@ -1345,7 +1362,7 @@ public class ContigManager extends AbstractManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e,
+			adb.handleSQLException(e,
 					"Failed to fetch children of contig ID=" + parent.getID(),
 					conn, adb);																											
 		}

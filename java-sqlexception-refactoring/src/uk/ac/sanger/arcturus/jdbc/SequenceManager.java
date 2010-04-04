@@ -57,7 +57,7 @@ public class SequenceManager extends AbstractManager {
 		try {
 			prepareStatements();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to initialise the sequence manager", conn, adb);
+			adb.handleSQLException(e, "Failed to initialise the sequence manager", conn, adb);
 		}
 	}
 	
@@ -146,7 +146,7 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to load sequence by read ID=" + readid, conn, adb);
+			adb.handleSQLException(e, "Failed to load sequence by read ID=" + readid, conn, adb);
 		}
 
 		setClippings(sequence);
@@ -202,7 +202,7 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to load sequence by read ID=" + readid, conn, adb);
+			adb.handleSQLException(e, "Failed to load sequence by read ID=" + readid, conn, adb);
 		}
 
 		setClippings(sequence);
@@ -265,7 +265,7 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to load full sequence by read ID=" + readid, conn, adb);
+			adb.handleSQLException(e, "Failed to load full sequence by read ID=" + readid, conn, adb);
 		}
 		catch (DataFormatException e) {
 			throw new ArcturusDatabaseException(e, "Failed to decompress DNA and quality for sequence by read ID=" + readid, conn, adb);
@@ -317,7 +317,7 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to full sequence by ID=" + seqid, conn, adb);
+			adb.handleSQLException(e, "Failed to full sequence by ID=" + seqid, conn, adb);
 		}
 
 		setClippings(sequence);
@@ -376,7 +376,7 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to load full sequence by ID=" + seqid, conn, adb);
+			adb.handleSQLException(e, "Failed to load full sequence by ID=" + seqid, conn, adb);
 		}
 		catch (DataFormatException e) {
 			throw new ArcturusDatabaseException(e, "Failed to decompress DNA and quality for sequence ID=" + seqid, conn, adb);
@@ -415,7 +415,7 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to get DNA and quality for sequence ID=" + seqid, conn, adb);
+			adb.handleSQLException(e, "Failed to get DNA and quality for sequence ID=" + seqid, conn, adb);
 		}
 		catch (DataFormatException e) {
 			throw new ArcturusDatabaseException(e, "Failed to decompress DNA and quality for sequence ID=" + seqid, conn, adb);
@@ -544,7 +544,7 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to set clipping data for sequence ID=" + seqid, conn, adb);
+			adb.handleSQLException(e, "Failed to set clipping data for sequence ID=" + seqid, conn, adb);
 		}
 	}
 
@@ -586,7 +586,7 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to set load tags for sequence ID=" + seqid, conn, adb);
+			adb.handleSQLException(e, "Failed to set load tags for sequence ID=" + seqid, conn, adb);
 		}
 	}
 }

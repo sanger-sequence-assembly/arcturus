@@ -33,14 +33,14 @@ public class CloneManager extends AbstractManager {
 		try {
 			pstmtByID = conn.prepareStatement(query);
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to prepare \"" + query + "\"", conn, adb);
+			adb.handleSQLException(e, "Failed to prepare \"" + query + "\"", conn, adb);
 		}
 
 		query = "select clone_id from CLONE where name = ?";
 		try {
 			pstmtByName = conn.prepareStatement(query);
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to prepare \"" + query + "\"", conn, adb);
+			adb.handleSQLException(e, "Failed to prepare \"" + query + "\"", conn, adb);
 		}
 
 		hashByID = new HashMap<Integer, Clone>();
@@ -53,23 +53,29 @@ public class CloneManager extends AbstractManager {
 	}
 
 	public Clone getCloneByName(String name) throws ArcturusDatabaseException {
-		Object obj = hashByName.get(name);
+		Clone clone = hashByName.get(name);
 
 		try {
-			return (obj == null) ? loadCloneByName(name) : (Clone) obj;
+			if (clone == null)
+				clone = loadCloneByName(name);
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to get clone by name=\"" + name + "\"", conn, adb);
+			adb.handleSQLException(e, "Failed to get clone by name=\"" + name + "\"", conn, adb);
 		}
+		
+		return clone;
 	}
 
 	public Clone getCloneByID(int id) throws ArcturusDatabaseException {
-		Object obj = hashByID.get(new Integer(id));
+		Clone clone = hashByID.get(new Integer(id));
 
 		try {
-			return (obj == null) ? loadCloneByID(id) : (Clone) obj;
+			if (clone == null)
+				clone = loadCloneByID(id);
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to get clone by ID=" + id, conn, adb);
+			adb.handleSQLException(e, "Failed to get clone by ID=" + id, conn, adb);
 		}
+		
+		return clone;
 	}
 
 	private Clone loadCloneByName(String name) throws SQLException {
@@ -127,7 +133,7 @@ public class CloneManager extends AbstractManager {
 			stmt.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to preload clones", conn, adb);
+			adb.handleSQLException(e, "Failed to preload clones", conn, adb);
 		}
 	}
 }

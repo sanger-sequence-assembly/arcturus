@@ -32,7 +32,6 @@ import uk.ac.sanger.arcturus.pooledconnection.ConnectionPool;
 import uk.ac.sanger.arcturus.projectchange.*;
 
 import uk.ac.sanger.arcturus.ArcturusInstance;
-import uk.ac.sanger.arcturus.Arcturus;
 
 public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	protected DataSource ds;
@@ -1175,5 +1174,24 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		}
 		
 		return null;
+	}
+
+	/*
+	 * ******************************************************************************
+	 */
+
+	/**
+	 * Handle an SQLException thrown within the code of an auxiliary object such as a manager.
+	 * 
+	 * @param e the SQLException which was thrown in the auxiliary object.
+	 * @param message an explanatory message provided by the method in which the exception was thrown.
+	 * @param conn the Connection object associated with the exception.
+	 * @source the auxiliary objec whose method caused the exception to be thrown. 
+	 *
+	 */
+	
+	public void handleSQLException(SQLException e, String message,
+			Connection conn, Object source) throws ArcturusDatabaseException {
+		throw new ArcturusDatabaseException(e, message, conn, this);
 	}
 }

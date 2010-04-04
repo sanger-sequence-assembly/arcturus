@@ -31,7 +31,7 @@ public class UserManager extends AbstractManager {
 		try {
 			prepareStatements();
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to initialise the user manager", conn, adb);
+			adb.handleSQLException(e, "Failed to initialise the user manager", conn, adb);
 		}
 
 		populateRoleMap();
@@ -96,7 +96,7 @@ public class UserManager extends AbstractManager {
 		stmt.close();
 		}
 		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to get all users", conn, adb);
+			adb.handleSQLException(e, "Failed to get all users", conn, adb);
 		}
 
 		if (includeNobody)
@@ -133,7 +133,7 @@ public class UserManager extends AbstractManager {
 
 			person.setRole(role);
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to find user UID=" + username, conn, adb);
+			adb.handleSQLException(e, "Failed to find user UID=" + username, conn, adb);
 		}
 
 		personMap.put(username, person);
