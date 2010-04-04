@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.utils;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import java.sql.*;
 import java.util.zip.*;
@@ -35,10 +36,14 @@ public class ReadToProjectImporter {
 	private Inflater decompresser = new Inflater();
 	private Deflater compresser = new Deflater(Deflater.BEST_COMPRESSION);
 
-	public ReadToProjectImporter(ArcturusDatabase adb) throws SQLException {
+	public ReadToProjectImporter(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		conn = adb.getPooledConnection(this);
 
-		prepareStatements();
+		try {
+			prepareStatements();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to initialise the read-to-project importer", conn, this);
+		}
 	}
 
 	private void prepareStatements() throws SQLException {
