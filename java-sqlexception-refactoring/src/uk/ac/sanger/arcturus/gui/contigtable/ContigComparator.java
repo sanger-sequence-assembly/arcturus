@@ -4,7 +4,7 @@ import java.util.Comparator;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Project;
 
-public class ContigComparator implements Comparator {
+public class ContigComparator implements Comparator<Contig> {
 	public static final int BY_LENGTH = 1;
 	public static final int BY_READS = 2;
 	public static final int BY_CREATION_DATE = 3;
@@ -57,10 +57,7 @@ public class ContigComparator implements Comparator {
 		return (that instanceof ContigComparator && (ContigComparator) that == this);
 	}
 
-	public int compare(Object o1, Object o2) {
-		Contig c1 = (Contig) o1;
-		Contig c2 = (Contig) o2;
-
+	public int compare(Contig c1, Contig c2) {
 		if (groupByProject) {
 			Project project1 = c1.getProject();
 			Project project2 = c2.getProject();

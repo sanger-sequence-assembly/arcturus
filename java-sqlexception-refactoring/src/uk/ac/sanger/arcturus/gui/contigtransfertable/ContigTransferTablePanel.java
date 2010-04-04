@@ -13,6 +13,7 @@ import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.people.Person;
 import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequest;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 public class ContigTransferTablePanel extends MinervaPanel {
 	private ContigTransferTable tableRequester = null;
@@ -26,12 +27,12 @@ public class ContigTransferTablePanel extends MinervaPanel {
 	private ContigTransferTable tableAdmin = null;
 	private ContigTransferTableModel modelAdmin = null;
 	
-	public ContigTransferTablePanel(MinervaTabbedPane mtp, ArcturusDatabase adb) {
+	public ContigTransferTablePanel(MinervaTabbedPane mtp, ArcturusDatabase adb) throws ArcturusDatabaseException {
 		this(mtp, adb, false);
 	}
 
 	protected ContigTransferTablePanel(MinervaTabbedPane mtp, ArcturusDatabase adb,
-			boolean isAdmin) {
+			boolean isAdmin) throws ArcturusDatabaseException {
 		super(mtp, adb);
 		
 		Person user = adb.findMe();

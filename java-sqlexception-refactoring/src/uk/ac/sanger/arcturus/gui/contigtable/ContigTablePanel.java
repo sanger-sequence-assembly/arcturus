@@ -9,6 +9,7 @@ import java.awt.event.*;
 import java.util.List;
 import java.util.Vector;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.gui.common.contigtransfer.ContigTransferMenu;
 import uk.ac.sanger.arcturus.gui.common.contigtransfer.ContigTransferSource;
@@ -16,6 +17,7 @@ import uk.ac.sanger.arcturus.gui.scaffold.ScaffoldWorker;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEventListener;
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 public class ContigTablePanel extends MinervaPanel implements ProjectChangeEventListener, ContigTransferSource {
 	protected ContigTable table = null;
@@ -39,7 +41,7 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 
 	protected boolean oneProject;
 	
-	public ContigTablePanel(MinervaTabbedPane parent, Project[] projects) {
+	public ContigTablePanel(MinervaTabbedPane parent, Project[] projects) throws ArcturusDatabaseException {
 		super(parent, projects[0].getArcturusDatabase());
 		
 		xferMenu = new ContigTransferMenu("Transfer selected contigs to", this, adb);
@@ -218,7 +220,11 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 
 		contigMenu.add(xferMenu);
 		
-		xferMenu.refreshMenu();
+		try {
+			xferMenu.refreshMenu();
+		} catch (ArcturusDatabaseException e) {
+			Arcturus.logWarning("Failed to refresh contig transfer menu", e);
+		}
 		
 		contigPopupMenu.add(actionViewContigs);
 
@@ -278,7 +284,12 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 
 	public void refresh() {
 		table.refresh();
-		xferMenu.refreshMenu();
+		
+		try {
+			xferMenu.refreshMenu();
+		} catch (ArcturusDatabaseException e) {
+			Arcturus.logWarning("Failed to refresh contig transfer menu", e);
+		}
 	}
 
 	protected boolean isRefreshable() {

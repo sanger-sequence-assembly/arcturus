@@ -1,8 +1,6 @@
 package uk.ac.sanger.arcturus.gui.contigtransfertable;
 
-import java.sql.SQLException;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -10,14 +8,13 @@ import javax.swing.ProgressMonitor;
 
 import javax.swing.SwingWorker;
 
-import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequest;
 import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequestException;
 import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequestNotifier;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.gui.contigtable.ContigTablePanel;
-import uk.ac.sanger.arcturus.people.PeopleManager;
 import uk.ac.sanger.arcturus.people.Person;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 
@@ -34,7 +31,7 @@ public class ContigTransferWorker extends SwingWorker<Void, Integer> {
 
 	public ContigTransferWorker(ContigTransferTable parent,
 			ArcturusDatabase adb, ContigTransferRequest[] requests,
-			int newStatus, ProgressMonitor monitor) {
+			int newStatus, ProgressMonitor monitor) throws ArcturusDatabaseException {
 		this.parent = parent;
 		this.adb = adb;
 		this.requests = requests;
@@ -60,11 +57,6 @@ public class ContigTransferWorker extends SwingWorker<Void, Integer> {
 				publish(i);
 			} catch (ContigTransferRequestException e) {
 				failures.add(e);
-			} catch (SQLException e) {
-				Arcturus
-						.logWarning(
-								"SQL exception whilst updating a contig transfer request",
-								e);
 			}
 		}
 

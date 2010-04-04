@@ -5,10 +5,10 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
-import java.sql.SQLException;
 
 import uk.ac.sanger.arcturus.data.Assembly;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.people.Person;
 import uk.ac.sanger.arcturus.Arcturus;
 
@@ -169,14 +169,22 @@ public class NewProjectPanel extends JPanel {
 	}
 	
 	private void updateDirectoryList() {
-		String[] dirs = adb.getAllDirectories();
+		String[] dirs = null;
 		
-		cbxDirectory.removeAllItems();
+		try {
+			dirs = adb.getAllDirectories();
+		} catch (ArcturusDatabaseException e) {
+			Arcturus.logSevere("An error occurred whilst enumerating directories", e);
+		}
 		
-		for (String dir : dirs)
-			cbxDirectory.addItem(dir);
-		
-		cbxDirectory.setSelectedIndex(0);
+		if (dirs != null) {
+			cbxDirectory.removeAllItems();
+
+			for (String dir : dirs)
+				cbxDirectory.addItem(dir);
+
+			cbxDirectory.setSelectedIndex(0);
+		}
 	}
 	
 	private void updateUserList() {
@@ -189,7 +197,7 @@ public class NewProjectPanel extends JPanel {
 				cbxOwner.addItem(users[i]);
 			
 			cbxOwner.setSelectedItem(adb.findMe());
-		} catch (SQLException e) {
+		} catch (ArcturusDatabaseException e) {
 			Arcturus.logSevere("An error occurred whilst enumerating users", e);
 		}
 	}
@@ -204,7 +212,7 @@ public class NewProjectPanel extends JPanel {
 				cbxAssembly.addItem(assemblies[i]);
 			
 			cbxAssembly.setEnabled(cbxAssembly.getItemCount() > 1);
-		} catch (SQLException e) {
+		} catch (ArcturusDatabaseException e) {
 			Arcturus.logSevere("An error occurred whilst enumerating assemblies", e);
 		}
 	}

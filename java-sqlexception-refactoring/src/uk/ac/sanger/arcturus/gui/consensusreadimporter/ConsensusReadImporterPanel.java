@@ -6,8 +6,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.io.File;
-import java.io.IOException;
-import java.sql.SQLException;
 import java.util.List;
 
 import javax.swing.*;
@@ -16,7 +14,6 @@ import javax.swing.border.EtchedBorder;
 import javax.swing.filechooser.FileFilter;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
-import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.consensusreadimporter.ConsensusReadImporter;
 import uk.ac.sanger.arcturus.consensusreadimporter.ConsensusReadImporterListener;
 
@@ -214,20 +211,10 @@ public class ConsensusReadImporterPanel extends MinervaPanel {
 		}
 		
 		protected Void doInBackground() throws Exception {
-			try {
-				publish("--------------------------------------------------------------------------------");
-				publish("The sequences in " + file.getAbsolutePath() + " will be imported with Q=" + quality);
+			publish("--------------------------------------------------------------------------------");
+			publish("The sequences in " + file.getAbsolutePath() + " will be imported with Q=" + quality);
 				
-				importer.importReads(this.adb, file, quality, this);
-			}
-			catch (SQLException sqle) {
-				int errorCode = sqle.getErrorCode();
-				Arcturus.logWarning("A database error occurred whilst importing consensus reads [Error code: " +
-							errorCode + "]", sqle);
-			}
-			catch (IOException ioe) {
-				Arcturus.logWarning("An I/O error occurred whilst importing consensus reads]", ioe);
-			}
+			importer.importReads(this.adb, file, quality, this);
 			
 			return null;
 		}

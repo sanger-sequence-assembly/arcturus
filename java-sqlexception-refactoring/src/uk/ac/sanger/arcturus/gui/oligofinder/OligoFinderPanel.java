@@ -7,6 +7,7 @@ import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectProxy;
 import uk.ac.sanger.arcturus.oligo.*;
 import uk.ac.sanger.arcturus.oligo.OligoFinderEvent.Type;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -55,7 +56,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 
 	protected DecimalFormat df = new DecimalFormat();
 
-	public OligoFinderPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
+	public OligoFinderPanel(MinervaTabbedPane parent, ArcturusDatabase adb) throws ArcturusDatabaseException {
 		super(parent, adb);
 
 		df.setGroupingSize(3);
@@ -281,16 +282,9 @@ public class OligoFinderPanel extends MinervaPanel implements
 	protected void createClassSpecificMenus() {
 	}
 
-	public void refresh() {
-		if (plm != null) {
-			try {
-				plm.refresh();
-			} catch (SQLException sqle) {
-				Arcturus.logWarning(
-						"An error occurred when refreshing the project list",
-						sqle);
-			}
-		}
+	public void refresh() throws ArcturusDatabaseException {
+		if (plm != null)
+			plm.refresh();
 	}
 
 	public void closeResources() {

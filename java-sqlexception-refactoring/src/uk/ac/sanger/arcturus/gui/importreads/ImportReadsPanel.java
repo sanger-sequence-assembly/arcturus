@@ -7,6 +7,7 @@ import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.utils.*;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.data.Project;
 
 import javax.swing.*;
@@ -35,16 +36,12 @@ public class ImportReadsPanel extends MinervaPanel {
 
 	protected JFileChooser fileChooser = new JFileChooser();
 
-	public ImportReadsPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
+	public ImportReadsPanel(MinervaTabbedPane parent, ArcturusDatabase adb) throws ArcturusDatabaseException {
 		super(parent, adb);
 
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 
-		try {
-			importer = new ReadToProjectImporter(adb);
-		} catch (SQLException sqle) {
-			Arcturus.logWarning("Error creating an importer", sqle);
-		}
+		importer = new ReadToProjectImporter(adb);
 
 		createActions();
 
@@ -183,16 +180,9 @@ public class ImportReadsPanel extends MinervaPanel {
 		return BorderFactory.createTitledBorder(etched, title);
 	}
 
-	public void refresh() {
-		if (plm != null) {
-			try {
-				plm.refresh();
-			} catch (SQLException sqle) {
-				Arcturus.logWarning(
-						"An error occurred when refreshing the project list",
-						sqle);
-			}
-		}
+	public void refresh() throws ArcturusDatabaseException {
+		if (plm != null)
+			plm.refresh();
 	}
 
 	protected void closePanel() {

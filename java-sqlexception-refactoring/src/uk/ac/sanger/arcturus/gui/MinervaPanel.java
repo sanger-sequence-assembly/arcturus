@@ -2,7 +2,9 @@ package uk.ac.sanger.arcturus.gui;
 
 import javax.swing.*;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import java.awt.BorderLayout;
 import java.awt.event.*;
@@ -33,7 +35,7 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 		return toolbar;
 	}
 
-	public abstract void refresh();
+	public abstract void refresh() throws ArcturusDatabaseException ;
 
 	public abstract void closeResources();
 
@@ -142,7 +144,11 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 						KeyEvent.VK_R), KeyStroke.getKeyStroke(KeyEvent.VK_F5,
 						0)) {
 			public void actionPerformed(ActionEvent e) {
-				refresh();
+				try {
+					refresh();
+				} catch (ArcturusDatabaseException e1) {
+					Arcturus.logWarning("Failed to refresh display", e1);
+				}
 			}
 		};
 

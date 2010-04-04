@@ -9,6 +9,7 @@ import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequest;
 import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequestException;
 import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequestNotifier;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Project;
 
@@ -16,11 +17,8 @@ import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.event.*;
 
-import java.sql.SQLException;
 import java.awt.*;
 import java.awt.event.*;
-import java.util.*;
-import java.util.zip.DataFormatException;
 import java.io.*;
 
 public class CreateContigTransferPanel extends MinervaPanel {
@@ -93,7 +91,11 @@ public class CreateContigTransferPanel extends MinervaPanel {
 
 		panel = new JPanel(new BorderLayout());
 
-		plm = new ProjectListModel(adb);
+		try {
+			plm = new ProjectListModel(adb);
+		} catch (ArcturusDatabaseException e1) {
+			Arcturus.logWarning("Failed to create project list model", e1);
+		}
 
 		lstProjects = new JList(plm);
 
@@ -150,7 +152,11 @@ public class CreateContigTransferPanel extends MinervaPanel {
 				null, "Transfer contigs", new Integer(KeyEvent.VK_I), KeyStroke
 						.getKeyStroke(KeyEvent.VK_I, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
-				createContigTransferRequests();
+				try {
+					createContigTransferRequests();
+				} catch (ArcturusDatabaseException e1) {
+					Arcturus.logWarning("Failed to create contig transfer requests", e1);
+				}
 			}
 		};
 
@@ -174,16 +180,9 @@ public class CreateContigTransferPanel extends MinervaPanel {
 		return BorderFactory.createTitledBorder(etched, title);
 	}
 
-	public void refresh() {
-		if (plm != null) {
-			try {
-				plm.refresh();
-			} catch (SQLException sqle) {
-				Arcturus.logWarning(
-						"An error occurred when refreshing the project list",
-						sqle);
-			}
-		}
+	public void refresh() throws ArcturusDatabaseException {
+		if (plm != null)
+			plm.refresh();
 	}
 
 	protected boolean isRefreshable() {
@@ -224,7 +223,7 @@ public class CreateContigTransferPanel extends MinervaPanel {
 		}
 	}
 
-	protected void createContigTransferRequests() {
+	protected void createContigTransferRequests() throws ArcturusDatabaseException {
 		ProjectProxy proxy = (ProjectProxy) lstProjects.getSelectedValue();
 
 		Project defaultProject = proxy == null ? null : proxy.getProject();
@@ -249,7 +248,6 @@ public class CreateContigTransferPanel extends MinervaPanel {
 				Contig contig = null;
 				Project project = null;
 
-				try {
 					if (contigname.matches("^\\d+$")) {
 						int contig_id = Integer.parseInt(contigname);
 						contig = adb.isCurrentContig(contig_id) ? adb
@@ -260,11 +258,6 @@ public class CreateContigTransferPanel extends MinervaPanel {
 
 					project = words.length == 1 ? defaultProject : adb
 							.getProjectByName(null, pname);
-				} catch (SQLException e) {
-					Arcturus.logWarning("Failed to find contig", e);
-				} catch (DataFormatException e) {
-					Arcturus.logWarning("Failed to find contig", e);
-				}
 
 				if (contig == null) {
 					appendMessage(lines[i]
@@ -286,12 +279,6 @@ public class CreateContigTransferPanel extends MinervaPanel {
 					} catch (ContigTransferRequestException e) {
 						appendMessage("Unable to create a contig transfer request: "
 								+ e.getTypeAsString());
-					} catch (SQLException e) {
-						Arcturus
-								.logWarning(
-										"SQL exception whilst creating a contig transfer request",
-										e);
-						appendMessage("SQL Exception: " + e.getMessage());
 					}
 				}
 			} else {
