@@ -29,6 +29,7 @@ import javax.management.remote.JMXConnectorServerFactory;
 import javax.management.remote.JMXServiceURL;
 
 import uk.ac.sanger.arcturus.logging.JDBCLogHandler;
+import uk.ac.sanger.arcturus.logging.LongMessageFormatter;
 import uk.ac.sanger.arcturus.logging.MailHandler;
 import uk.ac.sanger.arcturus.logging.MessageDialogHandler;
 
@@ -299,7 +300,7 @@ public class Arcturus {
 				FileHandler filehandler = new FileHandler(
 						"%h/.arcturus/arcturus%u.%g.log");
 				filehandler.setLevel(Level.INFO);
-				filehandler.setFormatter(new SimpleFormatter());
+				filehandler.setFormatter(new LongMessageFormatter());
 				logger.addHandler(filehandler);
 			} else
 				throw new IOException(
