@@ -282,7 +282,7 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 		return oneProject;
 	}
 
-	public void refresh() {
+	public void refresh() throws ArcturusDatabaseException {
 		table.refresh();
 		
 		try {
@@ -301,7 +301,11 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 	}
 
 	public void projectChanged(ProjectChangeEvent event) {
-		refresh();
+		try {
+			refresh();
+		} catch (ArcturusDatabaseException e) {
+			Arcturus.logWarning("Failed to refresh contig list", e);
+		}
 	}
 
 	public List<Contig> getSelectedContigs() {

@@ -15,6 +15,7 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.gui.scaffoldmanager.ScaffoldManagerPanel.FastaMode;
 import uk.ac.sanger.arcturus.gui.scaffoldmanager.node.AssemblyNode;
 import uk.ac.sanger.arcturus.gui.scaffoldmanager.node.ContigNode;
@@ -188,7 +189,11 @@ public class ScaffoldExportWorker extends
 		
 		try {
 			contig.update(ArcturusDatabase.CONTIG_CONSENSUS);
+		} catch (ArcturusDatabaseException e) {
+			Arcturus.logWarning("Failed to decompress the contig consensus sequence for contig ID=" + contig.getID(), e);
+			return;
 		} catch (DataFormatException e) {
+			Arcturus.logWarning("A database error occurred whilst fetching the contig consensus sequence for contig ID=" + contig.getID(), e);
 			return;
 		}			
 		

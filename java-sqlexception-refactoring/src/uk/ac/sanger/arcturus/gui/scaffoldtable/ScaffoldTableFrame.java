@@ -105,7 +105,16 @@ class ScaffoldSetTask implements Runnable {
 
 		SortedSet savedset = new TreeSet(contigset);
 
-		ScaffoldBuilder sb = new ScaffoldBuilder(adb);
+		ScaffoldBuilder sb = null;
+		
+		try {
+			sb = new ScaffoldBuilder(adb);
+		} catch (ArcturusDatabaseException e1) {
+			Arcturus.logWarning("Failed to create a scaffold builder", e1);
+		}
+		
+		if (sb == null)
+			return null;
 
 		BridgeSet bs = null;
 
@@ -115,6 +124,7 @@ class ScaffoldSetTask implements Runnable {
 		try {
 			bs = sb.processContigSet(contigset, monitor);
 		} catch (Exception e) {
+			Arcturus.logWarning("Failed to process contig set for scaffold building", e);
 		}
 
 		Set scaffoldSet = extractSubgraphs(bs, savedset, monitor);

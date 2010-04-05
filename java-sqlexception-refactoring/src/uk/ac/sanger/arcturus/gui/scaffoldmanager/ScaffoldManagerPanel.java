@@ -12,6 +12,7 @@ import java.awt.event.KeyEvent;
 import java.io.File;
 import java.util.List;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.gui.common.contigtransfer.ContigTransferMenu;
 import uk.ac.sanger.arcturus.gui.common.contigtransfer.ContigTransferSource;
@@ -20,6 +21,7 @@ import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEventListener;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import javax.swing.*;
 import javax.swing.event.TreeSelectionEvent;
@@ -296,7 +298,11 @@ public class ScaffoldManagerPanel extends MinervaPanel
 
 		contigMenu.add(xferMenu);
 		
-		xferMenu.refreshMenu();
+		try {
+			xferMenu.refreshMenu();
+		} catch (ArcturusDatabaseException e) {
+			Arcturus.logWarning("An error occurred hwilst refreshing the contig transfer menu for the scaffold tree view", e);
+		}
 	}
 	
 	protected void createScaffoldMenu() {
@@ -317,7 +323,7 @@ public class ScaffoldManagerPanel extends MinervaPanel
 		return true;
 	}
 
-	public void refresh() {
+	public void refresh() throws ArcturusDatabaseException {
 		xferMenu.refreshMenu();
 		refreshTree();
 	}
@@ -342,7 +348,11 @@ public class ScaffoldManagerPanel extends MinervaPanel
 	}
 
 	public void projectChanged(ProjectChangeEvent event) {
-		refresh();
+		try {
+			refresh();
+		} catch (ArcturusDatabaseException e) {
+			Arcturus.logWarning("Failed to refresh the scaffold tree view", e);
+		}
 	}
 	
 	public JTree getTree() {

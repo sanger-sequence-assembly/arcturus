@@ -102,7 +102,7 @@ public class ContigTransferTablePanel extends MinervaPanel {
 		// Does nothing
 	}
 
-	public void refresh() {
+	public void refresh() throws ArcturusDatabaseException {
 		if (tableRequester != null)
 			tableRequester.refresh();
 		

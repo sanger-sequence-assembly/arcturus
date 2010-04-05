@@ -20,6 +20,7 @@ import java.sql.ResultSet;
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.gui.scaffoldmanager.node.ContigNode;
 
 public class ScaffoldContigFinderWorker extends SwingWorker<TreePath, Void> {
@@ -76,7 +77,7 @@ public class ScaffoldContigFinderWorker extends SwingWorker<TreePath, Void> {
 		return result;
 	}
 
-	private int[] getContigIds(String str) {
+	private int[] getContigIds(String str) throws ArcturusDatabaseException {
 		try {
 			int contig_id = Integer.parseInt(str);
 			
@@ -124,17 +125,19 @@ public class ScaffoldContigFinderWorker extends SwingWorker<TreePath, Void> {
 			for (int i = 0; i < contig_ids.length; i++)
 				contig_ids[i] = ids.get(i);
 			
+			conn.close();
+			
 			return contig_ids;
 		}
 		catch (SQLException sqle) {
-			Arcturus.logWarning("An error occurred whilst trying to enumerate contigs", sqle);
+			adb.handleSQLException(sqle, "An error occurred when trying to find the contigs for read name=\"" + str + "\"", conn, this);
 		}
 		finally {
 			try {
 				if (conn != null && !conn.isClosed())
 					conn.close();
 			} catch (SQLException e) {
-				Arcturus.logWarning("An error occurred whilst trying to close connection in finally block", e);
+				adb.handleSQLException(e, "Failed to close the pooled connection", conn, this);
 			}
 		}
 		

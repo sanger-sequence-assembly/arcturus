@@ -5,6 +5,7 @@ import uk.ac.sanger.arcturus.readfinder.*;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -232,15 +233,13 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 		public void run() {
 			boolean ok = true;
 			
-			for (int i = 0; i < readnames.length && ok; i++) {
-				try {
+			try {
+				for (int i = 0; i < readnames.length && ok; i++) {
 					readFinder.findRead(readnames[i], onlyFreeReads, listener);
 				}
-				catch (SQLException sqle) {
-					Arcturus.logWarning("An error occurred whilst searching for " + readnames[i], sqle);
-					ok = false;
-					//ok = readFinder.isValid(5);
-				}
+			}
+			catch (ArcturusDatabaseException e) {
+				Arcturus.logWarning("An error occurred whilst finding free reads", e);
 			}
 			
 			SwingUtilities.invokeLater(new Runnable() {
