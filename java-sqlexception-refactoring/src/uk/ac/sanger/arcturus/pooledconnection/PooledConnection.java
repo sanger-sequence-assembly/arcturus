@@ -105,10 +105,15 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 		}
 	}
 
-	protected void closeConnection() throws SQLException {
-		if (conn != null && !conn.isClosed())
-			conn.close();
-
+	protected void closeConnection() {
+		try {
+			if (conn != null && !conn.isClosed())
+				conn.close();
+		}
+		catch (SQLException e) {
+			// Do nothing
+		}
+		
 		conn = null;
 
 		unregisterAsMBean();
