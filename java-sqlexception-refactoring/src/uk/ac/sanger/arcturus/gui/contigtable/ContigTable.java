@@ -8,6 +8,7 @@ import java.text.*;
 
 import uk.ac.sanger.arcturus.gui.SortableTable;
 import uk.ac.sanger.arcturus.gui.SortableTableModel;
+import uk.ac.sanger.arcturus.utils.CAFWriter;
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.data.Contig;
