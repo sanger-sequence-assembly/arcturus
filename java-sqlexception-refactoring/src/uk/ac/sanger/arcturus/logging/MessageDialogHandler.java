@@ -3,7 +3,11 @@ package uk.ac.sanger.arcturus.logging;
 import java.util.logging.*;
 import javax.swing.*;
 
-public class MessageDialogHandler extends AbstractHandler {
+public class MessageDialogHandler extends Handler {
+	public MessageDialogHandler() {
+		setFormatter(new ShortMessageFormatter());
+	}
+	
 	public void close() throws SecurityException {
 		// Does nothing
 	}
@@ -44,7 +48,7 @@ public class MessageDialogHandler extends AbstractHandler {
 				"Minerva cannot find a required Java class: " + throwable.getMessage() + "\n" +
 				record.getMessage();
 			} else {
-				message = formatShortMessage(record);
+				message = getFormatter().format(record);
 			}
 		}
 

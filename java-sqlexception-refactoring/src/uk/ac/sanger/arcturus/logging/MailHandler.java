@@ -8,13 +8,15 @@ import java.util.Properties;
 
 import uk.ac.sanger.arcturus.Arcturus;
 
-public class MailHandler extends AbstractHandler {
+public class MailHandler extends Handler {
 	protected Authenticator auth = null;
 	protected Session session = null;
 	protected InternetAddress addrTo = null;
 	protected InternetAddress addrFrom = null;
 	
 	public MailHandler(String recipient) {
+		setFormatter(new LongMessageFormatter());
+		
 		Properties props = Arcturus.getProperties();
 		session = Session.getDefaultInstance(props, auth);
 		
@@ -60,7 +62,7 @@ public class MailHandler extends AbstractHandler {
 
 			msg.setSubject(subject);
 						
-			String body = formatLongMessage(record);
+			String body = getFormatter().format(record);
 			
 			msg.setText(body);
 

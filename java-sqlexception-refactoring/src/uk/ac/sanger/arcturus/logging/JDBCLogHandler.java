@@ -7,7 +7,7 @@ import java.util.*;
 
 import uk.ac.sanger.arcturus.Arcturus;
 
-public class JDBCLogHandler extends AbstractHandler {
+public class JDBCLogHandler extends Handler {
 	protected Connection conn;
 	protected PreparedStatement pstmtInsertRecord;
 	protected PreparedStatement pstmtUpdateThrowableInfo;
