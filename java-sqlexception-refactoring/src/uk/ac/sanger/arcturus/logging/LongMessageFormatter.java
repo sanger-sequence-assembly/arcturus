@@ -7,7 +7,8 @@ import java.util.logging.LogRecord;
 import uk.ac.sanger.arcturus.Arcturus;
 
 public class LongMessageFormatter extends AbstractFormatter {
-
+	private final String SEPARATOR = "\n\n########################################################################\n\n";
+	
 	public String format(LogRecord record) {
 		StringBuffer sb = new StringBuffer(16384);
 		
@@ -42,7 +43,7 @@ public class LongMessageFormatter extends AbstractFormatter {
 			
 			displayThrowable(thrown, sb);
 			
-			Throwable cause = thrown == null ? null : thrown.getCause();
+			Throwable cause = thrown.getCause();
 			
 			while (cause != null) {
 				sb.append("\n----- CHAINED EXCEPTION -----\n");
@@ -51,6 +52,8 @@ public class LongMessageFormatter extends AbstractFormatter {
 				cause = cause.getCause();
 			}
 		}
+		
+		sb.append(SEPARATOR);
 
 		return sb.toString();
 	}

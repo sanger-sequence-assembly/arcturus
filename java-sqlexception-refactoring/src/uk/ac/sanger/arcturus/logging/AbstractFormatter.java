@@ -12,8 +12,9 @@ public abstract class AbstractFormatter extends Formatter {
 		sb.append("\n" + thrown.getClass().getName());
 
 		String message = thrown.getMessage();
+		
 		if (message != null)
-			sb.append(": " + thrown.getMessage());
+			sb.append(": " + message);
 		
 		sb.append("\n");
 		
