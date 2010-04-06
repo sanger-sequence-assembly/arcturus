@@ -84,9 +84,9 @@ foreach $minlen (@contig_length_cutoffs) {
     $filename = $prefix . "-project-" . ($minlen == 0 ? "all" : "${minlen}kb") . ".html";
     $caption = ($minlen == 0) ? "All contigs" : "$minlen kb or longer";
 
-    print $fhSection "<a href=\"$filename\" target=\"pageFrame\">$caption</a><br>\n";
+    print $fhSection "<a href=\"$filename\" target=\"pageFrame\">$caption</a><br/>\n";
 
-    print $fhSection "<p>\n" if ($minlen == 0);
+    print $fhSection "<br/>\n" if ($minlen == 0);
 
     my $fhProject = new FileHandle($filename, "w");
 
@@ -129,9 +129,9 @@ foreach $minlen (@contig_length_cutoffs) {
     $filename = $prefix . "-contig-" . ($minlen == 0 ? "all" : "${minlen}kb") . "-monthly.html";
     $caption = ($minlen == 0) ? "All contigs" : "$minlen kb or longer";
 
-    print $fhSection "<a href=\"$filename\" target=\"pageFrame\">$caption</a><br>\n";
+    print $fhSection "<a href=\"$filename\" target=\"pageFrame\">$caption</a><br/>\n";
 
-    print $fhSection "<p>\n" if ($minlen == 0);
+    print $fhSection "<br/>\n" if ($minlen == 0);
 
     my $fhContig = new FileHandle($filename, "w");
 
@@ -149,9 +149,9 @@ foreach $minlen (@contig_length_cutoffs) {
     $filename = $prefix . "-contig-" . ($minlen == 0 ? "all" : "${minlen}kb") . "-weekly.html";
     $caption = ($minlen == 0) ? "All contigs" : "$minlen kb or longer";
 
-    print $fhSection "<a href=\"$filename\" target=\"pageFrame\">$caption</a><br>\n";
+    print $fhSection "<a href=\"$filename\" target=\"pageFrame\">$caption</a><br/>\n";
 
-    print $fhSection "<p>\n" if ($minlen == 0);
+    print $fhSection "<br/>\n" if ($minlen == 0);
 
     my $fhContig = new FileHandle($filename, "w");
 
@@ -202,17 +202,18 @@ sub makeHeader {
 
     my $prefix = lc($organism);
 
-    my @lines = ("<HTML>",
-		 "<HEAD>",
-		 "<TITLE>Progress report for $description</TITLE>",
-		 "</HEAD>",
-		 "<FRAMESET cols=\"20%,80%\" title=\"\">",
-		 "\t<FRAMESET rows=\"20%,80%\" title=\"\">",
-		 "\t\t<FRAME src=\"${prefix}-main-index.html\" name=\"indexFrame\" title=\"Index\">",
-		 "\t\t<FRAME src=\"${prefix}-project-index.html\" name=\"sectionFrame\" title=\"Section\">",
-		 "\t</FRAMESET>",
-		 "\t<FRAME src=\"${prefix}-project-all.html\" name=\"pageFrame\" title=\"Page\">",
-		 "</FRAMESET>"
+    my @lines = ("<html>",
+		 "<head>",
+		 "<title>Progress report for $description</title>",
+		 "</head>",
+		 #"<body>",
+		 "<frameset cols=\"20%,80%\" title=\"\">",
+		 "\t<frameset rows=\"20%,80%\" title=\"\">",
+		 "\t\t<frame src=\"${prefix}-main-index.html\" name=\"indexFrame\" title=\"Index\" >",
+		 "\t\t<frame src=\"${prefix}-project-index.html\" name=\"sectionFrame\" title=\"Section\" >",
+		 "\t</frameset>",
+		 "\t<frame src=\"${prefix}-project-all.html\" name=\"pageFrame\" title=\"Page\" >",
+		 "</frameset>"
 		 );
 
     foreach my $line (@lines) {
@@ -241,8 +242,8 @@ sub makeIndexPage {
 
 sub makeFooter {
 
-    my @lines = ("</BODY>",
-		 "</HTML>"
+    my @lines = (#"</body>",
+		 "</html>"
 		 );
 
     foreach my $line (@lines) {
@@ -572,6 +573,7 @@ sub makeWeeklyContigStats {
     $minlen *= 1000;
 
     my $counter = 0;
+    my $rows = 0;
 
     for (my $days = $day_start; $days <= $day_end; $days += 7) {
 	$bg = "BGCOLOR=\"#" . (($counter%2 == 0) ? "FFFFEE" : "EEEEDD") . "\"";
@@ -585,23 +587,27 @@ sub makeWeeklyContigStats {
 
 	my ($contigs, $nreads, $totlen, $avglen, $stdlen, $maxlen) = $sth_contig_stats->fetchrow_array();
 	
-	($nreads,$totlen,$avglen,$stdlen,$maxlen) = ($nbsp,$nbsp,$nbsp,$nbsp,$nbsp) if ($contigs == 0);
+	if ($rows > 0 || $contigs > 0) { 
+	    $rows++;
 
-	my $n50len = &get_N50_for_date($date, $minlen);
+	    ($nreads,$totlen,$avglen,$stdlen,$maxlen) = ($nbsp,$nbsp,$nbsp,$nbsp,$nbsp) if ($contigs == 0);
 
-	print $fh "<TR $bg>\n";
+	    my $n50len = &get_N50_for_date($date, $minlen);
 
-	print $fh "<TD>$datestr</TD>\n";
+	    print $fh "<TR $bg>\n";
 
-	print $fh "<TD $ar>$contigs</TD>\n";
-	print $fh "<TD $ar>$nreads</TD>\n";
-	print $fh "<TD $ar>$totlen</TD>\n";
-	print $fh "<TD $ar>$avglen</TD>\n";
-	print $fh "<TD $ar>$stdlen</TD>\n";
-	print $fh "<TD $ar>$maxlen</TD>\n";
-	print $fh "<TD $ar>$n50len</TD>\n";
+	    print $fh "<TD>$datestr</TD>\n";
 
-	print $fh "</TR>\n";
+	    print $fh "<TD $ar>$contigs</TD>\n";
+	    print $fh "<TD $ar>$nreads</TD>\n";
+	    print $fh "<TD $ar>$totlen</TD>\n";
+	    print $fh "<TD $ar>$avglen</TD>\n";
+	    print $fh "<TD $ar>$stdlen</TD>\n";
+	    print $fh "<TD $ar>$maxlen</TD>\n";
+	    print $fh "<TD $ar>$n50len</TD>\n";
+	    
+	    print $fh "</TR>\n";
+    }
     }
 
     print $fh "</TABLE>\n";
