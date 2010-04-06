@@ -194,7 +194,7 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 		totalLeaseTime += (timestamp - lastLeaseTime);
 		owner = null;
 		inuse = false;
-		pool.returnConnection(this);
+		pool.removeConnection(this);
 	}
 
 	protected Connection getConnection() {

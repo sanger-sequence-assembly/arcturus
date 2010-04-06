@@ -134,7 +134,7 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		return c;
 	}
 
-	public synchronized void returnConnection(PooledConnection conn) {
+	public synchronized void removeConnection(PooledConnection conn) {
 		boolean valid = true;
 		
 		try {
