@@ -298,7 +298,7 @@ public class Arcturus {
 
 			if (dotarcturus.exists() || dotarcturus.mkdir()) {
 				FileHandler filehandler = new FileHandler(
-						"%h/.arcturus/arcturus%u.%g.log");
+						"%h/.arcturus/arcturus%u.%g.log", 10000000, 10, true);
 				filehandler.setLevel(Level.INFO);
 				filehandler.setFormatter(new LongMessageFormatter());
 				logger.addHandler(filehandler);
