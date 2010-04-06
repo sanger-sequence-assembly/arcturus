@@ -76,7 +76,7 @@ public class CalculateQualityClipping {
 
 			adb = ai.findArcturusDatabase(organism);
 
-			Connection conn = adb.getConnection();
+			Connection conn = adb.getDefaultConnection();
 
 			if (conn == null) {
 				System.err.println("Connection is undefined");

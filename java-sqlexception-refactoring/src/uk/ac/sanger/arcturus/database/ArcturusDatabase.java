@@ -118,7 +118,7 @@ public interface ArcturusDatabase {
 	 *             the database.
 	 */
 
-	public Connection getConnection() throws ArcturusDatabaseException;
+	public Connection getDefaultConnection() throws ArcturusDatabaseException;
 
 	/**
 	 * Establishes a unique (non-cached) JDBC connection to a database, using

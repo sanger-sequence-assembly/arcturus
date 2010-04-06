@@ -146,7 +146,7 @@ public class CalculateConsensus {
 			adb.setCacheing(ArcturusDatabase.TEMPLATE, false);
 			adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
 
-			conn = adb.getConnection();
+			conn = adb.getDefaultConnection();
 
 			if (conn == null) {
 				System.err.println("Connection is undefined");

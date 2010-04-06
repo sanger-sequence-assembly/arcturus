@@ -42,7 +42,7 @@ public class ScaffoldBuilder {
 			}
 		}
 
-		conn = adb.getConnection();
+		conn = adb.getDefaultConnection();
 
 		try {
 			prepareStatements(conn);
