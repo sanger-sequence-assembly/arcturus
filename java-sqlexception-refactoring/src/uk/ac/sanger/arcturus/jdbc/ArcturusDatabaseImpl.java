@@ -35,7 +35,6 @@ import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequest;
 import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequestException;
 
 import uk.ac.sanger.arcturus.pooledconnection.ConnectionPool;
-import uk.ac.sanger.arcturus.pooledconnection.PooledConnection;
 
 import uk.ac.sanger.arcturus.projectchange.*;
 
