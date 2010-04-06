@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.sql.*;
 
 import javax.sql.*;
+import javax.swing.JOptionPane;
 
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.Vector;
@@ -31,6 +33,7 @@ import uk.ac.sanger.arcturus.pooledconnection.ConnectionPool;
 
 import uk.ac.sanger.arcturus.projectchange.*;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.ArcturusInstance;
 
 public class ArcturusDatabaseImpl implements ArcturusDatabase {
@@ -126,7 +129,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		return instance;
 	}
 
-	public synchronized Connection getConnection() throws ArcturusDatabaseException {
+	public synchronized Connection getDefaultConnection() throws ArcturusDatabaseException {
 		if (defaultConnection == null)
 			try {
 				defaultConnection = connectionPool.getConnection(this);
@@ -142,7 +145,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		try {
 			return connectionPool.getConnection(owner);
 		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "Failed to geta pooled connection", null, this);
+			throw new ArcturusDatabaseException(e, "Failed to get a pooled connection", null, this);
 		}
 	}
 
@@ -304,18 +307,39 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	protected AssemblyManager assemblyManager;
 	protected UserManager userManager;
 	protected ContigTransferRequestManager contigTransferRequestManager;
+	
+	protected Set<AbstractManager> managers = new HashSet<AbstractManager>();
 
 	private void createManagers() throws ArcturusDatabaseException {
 		cloneManager = new CloneManager(this);
+		managers.add(cloneManager);
+		
 		ligationManager = new LigationManager(this);
+		managers.add(ligationManager);
+		
 		templateManager = new TemplateManager(this);
+		managers.add(templateManager);
+		
 		readManager = new ReadManager(this);
+		managers.add(readManager);
+		
 		sequenceManager = new SequenceManager(this);
+		managers.add(sequenceManager);
+		
 		contigManager = new ContigManager(this);
+		managers.add(contigManager);
+		
 		projectManager = new ProjectManager(this);
+		managers.add(projectManager);
+		
 		assemblyManager = new AssemblyManager(this);
+		managers.add(assemblyManager);
+		
 		userManager = new UserManager(this);
+		managers.add(userManager);
+		
 		contigTransferRequestManager = new ContigTransferRequestManager(this);
+		managers.add(contigTransferRequestManager);
 	}
 
 	public synchronized CloneManager getCloneManager() {
@@ -1193,6 +1217,57 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	
 	public void handleSQLException(SQLException e, String message,
 			Connection conn, Object source) throws ArcturusDatabaseException {
-		throw new ArcturusDatabaseException(e, message, conn, this);
+		// Handle a non-transient communications problem thrown by one of the client manager
+		// objects.		
+		if (isClientManager(source) && isNonTransientCommunicationProblem(e)) {
+			resetDefaultConnection();
+		} else
+			throw new ArcturusDatabaseException(e, message, conn, this);
+	}
+
+	private void resetDefaultConnection() {
+		defaultConnection = null;
+		
+		JOptionPane.showMessageDialog(null,
+				"The application has lost its connection to the database.\nIt will try to re-connect.\nPlease refresh your display by pressing F5.",
+				"Trying to re-connect to the database", JOptionPane.WARNING_MESSAGE);
+		
+		try {
+			defaultConnection = connectionPool.getConnection(this);
+		} catch (SQLException e) {
+			Arcturus.logSevere("Failed to get a connection from the pool.  This is a serious error.", e);
+		}
+		
+		if (defaultConnection != null) {
+			for (AbstractManager manager : managers) {
+				try {
+					manager.setConnection(defaultConnection);
+				} catch (SQLException e) {
+					Arcturus.logSevere("Failed to set the database connection for the " +
+							manager.getClass().getName() + 
+							".  This is a serious error.", e);
+					return;
+				}
+			}
+		}
+	}
+
+	private boolean isClientManager(Object source) {
+		return managers.contains(source);
+	}
+
+	private boolean isNonTransientCommunicationProblem(SQLException e) {
+		if (e instanceof com.mysql.jdbc.CommunicationsException)
+			return true;
+		
+		if (e instanceof com.mysql.jdbc.exceptions.jdbc4.MySQLNonTransientConnectionException)
+			return true;
+		
+		String sqlState = e.getSQLState();
+		
+		if (sqlState.equalsIgnoreCase("08003") || sqlState.equalsIgnoreCase("08S01"))
+			return true;
+		
+		return false;
 	}
 }

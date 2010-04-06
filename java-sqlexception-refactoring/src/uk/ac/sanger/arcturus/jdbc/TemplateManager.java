@@ -14,7 +14,6 @@ import java.util.*;
 
 public class TemplateManager extends AbstractManager {
 	private ArcturusDatabase adb;
-	private Connection conn;
 	private HashMap<Integer, Template> hashByID;
 	private HashMap<String, Template> hashByName;
 	private PreparedStatement pstmtByID, pstmtByName;
@@ -32,17 +31,15 @@ public class TemplateManager extends AbstractManager {
 
 		hashByID = new HashMap<Integer, Template>();
 		hashByName = new HashMap<String, Template>();
-
-		conn = adb.getConnection();
 		
 		try {
-			prepareStatements();
+			setConnection(adb.getDefaultConnection());
 		} catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to initialise the contig manager", conn, adb);
 		}
 	}
 	
-	private void prepareStatements() throws SQLException {
+	protected void prepareConnection() throws SQLException {
 		String query = "select name,ligation_id from TEMPLATE where template_id = ?";
 		pstmtByID = conn.prepareStatement(query);
 
@@ -149,7 +146,7 @@ public class TemplateManager extends AbstractManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to load template by name=\"" + name + "\"", conn, adb);
+			adb.handleSQLException(e, "Failed to load template by name=\"" + name + "\"", conn, this);
 		}
 
 		return template;
@@ -171,7 +168,7 @@ public class TemplateManager extends AbstractManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to load template by ID=" + id, conn, adb);
+			adb.handleSQLException(e, "Failed to load template by ID=" + id, conn, this);
 		}
 		
 		return template;
@@ -218,7 +215,7 @@ public class TemplateManager extends AbstractManager {
 		stmt.close();
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to preload templates", conn, adb);
+			adb.handleSQLException(e, "Failed to preload templates", conn, this);
 		}
 	}
 

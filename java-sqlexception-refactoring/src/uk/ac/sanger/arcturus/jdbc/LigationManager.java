@@ -14,7 +14,6 @@ import java.util.*;
 
 public class LigationManager extends AbstractManager {
 	private ArcturusDatabase adb;
-	private Connection conn;
 	private HashMap<Integer, Ligation> hashByID;
 	private HashMap<String, Ligation> hashByName;
 	private PreparedStatement pstmtByID, pstmtByName;
@@ -27,26 +26,22 @@ public class LigationManager extends AbstractManager {
 	public LigationManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		this.adb = adb;
 
-		conn = adb.getConnection();
-
-		String query = "select name,clone_id,silow,sihigh from LIGATION where ligation_id = ?";
-		try {
-			pstmtByID = conn.prepareStatement(query);
-		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to prepare \"" + query + "\"", conn, adb);
-
-		}
-
-		query = "select ligation_id,clone_id,silow,sihigh from LIGATION where name = ?";
-		try {
-			pstmtByName = conn.prepareStatement(query);
-		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to prepare \"" + query + "\"", conn, adb);
-
-		}
-
 		hashByID = new HashMap<Integer, Ligation>();
 		hashByName = new HashMap<String, Ligation>();
+
+		try {
+			setConnection(adb.getDefaultConnection());
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to initialise the ligation manager", conn, adb);
+		}
+	}
+	
+	protected void prepareConnection() throws SQLException {
+		String query = "select name,clone_id,silow,sihigh from LIGATION where ligation_id = ?";
+		pstmtByID = conn.prepareStatement(query);
+
+		query = "select ligation_id,clone_id,silow,sihigh from LIGATION where name = ?";
+		pstmtByName = conn.prepareStatement(query);
 	}
 
 	public void clearCache() {
@@ -82,7 +77,7 @@ public class LigationManager extends AbstractManager {
 						sihigh);
 			}
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to fetch ligation by name=\"" + name + "\"", conn, adb);
+			adb.handleSQLException(e, "Failed to fetch ligation by name=\"" + name + "\"", conn, this);
 		}
 		
 
@@ -105,7 +100,7 @@ public class LigationManager extends AbstractManager {
 						sihigh);
 			}
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to fetch ligation by ID=\"" + id + "\"", conn, adb);
+			adb.handleSQLException(e, "Failed to fetch ligation by ID=\"" + id + "\"", conn, this);
 		}
 
 		return ligation;
@@ -143,7 +138,7 @@ public class LigationManager extends AbstractManager {
 			rs.close();
 			stmt.close();
 		}catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to preload ligations", conn, adb);
+			adb.handleSQLException(e, "Failed to preload ligations", conn, this);
 		} 
 	}
 }

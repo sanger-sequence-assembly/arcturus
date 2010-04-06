@@ -11,11 +11,9 @@ import uk.ac.sanger.arcturus.contigtransfer.*;
 
 import java.sql.*;
 import java.util.*;
-import java.util.zip.DataFormatException;
 
-public class ContigTransferRequestManager {
+public class ContigTransferRequestManager extends AbstractManager {
 	protected ArcturusDatabase adb;
-	protected Connection conn;
 
 	protected HashMap<Integer, ContigTransferRequest> cache = new HashMap<Integer, ContigTransferRequest>();
 
@@ -59,19 +57,16 @@ public class ContigTransferRequestManager {
 			throws ArcturusDatabaseException {
 		this.adb = adb;
 
-		conn = adb.getConnection();
-
 		try {
-			prepareStatements();
+			setConnection(adb.getDefaultConnection());
 		} catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to initialise the contig transfer request manager", conn, adb);
-
 		}
 		
 		debugging = Boolean.getBoolean("debugging");
 	}
 
-	protected void prepareStatements() throws SQLException {
+	protected void prepareConnection() throws SQLException {
 		String columns = "request_id,contig_id,old_project_id,new_project_id,requester,"
 				+ "requester_comment,opened,reviewer,reviewer_comment,reviewed,CONTIGTRANSFERREQUEST.status,closed";
 
@@ -177,7 +172,8 @@ public class ContigTransferRequestManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to fetch contig transfer requests for user " + user.getName(), conn, adb);
+			adb.handleSQLException(e, "Failed to fetch contig transfer requests for user " + user.getName(),
+					conn, this);
 		}
 
 		return transfers;
@@ -240,7 +236,7 @@ public class ContigTransferRequestManager {
 			}
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to fetch contig transfer requests", conn, adb);
+			adb.handleSQLException(e, "Failed to fetch contig transfer requests", conn, this);
 		}
 
 		ContigTransferRequest[] array = v.toArray(new ContigTransferRequest[0]);
@@ -261,7 +257,7 @@ public class ContigTransferRequestManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to fetch contig transfer request ID=" + requestId, conn, adb);
+			adb.handleSQLException(e, "Failed to fetch contig transfer request ID=" + requestId, conn, this);
 		}
 
 		return (transfers == null || transfers.length == 0) ? null
@@ -363,7 +359,7 @@ public class ContigTransferRequestManager {
 		}
 		catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to create contig transfer request for " + requester.getName() +
-					" to move contig " + contig.getID() + " to project ID=" + toProject.getID() , conn, adb);
+					" to move contig " + contig.getID() + " to project ID=" + toProject.getID() , conn, this);
 		}
 
 		return request;
@@ -392,7 +388,7 @@ public class ContigTransferRequestManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to count active requests for contig ID=" + contigId, conn, adb);
+			adb.handleSQLException(e, "Failed to count active requests for contig ID=" + contigId, conn, this);
 		}
 
 		return count;
@@ -592,7 +588,8 @@ public class ContigTransferRequestManager {
 			success = pstmtMarkRequestAsFailed.executeUpdate() == 1;
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to mark request ID=" + request.getRequestID() + " as failed" , conn, adb);
+			adb.handleSQLException(e, "Failed to mark request ID=" + request.getRequestID() + " as failed",
+					conn, this);
 		}
 		
 		if (success) {
@@ -663,7 +660,9 @@ public class ContigTransferRequestManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to confirm project is still valid for request ID=" + request.getRequestID(), conn, adb);
+			adb.handleSQLException(e,
+					"Failed to confirm project is still valid for request ID=" + request.getRequestID(),
+					conn, this);
 		}
 
 		Project fromProject = request.getOldProject();
@@ -752,7 +751,8 @@ public class ContigTransferRequestManager {
 			rc = pstmtUpdateRequestStatus.executeUpdate();
 		}
 			catch (SQLException e) {
-				adb.handleSQLException(e, "Failed to update status for request ID=" + request.getRequestID(), conn, adb);
+				adb.handleSQLException(e, "Failed to update status for request ID=" + request.getRequestID(),
+						conn, this);
 		}
 
 		if (rc != 1)
@@ -769,7 +769,8 @@ public class ContigTransferRequestManager {
 				pstmtSetClosedDate.executeUpdate();
 			}
 			catch (SQLException e) {
-				adb.handleSQLException(e, "Failed to set closed date for request ID=" + request.getRequestID(), conn, adb);
+				adb.handleSQLException(e, "Failed to set closed date for request ID=" + request.getRequestID(),
+						conn, this);
 		}
 		}
 
@@ -862,7 +863,7 @@ public class ContigTransferRequestManager {
 			}
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to execute request ID=" + request.getRequestID(), conn, adb);
+			adb.handleSQLException(e, "Failed to execute request ID=" + request.getRequestID(), conn, this);
 		}
 	}
 
@@ -898,7 +899,7 @@ public class ContigTransferRequestManager {
 			rs.close();
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to execute request ID=" + request.getRequestID(), conn, adb);
+			adb.handleSQLException(e, "Failed to execute request ID=" + request.getRequestID(), conn, this);
 		}
 
 		if (lockdateNull && lockownerNull)
@@ -1008,8 +1009,16 @@ public class ContigTransferRequestManager {
 		}
 		catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to move contigs from project ID=" + fromProject.getID() +
-					" to project ID=" + toProject.getID(), conn, adb);
+					" to project ID=" + toProject.getID(), conn, this);
 		}
 	
+	}
+
+	public void clearCache() {
+		// Does nothing
+	}
+
+	public void preload() throws ArcturusDatabaseException {
+		// Does nothing
 	}
 }

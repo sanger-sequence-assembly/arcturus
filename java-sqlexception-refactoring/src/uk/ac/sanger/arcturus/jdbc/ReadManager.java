@@ -14,7 +14,6 @@ import java.util.*;
 
 public class ReadManager extends AbstractManager {
 	private ArcturusDatabase adb;
-	private Connection conn;
 	private HashMap<Integer, Read> hashByID;
 	private HashMap<String, Read> hashByName;
 	private PreparedStatement pstmtByID, pstmtByName, pstmtByTemplate;
@@ -29,17 +28,15 @@ public class ReadManager extends AbstractManager {
 
 		hashByID = new HashMap<Integer, Read>();
 		hashByName = new HashMap<String, Read>();
-
-		conn = adb.getConnection();
 		
 		try {
-			prepareStatements();
+			setConnection(adb.getDefaultConnection());
 		} catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to initialise the read manager", conn, adb);
 		}
 	}
 	
-	private void prepareStatements() throws SQLException {
+	protected void prepareConnection() throws SQLException {
 		String query = "select readname,template_id,asped,strand,primer,chemistry from READINFO where read_id = ?";
 		pstmtByID = conn.prepareStatement(query);
 
@@ -96,7 +93,7 @@ public class ReadManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to load read by name=\"" + name + "\"", conn, adb);
+			adb.handleSQLException(e, "Failed to load read by name=\"" + name + "\"", conn, this);
 		}
 
 		return read;
@@ -122,7 +119,7 @@ public class ReadManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to load read by ID=" + id, conn, adb);
+			adb.handleSQLException(e, "Failed to load read by ID=" + id, conn, this);
 		}
 
 		return read;
@@ -155,7 +152,7 @@ public class ReadManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to load reads by template ID=" + template_id, conn, adb);
+			adb.handleSQLException(e, "Failed to load reads by template ID=" + template_id, conn, this);
 		}
 
 		return newreads;
@@ -243,7 +240,7 @@ public class ReadManager extends AbstractManager {
 			rs.close();
 			stmt.close();
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to preload reads", conn, adb);
+			adb.handleSQLException(e, "Failed to preload reads", conn, this);
 		}
 	}
 
@@ -316,7 +313,7 @@ public class ReadManager extends AbstractManager {
 
 			stmt.close();
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to get unassembled read ID lists", conn, adb);
+			adb.handleSQLException(e, "Failed to get unassembled read ID lists", conn, this);
 		}
 
 		return ids;

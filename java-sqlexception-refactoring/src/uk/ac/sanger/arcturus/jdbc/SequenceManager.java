@@ -27,7 +27,6 @@ import java.util.zip.*;
 
 public class SequenceManager extends AbstractManager {
 	private ArcturusDatabase adb;
-	private Connection conn;
 	private HashMap<Integer, Sequence> hashByReadID;
 	private HashMap<Integer, Sequence> hashBySequenceID;
 	private PreparedStatement pstmtByReadID;
@@ -51,17 +50,15 @@ public class SequenceManager extends AbstractManager {
 
 		hashByReadID = new HashMap<Integer, Sequence>();
 		hashBySequenceID = new HashMap<Integer, Sequence>();
-
-		conn = adb.getConnection();
 		
 		try {
-			prepareStatements();
+			setConnection(adb.getDefaultConnection());
 		} catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to initialise the sequence manager", conn, adb);
 		}
 	}
 	
-	private void prepareStatements() throws SQLException {
+	protected void prepareConnection() throws SQLException {
 		String query = "select SEQ2READ.seq_id,version,seqlen from SEQ2READ left join SEQUENCE using(seq_id)"
 				+ "where read_id = ? order by version desc limit 1";
 		pstmtByReadID = conn.prepareStatement(query);
@@ -146,7 +143,7 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to load sequence by read ID=" + readid, conn, adb);
+			adb.handleSQLException(e, "Failed to load sequence by read ID=" + readid, conn, this);
 		}
 
 		setClippings(sequence);
@@ -202,7 +199,7 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to load sequence by read ID=" + readid, conn, adb);
+			adb.handleSQLException(e, "Failed to load sequence by read ID=" + readid, conn, this);
 		}
 
 		setClippings(sequence);
@@ -265,7 +262,7 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to load full sequence by read ID=" + readid, conn, adb);
+			adb.handleSQLException(e, "Failed to load full sequence by read ID=" + readid, conn, this);
 		}
 		catch (DataFormatException e) {
 			throw new ArcturusDatabaseException(e, "Failed to decompress DNA and quality for sequence by read ID=" + readid, conn, adb);
@@ -317,7 +314,7 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to full sequence by ID=" + seqid, conn, adb);
+			adb.handleSQLException(e, "Failed to full sequence by ID=" + seqid, conn, this);
 		}
 
 		setClippings(sequence);
@@ -376,7 +373,7 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to load full sequence by ID=" + seqid, conn, adb);
+			adb.handleSQLException(e, "Failed to load full sequence by ID=" + seqid, conn, this);
 		}
 		catch (DataFormatException e) {
 			throw new ArcturusDatabaseException(e, "Failed to decompress DNA and quality for sequence ID=" + seqid, conn, adb);
@@ -415,7 +412,7 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to get DNA and quality for sequence ID=" + seqid, conn, adb);
+			adb.handleSQLException(e, "Failed to get DNA and quality for sequence ID=" + seqid, conn, this);
 		}
 		catch (DataFormatException e) {
 			throw new ArcturusDatabaseException(e, "Failed to decompress DNA and quality for sequence ID=" + seqid, conn, adb);
@@ -544,7 +541,8 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to set clipping data for sequence ID=" + seqid, conn, adb);
+			adb.handleSQLException(e, "Failed to set clipping data for sequence ID=" + seqid,
+					conn, this);
 		}
 	}
 
@@ -586,7 +584,8 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to set load tags for sequence ID=" + seqid, conn, adb);
+			adb.handleSQLException(e, "Failed to set load tags for sequence ID=" + seqid,
+					conn, this);
 		}
 	}
 }

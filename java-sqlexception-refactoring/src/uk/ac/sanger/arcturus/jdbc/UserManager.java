@@ -10,7 +10,6 @@ import uk.ac.sanger.arcturus.people.role.*;
 
 public class UserManager extends AbstractManager {
 	private ArcturusDatabase adb;
-	private Connection conn;
 	private PreparedStatement pstmtRoleByName;
 	private Map<String, Role> roleMap = new HashMap<String, Role>();
 	private Map<String, Person> personMap = new HashMap<String, Person>();
@@ -25,11 +24,9 @@ public class UserManager extends AbstractManager {
 
 	public UserManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		this.adb = adb;
-		
-		conn = adb.getConnection();
 
 		try {
-			prepareStatements();
+			setConnection(adb.getDefaultConnection());
 		} catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to initialise the user manager", conn, adb);
 		}
@@ -39,7 +36,7 @@ public class UserManager extends AbstractManager {
 		getAllUsers(true);
 	}
 	
-	private void prepareStatements() throws SQLException {
+	protected void prepareConnection() throws SQLException {
 		String query = "select role from USER where username = ?";
 		pstmtRoleByName = conn.prepareStatement(query);		
 	}
@@ -96,7 +93,7 @@ public class UserManager extends AbstractManager {
 		stmt.close();
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to get all users", conn, adb);
+			adb.handleSQLException(e, "Failed to get all users", conn, this);
 		}
 
 		if (includeNobody)
@@ -133,7 +130,7 @@ public class UserManager extends AbstractManager {
 
 			person.setRole(role);
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to find user UID=" + username, conn, adb);
+			adb.handleSQLException(e, "Failed to find user UID=" + username, conn, this);
 		}
 
 		personMap.put(username, person);

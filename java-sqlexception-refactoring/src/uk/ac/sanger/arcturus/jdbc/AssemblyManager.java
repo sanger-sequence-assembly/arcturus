@@ -13,7 +13,6 @@ import java.util.*;
 
 public class AssemblyManager extends AbstractManager {
 	private ArcturusDatabase adb;
-	private Connection conn;
 	private HashMap<Integer, Assembly> hashByID = new HashMap<Integer, Assembly>();
 	private PreparedStatement pstmtByID;
 	private PreparedStatement pstmtByName;
@@ -27,21 +26,19 @@ public class AssemblyManager extends AbstractManager {
 	public AssemblyManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		this.adb = adb;
 
-		conn = adb.getConnection();
-
-		String query = "select name,updated,created,creator from ASSEMBLY where assembly_id = ?";
 		try {
-			pstmtByID = conn.prepareStatement(query);
+			setConnection(adb.getDefaultConnection());
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to prepare \"" + query + "\"", conn, this);
+			adb.handleSQLException(e, "Failed to initialise the assembly manager", conn, adb);
 		}
+	}
+	
+	protected void prepareConnection() throws SQLException {
+		String query = "select name,updated,created,creator from ASSEMBLY where assembly_id = ?";
+		pstmtByID = conn.prepareStatement(query);
 
 		query = "select assembly_id,updated,created,creator from ASSEMBLY where name = ?";
-		try {
-			pstmtByName = conn.prepareStatement(query);
-		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to prepare \"" + query + "\"", conn, this);
-		}
+		pstmtByName = conn.prepareStatement(query);	
 	}
 
 	public void clearCache() {

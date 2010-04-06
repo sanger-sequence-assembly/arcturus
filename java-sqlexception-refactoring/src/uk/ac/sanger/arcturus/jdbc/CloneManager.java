@@ -13,7 +13,6 @@ import java.util.*;
 
 public class CloneManager extends AbstractManager {
 	private ArcturusDatabase adb;
-	private Connection conn;
 	private HashMap<Integer, Clone> hashByID;
 	private HashMap<String, Clone> hashByName;
 	private PreparedStatement pstmtByID, pstmtByName;
@@ -27,24 +26,22 @@ public class CloneManager extends AbstractManager {
 	public CloneManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		this.adb = adb;
 
-		conn = adb.getConnection();
-
-		String query = "select name from CLONE where clone_id = ?";
-		try {
-			pstmtByID = conn.prepareStatement(query);
-		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to prepare \"" + query + "\"", conn, adb);
-		}
-
-		query = "select clone_id from CLONE where name = ?";
-		try {
-			pstmtByName = conn.prepareStatement(query);
-		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to prepare \"" + query + "\"", conn, adb);
-		}
-
 		hashByID = new HashMap<Integer, Clone>();
 		hashByName = new HashMap<String, Clone>();
+
+		try {
+			setConnection(adb.getDefaultConnection());
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to initialise the clone manager", conn, adb);
+		}
+	}
+	
+	protected void prepareConnection() throws SQLException {
+		String query = "select name from CLONE where clone_id = ?";
+		pstmtByID = conn.prepareStatement(query);
+
+		query = "select clone_id from CLONE where name = ?";
+		pstmtByName = conn.prepareStatement(query);
 	}
 
 	public void clearCache() {
@@ -59,7 +56,7 @@ public class CloneManager extends AbstractManager {
 			if (clone == null)
 				clone = loadCloneByName(name);
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to get clone by name=\"" + name + "\"", conn, adb);
+			adb.handleSQLException(e, "Failed to get clone by name=\"" + name + "\"", conn, this);
 		}
 		
 		return clone;
@@ -72,7 +69,7 @@ public class CloneManager extends AbstractManager {
 			if (clone == null)
 				clone = loadCloneByID(id);
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to get clone by ID=" + id, conn, adb);
+			adb.handleSQLException(e, "Failed to get clone by ID=" + id, conn, this);
 		}
 		
 		return clone;
@@ -133,7 +130,7 @@ public class CloneManager extends AbstractManager {
 			stmt.close();
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to preload clones", conn, adb);
+			adb.handleSQLException(e, "Failed to preload clones", conn, this);
 		}
 	}
 }
