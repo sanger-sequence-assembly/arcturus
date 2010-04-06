@@ -1,12 +1,10 @@
 package uk.ac.sanger.arcturus.readfinder;
 
-import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.data.*;
 
 import java.sql.*;
-import java.util.zip.DataFormatException;
 
 public class ReadFinder {
 	public static final int READ_DOES_NOT_EXIST = 1;
