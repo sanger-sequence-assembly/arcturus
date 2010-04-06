@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.logging;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.Date;
 import java.util.logging.LogRecord;
 
 import uk.ac.sanger.arcturus.Arcturus;
@@ -34,7 +35,10 @@ public class LongMessageFormatter extends AbstractFormatter {
 		sb.append("The level is " + record.getLevel().intValue() + "\n");
 		sb.append("The source class name is " + record.getSourceClassName() + "\n");
 		sb.append("The source method name is " + record.getSourceMethodName() + "\n");
-		sb.append("The timestamp is " + record.getMillis() + "\n");
+		
+		Date timestamp = new Date(record.getMillis());
+		
+		sb.append("The timestamp is " + timestamp + "\n");
 		
 		Throwable thrown = getUnderlyingException(record.getThrown());
 				
