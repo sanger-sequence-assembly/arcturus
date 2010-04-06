@@ -1,10 +1,15 @@
 package uk.ac.sanger.arcturus.jdbc;
 
 import java.io.IOException;
-import java.sql.*;
 
-import javax.sql.*;
 import javax.swing.JOptionPane;
+
+import java.sql.Connection;
+import java.sql.Statement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+import javax.sql.DataSource;
 
 import java.util.HashSet;
 import java.util.Map;
@@ -30,6 +35,7 @@ import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequest;
 import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequestException;
 
 import uk.ac.sanger.arcturus.pooledconnection.ConnectionPool;
+import uk.ac.sanger.arcturus.pooledconnection.PooledConnection;
 
 import uk.ac.sanger.arcturus.projectchange.*;
 
@@ -1226,6 +1232,13 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	}
 
 	private void resetDefaultConnection() {
+		if (defaultConnection != null)
+			try {
+				defaultConnection.close();
+			} catch (SQLException e) {
+				Arcturus.logSevere("Failed to close the default connection whilst resetting it", e);
+			}
+
 		defaultConnection = null;
 		
 		JOptionPane.showMessageDialog(null,
