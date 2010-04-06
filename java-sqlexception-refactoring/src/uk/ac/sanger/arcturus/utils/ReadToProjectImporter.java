@@ -4,6 +4,8 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import java.sql.*;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.zip.*;
 
 public class ReadToProjectImporter {
@@ -32,6 +34,8 @@ public class ReadToProjectImporter {
 	private PreparedStatement pstmtNewMapping;
 	private PreparedStatement pstmtNewSegment;
 	private PreparedStatement pstmtNewConsensus;
+	
+	private Set<PreparedStatement> statements = new HashSet<PreparedStatement>();
 
 	private Inflater decompresser = new Inflater();
 	private Deflater compresser = new Deflater(Deflater.BEST_COMPRESSION);
@@ -54,51 +58,77 @@ public class ReadToProjectImporter {
 						+ " and READINFO.read_id = SEQ2READ.read_id"
 						+ " and SEQ2READ.seq_id = MAPPING.seq_id"
 						+ " and MAPPING.contig_id = CURRENTCONTIGS.contig_id");
+		
+		statements.add(pstmtReadToContig);
 
 		pstmtReadID = conn
 				.prepareStatement("select read_id from READINFO where readname = ?");
+		
+		statements.add(pstmtReadID);
 
 		pstmtSequence = conn
 				.prepareStatement("select seq_id,seqlen,sequence,quality"
 						+ " from SEQ2READ left join SEQUENCE using(seq_id)"
 						+ " where read_id = ? order by seq_id asc limit 1");
+		
+		statements.add(pstmtSequence);
 
 		pstmtSeqVector = conn.prepareStatement("select svleft,svright,name"
 				+ " from SEQVEC left join SEQUENCEVECTOR using(svector_id)"
 				+ " where seq_id = ?");
+		
+		statements.add(pstmtSeqVector);
 
 		pstmtSeqVectorCount = conn.prepareStatement("select count(*)"
 				+ " from SEQVEC left join SEQUENCEVECTOR using(svector_id)"
 				+ " where seq_id = ?");
+		
+		statements.add(pstmtSeqVectorCount);
 
 		pstmtQualityClip = conn
 				.prepareStatement("select qleft,qright from QUALITYCLIP where seq_id = ?");
+		
+		statements.add(pstmtQualityClip);
 
 		pstmtNewContig = conn.prepareStatement(
 				"insert into CONTIG(gap4name,length,project_id,created)"
 						+ " VALUES(?,?,?,NOW())",
 				Statement.RETURN_GENERATED_KEYS);
+		
+		statements.add(pstmtNewContig);
 
 		pstmtValidateContig = conn
 				.prepareStatement("update CONTIG set nreads=1 where contig_id = ?");
+		
+		statements.add(pstmtValidateContig);
 
 		pstmtNewMapping = conn.prepareStatement(
 				"insert into MAPPING(contig_id,seq_id,cstart,cfinish,direction)"
 						+ " VALUES(?,?,?,?,'Forward')",
 				Statement.RETURN_GENERATED_KEYS);
+		
+		statements.add(pstmtNewMapping);
 
 		pstmtNewSegment = conn
 				.prepareStatement("insert into SEGMENT(mapping_id,cstart,rstart,length)"
 						+ " VALUES(?,?,?,?)");
+		
+		statements.add(pstmtNewSegment);
 
 		pstmtNewConsensus = conn
 				.prepareStatement("insert into CONSENSUS(contig_id,sequence,quality,length)"
 						+ " VALUES(?,?,?,?)");
+		
+		statements.add(pstmtNewConsensus);
 	}
 
 	public void close() throws SQLException {
-		if (conn != null)
+		if (conn != null) {
+			for (PreparedStatement p : statements)
+				p.close();
+			
 			conn.close();
+		}
 		
 		conn = null;
 	}
