@@ -3,6 +3,8 @@ package uk.ac.sanger.arcturus.pooledconnection;
 import java.lang.management.ManagementFactory;
 import java.sql.*;
 import java.util.*;
+import java.util.Date;
+
 import javax.management.*;
 
 import uk.ac.sanger.arcturus.Arcturus;
@@ -23,6 +25,8 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 	private long timestamp;
 
 	private long lastLeaseTime = Integer.MIN_VALUE;
+	
+	private Date lastLeaseDate;
 
 	private long totalLeaseTime = 0;
 
@@ -127,6 +131,7 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 			inuse = true;
 			timestamp = System.currentTimeMillis();
 			lastLeaseTime = timestamp;
+			lastLeaseDate = new Date(lastLeaseTime);
 			this.owner = owner;
 			return true;
 		}
@@ -161,8 +166,8 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 		return timestamp;
 	}
 
-	public long getLastLeaseTime() {
-		return lastLeaseTime;
+	public Date getLastLeaseTime() {
+		return lastLeaseDate;
 	}
 
 	public long getTotalLeaseTime() {
