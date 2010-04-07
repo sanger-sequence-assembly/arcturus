@@ -32,7 +32,7 @@ public class ScaffoldWorker extends SwingWorker<Void, ScaffoldEvent> implements
 	protected final ArcturusDatabase adb;
 	protected final MinervaTabbedPane mtp;
 	protected final Contig seedcontig;
-	protected Set bridgeset;
+	protected Set<Bridge> bridgeset;
 	protected ContigBox[] contigBoxes;
 	protected WorkerDialog dialog;
 
@@ -62,6 +62,8 @@ public class ScaffoldWorker extends SwingWorker<Void, ScaffoldEvent> implements
 
 			Arrays.sort(contigBoxes, new ContigBoxComparator());
 		}
+		
+		sb.close();
 
 		return null;
 	}
