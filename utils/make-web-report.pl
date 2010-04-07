@@ -550,7 +550,7 @@ sub makeWeeklyContigStats {
     print $fh "<TABLE  CELLPADDING=\"3\" BORDER=\"1\">\n";
     print $fh "<TR>\n";
 
-    print $fh "<TH></TH>\n<TH></TH>\n<TH COLSPAN=\"3\">TOTAL</TH>\n<TH COLSPAN=\"4\">CONTIG LENGTH</TH>\n";
+    print $fh "<TH></TH>\n<TH COLSPAN=\"3\">TOTAL</TH>\n<TH COLSPAN=\"4\">CONTIG LENGTH</TH>\n";
 
     print $fh "</TR>\n";
 
