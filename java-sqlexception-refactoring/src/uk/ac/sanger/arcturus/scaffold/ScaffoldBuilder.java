@@ -42,12 +42,25 @@ public class ScaffoldBuilder {
 			}
 		}
 
-		conn = adb.getDefaultConnection();
+		conn = adb.getPooledConnection(this);
 
 		try {
 			prepareStatements(conn);
-		} catch (SQLException sqle) {
-			throw new ArcturusDatabaseException(sqle, conn);
+		} catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to initialise the scaffold builder", conn);
+		}
+	}
+	
+	public void close() throws ArcturusDatabaseException {
+		if (conn != null) {
+			try {
+				conn.close();
+			} catch (SQLException e) {
+				throw new ArcturusDatabaseException(e,
+						"Failed to close the scaffold builder database connection", conn);
+			}
+			conn = null;
 		}
 	}
 
@@ -147,7 +160,7 @@ public class ScaffoldBuilder {
 		listener.scaffoldUpdate(event);
 	}
 	
-	public Set createScaffold(int seedcontigid, ScaffoldBuilderListener listener)
+	public Set<Bridge> createScaffold(int seedcontigid, ScaffoldBuilderListener listener)
 			throws ArcturusDatabaseException, DataFormatException {
 		if (!adb.isCurrentContig(seedcontigid)) {
 			fireEvent(listener, ScaffoldEvent.FINISH, "Not a current contig");
@@ -161,7 +174,7 @@ public class ScaffoldBuilder {
 
 		Contig seedcontig = adb.getContigByID(seedcontigid, flags);
 
-		Set subgraph = null;
+		Set<Bridge> subgraph = null;
 
 		if (seedcontig != null) {
 			contigset.add(seedcontig);
