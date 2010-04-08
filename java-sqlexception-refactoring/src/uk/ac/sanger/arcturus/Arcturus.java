@@ -278,16 +278,21 @@ public class Arcturus {
 		Logger logger = Logger.getLogger("uk.ac.sanger.arcturus");
 
 		logger.setUseParentHandlers(false);
+		
+		boolean testing = Boolean.getBoolean("testing");
+		
+		logger.setLevel(testing ? Level.INFO : Level.WARNING);
 
 		Handler warner = null;
 
 		if (GraphicsEnvironment.isHeadless()
-				|| Boolean.getBoolean("useConsoleLogHandler"))
+				|| Boolean.getBoolean("useConsoleLogHandler")) {
 			warner = new ConsoleHandler();
-		else
+			warner.setLevel(Level.INFO);
+		} else {
 			warner = new MessageDialogHandler();
-
-		warner.setLevel(Level.WARNING);
+			warner.setLevel(Level.WARNING);
+		}
 
 		logger.addHandler(warner);
 
@@ -320,7 +325,7 @@ public class Arcturus {
 					"Unable to create a JDBCLogHandler for logging", e);
 		}
 
-		if (!Boolean.getBoolean("testing")) {
+		if (!testing) {
 			try {
 				MailHandler mailhandler = new MailHandler(null);
 				mailhandler.setLevel(Level.WARNING);
