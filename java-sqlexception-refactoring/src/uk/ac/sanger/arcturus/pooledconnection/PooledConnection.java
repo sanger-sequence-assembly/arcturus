@@ -138,7 +138,7 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 		lastLeaseDate = new Date(lastLeaseTime);
 		this.owner = owner;
 		
-		Arcturus.logInfo("PooledConnection #" + ID + " leased to " + owner.getClass().getName() + " at " + lastLeaseDate);
+		//Arcturus.logInfo("PooledConnection #" + ID + " leased to " + owner.getClass().getName() + " at " + lastLeaseDate);
 			
 		return true;
 	}
@@ -199,7 +199,7 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 	public synchronized void close() throws SQLException {
 		timestamp = System.currentTimeMillis();
 		Date date = new Date(timestamp);
-		Arcturus.logInfo("PooledConnection #" + ID + " closed by " + owner.getClass().getName() + " at " + date);
+		//Arcturus.logInfo("PooledConnection #" + ID + " closed by " + owner.getClass().getName() + " at " + date);
 		totalLeaseTime += (timestamp - lastLeaseTime);
 		owner = null;
 		pool.releaseConnection(this);
