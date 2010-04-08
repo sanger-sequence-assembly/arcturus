@@ -160,10 +160,6 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 		return true;
 	}
 
-	public boolean inUse() {
-		return owner != null;
-	}
-
 	public boolean isInUse() {
 		return owner != null;
 	}

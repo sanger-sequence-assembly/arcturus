@@ -86,7 +86,7 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		while ((iter != null) && (iter.hasNext())) {
 			PooledConnection conn = (PooledConnection) iter.next();
 
-			if ((!conn.inUse()) && (conn.getIdleTime() > timeout)) {
+			if ((!conn.isInUse()) && (conn.getIdleTime() > timeout)) {
 				conn.closeConnection();
 				iter.remove();
 				nReaped++;
@@ -113,7 +113,7 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		for (Iterator iter = connections.iterator(); iter.hasNext();) {
 			c = (PooledConnection) iter.next();
 			
-			if (c.inUse())
+			if (c.isInUse())
 				continue;
 			
 			boolean valid = false;
@@ -213,7 +213,7 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		
 		for (Iterator iter = connections.iterator(); iter.hasNext();) {
 			PooledConnection c = (PooledConnection) iter.next();
-			if (c.inUse())
+			if (c.isInUse())
 				inuse++;
 		}
 
