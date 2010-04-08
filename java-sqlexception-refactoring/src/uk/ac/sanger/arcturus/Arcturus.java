@@ -287,7 +287,7 @@ public class Arcturus {
 		else
 			warner = new MessageDialogHandler();
 
-		warner.setLevel(Level.INFO);
+		warner.setLevel(Level.WARNING);
 
 		logger.addHandler(warner);
 
@@ -313,7 +313,7 @@ public class Arcturus {
 		try {
 			Properties props = Arcturus.getProperties();
 			JDBCLogHandler jdbcloghandler = new JDBCLogHandler(props);
-			jdbcloghandler.setLevel(Level.INFO);
+			jdbcloghandler.setLevel(Level.WARNING);
 			logger.addHandler(jdbcloghandler);
 		} catch (Exception e) {
 			logger.log(Level.WARNING,
