@@ -36,7 +36,6 @@ public class ScaffoldXMLDataParser {
 			is.close();
 			rs.close();
 			stmt.close();
-			conn.close();
 		}
 		catch (SQLException e) {
 			adb.handleSQLException(e, "A database error occurred when building the scaffold tree model", conn, this);
@@ -46,6 +45,13 @@ public class ScaffoldXMLDataParser {
 			Arcturus.logWarning("A SAX parser exception occurred when building the scaffold tree model", e);
 		} catch (IOException e) {
 			Arcturus.logWarning("An I/O exception occurred when building the scaffold tree model", e);
+		} finally {
+			try {
+				conn.close();
+			} catch (SQLException e) {
+				adb.handleSQLException(e, "Failed to close the database connection building the scaffold tree model",
+						conn, this);
+			}
 		}
 		
 		return model;
