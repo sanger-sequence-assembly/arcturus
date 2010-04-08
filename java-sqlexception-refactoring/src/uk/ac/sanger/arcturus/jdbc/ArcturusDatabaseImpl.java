@@ -139,7 +139,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 			try {
 				defaultConnection = connectionPool.getConnection(this);
 			} catch (SQLException e) {
-				throw new ArcturusDatabaseException(e, null, this);
+				throw new ArcturusDatabaseException(e, "Failed to obtain default connection", null, this);
 			}
 
 		return defaultConnection;
