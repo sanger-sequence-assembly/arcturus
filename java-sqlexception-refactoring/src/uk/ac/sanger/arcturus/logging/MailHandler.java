@@ -48,6 +48,9 @@ public class MailHandler extends Handler {
 	}
 
 	public void publish(LogRecord record) {
+		if (!isLoggable(record))
+			return;
+		
 		if (addrFrom == null || addrTo == null || session == null)
 			return;
 		

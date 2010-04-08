@@ -17,6 +17,9 @@ public class MessageDialogHandler extends Handler {
 	}
 
 	public void publish(LogRecord record) {
+		if (!isLoggable(record))
+			return;
+		
 		Level level = record.getLevel();
 
 		int type = JOptionPane.INFORMATION_MESSAGE;
