@@ -113,6 +113,9 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		for (Iterator iter = connections.iterator(); iter.hasNext();) {
 			c = (PooledConnection) iter.next();
 			
+			if (c.inUse())
+				continue;
+			
 			boolean valid = false;
 			
 			try {
@@ -125,16 +128,25 @@ public class ConnectionPool implements ConnectionPoolMBean {
 				return c;
 		}
 
-		Connection conn = dataSource.getConnection();
-		c = new PooledConnection(conn, this);
-		c.setWaitTimeout(5*24*3600);
+		c = createConnection();
+		
 		c.lease(owner);
+		
+		return c;
+	}
+	
+	private PooledConnection createConnection() throws SQLException {
+		Connection conn = dataSource.getConnection();
+		
+		PooledConnection c = new PooledConnection(conn, this);
+
 		connections.add(c);
 		nCreated++;
+
 		return c;
 	}
 
-	public synchronized void removeConnection(PooledConnection conn) {
+	public synchronized void releaseConnection(PooledConnection conn) {
 		boolean valid = true;
 		
 		try {
