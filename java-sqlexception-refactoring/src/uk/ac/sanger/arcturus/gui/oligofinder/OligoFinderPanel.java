@@ -13,10 +13,22 @@ import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.event.*;
 
-import java.sql.SQLException;
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.event.*;
-import java.util.*;
+
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.io.*;
 import java.text.*;
 
@@ -365,34 +377,54 @@ public class OligoFinderPanel extends MinervaPanel implements
 		txtMessages.append("\n\n");
 
 		boolean freereads = cbFreeReads.isSelected();
-
-		Task task = new Task(finder, oligos, projects, freereads);
-
-		task.setName("OligoSearch");
-		task.start();
+		
+		OligoFinderWorker worker = new OligoFinderWorker(this, finder, oligos, projects, freereads);
+		
+		worker.execute();
 	}
-
-	class Task extends Thread {
+	
+	class OligoFinderWorker extends SwingWorker<Void, OligoFinderEvent> {
 		protected final OligoFinder finder;
 		protected final Oligo[] oligos;
 		protected final int[] projects;
 		protected boolean freereads;
-		
-		public Task(OligoFinder finder, Oligo[] oligos, int[] projects,
+		protected OligoFinderPanel parent;
+		protected ArcturusDatabaseException pendingException = null;
+
+		public OligoFinderWorker(OligoFinderPanel parent, OligoFinder finder, Oligo[] oligos, int[] projects,
 				boolean freereads) {
+			this.parent = parent;
 			this.finder = finder;
 			this.oligos = oligos;
 			this.projects = projects;
-			this.freereads = freereads;
+			this.freereads = freereads;		
 		}
-
-		public void run() {
+		
+		protected Void doInBackground() throws Exception {
 			try {
 				finder.findMatches(oligos, projects, freereads);
-			} catch (SQLException sqle) {
-				Arcturus.logWarning("An error occurred whilst finding matches",
-						sqle);
 			}
+			catch (ArcturusDatabaseException e) {
+				pendingException = e;
+				return null;
+			}
+			
+			return null;
+		}
+		
+		protected void process(List<OligoFinderEvent> events) {
+			for (OligoFinderEvent event : events)
+				parent.oligoFinderUpdate(event);
+		}
+		
+		protected void done() {
+			if (pendingException != null) {
+				OligoFinderEvent event = new OligoFinderEvent(finder);
+				event.setException(pendingException);
+				parent.oligoFinderUpdate(event);
+			}
+		
+			parent.btnFindOligos.setEnabled(true);
 		}
 	}
 
