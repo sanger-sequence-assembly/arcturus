@@ -282,19 +282,22 @@ public class Arcturus {
 		boolean testing = Boolean.getBoolean("testing");
 		
 		logger.setLevel(testing ? Level.INFO : Level.WARNING);
+		
+		boolean headless = GraphicsEnvironment.isHeadless();
 
-		Handler warner = null;
+		if (headless || testing || Boolean.getBoolean("useConsoleLogHandler")) {
+			Handler consoleHandler = new ConsoleHandler();
+			consoleHandler.setLevel(Level.INFO);
 
-		if (GraphicsEnvironment.isHeadless()
-				|| Boolean.getBoolean("useConsoleLogHandler")) {
-			warner = new ConsoleHandler();
-			warner.setLevel(Level.INFO);
-		} else {
-			warner = new MessageDialogHandler();
-			warner.setLevel(Level.WARNING);
+			logger.addHandler(consoleHandler);
+		} 
+
+		if (!headless) {
+			Handler messageDialogHandler = new MessageDialogHandler();
+			messageDialogHandler.setLevel(Level.WARNING);
+
+			logger.addHandler(messageDialogHandler);
 		}
-
-		logger.addHandler(warner);
 
 		try {
 			File homedir = new File(System.getProperty("user.home"));
