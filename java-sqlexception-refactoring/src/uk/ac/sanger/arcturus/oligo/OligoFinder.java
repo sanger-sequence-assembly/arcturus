@@ -15,6 +15,7 @@ import java.util.regex.Matcher;
 import com.mysql.jdbc.MysqlErrorNumbers;
 
 public class OligoFinder {
+	private ArcturusDatabase adb;
 	private Connection conn = null;
 
 	private OligoFinderEventListener listener;
@@ -24,10 +25,10 @@ public class OligoFinder {
 	
 	private int passValue;
 	
+	private final int CONNECTION_VALIDATION_TIMEOUT = 10;
+	
 	private final int RETRY_INTERVAL = 10;
 	private final int MAX_RETRY_ATTEMPTS = 5;
-	
-	//private int oldTransactionIsolationLevel;
 	
 	// The name of the temporary table for busy reads (reads which are in current contigs)
 	private final String BUSY_READS = "tmpBUSYREADS";
@@ -74,24 +75,30 @@ public class OligoFinder {
 	private PreparedStatement pstmtGetReadSequences;
 
 	public OligoFinder(ArcturusDatabase adb, OligoFinderEventListener listener) throws ArcturusDatabaseException {
-		event = new OligoFinderEvent(this);
-
+		this.adb = adb;
 		this.listener = listener;
-
-		try {
-			conn = adb.getPooledConnection(this);
-			
-			//oldTransactionIsolationLevel = conn.getTransactionIsolation();
-			
-			//conn.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
-			
-			createTemporaryTables();
-			passValue = getPassValue();
-			prepareStatements();
-		} catch (SQLException sqle) {
-			throw new ArcturusDatabaseException(sqle, "Error when initialising database connection",
-					conn);
+		
+		event = new OligoFinderEvent(this);
+	}
+	
+	private void checkConnection() throws SQLException, ArcturusDatabaseException {
+		if (conn != null && conn.isValid(CONNECTION_VALIDATION_TIMEOUT))
+			return;
+		
+		if (conn != null) {
+			Arcturus.logInfo("OligoFinder: connection was invalid, obtaining a new one");
+			conn.close();
 		}
+		
+		prepareConnection();
+	}
+	
+	private void prepareConnection() throws SQLException, ArcturusDatabaseException {
+		conn = adb.getPooledConnection(this);
+			
+		createTemporaryTables();
+		passValue = getPassValue();
+		prepareStatements();
 	}
 
 	private int getPassValue() throws SQLException {
@@ -152,14 +159,21 @@ public class OligoFinder {
 	
 	public synchronized int findMatches(Oligo[] oligos, int[] projectIDs,
 			boolean searchFreeReads)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		int found = 0;
-		
-		if (projectIDs != null && projectIDs.length > 0)
-			found += findContigMatches(oligos, projectIDs);
-		
-		if (searchFreeReads)
-			found += findFreeReadMatches(oligos);
+
+		try {
+			checkConnection();
+
+			if (projectIDs != null && projectIDs.length > 0)
+				found += findContigMatches(oligos, projectIDs);
+
+			if (searchFreeReads)
+				found += findFreeReadMatches(oligos);
+		}
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e, "An error occurred when finding oligo matches", conn, adb);
+		}
 
 		if (listener != null) {
 			event.setEvent(Type.FINISH, null, null, -1, false);
@@ -476,14 +490,17 @@ public class OligoFinder {
 		return data;
 	}
 
-	public void close() throws SQLException {
-		closeConnection();
+	public void close() throws ArcturusDatabaseException {
+		try {
+			closeConnection();
+		} catch (SQLException e) {
+			throw new ArcturusDatabaseException(e, "An error occurred whilst closing an OligoFinder", conn, adb);
+		}
 	}
 
 	private void closeConnection() throws SQLException {
 		if (conn != null) {
 			closeStatements();
-			//conn.setTransactionIsolation(oldTransactionIsolationLevel);
 			conn.close();
 			conn = null;
 		}
