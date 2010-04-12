@@ -1,5 +1,6 @@
 package uk.ac.sanger.arcturus.readfinder;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.data.*;
@@ -13,6 +14,8 @@ public class ReadFinder {
 
 	protected ArcturusDatabase adb;
 	private Connection conn;
+	
+	private final int CONNECTION_VALIDATION_TIMEOUT = 10;
 
 	private PreparedStatement pstmtReadToContig;
 	private PreparedStatement pstmtReadNameToID;
@@ -23,8 +26,22 @@ public class ReadFinder {
 	public ReadFinder(ArcturusDatabase adb) throws SQLException {
 		this.adb = adb;
 	}
+	
+	private void checkConnection() throws SQLException, ArcturusDatabaseException {
+		if (conn != null && conn.isValid(CONNECTION_VALIDATION_TIMEOUT))
+			return;
+		
+		if (conn != null) {
+			Arcturus.logInfo("ReadFinder: connection was invalid, obtaining a new one");
+			conn.close();
+		}
+		
+		prepareConnection();
+	}
 
-	private void prepareStatements() throws SQLException {
+	private void prepareConnection() throws SQLException, ArcturusDatabaseException {
+		conn = adb.getPooledConnection(this);
+		
 		String query = "select R.read_id,S.name from READINFO R left join STATUS S"
 				+ " on (R.status = S.status_id) where R.readname = ?";
 
@@ -44,9 +61,14 @@ public class ReadFinder {
 						+ " and MAPPING.contig_id = CURRENTCONTIGS.contig_id");
 	}
 
-	public void close() throws SQLException {
+	public void close() throws ArcturusDatabaseException {
 		if (conn != null)
-			conn.close();
+			try {
+				conn.close();
+			} catch (SQLException e) {
+				throw new ArcturusDatabaseException(e,
+						"An error occurred when trying to close the ReadFinder's database connection", conn, adb);
+			}
 
 		conn = null;
 	}
@@ -54,18 +76,10 @@ public class ReadFinder {
 	protected void finalize() {
 		try {
 			close();
-		} catch (SQLException sqle) {
+		} catch (ArcturusDatabaseException e) {
+			Arcturus.logWarning("An error occurred when finalizing the ReadFinder", e);
 		}
 	}
-
-	// public boolean isValid(int timeout) {
-	// try {
-	// return conn.isValid(timeout);
-	// }
-	// catch (SQLException e) {
-	// return false;
-	// }
-	// }
 
 	protected boolean containsWildcards(String str) {
 		return str.indexOf("%") >= 0 || str.indexOf("_") >= 0;
@@ -74,10 +88,7 @@ public class ReadFinder {
 	public void findRead(String readname, boolean onlyFreeReads,
 			ReadFinderEventListener listener) throws ArcturusDatabaseException {
 		try {
-			if (conn == null) {
-				conn = adb.getPooledConnection(this);
-				prepareStatements();
-			}
+			checkConnection();
 
 			if (listener != null) {
 				event.setPattern(readname);
