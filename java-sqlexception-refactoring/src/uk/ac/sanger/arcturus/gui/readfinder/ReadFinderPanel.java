@@ -211,30 +211,28 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 		
 		onlyFreeReads = cbxOnlyFreeReads.isSelected();
 		
-		Task task = new Task(readFinder, readnames, onlyFreeReads, this);
+		ReadFinderWorker worker = new ReadFinderWorker(readFinder, readnames, onlyFreeReads, this);
 		
-		task.start();
+		worker.execute();
 	}
 	
-	class Task extends Thread {
+	class ReadFinderWorker extends SwingWorker<Void, Void> {
 		protected final String[] readnames;
 		protected final ReadFinder readFinder;
 		protected final boolean onlyFreeReads;
 		protected final ReadFinderEventListener listener;
 		
-		public Task(ReadFinder readFinder, String[] readnames, boolean onlyFreeReads, 
+		public ReadFinderWorker(ReadFinder readFinder, String[] readnames, boolean onlyFreeReads, 
 				ReadFinderEventListener listener) {
 			this.readFinder = readFinder;
 			this.readnames = readnames;
 			this.onlyFreeReads = onlyFreeReads;
 			this.listener = listener;
 		}
-		
-		public void run() {
-			boolean ok = true;
-			
+
+		protected Void doInBackground() throws Exception {
 			try {
-				for (int i = 0; i < readnames.length && ok; i++) {
+				for (int i = 0; i < readnames.length; i++) {
 					readFinder.findRead(readnames[i], onlyFreeReads, listener);
 				}
 			}
@@ -242,11 +240,12 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 				Arcturus.logWarning("An error occurred whilst finding free reads", e);
 			}
 			
-			SwingUtilities.invokeLater(new Runnable() {
-				public void run() {
-					actionFindReads.setEnabled(true);
-				}});
-		}	
+			return null;
+		}
+		
+		protected void done() {
+			actionFindReads.setEnabled(true);
+		}
 	}
 
 	public void readFinderUpdate(final ReadFinderEvent event) {
