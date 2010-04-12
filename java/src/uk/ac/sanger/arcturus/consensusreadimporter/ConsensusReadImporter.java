@@ -29,11 +29,13 @@ public class ConsensusReadImporter {
 	
 	private static final String DEFAULT_TAG_COMMENT = "Consensus read";
 	
+	private static final String DEFAULT_CHEMISTRY = "Dye_primer";
+	
 	private PreparedStatement pstmtGetPassStatus = null;
 	private static final String GET_PASS_STATUS = "select status_id from STATUS where name = ?";
 	
 	private PreparedStatement pstmtInsertReadInfo = null;
-	private static final String INSERT_READINFO = "insert into READINFO(readname,status) values (?,?)";
+	private static final String INSERT_READINFO = "insert into READINFO(readname,chemistry,status) values (?,?,?)";
 	
 	private PreparedStatement pstmtGetTemplateID = null;
 	private static final String GET_TEMPLATE_ID = "select template_id from TEMPLATE where name = ?";
@@ -280,7 +282,8 @@ public class ConsensusReadImporter {
 	
 	private int insertReadInfo(String readname) throws SQLException {
 		pstmtInsertReadInfo.setString(1, readname);
-		pstmtInsertReadInfo.setInt(2, passValue);
+		pstmtInsertReadInfo.setString(2, DEFAULT_CHEMISTRY);
+		pstmtInsertReadInfo.setInt(3, passValue);
 		
 		pstmtInsertReadInfo.executeUpdate();
 		
