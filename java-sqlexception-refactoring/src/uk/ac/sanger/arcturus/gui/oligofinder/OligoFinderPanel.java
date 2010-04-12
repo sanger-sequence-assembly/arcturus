@@ -424,7 +424,8 @@ public class OligoFinderPanel extends MinervaPanel implements
 				parent.oligoFinderUpdate(event);
 			}
 		
-			parent.btnFindOligos.setEnabled(true);
+			parent.setSearchInProgress(false);
+			parent.updateFindOligosButton();
 		}
 	}
 
@@ -679,6 +680,10 @@ public class OligoFinderPanel extends MinervaPanel implements
 			}
 		});
 
+	}
+	
+	protected void setSearchInProgress(boolean inProgress) {
+		searchInProgress = inProgress;
 	}
 	
 	protected void updateFindOligosButton() {
