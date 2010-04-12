@@ -3,11 +3,11 @@ package uk.ac.sanger.arcturus.gui.checkconsistency;
 import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.utils.CheckConsistency;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.Arcturus;
 
 import javax.swing.*;
 
-import java.sql.SQLException;
 import java.util.List;
 
 import java.awt.*;
@@ -111,10 +111,8 @@ public class CheckConsistencyPanel extends MinervaPanel {
 			try {
 				checker.checkConsistency(adb, this, true);
 			}
-			catch (SQLException sqle) {
-				int errorCode = sqle.getErrorCode();
-				Arcturus.logWarning("An error occurred whilst checking the database [Error code: " +
-							errorCode + "]", sqle);
+			catch (ArcturusDatabaseException e) {
+				Arcturus.logWarning("An error occurred whilst checking the database", e);
 			}
 			return null;
 		}

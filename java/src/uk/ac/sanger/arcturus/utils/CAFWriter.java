@@ -1,9 +1,7 @@
-package uk.ac.sanger.arcturus.test;
+package uk.ac.sanger.arcturus.utils;
 
 import java.io.*;
-import java.sql.SQLException;
 import java.util.*;
-import java.util.zip.DataFormatException;
 
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.Arcturus;

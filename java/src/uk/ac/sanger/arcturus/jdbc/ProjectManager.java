@@ -3,6 +3,7 @@ package uk.ac.sanger.arcturus.jdbc;
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.database.ProjectLockException;
 import uk.ac.sanger.arcturus.people.Person;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
@@ -19,7 +20,6 @@ import java.util.*;
 
 public class ProjectManager extends AbstractManager {
 	private ArcturusDatabase adb;
-	private Connection conn;
 	private HashMap<Integer, Project> hashByID = new HashMap<Integer, Project>();
 	private PreparedStatement pstmtByID;
 	private PreparedStatement pstmtByName;
@@ -41,11 +41,17 @@ public class ProjectManager extends AbstractManager {
 	 * ArcturusDatabase object.
 	 */
 
-	public ProjectManager(ArcturusDatabase adb) throws SQLException {
+	public ProjectManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		this.adb = adb;
-
-		conn = adb.getConnection();
-
+	
+		try {
+			setConnection(adb.getDefaultConnection());
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to initialise the project manager", conn, adb);
+		}
+	}
+	
+	protected void prepareConnection() throws SQLException {
 		String query = "select assembly_id,name,updated,owner,lockdate,lockowner,created,creator,directory,status"
 				+ " from PROJECT where project_id = ?";
 		pstmtByID = conn.prepareStatement(query);
@@ -113,11 +119,11 @@ public class ProjectManager extends AbstractManager {
 		hashByID.clear();
 	}
 
-	public Project getProjectByID(int id) throws SQLException {
+	public Project getProjectByID(int id) throws ArcturusDatabaseException {
 		return getProjectByID(id, true);
 	}
 
-	public Project getProjectByID(int id, boolean autoload) throws SQLException {
+	public Project getProjectByID(int id, boolean autoload) throws ArcturusDatabaseException {
 		Object obj = hashByID.get(new Integer(id));
 
 		if (obj == null)
@@ -128,75 +134,84 @@ public class ProjectManager extends AbstractManager {
 		return project;
 	}
 
-	private Project loadProjectByID(int id) throws SQLException {
-		pstmtByID.setInt(1, id);
-		ResultSet rs = pstmtByID.executeQuery();
-
+	private Project loadProjectByID(int id) throws ArcturusDatabaseException {
 		Project project = null;
 
-		if (rs.next()) {
-			int assembly_id = rs.getInt(1);
-			String name = rs.getString(2);
-			java.util.Date updated = rs.getTimestamp(3);
-			String owner = rs.getString(4);
-			java.util.Date lockdate = rs.getTimestamp(5);
-			String lockowner = rs.getString(6);
-			java.util.Date created = rs.getTimestamp(7);
-			String creator = rs.getString(8);
-			String directory = rs.getString(9);
-			int status = statusStringToCode(rs.getString(10));
+		try {
+			pstmtByID.setInt(1, id);
+			ResultSet rs = pstmtByID.executeQuery();
 
-			Assembly assembly = adb.getAssemblyByID(assembly_id);
+			if (rs.next()) {
+				int assembly_id = rs.getInt(1);
+				String name = rs.getString(2);
+				java.util.Date updated = rs.getTimestamp(3);
+				String owner = rs.getString(4);
+				java.util.Date lockdate = rs.getTimestamp(5);
+				String lockowner = rs.getString(6);
+				java.util.Date created = rs.getTimestamp(7);
+				String creator = rs.getString(8);
+				String directory = rs.getString(9);
+				int status = statusStringToCode(rs.getString(10));
 
-			project = createAndRegisterNewProject(id, assembly, name, updated,
-					owner, lockdate, lockowner, created, creator, directory, status);
+				Assembly assembly = adb.getAssemblyByID(assembly_id);
+
+				project = createAndRegisterNewProject(id, assembly, name,
+						updated, owner, lockdate, lockowner, created, creator,
+						directory, status);
+			}
+
+			rs.close();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to load project by ID=" + id, conn, this);
 		}
-
-		rs.close();
 
 		return project;
 	}
 
 	public Project getProjectByName(Assembly assembly, String name)
-			throws SQLException {
-		PreparedStatement pstmt;
-
-		if (assembly == null) {
-			pstmt = pstmtByName;
-			pstmt.setString(1, name);
-		} else {
-			int assembly_id = assembly.getID();
-			pstmt = pstmtByNameAndAssembly;
-			pstmt.setInt(1, assembly_id);
-			pstmt.setString(2, name);
-		}
-
-		ResultSet rs = pstmt.executeQuery();
-
+			throws ArcturusDatabaseException {
 		Project project = null;
 
-		if (rs.next()) {
-			int project_id = rs.getInt(1);
+		PreparedStatement pstmt;
 
-			project = (Project) hashByID.get(new Integer(project_id));
-
-			if (project == null) {
-				java.util.Date updated = rs.getTimestamp(2);
-				String owner = rs.getString(3);
-				java.util.Date lockdate = rs.getTimestamp(4);
-				String lockowner = rs.getString(5);
-				java.util.Date created = rs.getTimestamp(6);
-				String creator = rs.getString(7);
-				String directory = rs.getString(8);
-				int status = statusStringToCode(rs.getString(9));
-
-				project = createAndRegisterNewProject(project_id, assembly,
-						name, updated, owner, lockdate, lockowner, created,
-						creator, directory, status);
+		try {
+			if (assembly == null) {
+				pstmt = pstmtByName;
+				pstmt.setString(1, name);
+			} else {
+				int assembly_id = assembly.getID();
+				pstmt = pstmtByNameAndAssembly;
+				pstmt.setInt(1, assembly_id);
+				pstmt.setString(2, name);
 			}
-		}
 
-		rs.close();
+			ResultSet rs = pstmt.executeQuery();
+
+			if (rs.next()) {
+				int project_id = rs.getInt(1);
+
+				project = (Project) hashByID.get(new Integer(project_id));
+
+				if (project == null) {
+					java.util.Date updated = rs.getTimestamp(2);
+					String owner = rs.getString(3);
+					java.util.Date lockdate = rs.getTimestamp(4);
+					String lockowner = rs.getString(5);
+					java.util.Date created = rs.getTimestamp(6);
+					String creator = rs.getString(7);
+					String directory = rs.getString(8);
+					int status = statusStringToCode(rs.getString(9));
+
+					project = createAndRegisterNewProject(project_id, assembly,
+							name, updated, owner, lockdate, lockowner, created,
+							creator, directory, status);
+				}
+			}
+
+			rs.close();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to load project by name=" + name, conn, this);
+		}
 
 		return project;
 	}
@@ -219,58 +234,63 @@ public class ProjectManager extends AbstractManager {
 		hashByID.put(new Integer(project.getID()), project);
 	}
 
-	public void preload() throws SQLException {
+	public void preload() throws ArcturusDatabaseException {
 		String query = "select project_id,assembly_id,name,updated,owner,lockdate,lockowner,created,creator,directory,status from PROJECT";
 
-		Statement stmt = conn.createStatement();
+		try {
+			Statement stmt = conn.createStatement();
 
-		ResultSet rs = stmt.executeQuery(query);
+			ResultSet rs = stmt.executeQuery(query);
 
-		while (rs.next()) {
-			int id = rs.getInt(1);
+			while (rs.next()) {
+				int id = rs.getInt(1);
 
-			int assembly_id = rs.getInt(2);
-			String name = rs.getString(3);
-			java.util.Date updated = rs.getTimestamp(4);
-			String owner = rs.getString(5);
-			java.util.Date lockdate = rs.getTimestamp(6);
-			String lockowner = rs.getString(7);
-			java.util.Date created = rs.getTimestamp(8);
-			String creator = rs.getString(9);
-			String directory = rs.getString(10);
-			int status = statusStringToCode(rs.getString(11));
+				int assembly_id = rs.getInt(2);
+				String name = rs.getString(3);
+				java.util.Date updated = rs.getTimestamp(4);
+				String owner = rs.getString(5);
+				java.util.Date lockdate = rs.getTimestamp(6);
+				String lockowner = rs.getString(7);
+				java.util.Date created = rs.getTimestamp(8);
+				String creator = rs.getString(9);
+				String directory = rs.getString(10);
+				int status = statusStringToCode(rs.getString(11));
 
-			Assembly assembly = adb.getAssemblyByID(assembly_id);
+				Assembly assembly = adb.getAssemblyByID(assembly_id);
 
-			Project project = (Project) hashByID.get(new Integer(id));
+				Project project = (Project) hashByID.get(new Integer(id));
 
-			if (project == null)
-				createAndRegisterNewProject(id, assembly, name, updated, owner,
-						lockdate, lockowner, created, creator, directory, status);
-			else {
-				project.setAssembly(assembly);
-				project.setName(name);
-				project.setUpdated(updated);
-				project.setOwner(owner);
-				project.setLockdate(lockdate);
-				project.setLockOwner(lockowner);
-				project.setCreated(created);
-				project.setCreator(creator);
-				project.setDirectory(directory);
-				project.setStatus(status);
+				if (project == null)
+					createAndRegisterNewProject(id, assembly, name, updated,
+							owner, lockdate, lockowner, created, creator,
+							directory, status);
+				else {
+					project.setAssembly(assembly);
+					project.setName(name);
+					project.setUpdated(updated);
+					project.setOwner(owner);
+					project.setLockdate(lockdate);
+					project.setLockOwner(lockowner);
+					project.setCreated(created);
+					project.setCreator(creator);
+					project.setDirectory(directory);
+					project.setStatus(status);
+				}
 			}
-		}
 
-		rs.close();
-		stmt.close();
+			rs.close();
+			stmt.close();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to preload projects", conn, this);
+		}
 	}
 
-	public Set<Project> getAllProjects() throws SQLException {
+	public Set<Project> getAllProjects() throws ArcturusDatabaseException {
 		preload();
 		return new HashSet<Project>(hashByID.values());
 	}
 
-	public Set<Project> getProjectsForOwner(Person owner) throws SQLException {
+	public Set<Project> getProjectsForOwner(Person owner) throws ArcturusDatabaseException {
 		preload();
 
 		if (owner == null)
@@ -288,7 +308,7 @@ public class ProjectManager extends AbstractManager {
 		return set;
 	}
 	
-	public Set<Project> getBinProjects() throws SQLException {
+	public Set<Project> getBinProjects() throws ArcturusDatabaseException {
 		preload();
 		
 		HashSet<Project> set = new HashSet<Project>();
@@ -303,42 +323,46 @@ public class ProjectManager extends AbstractManager {
 		return set;		
 	}
 
-	public void refreshProject(Project project) throws SQLException {
+	public void refreshProject(Project project) throws ArcturusDatabaseException {
 		int id = project.getID();
 
-		pstmtByID.setInt(1, id);
-		ResultSet rs = pstmtByID.executeQuery();
+		try {
+			pstmtByID.setInt(1, id);
+			ResultSet rs = pstmtByID.executeQuery();
 
-		if (rs.next()) {
-			int assembly_id = rs.getInt(1);
-			String name = rs.getString(2);
-			java.util.Date updated = rs.getTimestamp(3);
-			String owner = rs.getString(4);
-			java.util.Date lockdate = rs.getTimestamp(5);
-			String lockowner = rs.getString(6);
-			java.util.Date created = rs.getTimestamp(7);
-			String creator = rs.getString(8);
-			String directory = rs.getString(9);
-			int status = statusStringToCode(rs.getString(10));
+			if (rs.next()) {
+				int assembly_id = rs.getInt(1);
+				String name = rs.getString(2);
+				java.util.Date updated = rs.getTimestamp(3);
+				String owner = rs.getString(4);
+				java.util.Date lockdate = rs.getTimestamp(5);
+				String lockowner = rs.getString(6);
+				java.util.Date created = rs.getTimestamp(7);
+				String creator = rs.getString(8);
+				String directory = rs.getString(9);
+				int status = statusStringToCode(rs.getString(10));
 
-			Assembly assembly = adb.getAssemblyByID(assembly_id);
+				Assembly assembly = adb.getAssemblyByID(assembly_id);
 
-			project.setAssembly(assembly);
-			project.setName(name);
-			project.setUpdated(updated);
-			project.setOwner(owner);
-			project.setLockdate(lockdate);
-			project.setLockOwner(lockowner);
-			project.setCreated(created);
-			project.setCreator(creator);
-			project.setDirectory(directory);
-			project.setStatus(status);
+				project.setAssembly(assembly);
+				project.setName(name);
+				project.setUpdated(updated);
+				project.setOwner(owner);
+				project.setLockdate(lockdate);
+				project.setLockOwner(lockowner);
+				project.setCreated(created);
+				project.setCreator(creator);
+				project.setDirectory(directory);
+				project.setStatus(status);
+			}
+
+			rs.close();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to refresh project ID=" + project.getID(), conn, this);
 		}
-
-		rs.close();
 	}
 
-	public void refreshAllProjects() throws SQLException {
+	public void refreshAllProjects() throws ArcturusDatabaseException {
 		preload();
 	}
 	
@@ -385,8 +409,14 @@ public class ProjectManager extends AbstractManager {
 	}
 	
 	public void setAssemblyForProject(Project project, Assembly assembly)
-			throws SQLException {
-		if (project != null && assembly != null) {
+			throws ArcturusDatabaseException {
+		if (project == null)
+			throw new IllegalArgumentException("Project cannot be null");
+		
+		if (assembly == null)
+			throw new IllegalArgumentException("Assembly cannot be null");
+		
+		try {
 			int project_id = project.getID();
 			int assembly_id = assembly.getID();
 
@@ -394,55 +424,64 @@ public class ProjectManager extends AbstractManager {
 			pstmtSetAssemblyForProject.setInt(2, project_id);
 
 			pstmtSetAssemblyForProject.executeUpdate();
+		} catch (SQLException e) {
+			adb.handleSQLException(e,
+					"Failed to set assembly ID=" + assembly.getID() + " for project ID=" + project.getID(),
+					conn, this);
 		}
+
 	}
 
 	public void getProjectSummary(Project project, int minlen, int minreads,
-			ProjectSummary summary) throws SQLException {
+			ProjectSummary summary) throws ArcturusDatabaseException {
 		int project_id = project.getID();
 
-		pstmtProjectSummaryByID.setInt(1, project_id);
-		pstmtProjectSummaryByID.setInt(2, minlen);
-		pstmtProjectSummaryByID.setInt(3, minreads);
+		try {
+			pstmtProjectSummaryByID.setInt(1, project_id);
+			pstmtProjectSummaryByID.setInt(2, minlen);
+			pstmtProjectSummaryByID.setInt(3, minreads);
 
-		ResultSet rs = pstmtProjectSummaryByID.executeQuery();
+			ResultSet rs = pstmtProjectSummaryByID.executeQuery();
 
-		if (rs.next()) {
-			summary.setNumberOfContigs(rs.getInt(1));
-			summary.setNumberOfReads(rs.getInt(2));
-			summary.setTotalConsensusLength(rs.getInt(3));
-			summary.setMeanConsensusLength(rs.getInt(4));
-			summary.setSigmaConsensusLength(rs.getInt(5));
-			summary.setMaximumConsensusLength(rs.getInt(6));
-			summary.setNewestContigCreated(rs.getTimestamp(7));
-			summary.setMostRecentContigUpdated(rs.getTimestamp(8));
-		} else
-			summary.reset();
+			if (rs.next()) {
+				summary.setNumberOfContigs(rs.getInt(1));
+				summary.setNumberOfReads(rs.getInt(2));
+				summary.setTotalConsensusLength(rs.getInt(3));
+				summary.setMeanConsensusLength(rs.getInt(4));
+				summary.setSigmaConsensusLength(rs.getInt(5));
+				summary.setMaximumConsensusLength(rs.getInt(6));
+				summary.setNewestContigCreated(rs.getTimestamp(7));
+				summary.setMostRecentContigUpdated(rs.getTimestamp(8));
+			} else
+				summary.reset();
 
-		rs.close();
+			rs.close();
 
-		pstmtLastContigTransferOutByID.setInt(1, project_id);
+			pstmtLastContigTransferOutByID.setInt(1, project_id);
 
-		rs = pstmtLastContigTransferOutByID.executeQuery();
+			rs = pstmtLastContigTransferOutByID.executeQuery();
 
-		summary.setMostRecentContigTransferOut(rs.next() ? rs.getTimestamp(1)
-				: null);
+			summary.setMostRecentContigTransferOut(rs.next() ? rs
+					.getTimestamp(1) : null);
 
-		rs.close();
+			rs.close();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get summary for project ID=" + project.getID(), conn, this);
+		}
 	}
 
 	public void getProjectSummary(Project project, ProjectSummary summary)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		getProjectSummary(project, 0, 0, summary);
 	}
 
 	public ProjectSummary getProjectSummary(Project project)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		return getProjectSummary(project, 0, 0);
 	}
 
 	public ProjectSummary getProjectSummary(Project project, int minlen)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		ProjectSummary summary = new ProjectSummary();
 
 		getProjectSummary(project, minlen, 0, summary);
@@ -451,7 +490,7 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public ProjectSummary getProjectSummary(Project project, int minlen,
-			int minreads) throws SQLException {
+			int minreads) throws ArcturusDatabaseException {
 		ProjectSummary summary = new ProjectSummary();
 
 		getProjectSummary(project, minlen, minreads, summary);
@@ -460,56 +499,60 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public Map<Integer, ProjectSummary> getProjectSummary(int minlen,
-			int minreads) throws SQLException {
+			int minreads) throws ArcturusDatabaseException {
 		HashMap<Integer, ProjectSummary> map = new HashMap<Integer, ProjectSummary>();
 
-		pstmtProjectSummary.setInt(1, minlen);
-		pstmtProjectSummary.setInt(2, minreads);
+		try {
+			pstmtProjectSummary.setInt(1, minlen);
+			pstmtProjectSummary.setInt(2, minreads);
 
-		ResultSet rs = pstmtProjectSummary.executeQuery();
+			ResultSet rs = pstmtProjectSummary.executeQuery();
 
-		while (rs.next()) {
-			int project_id = rs.getInt(1);
+			while (rs.next()) {
+				int project_id = rs.getInt(1);
 
-			ProjectSummary summary = new ProjectSummary();
+				ProjectSummary summary = new ProjectSummary();
 
-			summary.setNumberOfContigs(rs.getInt(2));
-			summary.setNumberOfReads(rs.getInt(3));
-			summary.setTotalConsensusLength(rs.getInt(4));
-			summary.setMeanConsensusLength(rs.getInt(5));
-			summary.setSigmaConsensusLength(rs.getInt(6));
-			summary.setMaximumConsensusLength(rs.getInt(7));
-			summary.setNewestContigCreated(rs.getTimestamp(8));
-			summary.setMostRecentContigUpdated(rs.getTimestamp(9));
-			summary.setMostRecentContigTransferOut(null);
+				summary.setNumberOfContigs(rs.getInt(2));
+				summary.setNumberOfReads(rs.getInt(3));
+				summary.setTotalConsensusLength(rs.getInt(4));
+				summary.setMeanConsensusLength(rs.getInt(5));
+				summary.setSigmaConsensusLength(rs.getInt(6));
+				summary.setMaximumConsensusLength(rs.getInt(7));
+				summary.setNewestContigCreated(rs.getTimestamp(8));
+				summary.setMostRecentContigUpdated(rs.getTimestamp(9));
+				summary.setMostRecentContigTransferOut(null);
 
-			map.put(new Integer(project_id), summary);
+				map.put(new Integer(project_id), summary);
+			}
+
+			rs.close();
+
+			rs = pstmtLastContigTransferOut.executeQuery();
+
+			while (rs.next()) {
+				int project_id = rs.getInt(1);
+
+				ProjectSummary summary = (ProjectSummary) map.get(new Integer(
+						project_id));
+
+				if (summary != null)
+					summary.setMostRecentContigTransferOut(rs.getTimestamp(2));
+			}
+
+			rs.close();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get summary for projects", conn, this);
 		}
-
-		rs.close();
-
-		rs = pstmtLastContigTransferOut.executeQuery();
-
-		while (rs.next()) {
-			int project_id = rs.getInt(1);
-
-			ProjectSummary summary = (ProjectSummary) map.get(new Integer(
-					project_id));
-
-			if (summary != null)
-				summary.setMostRecentContigTransferOut(rs.getTimestamp(2));
-		}
-
-		rs.close();
 
 		return map;
 	}
 
-	public Map getProjectSummary(int minlen) throws SQLException {
+	public Map getProjectSummary(int minlen) throws ArcturusDatabaseException {
 		return getProjectSummary(minlen, 0);
 	}
 
-	public Map getProjectSummary() throws SQLException {
+	public Map getProjectSummary() throws ArcturusDatabaseException {
 		return getProjectSummary(0, 0);
 	}
 
@@ -518,7 +561,7 @@ public class ProjectManager extends AbstractManager {
 	 */
 
 	public boolean canUserUnlockProject(Project project, Person user)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		if (!project.isLocked())
 			return false;
 
@@ -527,7 +570,7 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public boolean canUserLockProjectForSelf(Project project, Person user)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		if (project.isLocked() || project.isBin())
 			return false;
 
@@ -536,7 +579,7 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public boolean canUserLockProjectForOwner(Project project, Person user)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		if (project.isLocked() || project.isBin() || project.isUnowned())
 			return false;
 
@@ -544,7 +587,7 @@ public class ProjectManager extends AbstractManager {
 	}
 	
 	public boolean canUserLockProject(Project project, Person user)
-		throws SQLException {
+		throws ArcturusDatabaseException {
 		if (project.isLocked() || project.isBin())
 			return false;
 
@@ -552,7 +595,7 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public boolean unlockProject(Project project) throws ProjectLockException,
-			SQLException {
+			ArcturusDatabaseException {
 		if (!project.isLocked())
 			throw new ProjectLockException(
 					ProjectLockException.PROJECT_IS_UNLOCKED);
@@ -561,10 +604,16 @@ public class ProjectManager extends AbstractManager {
 			throw new ProjectLockException(
 					ProjectLockException.OPERATION_NOT_PERMITTED);
 
-		pstmtUnlockProject.setInt(1, project.getID());
+		int rc = 0;
+		
+		try {
+			pstmtUnlockProject.setInt(1, project.getID());
 
-		int rc = pstmtUnlockProject.executeUpdate();
-
+			rc = pstmtUnlockProject.executeUpdate();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to unlock project ID=" + project.getID(), conn, this);
+		}
+	
 		if (rc == 1)
 			lockChanged(project);
 
@@ -572,7 +621,7 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public boolean lockProject(Project project) throws ProjectLockException,
-			SQLException {
+			ArcturusDatabaseException {
 		if (project.isLocked())
 			throw new ProjectLockException(
 					ProjectLockException.PROJECT_IS_LOCKED);
@@ -582,12 +631,18 @@ public class ProjectManager extends AbstractManager {
 		if (!canUserLockProjectForSelf(project, me))
 			throw new ProjectLockException(
 					ProjectLockException.OPERATION_NOT_PERMITTED);
+		
+		int rc = 0;
 
-		pstmtLockProject.setString(1, me.getUID());
-		pstmtLockProject.setInt(2, project.getID());
+		try {
+			pstmtLockProject.setString(1, me.getUID());
+			pstmtLockProject.setInt(2, project.getID());
 
-		int rc = pstmtLockProject.executeUpdate();
-
+			rc = pstmtLockProject.executeUpdate();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to lock project ID=" + project.getID(), conn, this);
+		}
+	
 		if (rc == 1)
 			lockChanged(project);
 
@@ -595,7 +650,7 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public boolean lockProjectForOwner(Project project)
-			throws ProjectLockException, SQLException {
+			throws ProjectLockException, ArcturusDatabaseException {
 		if (project.isLocked())
 			throw new ProjectLockException(
 					ProjectLockException.PROJECT_IS_LOCKED);
@@ -610,9 +665,15 @@ public class ProjectManager extends AbstractManager {
 			throw new ProjectLockException(
 					ProjectLockException.OPERATION_NOT_PERMITTED);
 
-		pstmtLockProjectForOwner.setInt(1, project.getID());
+		int rc = 0;
+		
+		try {
+			pstmtLockProjectForOwner.setInt(1, project.getID());
 
-		int rc = pstmtLockProjectForOwner.executeUpdate();
+			rc = pstmtLockProjectForOwner.executeUpdate();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to lock project ID=" + project.getID() + " for owner", conn, this);
+		}
 
 		if (rc == 1)
 			lockChanged(project);
@@ -621,7 +682,7 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public boolean setProjectLockOwner(Project project, Person person)
-		throws ProjectLockException, SQLException {
+		throws ProjectLockException, ArcturusDatabaseException {
 		if (project.isLocked())
 			throw new ProjectLockException(
 					ProjectLockException.PROJECT_IS_LOCKED);
@@ -631,11 +692,19 @@ public class ProjectManager extends AbstractManager {
 		if (!canUserLockProject(project, me))
 			throw new ProjectLockException(
 					ProjectLockException.OPERATION_NOT_PERMITTED);
+		
+		int rc = 0;
 
-		pstmtLockProject.setString(1, person.getUID());
-		pstmtLockProject.setInt(2, project.getID());
+		try {
+			pstmtLockProject.setString(1, person.getUID());
+			pstmtLockProject.setInt(2, project.getID());
 
-		int rc = pstmtLockProject.executeUpdate();
+			rc = pstmtLockProject.executeUpdate();
+		} catch (SQLException e) {
+			adb.handleSQLException(e,
+					"Failed to lock project ID=" + project.getID() + " for user UID=" + person.getUID(),
+					conn, this);
+		}
 
 		if (rc == 1)
 			lockChanged(project);
@@ -644,14 +713,21 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public boolean unlockProjectForExport(Project project)
-			throws ProjectLockException, SQLException {
+			throws ProjectLockException, ArcturusDatabaseException {
 		if (!project.isLocked())
 			throw new ProjectLockException(
 					ProjectLockException.PROJECT_IS_UNLOCKED);
+		
+		int rc = 0;
 
-		pstmtUnlockProject.setInt(1, project.getID());
+		try {
+			pstmtUnlockProject.setInt(1, project.getID());
 
-		int rc = pstmtUnlockProject.executeUpdate();
+			rc = pstmtUnlockProject.executeUpdate();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to unlock project ID=" + project.getID() + " for export",
+					conn, this);
+		}
 
 		if (rc == 1)
 			lockChanged(project);
@@ -660,17 +736,24 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public boolean lockProjectForExport(Project project)
-			throws ProjectLockException, SQLException {
+			throws ProjectLockException, ArcturusDatabaseException {
 		if (project.isLocked())
 			throw new ProjectLockException(
 					ProjectLockException.PROJECT_IS_LOCKED);
 
 		Person me = adb.findMe();
+		
+		int rc = 0;
 
-		pstmtLockProject.setString(1, me.getUID());
-		pstmtLockProject.setInt(2, project.getID());
+		try {
+			pstmtLockProject.setString(1, me.getUID());
+			pstmtLockProject.setInt(2, project.getID());
 
-		int rc = pstmtLockProject.executeUpdate();
+			rc = pstmtLockProject.executeUpdate();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to lock project ID=" + project.getID() + " for export",
+					conn, this);
+		}
 
 		if (rc == 1)
 			lockChanged(project);
@@ -678,7 +761,7 @@ public class ProjectManager extends AbstractManager {
 		return rc == 1;
 	}
 
-	private void lockChanged(Project project) throws SQLException {
+	private void lockChanged(Project project) throws ArcturusDatabaseException {
 		refreshProject(project);
 
 		ProjectChangeEvent event = new ProjectChangeEvent(this, project,
@@ -688,23 +771,30 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public void setProjectOwner(Project project, Person person)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		boolean nobody = person.isNobody();
+		
+		int rc = 0;
 
-		if (nobody)
-			pstmtSetProjectOwner.setNull(1, Types.CHAR);
-		else
-			pstmtSetProjectOwner.setString(1, person.getUID());
+		try {
+			if (nobody)
+				pstmtSetProjectOwner.setNull(1, Types.CHAR);
+			else
+				pstmtSetProjectOwner.setString(1, person.getUID());
 
-		pstmtSetProjectOwner.setInt(2, project.getID());
+			pstmtSetProjectOwner.setInt(2, project.getID());
 
-		int rc = pstmtSetProjectOwner.executeUpdate();
+			rc = pstmtSetProjectOwner.executeUpdate();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to set owner for project ID=" + project.getID() + " to " +
+					(nobody ? "NULL" : person.getUID()), conn, this);
+		}
 
 		if (rc == 1)
 			ownerChanged(project);
 	}
 
-	private void ownerChanged(Project project) throws SQLException {
+	private void ownerChanged(Project project) throws ArcturusDatabaseException {
 		refreshProject(project);
 
 		ProjectChangeEvent event = new ProjectChangeEvent(this, project,
@@ -714,7 +804,7 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public boolean createNewProject(Assembly assembly, String name, Person owner,
-			String directory) throws SQLException, IOException {
+			String directory) throws ArcturusDatabaseException, IOException {
 		if (Arcturus.isLinux()) {
 			File dir = new File(directory);
 		
@@ -728,19 +818,29 @@ public class ProjectManager extends AbstractManager {
 			}
 		}
 		
-		pstmtCreateNewProject.setInt(1, assembly.getID());
-		pstmtCreateNewProject.setString(2, name);
-		pstmtCreateNewProject.setString(3, System.getProperty("user.name"));
-		pstmtCreateNewProject.setString(4, owner.getUID());
-		pstmtCreateNewProject.setString(5, directory);
+		int rc = 0;
 		
-		int rc = pstmtCreateNewProject.executeUpdate();
+		String creator = System.getProperty("user.name");
 		
+		try {
+			pstmtCreateNewProject.setInt(1, assembly.getID());
+			pstmtCreateNewProject.setString(2, name);
+			pstmtCreateNewProject.setString(3, creator);
+			pstmtCreateNewProject.setString(4, owner.getUID());
+			pstmtCreateNewProject.setString(5, directory);
+
+			rc = pstmtCreateNewProject.executeUpdate();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to create a new project with assembly ID=" + assembly.getID() +
+					", name=\"" + name + "\", creator=" + creator + ", owner=" + owner + ", directory=" + directory,
+					conn, this);
+		}
+	
 		return rc == 1;
 	}
 
 	public boolean canUserChangeProjectStatus(Project project, Person user)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		if (project.isLocked() || project.isBin() || project.isUnowned())
 			return false;
 
@@ -748,7 +848,7 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public boolean canUserChangeProjectStatus(Project project)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		if (project.isLocked() || project.isBin() || project.isUnowned())
 			return false;
 		
@@ -757,7 +857,7 @@ public class ProjectManager extends AbstractManager {
 		return project.getOwner().equals(user) || adb.hasFullPrivileges(user);
 	}
 	
-	public boolean changeProjectStatus(Project project, int status) throws SQLException {
+	public boolean changeProjectStatus(Project project, int status) throws ArcturusDatabaseException {
 		if (project == null)
 			return false;
 		
@@ -772,11 +872,17 @@ public class ProjectManager extends AbstractManager {
 		if (statusString == null)
 			return false;
 		
-		pstmtChangeProjectStatus.setString(1, statusString);
-		pstmtChangeProjectStatus.setInt(2, project.getID());
+		int rc = 0;
 		
-		int rc = pstmtChangeProjectStatus.executeUpdate();
+		try {
+			pstmtChangeProjectStatus.setString(1, statusString);
+			pstmtChangeProjectStatus.setInt(2, project.getID());
 		
+			rc = pstmtChangeProjectStatus.executeUpdate();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to change status of project ID=" + project.getID(), conn, this);
+		}
+	
 		if (rc == 1) {
 			project.setStatus(status);
 			
@@ -788,18 +894,18 @@ public class ProjectManager extends AbstractManager {
 			return false;
 	}
 
-	public boolean retireProject(Project project) throws SQLException {
+	public boolean retireProject(Project project) throws ArcturusDatabaseException {
 		if (project.isRetired())
 			return true;
 		return changeProjectStatus(project, Project.RETIRED);
 	}
 	
-	private void retireContigs(Project project) throws SQLException {
+	private void retireContigs(Project project) throws ArcturusDatabaseException {
 		Project bin = getBinForProject(project);
 		adb.moveContigs(project, bin);
 	}
 	
-	public Project getBinForProject(Project project) throws SQLException {
+	public Project getBinForProject(Project project) throws ArcturusDatabaseException {
 		if (project == null)
 			return null;
 		

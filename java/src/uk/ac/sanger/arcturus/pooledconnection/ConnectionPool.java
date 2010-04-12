@@ -14,6 +14,8 @@ import com.mysql.jdbc.jdbc2.optional.MysqlDataSource;
 
 public class ConnectionPool implements ConnectionPoolMBean {
 	public final static long DEFAULT_TIMEOUT = 60000;
+	public static final int DEFAULT_VALIDATION_TIMEOUT = 10;
+	
 	private HashSet<PooledConnection> connections;
 	private DataSource dataSource;
 	final private long timeout;
@@ -84,12 +86,8 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		while ((iter != null) && (iter.hasNext())) {
 			PooledConnection conn = (PooledConnection) iter.next();
 
-			if ((!conn.inUse()) && (conn.getIdleTime() > timeout)) {
-				try {
-					conn.closeConnection();
-				} catch (SQLException sqle) {
-					Arcturus.logWarning("An error occurred when closing a pooled connection", sqle);
-				}
+			if ((!conn.isInUse()) && (conn.getIdleTime() > timeout)) {
+				conn.closeConnection();
 				iter.remove();
 				nReaped++;
 			}
@@ -103,11 +101,7 @@ public class ConnectionPool implements ConnectionPoolMBean {
 
 		while ((iter != null) && (iter.hasNext())) {
 			PooledConnection conn = (PooledConnection) iter.next();
-			try {
-				conn.closeConnection();
-			} catch (SQLException sqle) {
-				Arcturus.logWarning("An error occurred when closing a pooled connection", sqle);
-			}
+			conn.closeConnection();
 		}
 		
 		connections.clear();
@@ -119,23 +113,52 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		for (Iterator iter = connections.iterator(); iter.hasNext();) {
 			c = (PooledConnection) iter.next();
 			
-			if (c.lease(owner))
+			if (c.isInUse())
+				continue;
+			
+			boolean valid = false;
+			
+			try {
+				valid = c.isValid(DEFAULT_VALIDATION_TIMEOUT);
+			} catch (SQLException e) {
+				Arcturus.logWarning("Failed to validate connection", e);
+			}			
+			
+			if (valid && c.lease(owner))
 				return c;
 		}
 
-		Connection conn = dataSource.getConnection();
-		c = new PooledConnection(conn, this);
-		c.setWaitTimeout(5*24*3600);
+		c = createConnection();
+		
 		c.lease(owner);
+		
+		return c;
+	}
+	
+	private PooledConnection createConnection() throws SQLException {
+		Connection conn = dataSource.getConnection();
+		
+		PooledConnection c = new PooledConnection(conn, this);
+
 		connections.add(c);
 		nCreated++;
+
 		return c;
 	}
 
-	public synchronized void returnConnection(PooledConnection conn) {
-		// This method allows a pooled connection to notify its parent
-		// pool that it has been closed.  It does nothing in this
-		// implementation.
+	public synchronized void releaseConnection(PooledConnection conn) {
+		boolean valid = true;
+		
+		try {
+			valid = conn.isValid(DEFAULT_VALIDATION_TIMEOUT);
+		} catch (SQLException e) {
+			Arcturus.logWarning("Failed to validate connection", e);
+		}
+		
+		if (!valid) {
+			conn.closeConnection();
+			connections.remove(conn);
+		}
 	}
 
 	class ConnectionReaper extends Thread {
@@ -190,7 +213,7 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		
 		for (Iterator iter = connections.iterator(); iter.hasNext();) {
 			PooledConnection c = (PooledConnection) iter.next();
-			if (c.inUse())
+			if (c.isInUse())
 				inuse++;
 		}
 

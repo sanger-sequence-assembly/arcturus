@@ -1,8 +1,6 @@
 package uk.ac.sanger.arcturus.utils;
 
 import java.io.*;
-import java.sql.SQLException;
-import java.util.zip.DataFormatException;
 
 import javax.naming.NamingException;
 
@@ -11,6 +9,7 @@ import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.database.ContigProcessor;
 import uk.ac.sanger.arcturus.database.ProjectLockException;
 
@@ -27,8 +26,7 @@ public class ProjectExporter {
 		}
 	}
 
-	public void run(String[] args) throws NamingException, SQLException,
-			IOException, DataFormatException {
+	public void run(String[] args) throws ArcturusDatabaseException {
 		String instanceName = null;
 		String organismName = null;
 		String cafFileName = null;
@@ -59,13 +57,32 @@ public class ProjectExporter {
 			System.exit(1);
 		}
 
-		ArcturusInstance ai = ArcturusInstance.getInstance(instanceName);
+		ArcturusInstance ai = null;
+		
+		try {
+			ai = ArcturusInstance.getInstance(instanceName);
+		} catch (NamingException e) {
+			throw new ArcturusDatabaseException(e, "Failed to find Arcturus instance name=\"" + instanceName + "\"");
+		}
+		
+		if (ai == null)
+			return;
+		
 		ArcturusDatabase adb = ai.findArcturusDatabase(organismName);
+		
+		if (adb == null)
+			return;
 
 		File file = new File(cafFileName);
 
-		PrintWriter pw = new PrintWriter(new BufferedWriter(
-				new FileWriter(file)));
+		PrintWriter pw = null;
+		
+		try {
+			pw = new PrintWriter(new BufferedWriter(
+					new FileWriter(file)));
+		} catch (IOException e) {
+			
+		}
 
 		String[] projects = projectList.split(",");
 
@@ -89,7 +106,7 @@ public class ProjectExporter {
 		private PrintWriter mypw;
 
 		public Processor(ArcturusDatabase adb, PrintWriter pw)
-				throws SQLException {
+				throws ArcturusDatabaseException {
 			super(adb);
 			this.mypw = pw;
 		}
@@ -113,7 +130,7 @@ public class ProjectExporter {
 	}
 
 	private void exportProject(Project project, Processor processor)
-			throws SQLException, DataFormatException {
+			throws ArcturusDatabaseException {
 
 		ArcturusDatabase adb = project.getArcturusDatabase();
 

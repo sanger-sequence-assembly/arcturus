@@ -3,6 +3,7 @@ package uk.ac.sanger.arcturus.utils;
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.gui.OrganismChooserPanel;
 
 import java.sql.*;
@@ -49,32 +50,30 @@ public class CheckConsistency {
 	}
 
 	public void checkConsistency(ArcturusDatabase adb, CheckConsistencyListener listener)
-		throws SQLException {
+		throws ArcturusDatabaseException {
 		checkConsistency(adb, listener, false);
 	}
 	
 	public void checkConsistency(ArcturusDatabase adb, CheckConsistencyListener listener, boolean criticalOnly)
-	throws SQLException {
+		throws ArcturusDatabaseException {
 		this.listener = listener;
 		Connection conn = adb.getPooledConnection(this);
 		
 		try {
 			checkConsistency(conn,criticalOnly);
 		}
-		catch (MySQLStatementCancelledException e) {
-			System.err.println("Caught a MySQLStatementCancelledException");
+		catch (SQLException e) {
+			adb.handleSQLException(e, "An error occurred when checking the database consistency", conn, this);
 		}
-		catch (SQLException sqle) {
-			int errorCode = sqle.getErrorCode();
+		finally {
+			this.listener = null;
 			
-			// Test for ER_QUERY_INTERRUPTED : Query execution was interrupted
-			if (errorCode == 1317)
-				System.err.println("Caught a " + sqle.getClass().getName() + " with error code " + errorCode);
-			else
-				throw sqle;
+			try {
+				conn.close();
+			} catch (SQLException e) {
+				adb.handleSQLException(e, "An error occurred whilst closing the connection", conn, this);
+			}
 		}
-		conn.close();
-		this.listener = null;
 	}
 
 	protected void checkConsistency(Connection conn, boolean criticalOnly) throws SQLException {

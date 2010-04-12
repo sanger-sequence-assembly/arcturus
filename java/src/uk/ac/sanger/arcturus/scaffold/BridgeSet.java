@@ -7,8 +7,9 @@ import java.util.*;
 import java.io.PrintStream;
 
 public class BridgeSet {
-	private HashMap byContigA = new HashMap();
-	private Set allBridges = new HashSet();
+	private HashMap<Contig, HashMap<Contig, HashMap<Integer, Bridge>>> byContigA =
+		new HashMap<Contig, HashMap<Contig, HashMap<Integer, Bridge>>>();
+	private Set<Bridge> allBridges = new HashSet<Bridge>();
 
 	private Bridge getBridge(Contig contiga, Contig contigb, int endcode) {
 		// Enforce the condition that the first contig must have the smaller ID.
@@ -21,17 +22,17 @@ public class BridgeSet {
 				endcode = 3 - endcode;
 		}
 
-		HashMap byContigB = (HashMap) byContigA.get(contiga);
+		HashMap<Contig, HashMap<Integer, Bridge>> byContigB = byContigA.get(contiga);
 
 		if (byContigB == null) {
-			byContigB = new HashMap();
+			byContigB = new HashMap<Contig, HashMap<Integer, Bridge>>();
 			byContigA.put(contiga, byContigB);
 		}
 
-		HashMap byEndCode = (HashMap) byContigB.get(contigb);
+		HashMap<Integer, Bridge> byEndCode = byContigB.get(contigb);
 
 		if (byEndCode == null) {
-			byEndCode = new HashMap();
+			byEndCode = new HashMap<Integer, Bridge>();
 			byContigB.put(contigb, byEndCode);
 		}
 
@@ -82,12 +83,12 @@ public class BridgeSet {
 		}
 	}
 
-	public Set getSubgraph(Contig seedcontig, int minlinks) {
-		Set contigsToProcess = new HashSet();
-		Set subgraph = new HashSet();
-		Set newContigs = new HashSet();
+	public Set<Bridge> getSubgraph(Contig seedcontig, int minlinks) {
+		Set<Contig> contigsToProcess = new HashSet<Contig>();
+		Set<Bridge> subgraph = new HashSet<Bridge>();
+		Set<Contig> newContigs = new HashSet<Contig>();
 
-		Set all = new HashSet(allBridges);
+		Set<Bridge> all = new HashSet<Bridge>(allBridges);
 
 		contigsToProcess.add(seedcontig);
 

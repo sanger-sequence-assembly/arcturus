@@ -295,7 +295,13 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	}
 
 	protected void addSharedFileMenuItems(JMenu menu) {
-		boolean iAmCoordinator = adb.isCoordinator();
+		boolean iAmCoordinator= false;
+		
+		try {
+			iAmCoordinator = adb.isCoordinator();
+		} catch (ArcturusDatabaseException e) {
+			Arcturus.logWarning("Failed to determine coordinator status", e);
+		}
 		
 		for (int i = 0; i < permanentViews.length; i++) {
 			PermanentView view = permanentViews[i];

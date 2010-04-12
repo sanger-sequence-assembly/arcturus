@@ -146,7 +146,7 @@ public class CalculateConsensus {
 			adb.setCacheing(ArcturusDatabase.TEMPLATE, false);
 			adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
 
-			conn = adb.getConnection();
+			conn = adb.getDefaultConnection();
 
 			if (conn == null) {
 				System.err.println("Connection is undefined");
@@ -232,7 +232,7 @@ public class CalculateConsensus {
 	}
 
 	public void calculateConsensusForContig(int contig_id)
-			throws SQLException, DataFormatException {
+			throws ArcturusDatabaseException {
 		long clockStart = System.currentTimeMillis();
 
 		Contig contig = adb.getContigByID(contig_id, flags);
@@ -483,7 +483,7 @@ public class CalculateConsensus {
 		algorithm.addBase(base, qual, strand, chemistry);
 	}
 
-	public void storeConsensus(int contig_id, Consensus consensus) throws SQLException {
+	public void storeConsensus(int contig_id, Consensus consensus) throws ArcturusDatabaseException {
 		byte[] sequence = consensus.getDNA();
 		byte[] quality = consensus.getQuality();
 
@@ -494,24 +494,35 @@ public class CalculateConsensus {
 		compresser.reset();
 		compresser.setInput(sequence);
 		compresser.finish();
+		
 		int compressedSequenceLength = compresser.deflate(buffer);
+		
 		byte[] compressedSequence = new byte[compressedSequenceLength];
+		
 		for (int i = 0; i < compressedSequenceLength; i++)
 			compressedSequence[i] = buffer[i];
 
 		compresser.reset();
 		compresser.setInput(quality);
 		compresser.finish();
+		
 		int compressedQualityLength = compresser.deflate(buffer);
+		
 		byte[] compressedQuality = new byte[compressedQualityLength];
+		
 		for (int i = 0; i < compressedQualityLength; i++)
 			compressedQuality[i] = buffer[i];
 
-		stmtStoreConsensus.setInt(1, contig_id);
-		stmtStoreConsensus.setInt(2, seqlen);
-		stmtStoreConsensus.setBytes(3, compressedSequence);
-		stmtStoreConsensus.setBytes(4, compressedQuality);
-		stmtStoreConsensus.executeUpdate();
+		try {
+			stmtStoreConsensus.setInt(1, contig_id);
+			stmtStoreConsensus.setInt(2, seqlen);
+			stmtStoreConsensus.setBytes(3, compressedSequence);
+			stmtStoreConsensus.setBytes(4, compressedQuality);
+			stmtStoreConsensus.executeUpdate();
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to set consensus for contig ID=" + contig_id, conn, this);
+		}
 	}
 
 	private class Consensus {

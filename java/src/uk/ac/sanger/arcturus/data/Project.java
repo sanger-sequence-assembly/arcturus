@@ -5,7 +5,6 @@ import uk.ac.sanger.arcturus.utils.ProjectSummary;
 import uk.ac.sanger.arcturus.people.*;
 
 import java.util.*;
-import java.sql.SQLException;
 import java.util.zip.DataFormatException;
 
 /**
@@ -75,7 +74,7 @@ public class Project extends Core {
 
 		try {
 			setAssembly(assembly, false);
-		} catch (SQLException sqle) {
+		} catch (ArcturusDatabaseException sqle) {
 		}
 
 		this.name = name;
@@ -116,11 +115,11 @@ public class Project extends Core {
 			this.creator = findPerson(creator);
 			this.directory = null;
 			this.status = status;
-		} catch (SQLException sqle) {
+		} catch (ArcturusDatabaseException sqle) {
 		}
 	}
 
-	private Person findPerson(String uid) throws SQLException {
+	private Person findPerson(String uid) throws ArcturusDatabaseException {
 		return adb.findUser(uid);
 	}
 
@@ -128,12 +127,12 @@ public class Project extends Core {
 		return assembly;
 	}
 
-	public void setAssembly(Assembly assembly) throws SQLException {
+	public void setAssembly(Assembly assembly) throws ArcturusDatabaseException {
 		setAssembly(assembly, true);
 	}
 
 	public void setAssembly(Assembly assembly, boolean commit)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		if (this.assembly == assembly)
 			return;
 
@@ -180,7 +179,7 @@ public class Project extends Core {
 		return owner;
 	}
 
-	public void setOwner(String owner) {
+	public void setOwner(String owner) throws ArcturusDatabaseException {
 		this.owner = adb.findUser(owner);
 	}
 
@@ -220,7 +219,7 @@ public class Project extends Core {
 		this.lockowner = lockowner;
 	}
 
-	public void setLockOwner(String lockowner) {
+	public void setLockOwner(String lockowner) throws ArcturusDatabaseException {
 		this.lockowner = adb.findUser(lockowner);
 	}
 
@@ -240,7 +239,7 @@ public class Project extends Core {
 		return creator;
 	}
 
-	public void setCreator(String creator) {
+	public void setCreator(String creator) throws ArcturusDatabaseException {
 		this.creator = adb.findUser(creator);
 	}
 
@@ -319,13 +318,10 @@ public class Project extends Core {
 		return contigs;
 	}
 
-	public Set<Contig> getContigs(boolean refresh) throws SQLException {
-		try {
-			if (refresh && adb != null)
-				contigs = adb.getContigsByProject(ID,
-						ArcturusDatabase.CONTIG_BASIC_DATA, 0);
-		} catch (DataFormatException dfe) { /* This is never going to happen */
-		}
+	public Set<Contig> getContigs(boolean refresh) throws ArcturusDatabaseException {
+		if (refresh && adb != null)
+			contigs = adb.getContigsByProject(ID,
+					ArcturusDatabase.CONTIG_BASIC_DATA, 0);
 
 		return contigs;
 	}
@@ -348,24 +344,24 @@ public class Project extends Core {
 			return contigs.remove(contig);
 	}
 
-	public void refresh() throws SQLException {
+	public void refresh() throws ArcturusDatabaseException {
 		if (adb != null)
 			adb.refreshProject(this);
 	}
 
-	public ProjectSummary getProjectSummary(int minlen) throws SQLException {
+	public ProjectSummary getProjectSummary(int minlen) throws ArcturusDatabaseException {
 		if (adb != null)
 			return adb.getProjectSummary(this, minlen, 0);
 		else
 			return null;
 	}
 
-	public ProjectSummary getProjectSummary() throws SQLException {
+	public ProjectSummary getProjectSummary() throws ArcturusDatabaseException {
 		return getProjectSummary(0);
 	}
 
 	public ProjectSummary getProjectSummary(int minlen, int minreads)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		if (adb != null)
 			return adb.getProjectSummary(this, minlen, minreads);
 		else
