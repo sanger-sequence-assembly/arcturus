@@ -138,7 +138,9 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 		lastLeaseDate = new Date(lastLeaseTime);
 		this.owner = owner;
 		
-		Arcturus.logInfo("PooledConnection #" + ID + " leased to " + owner.getClass().getName() + " at " + lastLeaseDate);
+		Arcturus.logInfo("PooledConnection #" + ID +
+				" [" + connectionID +
+				"] leased to " + owner.getClass().getName() + " at " + lastLeaseDate);
 			
 		return true;
 	}
