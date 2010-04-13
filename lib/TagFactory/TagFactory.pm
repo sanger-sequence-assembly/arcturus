@@ -282,7 +282,7 @@ sub processRepeatTag {
 
     my $tagcomment = $tag->getTagComment();
 
-    my $status = 0;
+    my $status = 9999;
 
 # test presence of a (repeat) tag sequence name upfront
                
