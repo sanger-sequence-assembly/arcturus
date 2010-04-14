@@ -107,7 +107,7 @@ fi
 
 if [ "x" == "x$subdir" ]
 then
-    subdir=vertebrates/Zebrafish/Pools
+    subdir=Zebrafish/Pools
 fi
 
 reposdir=`pwd`
