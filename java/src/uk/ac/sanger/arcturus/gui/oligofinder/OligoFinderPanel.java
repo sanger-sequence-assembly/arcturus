@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.Vector;
 import java.io.*;
 import java.text.*;
 
@@ -366,6 +367,9 @@ public class OligoFinderPanel extends MinervaPanel implements
 		}
 
 		Oligo[] oligos = parseOligos(txtOligoList.getText());
+		
+		if (oligos == null || oligos.length == 0)
+			return;
 
 		txtMessages.append("Searching for oligos:\n\n");
 
@@ -432,17 +436,17 @@ public class OligoFinderPanel extends MinervaPanel implements
 	protected Oligo[] parseOligos(String text) {
 		String[] lines = text.split("[\n\r]+");
 
-		Oligo[] oligos = new Oligo[lines.length];
+		List<Oligo> oligoList = new Vector<Oligo>();
 
 		int anon = 0;
 
 		for (int i = 0; i < lines.length; i++) {
-			String[] words = lines[i].split("\\s");
+			String[] words = lines[i].trim().split("\\s");
 
 			String name;
 			String sequence;
 
-			if (words.length < 1)
+			if (words.length < 1 || words[0].length() == 0)
 				continue;
 
 			if (words.length == 1) {
@@ -453,8 +457,10 @@ public class OligoFinderPanel extends MinervaPanel implements
 				sequence = words[1];
 			}
 
-			oligos[i] = new Oligo(name, sequence);
+			oligoList.add(new Oligo(name, sequence));
 		}
+
+		Oligo[] oligos = oligoList.toArray(new Oligo[0]);
 
 		return oligos;
 	}
