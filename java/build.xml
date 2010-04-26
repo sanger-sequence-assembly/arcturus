@@ -13,11 +13,19 @@
 	<!-- The directory containing classpath JAR files -->
 	<property name="lib.dir" value="lib"/>
 
+        <!-- Test suite class -->
+	<property name="test.class.name" value="uk.ac.sanger.arcturus.ArcturusTestSuite" />
+
 	<!-- Classpath for compilation -->
 	<path id="build.classpath">
 		<fileset dir="${lib.dir}">
 			<include name="*.jar" />
 		</fileset>
+	</path>
+
+	<path id="test.classpath">
+	  <pathelement location="./lib/junit.jar" />
+	  <pathelement location="./build/classes" />
 	</path>
 
 	<!-- The directory containing the test classes -->
@@ -153,5 +161,13 @@
 	     protected="no"
 	     package="no"
              packagenames="${package.prefix}.${project.name}.*,${package.prefix}.${project.name}.*.*"/>
+	</target>
+	<target name="test" depends="compile">
+	  <junit>
+	    <test name="${test.class.name}" />
+	    <formatter type="xml"  />
+	    <classpath refid="build.classpath" />
+	    <classpath refid="test.classpath" />
+	  </junit>
 	</target>
 </project>
