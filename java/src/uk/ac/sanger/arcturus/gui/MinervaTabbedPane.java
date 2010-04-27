@@ -20,6 +20,7 @@ import uk.ac.sanger.arcturus.gui.contigtransfertable.ContigTransferTablePanel;
 import uk.ac.sanger.arcturus.gui.createcontigtransfers.CreateContigTransferPanel;
 import uk.ac.sanger.arcturus.gui.readfinder.ReadFinderPanel;
 import uk.ac.sanger.arcturus.gui.scaffoldmanager.ScaffoldManagerPanel;
+import uk.ac.sanger.arcturus.gui.siblingreadfinder.SiblingReadFinderPanel;
 import uk.ac.sanger.arcturus.gui.contigfinder.ContigFinderPanel;
 
 public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
@@ -119,6 +120,15 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 					"Find one or more reads",
 					KeyEvent.VK_F,
 					KeyStroke.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK),
+					false),
+					
+			new PermanentView(
+					SiblingReadFinderPanel.class,
+					"Find sibling reads",
+					"Find sibling reads",
+					"Find unassembled sibling reads",
+					KeyEvent.VK_S,
+					KeyStroke.getKeyStroke(KeyEvent.VK_S, ActionEvent.CTRL_MASK),
 					false),
 					
 			new PermanentView(
