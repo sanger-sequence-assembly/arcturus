@@ -12,6 +12,7 @@ import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
+import uk.ac.sanger.arcturus.siblingreadfinder.SiblingReadFinderEvent.Status;
 
 public class SiblingReadFinder {
 	protected ArcturusDatabase adb;
@@ -36,6 +37,17 @@ public class SiblingReadFinder {
 	protected PreparedStatement pstmtListTemplatesForProject;
 	protected PreparedStatement pstmtListReadsForTemplate;
 	protected PreparedStatement pstmtCurrentContigForRead;
+	
+	protected SiblingReadFinderEventListener listener;
+	protected SiblingReadFinderEvent event = new SiblingReadFinderEvent();
+	
+	public SiblingReadFinder(ArcturusDatabase adb) {
+		this.adb = adb;
+	}
+	
+	public void setListener(SiblingReadFinderEventListener listener) {
+		this.listener = listener;
+	}
 	
 	private void checkConnection() throws SQLException, ArcturusDatabaseException {
 		if (conn != null && conn.isValid(CONNECTION_VALIDATION_TIMEOUT))
@@ -88,6 +100,11 @@ public class SiblingReadFinder {
 		try {
 			checkConnection();
 			
+			if (listener != null) {
+				event.setStatus(Status.STARTED);
+				listener.siblingReadFinderUpdate(event);
+			}
+			
 			Set<Integer> templateIDs = new HashSet<Integer>();
 			
 			pstmtListTemplatesForProject.setInt(1, project.getID());
@@ -100,7 +117,17 @@ public class SiblingReadFinder {
 			
 			rs.close();
 			
+			if (listener != null) {
+				event.setStatus(Status.COUNTED_SUBCLONES);
+				event.setValue(templateIDs.size());
+				listener.siblingReadFinderUpdate(event);
+			}
+		
 			Set<String> readnames = new HashSet<String>();
+			
+			event.setStatus(Status.IN_PROGRESS);
+			
+			int count = 0;
 			
 			for (int template_id : templateIDs) {
 				readnames.clear();
@@ -118,7 +145,19 @@ public class SiblingReadFinder {
 					if (isFree(readname))
 						names.add(readname);
 				}
+				
+				if (listener != null) {
+					count++;
+					event.setValue(count);
+					listener.siblingReadFinderUpdate(event);
+				}
 			}
+			
+			if (listener != null) {
+				event.setStatus(Status.FINISHED);
+				event.setValue(names.size());
+				listener.siblingReadFinderUpdate(event);
+			}		
 		}
 		catch (SQLException e) {
 			throw new ArcturusDatabaseException(e, conn);
@@ -132,10 +171,10 @@ public class SiblingReadFinder {
 		
 		ResultSet rs = pstmtCurrentContigForRead.executeQuery();
 		
-		boolean free = rs.next();
+		boolean inContig = rs.next();
 		
 		rs.close();
 		
-		return free;
+		return !inContig;
 	}
 }
