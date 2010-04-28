@@ -161,11 +161,10 @@
              packagenames="${package.prefix}.${project.name}.*,${package.prefix}.${project.name}.*.*"/>
 	</target>
 	<target name="test" depends="compile">
-	      <javac srcdir="test" destdir="${build.classes}" debug="true" deprecation="true">
+	  <javac srcdir="test" destdir="${build.classes}" debug="true" deprecation="true">
 		   <classpath refid="test.classpath" />
 		</javac>
-
-		 <mkdir dir="tmp"/>
+		<mkdir dir="tmp"/>
 
 	  <junit>
 	    <formatter type="xml"  />
