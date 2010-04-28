@@ -124,9 +124,9 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 					
 			new PermanentView(
 					SiblingReadFinderPanel.class,
-					"Find sibling reads",
-					"Find sibling reads",
-					"Find unassembled sibling reads",
+					"Find free sibling reads for project",
+					"Find free sibling reads for project",
+					"Find free sibling reads for project",
 					KeyEvent.VK_S,
 					KeyStroke.getKeyStroke(KeyEvent.VK_S, ActionEvent.CTRL_MASK),
 					false),
