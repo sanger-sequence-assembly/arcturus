@@ -38,6 +38,8 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 
 	protected SiblingReadFinder siblingReadFinder;
 	
+	protected boolean running = false;
+	
 	public SiblingReadFinderPanel(MinervaTabbedPane parent, ArcturusDatabase adb) throws ArcturusDatabaseException {
 		super(parent, adb);
 		
@@ -149,8 +151,15 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 	public void closeResources() {
 	}
 
+	protected void setRunning(boolean running) {
+		this.running = running;
+		
+		actionFindReads.setEnabled(!running);
+	}
 
-	protected void findReads() {		
+	protected void findReads() {
+		setRunning(true);
+		
 		ProjectProxy proxy = (ProjectProxy) lstProjects.getSelectedValue();
 
 		Project project = proxy.getProject();
@@ -260,15 +269,19 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 				
 			txtMessages.append("\n");
 
-			actionFindReads.setEnabled(true);
+			parent.setRunning(false);
 		}
 
 		public void siblingReadFinderUpdate(SiblingReadFinderEvent event) {
 			switch (event.getStatus()) {
+				case STARTED:
+					monitor = new ProgressMonitor(parent, "Finding free sibling reads",
+							"Counting sub-clones ...", 0, 1000);
+					
 				case COUNTED_SUBCLONES:
 					int value = event.getValue();
-					monitor = new ProgressMonitor(parent, "Finding free sibling reads",
-							"Examining sub-clones ...", 0, value);
+					monitor.setMaximum(value);
+					monitor.setNote("Examining sub-clones ...");
 					break;
 					
 				case IN_PROGRESS:
@@ -287,7 +300,7 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 	protected void updateFindReadsButton() {
 		boolean isProjectSelected = !lstProjects.isSelectionEmpty();
 		
-		actionFindReads.setEnabled(isProjectSelected);
+		actionFindReads.setEnabled(isProjectSelected && !running);
 	}
 
 	protected boolean isRefreshable() {
