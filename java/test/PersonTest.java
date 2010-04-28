@@ -11,7 +11,6 @@ public class PersonTest {
         return new JUnit4TestAdapter(PersonTest.class);
     }
 
-
     @Test
     public void testEqual() {
         Person person1 = new Person("23");
