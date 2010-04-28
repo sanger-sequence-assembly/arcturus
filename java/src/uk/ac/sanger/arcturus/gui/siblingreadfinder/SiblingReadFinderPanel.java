@@ -23,6 +23,7 @@ import java.awt.event.*;
 
 public class SiblingReadFinderPanel extends MinervaPanel {
 	protected JTextArea txtMessages = new JTextArea(20, 100);
+	protected JCheckBox cbxOmitShotgunReads = new JCheckBox("Don't list p1k and q1k reads");
 	protected JButton btnFindReads;
 	protected JButton btnClearMessages = new JButton("Clear messages");
 	protected JList lstProjects;
@@ -77,6 +78,8 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 		btnFindReads = new JButton(actionFindReads);
 		
 		panel.add(btnFindReads);
+		
+		panel.add(cbxOmitShotgunReads);
 			
 		add(panel);
 
@@ -142,7 +145,10 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 
 		Project project = proxy.getProject();
 		
-		ReadFinderWorker worker = new ReadFinderWorker(siblingReadFinder, project, this);
+		boolean omitShotgunReads = cbxOmitShotgunReads.isSelected();
+
+		ReadFinderWorker worker = new ReadFinderWorker(siblingReadFinder, project,
+				omitShotgunReads, this);
 		
 		worker.execute();
 	}
@@ -150,15 +156,18 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 	class ReadFinderWorker extends SwingWorker<Void, Void> implements SiblingReadFinderEventListener {
 		protected final SiblingReadFinder readFinder;
 		protected Project project;
+		protected boolean omitShotgunReads;
 		protected SiblingReadFinderPanel parent;
 		
 		protected SortedSet<String> results;
 		
 		protected ProgressMonitor monitor;
 		
-		public ReadFinderWorker(SiblingReadFinder readFinder, Project project, SiblingReadFinderPanel parent) {
+		public ReadFinderWorker(SiblingReadFinder readFinder, Project project, boolean omitShotgunReads,
+				SiblingReadFinderPanel parent) {
 			this.readFinder = readFinder;
 			this.project = project;
+			this.omitShotgunReads = omitShotgunReads;
 			this.parent = parent;
 			
 			readFinder.setListener(this);
@@ -166,7 +175,7 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 
 		protected Void doInBackground() throws Exception {
 			try {
-				Set<String> rawResults = readFinder.getSiblingReadnames(project);
+				Set<String> rawResults = readFinder.getSiblingReadnames(project, omitShotgunReads);
 				
 				results = rawResults == null ? null : new TreeSet<String>(rawResults);
 			}

@@ -91,7 +91,8 @@ public class SiblingReadFinder {
 		}
 	}
 
-	public Set<String> getSiblingReadnames(Project project) throws ArcturusDatabaseException {
+	public Set<String> getSiblingReadnames(Project project, boolean omitShotgunReads)
+		throws ArcturusDatabaseException {
 		if (project == null)
 			return null;
 		
@@ -142,7 +143,7 @@ public class SiblingReadFinder {
 				rs.close();
 				
 				for (String readname : readnames) {
-					if (isFree(readname))
+					if (isFree(readname) && !(omitShotgunReads && isShotgunRead(readname)))
 						names.add(readname);
 				}
 				
@@ -166,6 +167,10 @@ public class SiblingReadFinder {
 		return names;
 	}
 	
+	private boolean isShotgunRead(String readname) {
+		return readname != null && (readname.endsWith(".p1k") || readname.endsWith(".q1k"));
+	}
+
 	private boolean isFree(String readname) throws SQLException {
 		pstmtCurrentContigForRead.setString(1, readname);
 		
