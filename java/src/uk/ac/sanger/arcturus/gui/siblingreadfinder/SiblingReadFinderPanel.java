@@ -19,12 +19,14 @@ import java.util.Comparator;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
 import java.awt.*;
 import java.awt.event.*;
 
 public class SiblingReadFinderPanel extends MinervaPanel {
 	protected JTextArea txtMessages = new JTextArea(20, 100);
-	protected JCheckBox cbxOmitShotgunReads = new JCheckBox("Don't list p1k and q1k reads");
+	protected JCheckBox cbxOmitShotgunReads = new JCheckBox("Don't list reads with these suffixes:");
+	protected JTextField txtSuffixes = new JTextField(20);
 	protected JCheckBox cbxSortReadsBySuffix = new JCheckBox("Sort reads by suffix");
 	protected JButton btnFindReads;
 	protected JButton btnClearMessages = new JButton("Clear messages");
@@ -82,6 +84,10 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 		panel.add(btnFindReads);
 		
 		panel.add(cbxOmitShotgunReads);
+		
+		panel.add(txtSuffixes);
+		
+		txtSuffixes.setText("p1k,q1k");
 		
 		panel.add(cbxSortReadsBySuffix);
 			
@@ -149,16 +155,27 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 
 		Project project = proxy.getProject();
 		
-		boolean omitShotgunReads = cbxOmitShotgunReads.isSelected();
+		String[] suffixList = cbxOmitShotgunReads.isSelected() ? getSuffixes() : null;
 		
 		boolean sortReadsBySuffix = cbxSortReadsBySuffix.isSelected();
 
 		ReadFinderWorker worker = new ReadFinderWorker(siblingReadFinder, project,
-				omitShotgunReads, sortReadsBySuffix, this);
+				suffixList, sortReadsBySuffix, this);
 		
 		worker.execute();
 	}
 	
+	private String[] getSuffixes() {
+		String text = txtSuffixes.getText();
+		
+		if (text == null)
+			return null;
+		
+		text = text.trim();
+		
+		return (text.length() == 0) ? null : text.split("[,\\s;]+");
+	}
+
 	class CompareReadsBySuffix implements Comparator<String> {
 		public int compare(String s1, String s2) {
 			String[] words1 = s1.split("\\.", 2);
@@ -179,7 +196,7 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 	class ReadFinderWorker extends SwingWorker<Void, Void> implements SiblingReadFinderEventListener {
 		protected final SiblingReadFinder readFinder;
 		protected Project project;
-		protected boolean omitShotgunReads;
+		protected Pattern omitSuffixes;
 		protected boolean sortReadsBySuffix;
 		protected SiblingReadFinderPanel parent;
 		
@@ -187,20 +204,34 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 		
 		protected ProgressMonitor monitor;
 		
-		public ReadFinderWorker(SiblingReadFinder readFinder, Project project, boolean omitShotgunReads,
+		public ReadFinderWorker(SiblingReadFinder readFinder, Project project, String[] suffixList,
 				boolean sortReadsBySuffix, SiblingReadFinderPanel parent) {
 			this.readFinder = readFinder;
 			this.project = project;
-			this.omitShotgunReads = omitShotgunReads;
+			this.omitSuffixes = createPattern(suffixList);
 			this.sortReadsBySuffix = sortReadsBySuffix;
 			this.parent = parent;
 			
 			readFinder.setListener(this);
 		}
 
+		private Pattern createPattern(String[] suffixList) {
+			if (suffixList == null || suffixList.length == 0)
+				return null;
+			
+			String pattern = suffixList[0];
+			
+			for (int i = 1; i < suffixList.length; i++)
+				pattern += "|" + suffixList[i];
+			
+			pattern = "\\.(" + pattern + ")$";
+
+			return Pattern.compile(pattern);
+		}
+
 		protected Void doInBackground() throws Exception {
 			try {
-				Set<String> rawResults = readFinder.getSiblingReadnames(project, omitShotgunReads);
+				Set<String> rawResults = readFinder.getSiblingReadnames(project, omitSuffixes);
 				
 				if (rawResults == null)
 					results = null;

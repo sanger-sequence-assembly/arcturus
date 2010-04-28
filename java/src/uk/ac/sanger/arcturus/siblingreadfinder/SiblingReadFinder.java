@@ -7,6 +7,7 @@ import java.sql.ResultSet;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Project;
@@ -91,7 +92,7 @@ public class SiblingReadFinder {
 		}
 	}
 
-	public Set<String> getSiblingReadnames(Project project, boolean omitShotgunReads)
+	public Set<String> getSiblingReadnames(Project project, Pattern omitNamesLike)
 		throws ArcturusDatabaseException {
 		if (project == null)
 			return null;
@@ -143,8 +144,13 @@ public class SiblingReadFinder {
 				rs.close();
 				
 				for (String readname : readnames) {
-					if (isFree(readname) && !(omitShotgunReads && isShotgunRead(readname)))
-						names.add(readname);
+					if (isFree(readname)) {
+						boolean matchesPattern =
+							omitNamesLike != null && omitNamesLike.matcher(readname).find();
+						
+						if (!matchesPattern)
+							names.add(readname);
+					}
 				}
 				
 				if (listener != null) {
