@@ -15,6 +15,7 @@ import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.event.*;
 
+import java.util.Comparator;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -24,6 +25,7 @@ import java.awt.event.*;
 public class SiblingReadFinderPanel extends MinervaPanel {
 	protected JTextArea txtMessages = new JTextArea(20, 100);
 	protected JCheckBox cbxOmitShotgunReads = new JCheckBox("Don't list p1k and q1k reads");
+	protected JCheckBox cbxSortReadsBySuffix = new JCheckBox("Sort reads by suffix");
 	protected JButton btnFindReads;
 	protected JButton btnClearMessages = new JButton("Clear messages");
 	protected JList lstProjects;
@@ -80,6 +82,8 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 		panel.add(btnFindReads);
 		
 		panel.add(cbxOmitShotgunReads);
+		
+		panel.add(cbxSortReadsBySuffix);
 			
 		add(panel);
 
@@ -146,17 +150,37 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 		Project project = proxy.getProject();
 		
 		boolean omitShotgunReads = cbxOmitShotgunReads.isSelected();
+		
+		boolean sortReadsBySuffix = cbxSortReadsBySuffix.isSelected();
 
 		ReadFinderWorker worker = new ReadFinderWorker(siblingReadFinder, project,
-				omitShotgunReads, this);
+				omitShotgunReads, sortReadsBySuffix, this);
 		
 		worker.execute();
+	}
+	
+	class CompareReadsBySuffix implements Comparator<String> {
+		public int compare(String s1, String s2) {
+			String[] words1 = s1.split("\\.", 2);
+			String[] words2 = s2.split("\\.", 2);
+			
+			if (words1.length == 2 && words2.length == 2) {
+				int rc = words1[1].compareTo(words2[1]);
+				
+				if (rc != 0)
+					return rc;
+				else
+					return words1[0].compareTo(words2[0]);
+			} else
+				return s1.compareTo(s2);
+		}		
 	}
 	
 	class ReadFinderWorker extends SwingWorker<Void, Void> implements SiblingReadFinderEventListener {
 		protected final SiblingReadFinder readFinder;
 		protected Project project;
 		protected boolean omitShotgunReads;
+		protected boolean sortReadsBySuffix;
 		protected SiblingReadFinderPanel parent;
 		
 		protected SortedSet<String> results;
@@ -164,10 +188,11 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 		protected ProgressMonitor monitor;
 		
 		public ReadFinderWorker(SiblingReadFinder readFinder, Project project, boolean omitShotgunReads,
-				SiblingReadFinderPanel parent) {
+				boolean sortReadsBySuffix, SiblingReadFinderPanel parent) {
 			this.readFinder = readFinder;
 			this.project = project;
 			this.omitShotgunReads = omitShotgunReads;
+			this.sortReadsBySuffix = sortReadsBySuffix;
 			this.parent = parent;
 			
 			readFinder.setListener(this);
@@ -177,7 +202,13 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 			try {
 				Set<String> rawResults = readFinder.getSiblingReadnames(project, omitShotgunReads);
 				
-				results = rawResults == null ? null : new TreeSet<String>(rawResults);
+				if (rawResults == null)
+					results = null;
+				else
+				
+				results = sortReadsBySuffix ? new TreeSet<String>(new CompareReadsBySuffix()) : new TreeSet<String>();
+				
+				results.addAll(rawResults);
 			}
 			catch (ArcturusDatabaseException e) {
 				Arcturus.logWarning("An error occurred whilst finding free reads", e);
