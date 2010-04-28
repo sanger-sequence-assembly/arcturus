@@ -172,10 +172,6 @@ public class SiblingReadFinder {
 		
 		return names;
 	}
-	
-	private boolean isShotgunRead(String readname) {
-		return readname != null && (readname.endsWith(".p1k") || readname.endsWith(".q1k"));
-	}
 
 	private boolean isFree(String readname) throws SQLException {
 		pstmtCurrentContigForRead.setString(1, readname);
