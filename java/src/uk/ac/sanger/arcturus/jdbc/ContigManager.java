@@ -49,8 +49,6 @@ public class ContigManager extends AbstractManager {
 
 	private transient Vector<ManagerEventListener> eventListeners = new Vector<ManagerEventListener>();
 
-	protected MappingComparator mappingComparator = new MappingComparator();
-
 	protected SegmentComparatorByContigPosition segmentComparator = new SegmentComparatorByContigPosition();
 
 	protected Map<Integer, String> svectorByID = new HashMap<Integer, String>();
@@ -385,9 +383,9 @@ public class ContigManager extends AbstractManager {
 
 				mappings = new Mapping[nMappings];
 
-				getMappings(contig_id, mappings);
+				getMappings(contig, mappings);
 
-				Arrays.sort(mappings, mappingComparator);
+				Arrays.sort(mappings);
 
 				contig.setMappings(mappings);
 			}
@@ -442,12 +440,12 @@ public class ContigManager extends AbstractManager {
 		return count;
 	}
 
-	private void getMappings(int contig_id, Mapping[] mappings)
+	private void getMappings(Contig contig, Mapping[] mappings)
 			throws ArcturusDatabaseException {
 		int nMappings = mappings.length;
 
 		try {
-			pstmtMappingData.setInt(1, contig_id);
+			pstmtMappingData.setInt(1, contig.getID());
 
 			event.begin("Execute mapping query", nMappings);
 			fireEvent(event);
@@ -471,7 +469,7 @@ public class ContigManager extends AbstractManager {
 
 				Sequence sequence = adb.findOrCreateSequence(seq_id, length);
 
-				mappings[kMapping++] = new Mapping(sequence, cstart, cfinish,
+				mappings[kMapping++] = new Mapping(contig, sequence, cstart, cfinish,
 						forward);
 
 				if ((kMapping % 10) == 0) {
@@ -486,7 +484,7 @@ public class ContigManager extends AbstractManager {
 			rs.close();
 		} catch (SQLException e) {
 			adb.handleSQLException(e,
-					"Failed to get mappings for contig ID= " + contig_id,
+					"Failed to get mappings for contig ID= " + contig.getID(),
 					conn, this);			
 		}
 	}
@@ -1442,23 +1440,6 @@ public class ContigManager extends AbstractManager {
 		public boolean equals(Object obj) {
 			if (obj instanceof AlignToSCFComparator) {
 				AlignToSCFComparator that = (AlignToSCFComparator) obj;
-				return this == that;
-			} else
-				return false;
-		}
-	}
-
-	class MappingComparator implements Comparator<Mapping> {
-		public int compare(Mapping mapping1, Mapping mapping2) {
-
-			int diff = mapping1.getContigStart() - mapping2.getContigStart();
-
-			return diff;
-		}
-
-		public boolean equals(Object obj) {
-			if (obj instanceof MappingComparator) {
-				MappingComparator that = (MappingComparator) obj;
 				return this == that;
 			} else
 				return false;

@@ -8,7 +8,7 @@ package uk.ac.sanger.arcturus.data;
  * length. The direction is a property of the parent Mapping.
  */
 
-public class Segment implements java.lang.Comparable {
+public class Segment implements Comparable<Segment> {
 	protected int cstart;
 	protected int rstart;
 	protected int length;
@@ -78,6 +78,36 @@ public class Segment implements java.lang.Comparable {
 	public int getReadFinish(boolean forward) {
 		return forward ? rstart + (length - 1) : rstart - (length - 1);
 	}
+	
+	/**
+	 * Returns the read range corresponding to this segment, given the orientation.
+	 * 
+	 * @param forward
+	 *            true if the parent mapping represents a read that is
+	 *            co-aligned to the contig, false if the read is counter-aligned
+	 *            to the contig.
+	 * 
+	 * @return the read range.
+	 */
+	
+	public Range getReadRange(boolean forward) {
+		return forward ? new Range(rstart, rstart + length - 1) : new Range(rstart - length + 1, rstart);
+	}
+	
+	/**
+	 * Returns the contig range corresponding to this segment, given the orientation.
+	 * 
+	 * @param forward
+	 *            true if the parent mapping represents a read that is
+	 *            co-aligned to the contig, false if the read is counter-aligned
+	 *            to the contig.
+	 * 
+	 * @return the contig range.
+	 */
+	
+	public Range getContigRange(boolean forward) {
+		return forward ? new Range(cstart, cstart + length - 1) : new Range(cstart + length - 1, cstart);
+	}
 
 	/**
 	 * Returns the length of this segment.
@@ -124,15 +154,13 @@ public class Segment implements java.lang.Comparable {
 	}
 
 	/**
-	 * Compares this object with the specified object for order.
+	 * Compares this segment with the specified segment for order.
 	 * 
 	 * @return a negative integer, zero, or a positive integer as this object is
 	 *         less than, equal to, or greater than the specified object.
 	 */
 
-	public int compareTo(Object o) {
-		Segment that = (Segment) o;
-
+	public int compareTo(Segment that) {
 		return this.cstart - that.cstart;
 	}
 }

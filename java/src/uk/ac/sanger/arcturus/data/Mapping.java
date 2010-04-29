@@ -1,5 +1,7 @@
 package uk.ac.sanger.arcturus.data;
 
+import java.util.Arrays;
+
 /**
  * An object which represents an alignment of a read to a contig.
  * 
@@ -10,48 +12,20 @@ package uk.ac.sanger.arcturus.data;
  * greater detail.
  */
 
-public class Mapping {
+public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
+	protected Contig contig;
 	protected Sequence sequence;
 	protected int cstart;
 	protected int cfinish;
-	protected boolean forward;
+	protected Direction direction;
 	protected Segment[] segments;
-	protected int nsegs;
-
-	/**
-	 * Constructs a mapping from the specified sequence, contig start and end
-	 * position, direction and number of segments.
-	 * 
-	 * The array of Segment objects may be filled in by subsequence calls to
-	 * addSegment.
-	 * 
-	 * @param sequence
-	 *            the read sequence of this read-to-contig alignment.
-	 * @param cstart
-	 *            the start position of the alignment on the contig.
-	 * @param cfinish
-	 *            the end position of the alignment on the contig.
-	 * @param forward
-	 *            true if the sequence is co-aligned to the contig, false if the
-	 *            read is counter-aligned to the contig.
-	 * @param numsegs
-	 *            the number of Segment objects which this alignment contains.
-	 */
-
-	public Mapping(Sequence sequence, int cstart, int cfinish, boolean forward,
-			int numsegs) {
-		this.sequence = sequence;
-		this.cstart = cstart;
-		this.cfinish = cfinish;
-		this.forward = forward;
-		this.segments = new Segment[numsegs];
-		nsegs = 0;
-	}
 
 	/**
 	 * Constructs a mapping from the specified sequence, contig start and end
 	 * position, direction and an array of Segment objects.
 	 * 
+	 * @param contig
+	 *            the contig of this read-to-contig alignment
 	 * @param sequence
 	 *            the read sequence of this read-to-contig alignment.
 	 * @param cstart
@@ -65,26 +39,19 @@ public class Mapping {
 	 *            the array of Segment objects for this alignment.
 	 */
 
-	public Mapping(Sequence sequence, int cstart, int cfinish, boolean forward,
-			Segment[] segments) {
+	public Mapping(Contig contig, Sequence sequence, boolean forward, Segment[] segments) {
+		this.contig = contig;
 		this.sequence = sequence;
-		this.cstart = cstart;
-		this.cfinish = cfinish;
-		this.forward = forward;
-		this.segments = segments;
-
-		if (segments == null)
-			nsegs = 0;
-		else {
-			java.util.Arrays.sort(segments);
-			nsegs = segments.length;
-		}
+		this.direction = forward ? Direction.FORWARD : Direction.REVERSE;
+		setSegments(segments);
 	}
 
 	/**
 	 * Constructs a mapping from the specified sequence, contig start and end
 	 * position, and a direction.
 	 * 
+	 * @param contig
+	 *            the contig of this read-to-contig alignment
 	 * @param sequence
 	 *            the read sequence of this read-to-contig alignment.
 	 * @param cstart
@@ -96,8 +63,66 @@ public class Mapping {
 	 *            read is counter-aligned to the contig.
 	 */
 
-	public Mapping(Sequence sequence, int cstart, int cfinish, boolean forward) {
-		this(sequence, cstart, cfinish, forward, null);
+	public Mapping(Contig contig, Sequence sequence, int cstart, int cfinish, boolean forward) {
+		this.contig = contig;
+		this.sequence = sequence;
+		this.cstart = cstart;
+		this.cfinish = cfinish;
+		this.direction = forward ? Direction.FORWARD : Direction.REVERSE;
+	}
+	
+	
+	/**
+	 * Constructs a mapping from the specified contig, sequence, and assembled-from
+	 * data.
+	 * 
+	 * @param contig
+	 *            the contig of this read-to-contig alignment
+	 * @param sequence
+	 *            the read sequence of this read-to-contig alignment.
+	 * @param afdata
+	 *            the assembled-from segments which define the read-to-contig mapping.
+	 */
+	
+	public Mapping(Contig contig, Sequence sequence, AssembledFrom[] afdata) {
+		this.contig = contig;
+		this.sequence = sequence;
+		
+		constructMappingAndSegments(afdata);
+	}
+	
+	private void constructMappingAndSegments(AssembledFrom[] afdata) {
+		Arrays.sort(afdata);
+		
+		direction = AssembledFrom.getDirection(afdata);
+		
+		boolean forward = direction == Direction.FORWARD;
+		
+		Range firstContigRange = afdata[0].getContigRange();
+		Range lastContigRange = afdata[afdata.length - 1].getContigRange();
+		
+		if (forward) {
+			this.cstart = firstContigRange.getStart();
+			this.cfinish = lastContigRange.getEnd();
+		} else {
+			this.cstart = lastContigRange.getEnd();
+			this.cfinish = firstContigRange.getStart();
+		}
+		
+		Segment[] segments = new Segment[afdata.length];
+		
+		for (int i = 0; i < afdata.length; i++) {
+			Range readRange = afdata[i].getReadRange();
+			Range contigRange = afdata[i].getContigRange();
+			
+			int rstart = forward ? readRange.getStart() : readRange.getEnd();
+			int cstart = forward ? contigRange.getStart() : contigRange.getEnd();
+			int length = readRange.getLength();
+			
+			segments[i] = new Segment(cstart, rstart, length);
+		}	
+		
+		setSegments(segments);
 	}
 
 	/**
@@ -111,12 +136,22 @@ public class Mapping {
 	}
 
 	/**
+	 * Returns the Contig object corresponding to this alignment.
+	 * 
+	 * @return the contig object corresponding to this alignment.
+	 */
+
+	public Contig getContig() {
+		return contig;
+	}
+
+	/**
 	 * Returns the start position of the alignment on the contig.
 	 * 
 	 * @return the start position of the alignment on the contig.
 	 */
 
-	public int getContigStart() {
+	public int getContigStartPosition() {
 		return cstart;
 	}
 
@@ -126,8 +161,18 @@ public class Mapping {
 	 * @return the end position of the alignment on the contig.
 	 */
 
-	public int getContigFinish() {
+	public int getContigEndPosition() {
 		return cfinish;
+	}
+
+	/**
+	 * Returns the direction of the alignment on the contig.
+	 * 
+	 * @return true of the sequence is co-aligned with the contig, false if it is counter-aligned.
+	 */
+
+	public boolean isForward() {
+		return direction == Direction.FORWARD;
 	}
 
 	/**
@@ -136,8 +181,8 @@ public class Mapping {
 	 * @return the direction of the alignment on the contig.
 	 */
 
-	public boolean isForward() {
-		return forward;
+	public Direction getDirection() {
+		return direction;
 	}
 
 	/**
@@ -160,8 +205,12 @@ public class Mapping {
 	public void setSegments(Segment[] segments) {
 		this.segments = segments;
 
-		if (segments != null)
-			java.util.Arrays.sort(segments);
+		if (segments != null) {
+			Arrays.sort(segments);
+			
+			this.cstart = segments[0].getContigStart();
+			this.cfinish = segments[segments.length - 1].getContigFinish();
+		}
 	}
 
 	/**
@@ -172,37 +221,17 @@ public class Mapping {
 	 *         contains.
 	 */
 
-	public int getSegmentCount() {
-		if (segments != null) {
+	protected int getSegmentCount() {
+		if (segments == null)
+			return 0;
+		else {
 			int count = 0;
 			for (int i = 0; i < segments.length; i++)
 				if (segments[i] != null)
 					count++;
 
 			return count;
-		} else
-			return nsegs;
-	}
-
-	/**
-	 * Adds a Segment object to the array of segments for this alignment.
-	 * 
-	 * @param segment
-	 *            the Segment object to be added to this alignment.
-	 * 
-	 * @return true if the segment was successfully added; otherwise, false. A
-	 *         false value will be returned when the array becomes full. There
-	 *         is currently no mechanism to extend the array, so the size must
-	 *         be correctly specified when the Mapping object is created.
-	 */
-
-	public boolean addSegment(Segment segment) {
-		if (nsegs < segments.length) {
-			segments[nsegs++] = segment;
-			java.util.Arrays.sort(segments, 0, nsegs);
-			return true;
-		} else
-			return false;
+		}
 	}
 
 	/**
@@ -231,7 +260,7 @@ public class Mapping {
 		else
 			base = '?';
 
-		if (!forward) {
+		if (direction == Direction.REVERSE) {
 			switch (base) {
 				case 'a':
 					base = 't';
@@ -307,7 +336,7 @@ public class Mapping {
 
 		for (int i = 0; i < segments.length; i++) {
 			if (segments[i] != null) {
-				rpos = segments[i].getReadOffset(cpos, forward);
+				rpos = segments[i].getReadOffset(cpos, direction == Direction.FORWARD);
 				if (rpos >= 0)
 					return rpos;
 			}
@@ -348,7 +377,7 @@ public class Mapping {
 				int rleft = -1, rright = -1, qleft = -1, qright = -1, q = -1;
 
 				if (cpos > cleft && cpos < cright) {
-					rleft = segments[i - 1].getReadFinish(forward);
+					rleft = segments[i - 1].getReadFinish(direction == Direction.FORWARD);
 					rright = segments[i].getReadStart();
 					qleft = (int) quality[rleft - 1];
 					qright = (int) quality[rright - 1];
@@ -371,7 +400,7 @@ public class Mapping {
 	public String toString() {
 		String text = "Mapping[sequence=" + sequence.getID() + ", cstart="
 				+ cstart + ", cfinish=" + cfinish + ", direction="
-				+ (forward ? "Forward" : "Reverse");
+				+ (direction == Direction.FORWARD ? "Forward" : "Reverse");
 
 		if (segments != null) {
 			text += "\nsegments={\n";
@@ -385,5 +414,41 @@ public class Mapping {
 		text += "]";
 
 		return text;
+	}
+
+	public BaseWithQuality getBaseAndQualityByContigPosition(int cpos) {
+		int rpos = getReadOffset(cpos);
+		
+		char base = rpos < 0 ? BaseWithQuality.STAR : getBase(rpos);
+		
+		int quality = rpos < 0 ? getPadQuality(cpos) : getQuality(rpos);
+		
+		return new BaseWithQuality(base, quality);
+	}
+
+	public BaseWithQuality getBaseAndQualityByReadPosition(int rpos) {
+		char base = getBase(rpos);
+		int quality = getQuality(rpos);
+		return new BaseWithQuality(base, quality);
+	}
+
+	public AssembledFrom[] getAssembledFromRecords() {
+		if (segments == null)
+			return null;
+		
+		AssembledFrom[] afdata = new AssembledFrom[segments.length];
+		
+		boolean forward = direction == Direction.FORWARD;
+		
+		for (int i = 0; i < segments.length; i++)
+			afdata[i] = new AssembledFrom(segments[i].getContigRange(forward), segments[i].getReadRange(forward));
+		
+		Arrays.sort(afdata);
+		
+		return afdata;
+	}
+
+	public int compareTo(Mapping that) {
+		return this.cstart - that.cstart;
 	}
 }
