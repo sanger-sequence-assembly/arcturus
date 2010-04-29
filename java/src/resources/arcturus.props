@@ -36,3 +36,5 @@ project.allowbinimport=false
 oligofinder.useRegex=true
 
 LDAPSocketFactory.debug=false
+
+traceserver.url=http://trace3slb.internal.sanger.ac.uk:8888/get_exp
