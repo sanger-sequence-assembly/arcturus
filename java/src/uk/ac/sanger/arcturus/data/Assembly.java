@@ -3,7 +3,6 @@ package uk.ac.sanger.arcturus.data;
 import uk.ac.sanger.arcturus.database.*;
 
 import java.util.*;
-import java.sql.SQLException;
 
 /**
  * This class represents a assembly, which is a set of projects.
@@ -141,7 +140,7 @@ public class Assembly extends Core implements Comparable {
 			return projects.remove(project);
 	}
 
-	public void refresh() throws SQLException {
+	public void refresh() throws ArcturusDatabaseException {
 		if (adb != null)
 			adb.refreshAssembly(this);
 	}

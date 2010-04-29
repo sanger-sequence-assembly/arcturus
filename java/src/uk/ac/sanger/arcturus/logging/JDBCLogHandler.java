@@ -96,6 +96,9 @@ public class JDBCLogHandler extends Handler {
 	}
 
 	public void publish(LogRecord record) {
+		if (!isLoggable(record))
+			return;
+		
 		try {
 			pstmtInsertRecord.setLong(1, record.getMillis());
 			pstmtInsertRecord.setLong(2, record.getSequenceNumber());

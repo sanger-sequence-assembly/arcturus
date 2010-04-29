@@ -1,7 +1,5 @@
 package uk.ac.sanger.arcturus.data;
 
-import java.util.Arrays;
-
 /**
  * An object which represents an alignment of a read to a contig.
  * 
@@ -12,12 +10,13 @@ import java.util.Arrays;
  * greater detail.
  */
 
-public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
+public class Mapping {
 	protected Sequence sequence;
 	protected int cstart;
 	protected int cfinish;
 	protected boolean forward;
 	protected Segment[] segments;
+	protected int nsegs;
 
 	/**
 	 * Constructs a mapping from the specified sequence, contig start and end
@@ -45,7 +44,8 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 		this.cstart = cstart;
 		this.cfinish = cfinish;
 		this.forward = forward;
-		setSegments(null);
+		this.segments = new Segment[numsegs];
+		nsegs = 0;
 	}
 
 	/**
@@ -71,7 +71,14 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 		this.cstart = cstart;
 		this.cfinish = cfinish;
 		this.forward = forward;
-		setSegments(segments);
+		this.segments = segments;
+
+		if (segments == null)
+			nsegs = 0;
+		else {
+			java.util.Arrays.sort(segments);
+			nsegs = segments.length;
+		}
 	}
 
 	/**
@@ -109,7 +116,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 	 * @return the start position of the alignment on the contig.
 	 */
 
-	public int getContigStartPosition() {
+	public int getContigStart() {
 		return cstart;
 	}
 
@@ -119,7 +126,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 	 * @return the end position of the alignment on the contig.
 	 */
 
-	public int getContigEndPosition() {
+	public int getContigFinish() {
 		return cfinish;
 	}
 
@@ -139,7 +146,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 	 * @return the array of Segment objects for this alignment.
 	 */
 
-	protected Segment[] getSegments() {
+	public Segment[] getSegments() {
 		return segments;
 	}
 
@@ -154,7 +161,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 		this.segments = segments;
 
 		if (segments != null)
-				Arrays.sort(segments);
+			java.util.Arrays.sort(segments);
 	}
 
 	/**
@@ -165,17 +172,37 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 	 *         contains.
 	 */
 
-	protected int getSegmentCount() {
-		if (segments == null)
-			return 0;
-		else {
+	public int getSegmentCount() {
+		if (segments != null) {
 			int count = 0;
 			for (int i = 0; i < segments.length; i++)
 				if (segments[i] != null)
 					count++;
 
 			return count;
-		}
+		} else
+			return nsegs;
+	}
+
+	/**
+	 * Adds a Segment object to the array of segments for this alignment.
+	 * 
+	 * @param segment
+	 *            the Segment object to be added to this alignment.
+	 * 
+	 * @return true if the segment was successfully added; otherwise, false. A
+	 *         false value will be returned when the array becomes full. There
+	 *         is currently no mechanism to extend the array, so the size must
+	 *         be correctly specified when the Mapping object is created.
+	 */
+
+	public boolean addSegment(Segment segment) {
+		if (nsegs < segments.length) {
+			segments[nsegs++] = segment;
+			java.util.Arrays.sort(segments, 0, nsegs);
+			return true;
+		} else
+			return false;
 	}
 
 	/**
@@ -358,31 +385,5 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 		text += "]";
 
 		return text;
-	}
-
-	public BaseWithQuality getBaseAndQualityByContigPosition(int cpos) {
-		int rpos = getReadOffset(cpos);
-		
-		char base = rpos < 0 ? BaseWithQuality.STAR : getBase(rpos);
-		
-		int quality = rpos < 0 ? getPadQuality(cpos) : getQuality(rpos);
-		
-		return new BaseWithQuality(base, quality);
-	}
-
-	public BaseWithQuality getBaseAndQualityByReadPosition(int rpos) {
-		char base = getBase(rpos);
-		int quality = getQuality(rpos);
-		return new BaseWithQuality(base, quality);
-	}
-
-	@Override
-	public AssembledFrom[] getAssembledFromRecords() {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	public int compareTo(Mapping that) {
-		return this.cstart - that.cstart;
 	}
 }

@@ -388,6 +388,12 @@ while (my $remainder = scalar(@$readids)) {
 
     my $reads = $adb->getReadsByReadID(\@readblock);
 
+    unless ($reads && @$reads) {
+        $logger->error("$readblock[0] $readblock[$#readblock] ".scalar(@readblock));
+	$logger->error("Unexpectedly no reads returned");
+	next;
+    }
+
     $logger->info("Adding sequence");
 
     $adb->getSequenceForReads($reads);

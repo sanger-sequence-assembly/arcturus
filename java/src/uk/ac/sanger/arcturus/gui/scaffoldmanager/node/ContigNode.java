@@ -38,7 +38,7 @@ public class ContigNode extends SequenceNode {
 	}
 	
 	public String toString() {
-		return "Contig " + contig.getID() + " (" + formatter.format(contig.getLength()) + " bp, project "
+		return "Contig " + contig.getID() + "/" + contig.getName() + " (" + formatter.format(contig.getLength()) + " bp, project "
 			+ contig.getProject().getName() + ")" + (current ? "" : " *** NOT CURRENT ***");
 	}
 

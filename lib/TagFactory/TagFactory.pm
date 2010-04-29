@@ -282,7 +282,7 @@ sub processRepeatTag {
 
     my $tagcomment = $tag->getTagComment();
 
-    my $status = 0;
+    my $status = 9999;
 
 # test presence of a (repeat) tag sequence name upfront
                
@@ -1061,15 +1061,13 @@ sub remap {
     return undef unless &verifyParameter($mapping,'remap', class=>'Mapping');
 
 my $logger = &verifyLogger('newremap');
+$logger->fine("TagFactory::remap options @_");
 
 # experimental new remapping
 
-    my $oldposition = $tag->getPositionMapping();
-
     $tag = $tag->copy() unless $options{nonew};
 
-$logger->fine($mapping->toString());
-$logger->fine($oldposition->toString());
+#    return undef if ($tag->getSpan() > 40000);
 
     return undef unless &remapper($tag,$mapping,%options);
 
@@ -1142,7 +1140,7 @@ sub split {
     foreach my $segment (@$segments) {
         my $flength = $segment->getSegmentLength();
         next if ($flength < $minimumsegmentsize);
-        my $newtag = $tag->copy();
+        my $newtag = $tag->copy(noposition=>1);
         $newtag->setPosition($segment->getYstart(),$segment->getYfinis());
 # add sequence fragment, if any
         if ($sequence) {

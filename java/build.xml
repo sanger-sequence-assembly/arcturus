@@ -20,6 +20,12 @@
 		</fileset>
 	</path>
 
+	<path id="test.classpath">
+	  <pathelement location="./lib/junit.jar" />
+	  <pathelement location="./lib/mockito-all-1.8.4.jar" />
+	  <pathelement location="./build/classes" />
+	</path>
+
 	<!-- The directory containing the test classes -->
 	<property name="testsrc.dir" value="test"/>
 
@@ -153,5 +159,23 @@
 	     protected="no"
 	     package="no"
              packagenames="${package.prefix}.${project.name}.*,${package.prefix}.${project.name}.*.*"/>
+	</target>
+	<target name="test" depends="compile">
+	  <javac srcdir="test" destdir="${build.classes}" debug="true" deprecation="true">
+		   <classpath refid="test.classpath" />
+		</javac>
+		<mkdir dir="tmp"/>
+
+	  <junit>
+	    <formatter type="xml"  />
+	    <batchtest todir="tmp">
+                <fileset dir="${build.classes}">
+                   <include name="test/*Test.class"/>
+                </fileset>
+            </batchtest>
+
+	    <classpath refid="build.classpath" />
+	    <classpath refid="test.classpath" />
+	  </junit>
 	</target>
 </project>

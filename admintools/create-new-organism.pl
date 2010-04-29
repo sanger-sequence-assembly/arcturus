@@ -11,6 +11,9 @@ use Term::ReadKey;
 
 use DataSource;
 
+# LDAP error code returned when we try to create an entry which already exists
+use constant ALREADY_EXISTS => 68;
+
 my $instance;
 my $organism;
 my $repository;
@@ -28,6 +31,7 @@ my $description;
 my $template;
 
 my $projects;
+my $projectsfile;
 
 my $appendtofile;
 
@@ -55,6 +59,8 @@ while (my $nextword = shift @ARGV) {
     $description = shift @ARGV if ($nextword eq '-description');
 
     $projects = shift @ARGV if ($nextword eq '-projects');
+
+    $projectsfile = shift @ARGV if ($nextword eq '-projectsfile');
 
     $appendtofile = shift @ARGV if ($nextword eq '-appendtofile');
 
@@ -114,6 +120,32 @@ my $dbhost = $dsb->getAttribute("serverName");
 my $dbport = $dsb->getAttribute("port");
 my $dbuser = $dsb->getAttribute("user");
 my $dbpass = $dsb->getAttribute("password");
+
+my %projects;
+
+if (defined($projectsfile) && -f $projectsfile) {
+    open(PROJECTS, $projectsfile) || die "Could not open project list file $projects";
+
+    my @projects;
+
+    while (my $line = <PROJECTS>) {
+	chop($line);
+
+	my ($projectname,$directory) = split(/,/, $line);
+
+	$directory = $repository . '/split/' . $projectname unless defined($directory);
+
+        $projects{$projectname} = $directory;
+    }
+
+    close(PROJECTS);
+}
+
+if (defined($projects)) {
+    foreach my $projectname (split(/,/,$projects)) {
+	$projects{$projectname} = $repository . '/split/' . $projectname;
+    }
+}
 
 unless ($skipdbsteps) {
     my $users_and_roles = &getUsersAndRoles($dsa);
@@ -299,22 +331,29 @@ unless ($skipdbsteps) {
     
     $sth = $dbh->prepare($query);
     &db_die("Failed to prepare query \"$query\"");
+
+    my $directory = $projects{'BIN'};
+
+    $directory = $repository . '/split/BIN' unless defined($directory);
     
-    $sth->execute($assembly_id, 'BIN', $me, $repository . "/split/BIN");
+    $sth->execute($assembly_id, 'BIN', $me, $directory);
     &db_die("Failed to execute query \"$query\" for BIN");
     
     $sth->execute($assembly_id, 'PROBLEMS', $me, undef);
     &db_die("Failed to execute query \"$query\" for PROBLEMS");
     
     print STDERR "OK\n\n";
+
+    delete $projects{'BIN'};
     
-    if (defined($projects)) {
+    if (scalar keys %projects) {
 	print STDERR "### Creating user-specified projects ...\n";
 	
-	foreach my $project (split(/,/, $projects)) {
-	    $sth->execute($assembly_id, $project, $me, $repository . "/split/" . $project);
-	    &db_die("Failed to execute query \"$query\" for $project");
-	    print STDERR "\t$project\n";
+	foreach my $projectname (sort keys %projects) {
+	    my $directory = $projects{$projectname};
+	    $sth->execute($assembly_id, $projectname, $me, $directory);
+	    &db_die("Failed to execute query \"$query\" for $projectname");
+	    print STDERR "\t$projectname\n";
 	}
 	
 	print STDERR "\nOK\n\n";
@@ -385,8 +424,12 @@ my $result = $ldap->add($dn,
 		     );
 
 if ($result->code) {
-    print STDERR " FAILED: ", $result->error, "\n";
-    exit(1);
+    if ($result->code == ALREADY_EXISTS) {
+	print STDERR "WARNING: the LDAP entry already exists\n"
+    } else {
+	print STDERR "LDAP FAILURE: ", $result->error, "\n";
+	exit($result->code);
+    }
 } else {
     print STDERR " OK\n";
 }
@@ -407,7 +450,7 @@ if (defined($appendtofile)) {
     }
 }
 
-print STDERR "\nTHE SCRIPT HAS COMPLETED\n";
+print STDERR "\nAN ARCTURUS DATABASE HAS BEEN CREATED FOR instance=$instance organism=$organism\n";
 
 exit(0);
 
@@ -651,4 +694,7 @@ sub showUsage {
     print STDERR "    -nocreatedatabase\tDatabase already exists, do not create it\n";
     print STDERR "    -skipdbsteps\tSkip the MySQL steps\n";
     print STDERR "    -appendtofile\tAppend the organism name to this file\n";
+    print STDERR "    -projects\t\tProjects to add to the database\n";
+    print STDERR "    -projectsfile\tFile containing list of projects to add to the database\n";
+
 }

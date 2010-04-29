@@ -428,7 +428,6 @@ foreach my $contigname (sort keys %$contigreadhash) {
 # run through the reads and create a Tag object for each
 
     $logger->warning(scalar(@$placedreads)." new reads specified for $contigname");
-    $logger->special(scalar(@$placedreads)." new reads specified for $contigname");
 
     my $readhash = {};
     my $readscore = {};
@@ -438,11 +437,9 @@ foreach my $contigname (sort keys %$contigreadhash) {
 
         my ($name,$strand,$cstart,$cfinal) = @$placedreadinfo;
         $logger->warning("placing read : $name,$strand,$cstart,$cfinal",preskip=>1);
-        $logger->special("placing read : $name,$strand,$cstart,$cfinal",preskip=>1);
 
         if ($padmapping && !$filterdomain) {
-#            my ($intervals,$transform) = $padmapping->transform($cstart,$cfinal);
-            my $transform = $padmapping->transform($cstart,$cfinal);
+            my ($intervals,$transform) = $padmapping->transform($cstart,$cfinal);
             $logger->info("xmatch range   $cstart  $cfinal"); 
 
             my ($cmstart,$cmfinal) = $transform->getMappedRange();
@@ -539,7 +536,6 @@ foreach my $contigname (sort keys %$contigreadhash) {
 	        $logger->severe("Failed read placement (SW) : "
                               ."($name,$strand,$cstart,$cfinal)");
 	        $logger->warning("score $score for lengths: r: $rlength  c:$clength");
-	        $logger->severe("FAIL : low alignment score $score (SW)");
 		next;
 	        $logger->warning("read\n$rsubstring");
 	        $logger->warning("contig substring\n$csubstring");
@@ -548,8 +544,7 @@ foreach my $contigname (sort keys %$contigreadhash) {
 	    }
 
             if (&mappingrange($mapping) <= 50) {
-		$logger->warning("FAIL : low mapping range (r: $rlength  c: $clength)");
-		$logger->special("FAIL : low mapping range (r: $rlength  c: $clength)");
+		$logger->warning("Low mapping range (r: $rlength  c: $clength)");
                 $logger->warning($mapping->toString(Xdomain=>$csubstring,Ydomain=>$rsubstring));
                 next;
             }
@@ -592,11 +587,9 @@ foreach my $contigname (sort keys %$contigreadhash) {
 
     if ($assembledreads) {
 	$logger->warning("$assembledreads new reads placed for contig $contigname");
-	$logger->special("$assembledreads new reads placed for contig $contigname");
     }
     else {
 	$logger->warning("No new reads placed for contig $contigname",skip=>1);
-	$logger->special("No new reads placed for contig $contigname",skip=>1);
 	next;
     }
 
@@ -631,8 +624,6 @@ foreach my $contigname (sort keys %$contigreadhash) {
 #    print STDOUT "parentids $parentids \n";
 #    next unless $parentids;
 #    print STDOUT "parents @$parentids \n";
-
-# RESTORE MASKED READS $arcturuscontig->restoreMaskedReads();
 
     next unless $confirm;
       

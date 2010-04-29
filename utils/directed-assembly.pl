@@ -19,7 +19,7 @@ my ($project,$assembly,$fopn,$lock, $ignore); # arcturus contig data
 $project = 'all'; # default
 $ignore  = 'PROBLEMS';
 
-my ($nomask,$namelike,$namenotlike,$aspedbefore,$aspedafter,$singletons); # read data
+my ($nomask,$namelike,$namenotlike,$aspedbefore,$aspedafter); # read data
 
 my ($minmatch,$minscore,$masklevel,$penalty,$noraw); # cross match params
 
@@ -34,7 +34,7 @@ my ($fuzz, $partial, $nosingle, $ftest); # crossmatch output filtering
 
 my $filterdomain; # read placement
 
-my ($renew,$verbose,$debug,$uselocal); # control
+my ($renew,$verbose,$debug); # control
 
 $renew = 1; # default always renew
 
@@ -44,12 +44,12 @@ $renew = 1; # default always renew
 
 my $validKeys  = "organism|o|instance|i|"
                . "project|p|assembly|a|fopn|lock|ignore|ip|"  # contig selection & export
-               . "namelike|nl|namenotlike|nnl|aspedbefore|ab|aspedafter|aa|singletons|"
+               . "namelike|nl|namenotlike|nnl|aspedbefore|ab|aspedafter|aa|"
                . "nomasksequence|nms|" # read selection & export
                . "minmatch|mm|minscore|ms|masklevel|ml|" # crossmatch control
                . "fuzz|partial|filtertest|ft|multiplematchesonly|mmo|fd|filterdomain|nfd|" # cm output filter
                . "contig|read|caf|" # test options and output
-               . "norefresh|nrf|local|confirm|verbose|info|debug|help";
+               . "norefresh|nrf|confirm|verbose|info|debug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -83,7 +83,7 @@ while (my $nextword = shift @ARGV) {
     $fopn          = shift @ARGV  if ($nextword eq '-fopn');
 
     if ($nextword eq '-ip'  || $nextword eq '-ignore') {
-        my $ignoreproject = shift @ARGV;
+        $ignoreproject = shift @ARGV;
         $ignore = ','.$ignoreproject;
     }  
 
@@ -109,8 +109,6 @@ while (my $nextword = shift @ARGV) {
     if ($nextword eq '-nomasksequence' || $nextword eq '-nms') {
         $nomask      = 1;
     }  
-
-    $singletons      = 1 if ($nextword eq '-singletons');
 
 # renew (build from scratch) option
 
@@ -161,7 +159,6 @@ while (my $nextword = shift @ARGV) {
     $testread      = shift @ARGV  if ($nextword eq '-read');
     $caffile       = shift @ARGV  if ($nextword eq '-caf');
     $confirm       = 1            if ($nextword eq '-confirm');
-    $uselocal      = 1            if ($nextword eq '-local');
 
 # reporting
 
@@ -215,33 +212,25 @@ my $xmatchfilter     = "/tmp/$organism.crossmatchfilter";
 my $readqmaskdata    = "/tmp/$organism.r.mask.lis";
 
 my $arcturus_root = "/software/arcturus";
-$arcturus_root = "$ENV{ARC_DEV_ROOT}" if $uselocal;
 
 #------------------------------------------------------------------------------
 # 1 : export the (selected) contigs as fasta file
 #------------------------------------------------------------------------------
 
 unless ( -f $contigfasta && !$renew) {
-#unless (!$renew && (-f $contigfasta) && (!$singleton || (-f $uareadfasta))) {
 # later replace by new-contig-export
     my $command = "$arcturus_root/utils/project-export "
                 . "-organism $organism -instance $instance "
                 . "-fasta $contigfasta "
-                . "-quality $contigquality "
-                . "-scaffold 0 "
                 . "-gap4name -qc ";
-    $command   .= "-project $project "           if $project;
-    $command   .= "-singletons  $uareadfasta "   if $singletons;
-    $command   .= "-mask x "                     unless $nomask;
-    $command   .= "-ignore $ignore "             if $ignore;
-    $command   .= "-fopn $fopn "                 if $fopn;
-    $command   .= "-lock "                       if $lock;
-    $command   .= "-verbose"                     if $verbose;
+    $command   .= "-project $project "       if $project;
+    $command   .= "-ignore $ignore "         if $ignore;
+    $command   .= "-fopn $fopn "             if $fopn;
+    $command   .= "-lock "                   if $lock;
+    $command   .= "-quality $contigquality " if $nomask;
+    $command   .= "-verbose"                 if $verbose;
 
     $logger->warning("exporting current contigs to $contigfasta",ss=>1);
-    if ($singletons) {
-        $logger->warning("exporting singleton contigs to $uareadfasta",skip=>1);
-    }
     $logger->info($command,skip=>1);
 
     exit 1 if &mySystem($command);
@@ -251,7 +240,7 @@ unless ( -f $contigfasta && !$renew) {
 # 2 : export the (selected) unassembled reads
 #------------------------------------------------------------------------------
 
-unless ((-f $uareadfasta) && !$renew || $singletons) {
+unless (-f $uareadfasta && !$renew) {
 
     &mySystem("rm -f ${uareadfasta}*") if (-f $uareadfasta);
 
@@ -263,6 +252,7 @@ unless ((-f $uareadfasta) && !$renew || $singletons) {
     $command   .= "-namenotlike '$namenotlike' " if $namenotlike;
     $command   .= "-aspedbefore '$aspedbefore' " if $aspedbefore;
     $command   .= "-aspedafter  '$aspedafter' "  if $aspedafter;
+# nosingletons ?
     $command   .= "-verbose"                     if $verbose;
 
     $logger->warning("exporting unssembled reads to $uareadfasta",ss=>1);
@@ -305,7 +295,7 @@ unless ((-f $xmatchfilter && ! -z $xmatchfilter) && !$renew && !$ftest) {
     my $command = "$arcturus_root/utils/xmatch-filter "
     	        . "-in  $xmatchoutput "
                 . "-out $xmatchfilter ";
-    $command   .= "-qfile $readqmaskdata " unless ($nomask || $singletons);
+    $command   .= "-qfile $readqmaskdata " unless $nomask;
     $command   .= "-fuzz $fuzz "  if $fuzz;
     $command   .= "-partials 1 "  if $partial;
     $command   .= "-test $ftest " if $ftest;
@@ -330,17 +320,18 @@ my $swprog = "$arcturus_root/test/smithwaterman.x";
 
 if (-f $xmatchfilter) {
 
+#my $arcturus_root = "$ENV{ARC_DEV_ROOT}";
+
     my $command = "$arcturus_root/utils/directed-read-assembler "
                 . "-o $organism -i $instance "
                 . "-filename $xmatchfilter -swprog $swprog "
-                . "-clip -cleanup ";
+                . "-clip -breakmode -cleanup ";
     $command   .= "-caf $caffile "     if $caffile;
     $command   .= "-contig $contig "   if $contig;
     $command   .= "-read $testread "   if $testread;
 #    $command   .= "-multiple "         if $nosingle; # to be developed
     $command   .= "-filterdomain "     if $filterdomain;
     $command   .= "-ignorelock "       if $lock;
-    $command   .= "-breakmode "        unless $singletons;
     $command   .= "-confirm "          if $confirm;
     $command   .= "-verbose "          if $verbose;
     $command   .= "-debug "            if $debug;
@@ -438,7 +429,6 @@ sub showUsage {
     print STDERR "-aspedbefore\t(ab)  include reads when asped before\n";
     print STDERR "-aspedafter\t(aa)  include reads when asped after\n";
     print STDERR "-nomasksequence\t(nms) do not mask low quality read sequence\n";
-    print STDERR "-singletons\t(no value) use only the reads in single-read contigs\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS for crossmatch control (re: man cross_match):\n";
     print STDERR "\n";

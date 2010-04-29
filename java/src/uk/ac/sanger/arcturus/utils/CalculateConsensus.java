@@ -146,7 +146,7 @@ public class CalculateConsensus {
 			adb.setCacheing(ArcturusDatabase.TEMPLATE, false);
 			adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
 
-			conn = adb.getConnection();
+			conn = adb.getDefaultConnection();
 
 			if (conn == null) {
 				System.err.println("Connection is undefined");
@@ -232,7 +232,7 @@ public class CalculateConsensus {
 	}
 
 	public void calculateConsensusForContig(int contig_id)
-			throws SQLException, DataFormatException {
+			throws ArcturusDatabaseException {
 		long clockStart = System.currentTimeMillis();
 
 		Contig contig = adb.getContigByID(contig_id, flags);
@@ -328,26 +328,27 @@ public class CalculateConsensus {
 		if (contig == null || contig.getMappings() == null)
 			return false;
 
-		ReadToContigMapping[] mappings = contig.getMappings();
+		Mapping[] mappings = contig.getMappings();
 		int cpos, rdleft, rdright, oldrdleft, oldrdright;
 
-		int cstart = mappings[0].getContigStartPosition();
-		int cfinal = mappings[0].getContigEndPosition();
+		int cstart = mappings[0].getContigStart();
+		int cfinal = mappings[0].getContigFinish();
 
-		Vector<ReadToContigMapping> normalReads = new Vector<ReadToContigMapping>();
-		Vector<ReadToContigMapping> longReads = new Vector<ReadToContigMapping>();
+		Vector<Mapping> normalReads = new Vector<Mapping>();
+		Vector<Mapping> longReads = new Vector<Mapping>();
 
 		for (int i = 0; i < mappings.length; i++) {
 			if (mappings[i].getSequence() == null
 					|| mappings[i].getSequence().getDNA() == null
-					|| mappings[i].getSequence().getQuality() == null)
+					|| mappings[i].getSequence().getQuality() == null
+					|| mappings[i].getSegments() == null)
 				return false;
 
-			if (mappings[i].getContigStartPosition() < cstart)
-				cstart = mappings[i].getContigStartPosition();
+			if (mappings[i].getContigStart() < cstart)
+				cstart = mappings[i].getContigStart();
 
-			if (mappings[i].getContigEndPosition() > cfinal)
-				cfinal = mappings[i].getContigEndPosition();
+			if (mappings[i].getContigFinish() > cfinal)
+				cfinal = mappings[i].getContigFinish();
 
 			Read read = mappings[i].getSequence().getRead();
 
@@ -386,11 +387,11 @@ public class CalculateConsensus {
 
 		for (cpos = cstart, rdleft = 0, oldrdleft = 0, rdright = -1, oldrdright = -1; cpos <= cfinal; cpos++) {
 			while ((rdleft < nreads)
-					&& (mappings[rdleft].getContigEndPosition() < cpos))
+					&& (mappings[rdleft].getContigFinish() < cpos))
 				rdleft++;
 
 			while ((rdright < nreads - 1)
-					&& (mappings[rdright + 1].getContigStartPosition() <= cpos))
+					&& (mappings[rdright + 1].getContigStart() <= cpos))
 				rdright++;
 
 			int depth = 1 + rdright - rdleft;
@@ -414,7 +415,7 @@ public class CalculateConsensus {
 				processMapping(mappings[rdid], cpos);
 
 			// Process the oversize (consensus) reads
-			for (ReadToContigMapping mapping : longReads)
+			for (Mapping mapping : longReads)
 				processMapping(mapping, cpos);
 
 			try {
@@ -448,29 +449,41 @@ public class CalculateConsensus {
 		return true;
 	}
 
-	private void processMapping(ReadToContigMapping mapping, int cpos) {
-		BaseWithQuality bq = mapping.getBaseAndQualityByContigPosition(cpos);
+	private void processMapping(Mapping mapping, int cpos) {
+		int rpos = -1;
+		int qual = -1;
+		
+		try {
+			rpos = mapping.getReadOffset(cpos);
 
-		char base = bq.getBase();
-		
-		int qual = bq.getQuality();
-		
+			qual = (rpos >= 0) ? mapping.getQuality(rpos) : mapping
+					.getPadQuality(cpos);
+		} catch (ArrayIndexOutOfBoundsException e) {
+			e.printStackTrace();
+			System.err.println("Mapping " + mapping +", cpos " + cpos);
+			System.exit(1);
+		}
+
 		if (qual <= 0)
 			return;
 
 		Read read = mapping.getSequence().getRead();
 
-		// In the Gap4 consensus algorithm, "strand" refers to the read-to-contig
-		// alignment direction, not the physical strand from which the read has
+		// In the Gap4 consensus algorithm, "strand" refers to the
+		// read-to-contig
+		// alignment direction, not the physical strand from which the
+		// read has
 		// been sequenced.
 		int strand = mapping.isForward() ? Read.FORWARD : Read.REVERSE;
 
 		int chemistry = read == null ? Read.UNKNOWN : read.getChemistry();
 
+		char base = (rpos >= 0) ? mapping.getBase(rpos) : '*';
+
 		algorithm.addBase(base, qual, strand, chemistry);
 	}
 
-	public void storeConsensus(int contig_id, Consensus consensus) throws SQLException {
+	public void storeConsensus(int contig_id, Consensus consensus) throws ArcturusDatabaseException {
 		byte[] sequence = consensus.getDNA();
 		byte[] quality = consensus.getQuality();
 
@@ -481,24 +494,35 @@ public class CalculateConsensus {
 		compresser.reset();
 		compresser.setInput(sequence);
 		compresser.finish();
+		
 		int compressedSequenceLength = compresser.deflate(buffer);
+		
 		byte[] compressedSequence = new byte[compressedSequenceLength];
+		
 		for (int i = 0; i < compressedSequenceLength; i++)
 			compressedSequence[i] = buffer[i];
 
 		compresser.reset();
 		compresser.setInput(quality);
 		compresser.finish();
+		
 		int compressedQualityLength = compresser.deflate(buffer);
+		
 		byte[] compressedQuality = new byte[compressedQualityLength];
+		
 		for (int i = 0; i < compressedQualityLength; i++)
 			compressedQuality[i] = buffer[i];
 
-		stmtStoreConsensus.setInt(1, contig_id);
-		stmtStoreConsensus.setInt(2, seqlen);
-		stmtStoreConsensus.setBytes(3, compressedSequence);
-		stmtStoreConsensus.setBytes(4, compressedQuality);
-		stmtStoreConsensus.executeUpdate();
+		try {
+			stmtStoreConsensus.setInt(1, contig_id);
+			stmtStoreConsensus.setInt(2, seqlen);
+			stmtStoreConsensus.setBytes(3, compressedSequence);
+			stmtStoreConsensus.setBytes(4, compressedQuality);
+			stmtStoreConsensus.executeUpdate();
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to set consensus for contig ID=" + contig_id, conn, this);
+		}
 	}
 
 	private class Consensus {

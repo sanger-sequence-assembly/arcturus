@@ -1,6 +1,5 @@
 package uk.ac.sanger.arcturus.gui;
 
-import java.sql.SQLException;
 import javax.naming.NamingException;
 
 import javax.swing.*;
@@ -8,7 +7,6 @@ import javax.swing.border.*;
 import java.awt.*;
 import java.awt.event.*;
 
-import java.io.*;
 import java.util.*;
 
 import uk.ac.sanger.arcturus.ArcturusInstance;
@@ -158,7 +156,7 @@ public class Minerva {
 	}
 
 	public void createAndShowOrganismDisplay(String organism)
-			throws SQLException, NamingException {
+			throws ArcturusDatabaseException {
 		MinervaFrame frame = frames.get(organism);
 
 		if (frame == null) {
@@ -177,7 +175,7 @@ public class Minerva {
 	}
 
 	public MinervaTabbedPane createOrganismDisplay(String organism)
-			throws SQLException, NamingException {
+			throws ArcturusDatabaseException {
 		ArcturusDatabase adb = ai[0].findArcturusDatabase(organism);
 
 		return createOrganismDisplay(adb);
@@ -185,14 +183,14 @@ public class Minerva {
 
 
 	public MinervaTabbedPane createOrganismDisplay(Organism organism)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		ArcturusDatabase adb = new ArcturusDatabaseImpl(organism);
 		
 		return createOrganismDisplay(adb);
 	}
 
 	private MinervaTabbedPane createOrganismDisplay(ArcturusDatabase adb)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		adb.setCacheing(ArcturusDatabase.READ, false);
 		adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
 
@@ -204,7 +202,7 @@ public class Minerva {
 	}
 
 	public void createAndShowOrganismDisplay(Organism organism)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		MinervaFrame frame = frames.get(organism.getName());
 
 		if (frame == null) {

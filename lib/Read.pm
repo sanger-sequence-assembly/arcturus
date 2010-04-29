@@ -2,7 +2,7 @@ package Read;
 
 use strict;
 
-use RegularMapping;
+use Mapping;
 
 use Clipping;
 
@@ -157,9 +157,7 @@ sub getAlignToTrace {
     return $this->{alignToTrace}; # undef or array of arrays
 }
 
-#TO BE DEPRECATED FROM HERE
-use Mapping;
-sub oldgetAlignToTraceMapping {
+sub getAlignToTraceMapping {
 # export the trace-to-read mappings as a Mapping object
     my $this = shift;
 
@@ -179,29 +177,8 @@ sub oldgetAlignToTraceMapping {
 
     return $mapping;
 }
-#UNTIL HERE
-sub getAlignToTraceMapping {
-# export the trace-to-read mappings as a Mapping object
-    my $this = shift;
-return $this->oldgetAlignToTraceMapping() unless shift;
 
-    my $aligntotrace = $this->getAlignToTrace() || [];
-
-    unless (@$aligntotrace) {
-        my $length = $this->getSequenceLength() || return undef;
-        my @segment = (1,$length,1,$length);
-        push @$aligntotrace,[@segment];
-    }
-
-    my $mapping = new RegularMapping($aligntotrace);
-    $mapping->setReadName($this->getReadName());
-    $mapping->setSequenceID($this->getSequenceID());
-
-    return $mapping;
-}
-
-#TO BE DEPRECATED FROM HERE
-sub oldputAlignToTraceMapping {
+sub putAlignToTraceMapping {
 # import the trace-to-read mappings from a Mapping object
     my $this = shift;
     my $attm = shift;
@@ -211,22 +188,6 @@ sub oldputAlignToTraceMapping {
     my $segments = $attm->getSegments();
     foreach my $segment (@$segments) {
         my @segment = $segment->getSegment();
-        $this->addAlignToTrace([@segment]);
-    }
-}
-#UNTIL HERE
-sub putAlignToTraceMapping {
-# import the trace-to-read mappings from a Mapping object
-    my $this = shift;
-    my $attm = shift;
-return $this->oldputAlignToTraceMapping($attm) unless shift;
-
-    undef $this->{alignToTrace};
-
-    my $nrofsegments = $attm->hasSegments();
-
-    foreach my $i (1 .. $nrofsegments) {
-        my @segment = $attm->getSegment($i);
         $this->addAlignToTrace([@segment]);
     }
 }

@@ -10,15 +10,12 @@ use ContigFactory::ContigFactory;
 use ReadFactory::TraceServerReadFactory;
 
 use ArcturusDatabase;
-#use ArcturusDatabase::ADBMapping;
 use Project;
 
 use FileHandle;
 use Logging;
 
 require Mail::Send;
-
-my $NEW = 1;
 
 #----------------------------------------------------------------
 # ingest command line parameters
@@ -97,7 +94,7 @@ my $autolockmode = 1;
 
 # filter for mixed assembly capilary reads
 
-my $rejectreadname = '\.[pq][12]k\.[\w\-]+';
+my $rejectreadname;
 my $manglereadname = '\.[pq][12]k\.[\w\-]+';
 
 # filter for reads on input caf file
@@ -108,6 +105,7 @@ my $ignorereadnamelike;
 
 my $loglevel;             
 my $logfile;
+my $mapfile;
 #my $outfile;
 my $outfile = "contigloader";
 my $minerva;
@@ -159,7 +157,7 @@ my $validkeys  = "organism|o|instance|i|"
                . "projectlock|pl|dounlock|project|p|noprojectlock|npl|"
                . "assembly|a|noscaffold|ns|scaffoldfile|sf|"
 
-               . "outputfile|out|log|minerva|verbose|info|debug|"
+               . "outputfile|out|log|mapfile|minerva|verbose|info|debug|"
                . "memory|timing|benchmark|help|h";
 
 #------------------------------------------------------------------------------
@@ -390,6 +388,7 @@ while (my $nextword = shift @ARGV) {
 
     $logfile          = shift @ARGV  if ($nextword eq '-log');
     $outfile          = shift @ARGV  if ($nextword eq '-out');
+    $mapfile          = shift @ARGV  if ($nextword eq '-mapfile');
 
     &showUsage(0) if ($nextword eq '-h' || $nextword eq '-help');
 }
@@ -431,6 +430,17 @@ $logger->listStreams() if defined $loglevel; # test
 
 if ($syncreadtags && !$production) {
     $logger->warning("BEWARE: read tag synchronization active");
+}
+
+#----------------------------------------------------------------
+# open file handle for CAF contig name to Arcturus ID mapping
+#----------------------------------------------------------------
+
+my $fhMapfile;
+
+if (defined($mapfile)) {
+    $fhMapfile = new FileHandle($mapfile, "w");
+    $fhMapfile->autoflush(1);
 }
 
 #----------------------------------------------------------------
@@ -720,12 +730,13 @@ if ($frugal) { # this whole block should go to a contig "factory"
 	}
         elsif ($objecttype =~ /read/) {
 # filter readnames to avoid loading unwanted reads into arcturus
-            if ($manglereadname && $objectname =~ /$manglereadname/) {
-                $logger->severe("The assembly contains reads mangled by the Newbler asssembler");
-		$logger->severe("Loading is aborted");
-  	        $adb->disconnect();
-	        exit 1;
-            }
+#            if ($manglereadname && $objectname =~ /$manglereadname/) {
+#                $logger->severe("The assembly contains reads mangled by the Newbler asssembler");
+#		$logger->severe("Offending read: $objectname");
+#		$logger->severe("Loading is aborted");
+#  	        $adb->disconnect();
+#	        exit 1;
+#            }
             if ($rejectreadname && $objectname =~ /$rejectreadname/) {
 		$logger->warning("read $objectname was rejected");
                 next;
@@ -759,6 +770,7 @@ if ($frugal) { # this whole block should go to a contig "factory"
         my %toptions = (readload=>$readload);
         $toptions{consensusread}  = $consensusread      if $consensusread;
         $toptions{noaspedcheck}   = $noaspedcheck       if $noaspedcheck;
+        $toptions{manglereadname} = $manglereadname     if $manglereadname;
 
         my $readnames = \@readnames;
         if (defined $ignorereadnamelike) { # apply filter to readnames
@@ -1089,6 +1101,11 @@ print STDOUT " end no frugal scan\n";
                 $lastinsertedcontig = $added;
                 $logger->info("Contig $identifier with $nr reads :"
                              ." status $added, $msg");
+                $logger->special("Contig $identifier with $nr reads :"
+                                ." status $added, $msg");
+            # Record the mapping from CAF contig name to Arcturus ID, if 
+            # the user specified a map file
+		print $fhMapfile "$identifier $added\n" if defined($fhMapfile);
 #                $loaded++ unless ...;
 # replace the input rank by the scaffold ranking, or, if absent by the nextrank count
                 if ($scaffold) {
@@ -1110,7 +1127,8 @@ print STDOUT " end no frugal scan\n";
 # add contig_id, rank in current scaffold, parent ids (if any);    
             }
             else {
-                $logger->warning("Contig $identifier with $nr reads was not added:"
+
+                $logger->warning("WARNING! Contig $identifier with $nr reads was NOT ADDED :"
                                 ."\n$msg",preskip=>1);
                 $missed++;
 # for discontinuous contigs: try break
@@ -1137,7 +1155,12 @@ print STDOUT " end no frugal scan\n";
 		    $contig->erase(); # enable garbage collection
                     next;
    	        }
-# $adb->clearLastContig(); ?
+                   
+                if ($loglevel) { # debugging option for failed contig
+                    $contig->setSequence();
+                    $contig->writeToCaf(*STDOUT);
+                    next;
+	        }
             }
 #$logger->monitor("memory usage after loading contig ".$contig->getContigName(),memory=>1);
         }
@@ -1168,7 +1191,7 @@ print STDOUT " end no frugal scan\n";
                     $logger->warning($line);
 		}
                 $contig->setContigID($added) if $added;
-                my $diagnose =($contigtest > 1) ? 2 : 0;
+                my $diagnose =($contigtest > 1 || $debug) ? 2 : 0;
 		$contig->isValid(diagnose=>$diagnose);
 	        if ($contig->hasContigToContigMappings()) {
                     $logger->warning($contig->getContigName()
@@ -1188,7 +1211,12 @@ print STDOUT " end no frugal scan\n";
             }
 	    else {
                 my $diagnosis = $contig->getStatus();
-                $logger->severe("Invalid contig $identifier: $diagnosis");
+                $logger->severe("Invalid contig $identifier: $diagnosis");               
+                if ($loglevel) { # debugging option for failed contig
+                    $contig->setSequence();
+                    $contig->writeToCaf(*STDOUT);
+                    next;
+	        }
 	    }
         }
 
@@ -1241,6 +1269,7 @@ if (@$reads && keys %readtagoptions) {
 
 $logger->warning("$loaded contigs loaded");
 $logger->warning("$missed contigs skipped") if $missed;
+$logger->special("$missed contigs skipped") if $missed;
 
 # ad import mark on the project
 
@@ -1295,9 +1324,11 @@ my $addressees = $adb->getMessageAddresses(1);
 
 foreach my $user (@$addressees) {
     my $message = $adb->getMessageForUser($user);
-    &sendMessage($user,$message) if $message;
+    &sendMessage($user, $message, $instance) if $message;
 }
 
+# Close the CAF contig name to Arcturus ID map file, if it was opened
+$fhMapfile->close() if defined($fhMapfile);
 
 exit 0 if $loaded;  # no errors and contigs loaded
 
@@ -1320,7 +1351,7 @@ sub testreadsindatabase {
 
     return 0 unless ($missingreads && @$missingreads);
     
-    $logger->warning(scalar(@$missingreads)." missing reads identified ($missingreads->[0])");
+    $logger->warning(scalar(@$missingreads)." missing reads identified");
 
     $logger->warning("$missingreads->[0] ... $missingreads->[$#$missingreads]");
 
@@ -1377,6 +1408,10 @@ sub testreadsindatabase {
 
     my $crn = $options{consensusread};
     my $nac = $options{noaspedcheck};
+    my $manglereadname = $options{manglereadname};
+
+    my $readstobeloaded = $stillmissingreads;
+    my $readsloaded = 0;
 
     while (@$stillmissing) {
         my @nameblock = splice @$stillmissing,0,1000;
@@ -1396,6 +1431,16 @@ sub testreadsindatabase {
                 $logger->info("required un-edit edited read $readname");
 #                next; # ignore here, or override ?
  	    }
+# do not load anything that looks like a mangled read in order not to contamionate raw data            
+            if ($manglereadname && $readname =~ /$manglereadname/) {
+                $logger->severe("The assembly contains reads mangled by the Newbler asssembler");
+		$logger->severe("Offending read: $readname");
+		$logger->severe("Loading will be aborted");
+#  	        $adb->disconnect();
+#	        exit 1;
+		next;
+            }
+
 
 # move most of this to ReadFactory ? 
             unless ($read->getStrand()) {
@@ -1435,7 +1480,7 @@ sub testreadsindatabase {
             }
 
             next unless $readload;
-# AD HOC fix fro zebrafish; TO BE REMOVED LATER
+# AD HOC fix for zebrafish; TO BE REMOVED LATER
 if ($read->getPrimer() eq 'Custom_primer') {
     $logger->special("Custom_primer adjusted");
     $read->setPrimer('Custom');
@@ -1446,7 +1491,9 @@ if ($read->getPrimer() eq 'Custom_primer') {
 		next;
 	    }
             $stillmissingreads--;
+	    $readsloaded++;
         }
+	$logger->warning("Loaded $readsloaded reads of $readstobeloaded");
     }
 
     return $stillmissingreads; # number of reads still missing
@@ -1541,7 +1588,7 @@ $logger->monitor("AFTER processing readtags",memory=>1,timing=>1) if $monitor;
                 $logger->warning($tag->writeToCaf());
             }
 # list the tags which need to be loaded
-            my $tagstobeloaded = $adb->putTagsForReads([($read)]);
+            my $tagstobeloaded = $adb->putTagsForReads([($read)],noload=>1);
             if (ref($tagstobeloaded) eq 'ARRAY') {
                 $logger->warning("Tags to be loaded : ".scalar(@$tagstobeloaded));
                 foreach my $tag (@$tagstobeloaded) {
@@ -1636,7 +1683,12 @@ sub scaffoldfileparser { # TO BE TESTED
 #------------------------------------------------------------------------
 
 sub sendMessage {
-    my ($user,$message) = @_;
+    my ($user,$message,$instance) = @_;
+
+    if ($instance eq 'test') {
+	print STDOUT "TEST MODE -- This message would be mailed user $user:\n$message\n\n";
+	return;
+    }
 
     print STDOUT "message to be emailed to user $user:\n$message\n\n";
 
@@ -1825,6 +1877,8 @@ sub showUsage {
     print STDERR "-debug\t\t(no value) you don't want to do this\n";
     print STDERR "\n";
     print STDERR "-gap4name\tname entered in database import log for origin of data\n";
+    print STDERR "\n";
+    print STDERR "-mapfile\tName of output file for CAF contig name to Arcturus ID mappings\n";
     print STDERR "\n";
 #    print STDERR "-safemode\tread the last contig back from the database to confirm storage\n";
     print STDERR "\n";

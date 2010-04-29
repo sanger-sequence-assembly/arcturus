@@ -3,6 +3,7 @@ package uk.ac.sanger.arcturus.utils;
 import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import java.sql.*;
 import java.util.zip.*;
@@ -21,6 +22,7 @@ public class ContigCAFWriter {
 	public static final int READ_CLONE_DATA_NOT_FOUND = 4;
 	public static final int NO_SEQUENCE_DATA = 5;
 
+	private ArcturusDatabase adb;
 	private Connection conn;
 
 	private PreparedStatement pstmtContigData;
@@ -81,11 +83,22 @@ public class ContigCAFWriter {
 
 	private Inflater decompresser = new Inflater();
 
-	public ContigCAFWriter(ArcturusDatabase adb) throws SQLException {
+	public ContigCAFWriter(ArcturusDatabase adb) throws ArcturusDatabaseException {
+		this.adb = adb;
+		
 		conn = adb.getPooledConnection(this);
 
-		prepareStatements();
-		createDictionaries();
+		try {
+			prepareStatements();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to initialise CAF writer", conn, this);
+		}
+		
+		try {
+			createDictionaries();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to create dictionaries for CAF writer", conn, this);
+		}
 	}
 
 	private void prepareStatements() throws SQLException {
@@ -225,14 +238,21 @@ public class ContigCAFWriter {
 		stmt.close();
 	}
 
-	public int getContigReadCount(int contigid) throws SQLException {
+	public int getContigReadCount(int contigid) throws ArcturusDatabaseException {
+		int nreads = 0;
+		
+		try {
 		pstmtContigData.setInt(1, contigid);
 
 		ResultSet rs = pstmtContigData.executeQuery();
 
-		int nreads = rs.next() ? rs.getInt(1) : -1;
+		nreads = rs.next() ? rs.getInt(1) : -1;
 
 		rs.close();
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get contig read count for contig ID=" + contigid, conn, this);
+		}
 
 		return nreads;
 	}
@@ -268,7 +288,7 @@ public class ContigCAFWriter {
 	}
 	
 	public int writeContigAsCAF(Contig contig, PrintWriter pw) 
-		throws SQLException, DataFormatException {
+		throws ArcturusDatabaseException {
 		int contigid = contig.getID();
 		int nreads = contig.getReadCount();
 		
@@ -276,7 +296,7 @@ public class ContigCAFWriter {
 	}
 
 	public int writeContigAsCAF(int contigid, int nreads, PrintWriter pw)
-			throws SQLException, DataFormatException {
+			throws ArcturusDatabaseException {
 		String contigname = "Contig" + decimalformat.format(contigid);
 
 		pw.println("Sequence : " + contigname);
@@ -285,95 +305,131 @@ public class ContigCAFWriter {
 
 		Map<Integer, Mapping> mappings = new HashMap<Integer, Mapping>(nreads);
 
-		pstmtMapping.setInt(1, contigid);
+		try {
+			pstmtMapping.setInt(1, contigid);
 
-		ResultSet rs = pstmtMapping.executeQuery();
+			ResultSet rs = pstmtMapping.executeQuery();
 
-		while (rs.next()) {
-			int mappingid = rs.getInt(1);
-			String direction = rs.getString(2);
-			int seqid = rs.getInt(3);
-			int readid = rs.getInt(4);
-			String readname = rs.getString(5);
+			while (rs.next()) {
+				int mappingid = rs.getInt(1);
+				String direction = rs.getString(2);
+				int seqid = rs.getInt(3);
+				int readid = rs.getInt(4);
+				String readname = rs.getString(5);
 
-			boolean forward = direction.equalsIgnoreCase("Forward");
+				boolean forward = direction.equalsIgnoreCase("Forward");
 
-			Mapping mapping = new Mapping(seqid, readid, forward, readname);
+				Mapping mapping = new Mapping(seqid, readid, forward, readname);
 
-			mappings.put(mappingid, mapping);
-		}
-
-		rs.close();
-
-		pstmtSegment.setInt(1, contigid);
-
-		rs = pstmtSegment.executeQuery();
-		
-		int lastmappingid = -1;
-		boolean forward = false;
-		String readname = null;
-
-		while (rs.next()) {
-			int mappingid = rs.getInt(1);
-			int cstart = rs.getInt(2);
-			int rstart = rs.getInt(3);
-			int seglen = rs.getInt(4);
-			
-			if (mappingid != lastmappingid) {
-				Mapping mapping = mappings.get(mappingid);
-				
-				forward = mapping.isForward();
-				readname = mapping.getReadname();
+				mappings.put(mappingid, mapping);
 			}
 
-			int rfinish = forward ? rstart + seglen - 1 : rstart - seglen + 1;
-			int cfinish = cstart + seglen - 1;
-
-			if (forward)
-				pw.println("Assembled_from " + readname + " " + cstart + " "
-						+ cfinish + " " + rstart + " " + rfinish);
-			else
-				pw.println("Assembled_from " + readname + " " + cfinish + " "
-						+ cstart + " " + rfinish + " " + rstart);
+			rs.close();
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get mappings for contig ID=" + contigid, conn, this);
 		}
 
-		rs.close();
+		try {
+			pstmtSegment.setInt(1, contigid);
 
-		pstmtContigTag.setInt(1, contigid);
+			ResultSet rs = pstmtSegment.executeQuery();
 
-		rs = pstmtContigTag.executeQuery();
+			int lastmappingid = -1;
+			boolean forward = false;
+			String readname = null;
 
-		while (rs.next()) {
-			String tagtype = rs.getString(1);
-			int tagstart = rs.getInt(2);
-			int tagfinish = rs.getInt(3);
-			String tagcomment = rs.getString(4);
+			while (rs.next()) {
+				int mappingid = rs.getInt(1);
+				int cstart = rs.getInt(2);
+				int rstart = rs.getInt(3);
+				int seglen = rs.getInt(4);
 
-			pw.print("Tag " + tagtype + " " + tagstart + " " + tagfinish);
-			if (tagcomment != null)
-				pw.print(" \"" + tagcomment + "\"");
-			pw.println();
+				if (mappingid != lastmappingid) {
+					Mapping mapping = mappings.get(mappingid);
+
+					forward = mapping.isForward();
+					readname = mapping.getReadname();
+				}
+
+				int rfinish = forward ? rstart + seglen - 1 : rstart - seglen
+						+ 1;
+				int cfinish = cstart + seglen - 1;
+
+				if (forward)
+					pw.println("Assembled_from " + readname + " " + cstart
+							+ " " + cfinish + " " + rstart + " " + rfinish);
+				else
+					pw.println("Assembled_from " + readname + " " + cfinish
+							+ " " + cstart + " " + rfinish + " " + rstart);
+			}
+
+			rs.close();
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get segments for contig ID=" + contigid, conn, this);
 		}
 
-		rs.close();
+		try {
+			pstmtContigTag.setInt(1, contigid);
+
+			ResultSet rs = pstmtContigTag.executeQuery();
+
+			while (rs.next()) {
+				String tagtype = rs.getString(1);
+				int tagstart = rs.getInt(2);
+				int tagfinish = rs.getInt(3);
+				String tagcomment = rs.getString(4);
+
+				pw.print("Tag " + tagtype + " " + tagstart + " " + tagfinish);
+				if (tagcomment != null)
+					pw.print(" \"" + tagcomment + "\"");
+				pw.println();
+			}
+
+			rs.close();
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get tags for contig ID=" + contigid, conn, this);
+		}
 
 		pw.println();
+		
+		byte[] dna = null;
+		byte[] quality = null;
+		int seqlen = 0;
 
-		pstmtConsensus.setInt(1, contigid);
+		try {
+			pstmtConsensus.setInt(1, contigid);
 
-		rs = pstmtConsensus.executeQuery();
+			ResultSet rs = pstmtConsensus.executeQuery();
 
-		if (!rs.next()) {
+			if (rs.next()) {
+				dna = rs.getBytes(1);
+				quality = rs.getBytes(2);
+				seqlen = rs.getInt(3);
+			}
+
 			rs.close();
-			return NO_CONSENSUS;
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get consensus sequence for contig ID=" + contigid, conn, this);
 		}
 
-		byte[] dna = rs.getBytes(1);
-		byte[] quality = rs.getBytes(2);
-		int seqlen = rs.getInt(3);
+		if (dna == null || quality == null)
+			return NO_CONSENSUS;
 
-		dna = decodeCompressedData(dna, seqlen);
-		quality = decodeCompressedData(quality, seqlen);
+		try {
+			dna = decodeCompressedData(dna, seqlen);
+		} catch (DataFormatException e) {
+			handleDataFormatException(e, "Failed to decompress DNA data for contig ID=" + contigid);
+		}
+		
+		try {
+			quality = decodeCompressedData(quality, seqlen);
+		} catch (DataFormatException e) {
+			handleDataFormatException(e, "Failed to decompress quality data for contig ID=" + contigid);
+		}
 
 		pw.println("DNA : " + contigname);
 
@@ -400,59 +456,87 @@ public class ContigCAFWriter {
 		return OK;
 	}
 
+	private void handleDataFormatException(DataFormatException e, String message) throws ArcturusDatabaseException {
+		throw new ArcturusDatabaseException(e, message);
+	}
+
 	private int writeRead(int readid, int seqid, PrintWriter pw)
-			throws SQLException, DataFormatException {
-		pstmtReadBasicData.setInt(1, readid);
+			throws ArcturusDatabaseException {
+		String readname = null;
+		java.util.Date asped = null;
+		String strand = null;
+		String primer = null;
+		String chemistry = null;
+		String basecaller = null;
+		String status = null;
+		
+		try {
+			pstmtReadBasicData.setInt(1, readid);
 
-		ResultSet rs = pstmtReadBasicData.executeQuery();
+			ResultSet rs = pstmtReadBasicData.executeQuery();
 
-		if (!rs.next()) {
+			if (!rs.next()) {
+				rs.close();
+				return READ_BASIC_DATA_NOT_FOUND;
+			}
+
+			readname = rs.getString(1);
+			asped = rs.getDate(2);
+			strand = rs.getString(3);
+			primer = rs.getString(4);
+			chemistry = rs.getString(5);
+
+			int basecaller_id = rs.getInt(6);
+
+			basecaller = rs.wasNull() ? null : dictBasecaller
+					.get(basecaller_id);
+
+			int status_id = rs.getInt(7);
+
+			status = rs.wasNull() ? null : dictReadStatus.get(status_id);
+
 			rs.close();
-			return READ_BASIC_DATA_NOT_FOUND;
 		}
-
-		String readname = rs.getString(1);
-		java.util.Date asped = rs.getDate(2);
-		String strand = rs.getString(3);
-		String primer = rs.getString(4);
-		String chemistry = rs.getString(5);
-
-		int basecaller_id = rs.getInt(6);
-
-		String basecaller = rs.wasNull() ? null : dictBasecaller
-				.get(basecaller_id);
-
-		int status_id = rs.getInt(7);
-
-		String status = rs.wasNull() ? null : dictReadStatus.get(status_id);
-
-		rs.close();
-
-		pstmtReadCloneData.setInt(1, readid);
-
-		rs = pstmtReadCloneData.executeQuery();
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get basic data for read ID=" + readid, conn, this);
+		}
 
 		String template = null;
 		String ligation = null;
 		int silow = -1;
 		int sihigh = -1;
 		String clone = null;
+		
+		try {
+			pstmtReadCloneData.setInt(1, readid);
 
-		if (rs.next()) {
-			template = rs.getString(1);
-			int ligation_id = rs.getInt(2);
+			ResultSet rs = pstmtReadCloneData.executeQuery();
 
-			Ligation l = dictLigation.get(ligation_id);
+			template = null;
+			ligation = null;
+			silow = -1;
+			sihigh = -1;
+			clone = null;
 
-			if (l != null) {
-				ligation = l.getName();
-				silow = l.getSilow();
-				sihigh = l.getSihigh();
-				clone = l.getCloneName();
+			if (rs.next()) {
+				template = rs.getString(1);
+				int ligation_id = rs.getInt(2);
+
+				Ligation l = dictLigation.get(ligation_id);
+
+				if (l != null) {
+					ligation = l.getName();
+					silow = l.getSilow();
+					sihigh = l.getSihigh();
+					clone = l.getCloneName();
+				}
 			}
-		}
 
-		rs.close();
+			rs.close();
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get clone data for read ID=" + readid, conn, this);
+		}
 
 		StringBuffer buffer = new StringBuffer(4096);
 
@@ -490,99 +574,139 @@ public class ContigCAFWriter {
 		if (basecaller != null)
 			buffer.append("Base_caller " + basecaller + "\n");
 
-		pstmtQualityClipping.setInt(1, seqid);
+		try {
+			pstmtQualityClipping.setInt(1, seqid);
 
-		rs = pstmtQualityClipping.executeQuery();
+			ResultSet rs = pstmtQualityClipping.executeQuery();
 
-		while (rs.next()) {
-			int qleft = rs.getInt(1);
-			int qright = rs.getInt(2);
-			buffer.append("Clipping QUAL " + qleft + " " + qright + "\n");
+			while (rs.next()) {
+				int qleft = rs.getInt(1);
+				int qright = rs.getInt(2);
+				buffer.append("Clipping QUAL " + qleft + " " + qright + "\n");
+			}
+
+			rs.close();
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get quality clipping data for read ID=" + readid, conn, this);
 		}
 
-		rs.close();
+		try {
+			pstmtSequenceVector.setInt(1, seqid);
 
-		pstmtSequenceVector.setInt(1, seqid);
+			ResultSet rs = pstmtSequenceVector.executeQuery();
 
-		rs = pstmtSequenceVector.executeQuery();
+			while (rs.next()) {
+				int svleft = rs.getInt(1);
+				int svright = rs.getInt(2);
+				String svname = rs.getString(3);
+				buffer.append("Seq_vec SVEC " + svleft + " " + svright + " \""
+						+ svname + "\"" + "\n");
+			}
 
-		while (rs.next()) {
-			int svleft = rs.getInt(1);
-			int svright = rs.getInt(2);
-			String svname = rs.getString(3);
-			buffer.append("Seq_vec SVEC " + svleft + " " + svright + " \""
-					+ svname + "\"" + "\n");
+			rs.close();
 		}
-
-		rs.close();
-
-		pstmtCloningVector.setInt(1, seqid);
-
-		rs = pstmtCloningVector.executeQuery();
-
-		while (rs.next()) {
-			int cvleft = rs.getInt(1);
-			int cvright = rs.getInt(2);
-			String cvname = rs.getString(3);
-			buffer.append("Clone_vec CVEC " + cvleft + " " + cvright + " \""
-					+ cvname + "\"" + "\n");
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get sequence vector data for read ID=" + readid, conn, this);
 		}
-
-		rs.close();
-
-		pstmtReadTag.setInt(1, seqid);
-
-		rs = pstmtReadTag.executeQuery();
-
-		while (rs.next()) {
-			String tagtype = rs.getString(1);
-			int tagstart = rs.getInt(2);
-			int tagfinish = rs.getInt(3);
-			String tagcomment = rs.getString(4);
-
-			buffer.append("Tag " + tagtype + " " + tagstart + " " + tagfinish);
-			if (tagcomment != null)
-				buffer.append(" \"" + tagcomment + "\"");
-			buffer.append('\n');
-		}
-
-		rs.close();
-
-		pstmtAlignToSCF.setInt(1, seqid);
 		
-		rs = pstmtAlignToSCF.executeQuery();
+
+		try {
+			pstmtCloningVector.setInt(1, seqid);
+
+			ResultSet rs = pstmtCloningVector.executeQuery();
+
+			while (rs.next()) {
+				int cvleft = rs.getInt(1);
+				int cvright = rs.getInt(2);
+				String cvname = rs.getString(3);
+				buffer.append("Clone_vec CVEC " + cvleft + " " + cvright
+						+ " \"" + cvname + "\"" + "\n");
+			}
+
+			rs.close();
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get cloning vector data for read ID=" + readid, conn, this);
+		}
+
+		try {
+			pstmtReadTag.setInt(1, seqid);
+
+			ResultSet rs = pstmtReadTag.executeQuery();
+
+			while (rs.next()) {
+				String tagtype = rs.getString(1);
+				int tagstart = rs.getInt(2);
+				int tagfinish = rs.getInt(3);
+				String tagcomment = rs.getString(4);
+
+				buffer.append("Tag " + tagtype + " " + tagstart + " "
+						+ tagfinish);
+				if (tagcomment != null)
+					buffer.append(" \"" + tagcomment + "\"");
+				buffer.append('\n');
+			}
+
+			rs.close();
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get read tag data for read ID=" + readid, conn, this);
+		}
 
 		boolean hasAlignToSCF = false;
 
-		while (rs.next()) {
-			hasAlignToSCF = true;
-			
-			int startInSequence = rs.getInt(1);
-			int startInSCF = rs.getInt(2);
-			
-			int length = rs.getInt(3);
-			
-			int endInSequence = startInSequence + length - 1;
-			int endInSCF = startInSCF + length - 1;
-			
-			buffer.append("Align_to_SCF " + startInSequence + " " + endInSequence +
-					" " + startInSCF + " " + endInSCF + "\n");
-		}
-		
-		rs.close();
-		
-		pstmtSequence.setInt(1, seqid);
+		try {
+			pstmtAlignToSCF.setInt(1, seqid);
 
-		rs = pstmtSequence.executeQuery();
+			ResultSet rs = pstmtAlignToSCF.executeQuery();
 
-		if (!rs.next()) {
+
+			while (rs.next()) {
+				hasAlignToSCF = true;
+
+				int startInSequence = rs.getInt(1);
+				int startInSCF = rs.getInt(2);
+
+				int length = rs.getInt(3);
+
+				int endInSequence = startInSequence + length - 1;
+				int endInSCF = startInSCF + length - 1;
+
+				buffer.append("Align_to_SCF " + startInSequence + " "
+						+ endInSequence + " " + startInSCF + " " + endInSCF
+						+ "\n");
+			}
+
 			rs.close();
-			return NO_SEQUENCE_DATA;
 		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get AlignToSCF data for read ID=" + readid, conn, this);
+		}
+		
+		byte[] dna = null;
+		byte[] quality = null;
+		int seqlen = 0;
+		
+		try {
+			pstmtSequence.setInt(1, seqid);
 
-		byte[] dna = rs.getBytes(1);
-		byte[] quality = rs.getBytes(2);
-		int seqlen = rs.getInt(3);
+			ResultSet rs = pstmtSequence.executeQuery();
+
+			if (rs.next()) {
+				dna = rs.getBytes(1);
+				quality = rs.getBytes(2);
+				seqlen = rs.getInt(3);
+			}
+
+			rs.close();
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get sequence data for read ID=" + readid, conn, this);
+		}
+		
+		if (dna == null || quality == null)
+			return NO_SEQUENCE_DATA;
 		
 		if (!hasAlignToSCF)
 			buffer.append("Align_to_SCF 1 " + seqlen + " 1 " + seqlen + "\n");
@@ -591,8 +715,17 @@ public class ContigCAFWriter {
 
 		pw.println();
 
-		dna = decodeCompressedData(dna, seqlen);
-		quality = decodeCompressedData(quality, seqlen);
+		try {
+			dna = decodeCompressedData(dna, seqlen);
+		} catch (DataFormatException e) {
+			handleDataFormatException(e, "Faled to decompress DNA data for read ID=" + readid);
+		}
+		
+		try {
+			quality = decodeCompressedData(quality, seqlen);
+		} catch (DataFormatException e) {
+			handleDataFormatException(e, "Faled to decompress quality data for read ID=" + readid);
+		}
 
 		pw.println("DNA : " + readname);
 
@@ -610,7 +743,8 @@ public class ContigCAFWriter {
 	}
 
 	private void writeReadsForContig(int contigid, PrintWriter pwReads)
-			throws SQLException, DataFormatException {
+			throws ArcturusDatabaseException {
+		try {
 		pstmtMapping.setInt(1, contigid);
 
 		ResultSet rs = pstmtMapping.executeQuery();
@@ -623,6 +757,10 @@ public class ContigCAFWriter {
 		}
 
 		rs.close();
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to write reads for contig ID=" + contigid, conn, this);
+		}
 	}
 
 	private byte[] decodeCompressedData(byte[] compressed, int length)
@@ -663,18 +801,20 @@ public class ContigCAFWriter {
 		pw.print(buffer.toString());
 	}
 
-	public void close() throws SQLException {
-		if (conn != null)
-			conn.close();
-
-		conn = null;
+	public void close() throws ArcturusDatabaseException {
+		if (conn != null) {
+			try {
+				conn.close();
+			} catch (SQLException e) {
+				adb.handleSQLException(e, "Failed to close database connection", conn, this);
+			}
+			
+			conn = null;
+		}
 	}
 
-	protected void finalize() {
-		try {
-			close();
-		} catch (SQLException sqle) {
-		}
+	protected void finalize() throws ArcturusDatabaseException {
+		close();
 	}
 
 	public List<Integer> getContigIDsForProject(String project)

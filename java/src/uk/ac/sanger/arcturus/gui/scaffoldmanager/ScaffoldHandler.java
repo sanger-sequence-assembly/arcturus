@@ -1,11 +1,9 @@
 package uk.ac.sanger.arcturus.gui.scaffoldmanager;
 
-import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Vector;
-import java.util.zip.DataFormatException;
 
 import javax.swing.tree.DefaultTreeModel;
 
@@ -17,6 +15,7 @@ import org.xml.sax.helpers.DefaultHandler;
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.gui.scaffoldmanager.node.*;
 
 public class ScaffoldHandler extends DefaultHandler {
@@ -120,23 +119,23 @@ public class ScaffoldHandler extends DefaultHandler {
 				break;
 
 			case SCAFFOLD:
+				int scaffoldID = getIntegerAttribute(attrs, "id", -1);
 				String sSense = attrs.getValue("sense");
 				boolean sForward = sSense.equalsIgnoreCase("F");
-				scaffoldNode = new ScaffoldNode(sForward);
+				scaffoldNode = new ScaffoldNode(scaffoldID, sForward);
 				break;
 
 			case CONTIG:
-				int id = getIntegerAttribute(attrs, "id", -1);
+				int contigID = getIntegerAttribute(attrs, "id", -1);
 				Contig contig = null;
 				boolean current = false;
 				try {
-					contig = adb.getContigByID(id);
-					current = adb.isCurrentContig(id);
-				} catch (SQLException e) {
-					Arcturus.logWarning(e);
-				} catch (DataFormatException e) {
-					Arcturus.logWarning(e);
+					contig = adb.getContigByID(contigID);
+					current = adb.isCurrentContig(contigID);
+				} catch (ArcturusDatabaseException e) {
+					Arcturus.logWarning("Failed to get contig information for contig ID=" + contigID + " whilst building scaffold tree", e);
 				}
+				
 				String cSense = attrs.getValue("sense");
 				boolean cForward = cSense.equalsIgnoreCase("F");
 				ContigNode cNode = new ContigNode(contig, cForward, current);

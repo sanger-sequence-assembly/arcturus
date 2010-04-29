@@ -4,12 +4,15 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.ComponentOrientation;
+import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import java.io.File;
 import java.util.List;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.gui.common.contigtransfer.ContigTransferMenu;
 import uk.ac.sanger.arcturus.gui.common.contigtransfer.ContigTransferSource;
@@ -18,18 +21,29 @@ import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEventListener;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import javax.swing.*;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.event.TreeSelectionListener;
 import javax.swing.tree.*;
 
-public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeEventListener, ContigTransferSource {
+public class ScaffoldManagerPanel extends MinervaPanel
+	implements ProjectChangeEventListener, ContigTransferSource {
+	public enum FastaMode { SEPARATE_CONTIGS, CONCATENATE_CONTIGS }
+	
 	private JTree tree= new JTree();
 
 	private JLabel lblWait = new JLabel("Please wait whilst the scaffold tree is retrieved");
+	
+	private JButton btnSearch = new JButton("Search");
+	
+	private JTextField txtContig = new JTextField(30);
 
 	protected ContigTransferMenu xferMenu;
+
+	protected MinervaAbstractAction actionExportAsSeparateFasta;
+	protected MinervaAbstractAction actionExportAsConcatenatedFasta;
 
 	public ScaffoldManagerPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
 		super(parent, adb);
@@ -63,6 +77,12 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 
 		tree.setCellRenderer(new MyRenderer());
 		
+		btnSearch.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				doContigSearch();
+			}			
+		});
+		
 		lblWait.setForeground(Color.RED);
 		lblWait.setHorizontalAlignment(SwingConstants.CENTER);
 		lblWait.setVerticalAlignment(SwingConstants.CENTER);
@@ -76,6 +96,19 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 		boolean noneSelected = nrows == 0;
 		
 		xferMenu.setEnabled(!noneSelected);
+
+		if (noneSelected) {
+			actionExportAsSeparateFasta.setEnabled(false);
+			actionExportAsConcatenatedFasta.setEnabled(false);
+		} else {
+			DefaultMutableTreeNode node = (DefaultMutableTreeNode)tree.getLastSelectedPathComponent();
+			
+			boolean canExport = node instanceof ScaffoldNode || node instanceof SuperscaffoldNode ||
+				node instanceof AssemblyNode;
+
+			actionExportAsSeparateFasta.setEnabled(canExport);
+			actionExportAsConcatenatedFasta.setEnabled(canExport);
+		}
 	}
 
 	private final Color PALE_PINK = new Color(0xFF, 0xCC, 0xCC);
@@ -170,8 +203,27 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 			JScrollPane treepane = new JScrollPane(tree);
 			removeAll();
 			add(treepane, BorderLayout.CENTER);
+			
+			JPanel buttonPanel = new JPanel(new FlowLayout());
+			
+			JLabel label = new JLabel("Search for contig: ");
+			
+			buttonPanel.add(label);
+			buttonPanel.add(txtContig);
+			buttonPanel.add(btnSearch);
+			
+			add(buttonPanel, BorderLayout.NORTH);
+			
 			revalidate();
 		}
+	}
+	
+	private void doContigSearch() {
+		String text = txtContig.getText().trim();
+		
+		ScaffoldContigFinderWorker worker = new ScaffoldContigFinderWorker(adb, this, text);
+		
+		worker.execute();
 	}
 
 	protected boolean addClassSpecificFileMenuItems(JMenu menu) {
@@ -185,19 +237,83 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 	}
 
 	protected void createActions() {
+		actionExportAsSeparateFasta = new MinervaAbstractAction("For gap closure",
+				null, "Export selected scaffold(s) as separate contigs", new Integer(KeyEvent.VK_G),
+				KeyStroke.getKeyStroke(KeyEvent.VK_G, ActionEvent.CTRL_MASK | ActionEvent.ALT_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				exportAsFasta(FastaMode.SEPARATE_CONTIGS);
+			}
+		};
+		
+		actionExportAsConcatenatedFasta = new MinervaAbstractAction("For annotation",
+				null, "Export selected scaffold(s) as concatenated contigs", new Integer(KeyEvent.VK_N),
+				KeyStroke.getKeyStroke(KeyEvent.VK_N, ActionEvent.CTRL_MASK | ActionEvent.ALT_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				exportAsFasta(FastaMode.CONCATENATE_CONTIGS);
+			}
+		};
+	}
+
+	private void exportAsFasta(FastaMode mode) {
+		DefaultMutableTreeNode node = (DefaultMutableTreeNode)tree.getLastSelectedPathComponent();
+		
+		if (node == null) {
+			JOptionPane.showMessageDialog(this, "No valid node is selected.  This should not happen.",
+					"No node selected", JOptionPane.ERROR_MESSAGE);			
+			return;
+		}
+		
+		JFileChooser chooser = new JFileChooser();
+		
+		File dir = new File(System.getProperty("user.dir"));
+		
+		chooser.setCurrentDirectory(dir);
+		
+		chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+		
+		chooser.setMultiSelectionEnabled(false);
+		
+		if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+			dir = chooser.getSelectedFile();
+			
+			if (dir.canWrite()) {
+				ScaffoldExportWorker worker = new ScaffoldExportWorker(this, mode, dir, node);
+			
+				worker.execute();
+			} else
+				JOptionPane.showMessageDialog(this,
+						"The selected directory (" + dir.getAbsolutePath() + ") is read-only.",
+						"The directory is read-only.", JOptionPane.ERROR_MESSAGE);
+		}
 	}
 
 	protected void createClassSpecificMenus() {
+		createScaffoldMenu();
 		createContigMenu();
 	}
 
 	protected void createContigMenu() {
-		JMenu contigMenu = createMenu("Contigs", KeyEvent.VK_C, "Contigs");
+		JMenu contigMenu = createMenu("Contigs", KeyEvent.VK_C, "Operations on contigs");
 		menubar.add(contigMenu);
 
 		contigMenu.add(xferMenu);
 		
-		xferMenu.refreshMenu();
+		try {
+			xferMenu.refreshMenu();
+		} catch (ArcturusDatabaseException e) {
+			Arcturus.logWarning("An error occurred hwilst refreshing the contig transfer menu for the scaffold tree view", e);
+		}
+	}
+	
+	protected void createScaffoldMenu() {
+		JMenu scaffoldMenu = createMenu("Scaffolds", KeyEvent.VK_S, "Operations on scaffolds");
+		menubar.add(scaffoldMenu);
+		
+		JMenu exportMenu = new JMenu("Export as FASTA"); 
+		scaffoldMenu.add(exportMenu);
+		
+		exportMenu.add(actionExportAsSeparateFasta);
+		exportMenu.add(actionExportAsConcatenatedFasta);
 	}
 
 	protected void doPrint() {
@@ -207,7 +323,7 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 		return true;
 	}
 
-	public void refresh() {
+	public void refresh() throws ArcturusDatabaseException {
 		xferMenu.refreshMenu();
 		refreshTree();
 	}
@@ -232,6 +348,14 @@ public class ScaffoldManagerPanel extends MinervaPanel implements ProjectChangeE
 	}
 
 	public void projectChanged(ProjectChangeEvent event) {
-		refresh();
+		try {
+			refresh();
+		} catch (ArcturusDatabaseException e) {
+			Arcturus.logWarning("Failed to refresh the scaffold tree view", e);
+		}
+	}
+	
+	public JTree getTree() {
+		return tree;
 	}
 }

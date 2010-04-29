@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.utils;
 
 import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import java.sql.*;
 import java.util.zip.*;
@@ -62,11 +63,20 @@ public class ReadCAFWriter {
 
 	private Inflater decompresser = new Inflater();
 
-	public ReadCAFWriter(ArcturusDatabase adb) throws SQLException {
+	public ReadCAFWriter(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		conn = adb.getPooledConnection(this);
 
-		prepareStatements();
-		createDictionaries();
+		try {
+			prepareStatements();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to initialise the read CAF writer", conn, this);
+		}
+		
+		try {
+			createDictionaries();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to create dictionaries for the read CAF writer", conn, this);
+		}
 	}
 
 	private void prepareStatements() throws SQLException {

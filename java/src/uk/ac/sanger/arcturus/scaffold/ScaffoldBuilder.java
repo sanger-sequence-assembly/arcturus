@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.scaffold;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.Arcturus;
 
@@ -10,6 +11,9 @@ import java.util.zip.DataFormatException;
 
 public class ScaffoldBuilder {
 	protected ArcturusDatabase adb;
+	
+	protected Connection conn;
+	
 	protected PreparedStatement pstmtContigData;
 	protected PreparedStatement pstmtLeftEndReads;
 	protected PreparedStatement pstmtRightEndReads;
@@ -25,7 +29,7 @@ public class ScaffoldBuilder {
 	protected int flags = ArcturusDatabase.CONTIG_BASIC_DATA
 			| ArcturusDatabase.CONTIG_TAGS;
 
-	public ScaffoldBuilder(ArcturusDatabase adb) {
+	public ScaffoldBuilder(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		this.adb = adb;
 		
 		String str = Arcturus.getProperty("scaffoldbuilder.puclimit");
@@ -38,11 +42,25 @@ public class ScaffoldBuilder {
 			}
 		}
 
+		conn = adb.getPooledConnection(this);
+
 		try {
-			Connection conn = adb.getConnection();
 			prepareStatements(conn);
-		} catch (SQLException sqle) {
-			sqle.printStackTrace();
+		} catch (SQLException e) {
+			throw new ArcturusDatabaseException(e,
+					"Failed to initialise the scaffold builder", conn);
+		}
+	}
+	
+	public void close() throws ArcturusDatabaseException {
+		if (conn != null) {
+			try {
+				conn.close();
+			} catch (SQLException e) {
+				throw new ArcturusDatabaseException(e,
+						"Failed to close the scaffold builder database connection", conn);
+			}
+			conn = null;
 		}
 	}
 
@@ -112,16 +130,21 @@ public class ScaffoldBuilder {
 		pstmtMapping = conn.prepareStatement(query);
 	}
 
-	protected boolean isCurrentContig(int contigid) throws SQLException {
-		pstmtContigData.setInt(1, contigid);
+	protected boolean isCurrentContig(int contigid) throws ArcturusDatabaseException {
+		try {
+			pstmtContigData.setInt(1, contigid);
 
-		ResultSet rs = pstmtContigData.executeQuery();
+			ResultSet rs = pstmtContigData.executeQuery();
 
-		boolean found = rs.next();
+			boolean found = rs.next();
 
-		rs.close();
-
-		return found;
+			rs.close();
+		
+			return found;
+		}
+		catch (SQLException sqle) {
+			throw new ArcturusDatabaseException(sqle, conn, adb);
+		}
 	}
 
 	private void fireEvent(ScaffoldBuilderListener listener, int mode, String message) {
@@ -137,21 +160,21 @@ public class ScaffoldBuilder {
 		listener.scaffoldUpdate(event);
 	}
 	
-	public Set createScaffold(int seedcontigid, ScaffoldBuilderListener listener)
-			throws SQLException, DataFormatException {
+	public Set<Bridge> createScaffold(int seedcontigid, ScaffoldBuilderListener listener)
+			throws ArcturusDatabaseException, DataFormatException {
 		if (!adb.isCurrentContig(seedcontigid)) {
 			fireEvent(listener, ScaffoldEvent.FINISH, "Not a current contig");
 
 			return null;
 		}
 
-		SortedSet contigset = new TreeSet(new ContigLengthComparator());
+		SortedSet<Contig> contigset = new TreeSet<Contig>(new ContigLengthComparator());
 
 		fireEvent(listener, ScaffoldEvent.START, "Initialising scaffold");
 
 		Contig seedcontig = adb.getContigByID(seedcontigid, flags);
 
-		Set subgraph = null;
+		Set<Bridge> subgraph = null;
 
 		if (seedcontig != null) {
 			contigset.add(seedcontig);
@@ -166,12 +189,23 @@ public class ScaffoldBuilder {
 		return subgraph;
 	}
 
-	public BridgeSet processContigSet(SortedSet contigset,
-			ScaffoldBuilderListener listener) throws SQLException,
+	public BridgeSet processContigSet(SortedSet<Contig> contigset,
+			ScaffoldBuilderListener listener) throws ArcturusDatabaseException,
+			DataFormatException {
+		try {
+			return processContigSetImpl(contigset, listener);
+		}
+		catch (SQLException sqle) {
+			throw new ArcturusDatabaseException(sqle, conn);
+		}
+	}
+	
+	private BridgeSet processContigSetImpl(SortedSet<Contig> contigset,
+			ScaffoldBuilderListener listener) throws SQLException, ArcturusDatabaseException,
 			DataFormatException {
 		BridgeSet bridgeset = new BridgeSet();
 
-		Set processed = new HashSet();
+		Set<Contig> processed = new HashSet<Contig>();
 		
 		int linksExamined = 0;
 		int contigsExamined = 0;
@@ -209,7 +243,7 @@ public class ScaffoldBuilder {
 
 			int contiglength = contig.getLength();
 
-			Set linkedContigs = new HashSet();
+			Set<Contig> linkedContigs = new HashSet<Contig>();
 
 			for (int iEnd = 0; iEnd < 2; iEnd++) {
 				int endcode = 2 * iEnd;
@@ -347,11 +381,8 @@ public class ScaffoldBuilder {
 		return bridgeset;
 	}
 
-	class ContigLengthComparator implements Comparator {
-		public int compare(Object o1, Object o2) {
-			Contig c1 = (Contig) o1;
-			Contig c2 = (Contig) o2;
-
+	class ContigLengthComparator implements Comparator<Contig> {
+		public int compare(Contig c1, Contig c2) {
 			return c2.getLength() - c1.getLength();
 		}
 	}

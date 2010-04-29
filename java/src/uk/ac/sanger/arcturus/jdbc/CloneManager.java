@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.jdbc;
 
 import uk.ac.sanger.arcturus.data.Clone;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import java.sql.*;
 import java.util.*;
@@ -12,28 +13,35 @@ import java.util.*;
 
 public class CloneManager extends AbstractManager {
 	private ArcturusDatabase adb;
-	private Connection conn;
-	private HashMap hashByID, hashByName;
+	private HashMap<Integer, Clone> hashByID;
+	private HashMap<String, Clone> hashByName;
 	private PreparedStatement pstmtByID, pstmtByName;
 
 	/**
 	 * Creates a new CloneManager to provide clone management services to an
 	 * ArcturusDatabase object.
+	 * @throws ArcturusDatabaseException 
 	 */
 
-	public CloneManager(ArcturusDatabase adb) throws SQLException {
+	public CloneManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		this.adb = adb;
 
-		conn = adb.getConnection();
+		hashByID = new HashMap<Integer, Clone>();
+		hashByName = new HashMap<String, Clone>();
 
+		try {
+			setConnection(adb.getDefaultConnection());
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to initialise the clone manager", conn, adb);
+		}
+	}
+	
+	protected void prepareConnection() throws SQLException {
 		String query = "select name from CLONE where clone_id = ?";
 		pstmtByID = conn.prepareStatement(query);
 
 		query = "select clone_id from CLONE where name = ?";
 		pstmtByName = conn.prepareStatement(query);
-
-		hashByID = new HashMap();
-		hashByName = new HashMap();
 	}
 
 	public void clearCache() {
@@ -41,16 +49,30 @@ public class CloneManager extends AbstractManager {
 		hashByName.clear();
 	}
 
-	public Clone getCloneByName(String name) throws SQLException {
-		Object obj = hashByName.get(name);
+	public Clone getCloneByName(String name) throws ArcturusDatabaseException {
+		Clone clone = hashByName.get(name);
 
-		return (obj == null) ? loadCloneByName(name) : (Clone) obj;
+		try {
+			if (clone == null)
+				clone = loadCloneByName(name);
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get clone by name=\"" + name + "\"", conn, this);
+		}
+		
+		return clone;
 	}
 
-	public Clone getCloneByID(int id) throws SQLException {
-		Object obj = hashByID.get(new Integer(id));
+	public Clone getCloneByID(int id) throws ArcturusDatabaseException {
+		Clone clone = hashByID.get(new Integer(id));
 
-		return (obj == null) ? loadCloneByID(id) : (Clone) obj;
+		try {
+			if (clone == null)
+				clone = loadCloneByID(id);
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get clone by ID=" + id, conn, this);
+		}
+		
+		return clone;
 	}
 
 	private Clone loadCloneByName(String name) throws SQLException {
@@ -90,20 +112,25 @@ public class CloneManager extends AbstractManager {
 		return clone;
 	}
 
-	public void preload() throws SQLException {
+	public void preload() throws ArcturusDatabaseException  {
 		String query = "select clone_id, name from CLONE";
 
-		Statement stmt = conn.createStatement();
+		try {
+			Statement stmt = conn.createStatement();
 
-		ResultSet rs = stmt.executeQuery(query);
+			ResultSet rs = stmt.executeQuery(query);
 
-		while (rs.next()) {
-			int id = rs.getInt(1);
-			String name = rs.getString(2);
-			registerNewClone(name, id);
+			while (rs.next()) {
+				int id = rs.getInt(1);
+				String name = rs.getString(2);
+				registerNewClone(name, id);
+			}
+
+			rs.close();
+			stmt.close();
 		}
-
-		rs.close();
-		stmt.close();
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to preload clones", conn, this);
+		}
 	}
 }

@@ -29,6 +29,7 @@ import javax.management.remote.JMXConnectorServerFactory;
 import javax.management.remote.JMXServiceURL;
 
 import uk.ac.sanger.arcturus.logging.JDBCLogHandler;
+import uk.ac.sanger.arcturus.logging.LongMessageFormatter;
 import uk.ac.sanger.arcturus.logging.MailHandler;
 import uk.ac.sanger.arcturus.logging.MessageDialogHandler;
 
@@ -277,18 +278,26 @@ public class Arcturus {
 		Logger logger = Logger.getLogger("uk.ac.sanger.arcturus");
 
 		logger.setUseParentHandlers(false);
+		
+		boolean testing = Boolean.getBoolean("testing");
+		
+		logger.setLevel(testing ? Level.INFO : Level.WARNING);
+		
+		boolean headless = GraphicsEnvironment.isHeadless();
 
-		Handler warner = null;
+		if (headless || testing || Boolean.getBoolean("useConsoleLogHandler")) {
+			Handler consoleHandler = new ConsoleHandler();
+			consoleHandler.setLevel(Level.INFO);
 
-		if (GraphicsEnvironment.isHeadless()
-				|| Boolean.getBoolean("useConsoleLogHandler"))
-			warner = new ConsoleHandler();
-		else
-			warner = new MessageDialogHandler();
+			logger.addHandler(consoleHandler);
+		} 
 
-		warner.setLevel(Level.INFO);
+		if (!headless) {
+			Handler messageDialogHandler = new MessageDialogHandler();
+			messageDialogHandler.setLevel(Level.WARNING);
 
-		logger.addHandler(warner);
+			logger.addHandler(messageDialogHandler);
+		}
 
 		try {
 			File homedir = new File(System.getProperty("user.home"));
@@ -297,9 +306,9 @@ public class Arcturus {
 
 			if (dotarcturus.exists() || dotarcturus.mkdir()) {
 				FileHandler filehandler = new FileHandler(
-						"%h/.arcturus/arcturus%u.%g.log");
+						"%h/.arcturus/arcturus%u.%g.log", 10000000, 10, true);
 				filehandler.setLevel(Level.INFO);
-				filehandler.setFormatter(new SimpleFormatter());
+				filehandler.setFormatter(new LongMessageFormatter());
 				logger.addHandler(filehandler);
 			} else
 				throw new IOException(
@@ -312,14 +321,14 @@ public class Arcturus {
 		try {
 			Properties props = Arcturus.getProperties();
 			JDBCLogHandler jdbcloghandler = new JDBCLogHandler(props);
-			jdbcloghandler.setLevel(Level.INFO);
+			jdbcloghandler.setLevel(Level.WARNING);
 			logger.addHandler(jdbcloghandler);
 		} catch (Exception e) {
 			logger.log(Level.WARNING,
 					"Unable to create a JDBCLogHandler for logging", e);
 		}
 
-		if (!Boolean.getBoolean("testing")) {
+		if (!testing) {
 			try {
 				MailHandler mailhandler = new MailHandler(null);
 				mailhandler.setLevel(Level.WARNING);

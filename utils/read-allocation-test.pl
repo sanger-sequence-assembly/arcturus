@@ -66,7 +66,7 @@ while (my $nextword = shift @ARGV) {
         $confirm    = 1;
     }
 
-    $repair         = 2            if ($nextword eq '-mark');  # may be obsolete
+    $repair         = 2            if ($nextword eq '-mark');
 
     $repair         = 3            if ($nextword eq '-repair');
     $force          = 1            if ($nextword eq '-repair');
@@ -141,8 +141,6 @@ $logger->info("Database ".$adb->getURL." opened succesfully");
 # if a special log file is to be used, open it here
 
 $logger->setSpecialStream($output,append=>1,timestamplabel=>"$instance:$organism") if $output;
-
-$logger->setBlock('special',unblock=>1) unless $output; # redirects special stream to STDOUT
 
 #----------------------------------------------------------------
 # get the backup project
@@ -393,13 +391,13 @@ foreach my $contig_id (sort {$a <=> $b} keys %$link) {
 # enter record in transfer queue with status 'done'
 	}
 
-        elsif ($repair == 2) { # Obsolete option? fails because of foreign key constraint?
+        elsif ($repair == 2) {
 # move the contig out of the current generation by making it a parent of contig 0
             if ($markedparents{$parent_id}++) {
                 $logger->special("Contig $parent_id has been processed earlier");
                 next;
             }
-            $logger->special("Contig $parent_id will be marked as not in "
+            $logger->warning("Contig $parent_id will be marked as not in "
 		   	   . "the current generation in recover mode");
             unless ($confirm) {
 	        $logger->warning("repeat with '-confirm' switch", skip=>1);
@@ -424,7 +422,7 @@ foreach my $contig_id (sort {$a <=> $b} keys %$link) {
 	    }
 # add the new link(s) to the C2CMAPPING list for this contig  TO BE TESTED
             my ($s,$m)= $adb->repairContigToContigMappings($contig,confirm=>1,
-#                                                                   allowemptymapping=>1,
+                                                                   allowemptymapping=>1,
                                                                    nodelete=>1);
             $logger->special($m);
 	}

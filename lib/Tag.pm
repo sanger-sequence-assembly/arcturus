@@ -645,8 +645,9 @@ sub writeToCaf {
 
     my $string = "Tag $type ";
 
-    if ($type eq 'NOTE') {
+    if ($type =~ /^Note$/i) {
 # GAP4 NOTE tag, no position info
+        $string = "Note $tagcomment\n";
     }
 
     elsif ($host eq 'Contig' && $this->getSystematicID()) {

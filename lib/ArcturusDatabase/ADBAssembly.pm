@@ -253,34 +253,57 @@ sub putScaffoldForImportID {
                     $options{source}  || "unknown",
 		    $options{comment} || '');
 
-    my $sinsert = "insert into SCAFFOLD (creator,created,import_id,type_id,source,comment) "
-	        . "values (?,now(),?,?,?,?)";
+    $dbh->{RaiseError} = 1;
+
+    my $status = 0;
+
+    eval {
+	$dbh->begin_work;
+
+	my $sinsert = "insert into SCAFFOLD (creator,created,import_id,type_id,source,comment) "
+	    . "values (?,now(),?,?,?,?)";
     
-    my $isth = $dbh->prepare_cached($sinsert);
+	my $isth = $dbh->prepare_cached($sinsert);
 
-    my $rc = $isth->execute(@binddata) || &queryFailed($sinsert,@binddata);
+	my $rc = $isth->execute(@binddata) || &queryFailed($sinsert,@binddata);
 
-    $scaffold_id = $dbh->{'mysql_insertid'} if ($rc+0);
+	$scaffold_id = $dbh->{'mysql_insertid'} if ($rc+0);
 
-    $isth->finish();
+	$isth->finish();
     
 # insert the CONTIGORDER data
 
-    my $cinsert = "insert into CONTIGORDER (scaffold_id,contig_id,position,direction,following_gap_size) "
-                . "values (?,?,?,?,?)";
+	my $cinsert = "insert into CONTIGORDER (scaffold_id,contig_id,position,direction,following_gap_size) "
+	    . "values (?,?,?,?,?)";
 
-    my $csth = $dbh->prepare_cached($cinsert);
+	my $csth = $dbh->prepare_cached($cinsert);
 
-    my $status = 0;
-    foreach my $member (@$scaffold) {
-        my @idata = @$member; # length 3
-        push @idata,'forward' unless (scalar(@idata) >= 3); # should be caught by Scaffold class
-        push @idata,undef unless (scalar(@idata) >= 4); # should be caught by Scaffold class
-        my $crc = $csth->execute($scaffold_id,@idata) || &queryFailed($cinsert,$scaffold_id,@idata);
-	$status++ if ($crc+0);
+	foreach my $member (@$scaffold) {
+	    next unless ($member->[1] > 0); # protection against undefined contig_id
+	    my @idata = @$member; # length 3
+	    push @idata,'forward' unless (scalar(@idata) >= 3); # should be caught by Scaffold class
+	    push @idata,undef unless (scalar(@idata) >= 4); # should be caught by Scaffold class
+	    my $crc = $csth->execute($scaffold_id,@idata) || &queryFailed($cinsert,$scaffold_id,@idata);
+	    $status++ if ($crc+0);
+	}
+	
+	$dbh->commit;
+
+	$csth->finish();
+    };
+
+    if ($@) {
+	print STDERR "putScaffoldForImportID: Failed to store scaffold in database: " . $@ . "\n";
+	
+	eval {
+	    $dbh->rollback;
+	};
+	if ($@) {
+	    print STDERR "putScaffoldForImportID: ***** ROLLBACK FAILED: " . $@ . " *****\n";
+	}
     }
 
-    $csth->finish();
+    $dbh->{RaiseError} = 0;
 
     return $status;
 }
@@ -298,8 +321,8 @@ sub getScaffoldForProject {
               . "  from CONTIGORDER join SCAFFOLD using (scaffold_id)"
               . " where SCAFFOLD.import_id in ($subquery)"
 #             . "   and SCAFFOLD.source = 'Arcturus contig-loader'"
+#              . "   and contig_id in (select contig_id from CURRENTCONTIGS)"
               . " order by position";
-
 # either build a scaffold object or put an ordered list of contig_ids in Project
 
     my $dbh = $this->getConnection();
@@ -307,12 +330,12 @@ sub getScaffoldForProject {
     my $sth = $dbh->prepare_cached($query);
 
     my $rc = $sth->execute($project_id) || &queryFailed($query,$project_id);
-
     $project->addContigID(undef,scaffold=>1); # clear any
     while (my @ary = $sth->fetchrow_array()) {
         $ary[0] = -$ary[0] if ($ary[2] eq 'reverse');
         $project->addContigID($ary[0],scaffold=>1);
     }
+    $sth->finish();
 # on exit the project instance contains the list of ordered contig_ids
     return $rc;
 }

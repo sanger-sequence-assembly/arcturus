@@ -2,7 +2,6 @@ package uk.ac.sanger.arcturus.gui.common.contigtransfer;
 
 import java.awt.Component;
 import java.awt.event.ActionEvent;
-import java.sql.SQLException;
 import java.util.List;
 
 import javax.swing.AbstractAction;
@@ -13,6 +12,7 @@ import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequestException;
 import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequestNotifier;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 public class ContigTransferAction extends AbstractAction {
 	protected ContigTransferSource source;
@@ -48,8 +48,8 @@ public class ContigTransferAction extends AbstractAction {
 						message,
 						"Failed to create request", JOptionPane.WARNING_MESSAGE, null);
 
-			} catch (SQLException e) {
-				Arcturus.logWarning("SQL exception whilst creating a contig transfer request", e);
+			} catch (ArcturusDatabaseException e) {
+				Arcturus.logWarning("Database exception whilst creating a contig transfer request", e);
 			}
 		}
 

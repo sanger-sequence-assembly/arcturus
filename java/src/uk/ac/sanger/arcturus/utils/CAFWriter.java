@@ -1,9 +1,7 @@
 package uk.ac.sanger.arcturus.utils;
 
 import java.io.*;
-import java.sql.SQLException;
 import java.util.*;
-import java.util.zip.DataFormatException;
 
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.Arcturus;
@@ -11,6 +9,8 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
 public class CAFWriter {
 	protected PrintStream ps = null;
+	protected Segment[] segments = null;
+	protected SegmentComparatorByReadPosition segmentComparator = new SegmentComparatorByReadPosition();
 
 	public CAFWriter(PrintStream ps) {
 		this.ps = ps;
@@ -46,6 +46,17 @@ public class CAFWriter {
 
 		Mapping[] mappings = contig.getMappings();
 
+		int maxsegcount = 0;
+
+		for (int i = 0; i < mappings.length; i++) {
+			int segcount = mappings[i].getSegmentCount();
+			if (segcount > maxsegcount)
+				maxsegcount = segcount;
+		}
+
+		if (segments == null || segments.length < maxsegcount)
+			segments = new Segment[maxsegcount];
+
 		for (int i = 0; i < mappings.length; i++)
 			writeAssembledFrom(mappings[i]);
 		
@@ -64,22 +75,39 @@ public class CAFWriter {
 	}
 
 	private void writeAssembledFrom(Mapping mapping) {
+		Segment[] rawsegments = mapping.getSegments();
+
+		for (int i = 0; i < rawsegments.length; i++)
+			segments[i] = rawsegments[i];
+
+		Arrays.sort(segments, 0, rawsegments.length, segmentComparator);
+
 		Sequence sequence = mapping.getSequence();
 		Read read = sequence.getRead();
 		String readname = read.getName();
-		
-		AssembledFrom[] afdata = mapping.getAssembledFromRecords();
 
-		for (int i = 0; i < afdata.length; i++) {
+		boolean forward = mapping.isForward();
+
+		for (int i = 0; i < rawsegments.length; i++) {
+			int cstart = segments[i].getContigStart();
+			int rstart = segments[i].getReadStart();
+			int length = segments[i].getLength();
+
+			int cfinish = cstart + length - 1;
+
 			ps.print("Assembled_from " + readname);
 
-			Range readRange = afdata[i].getReadRange();
-			Range contigRange = afdata[i].getContigRange();
-			
-			ps.print(" " + contigRange.getStart() + " " + contigRange.getEnd());
-			ps.print(" " + readRange.getStart() + " " + readRange.getEnd());
-			
-			ps.println();
+			if (forward) {
+				int rfinish = rstart + length - 1;
+
+				ps.println(" " + cstart + " " + cfinish + " " + rstart + " "
+						+ rfinish);
+			} else {
+				int rfinish = rstart - (length - 1);
+
+				ps.println(" " + cfinish + " " + cstart + " " + rfinish + " "
+						+ rstart);
+			}
 		}
 	}
 
@@ -134,15 +162,19 @@ public class CAFWriter {
 		for (int i = 0; i < quality.length; i++) {
 			int qual = (int) quality[i];
 			buffer.append(qual);
+			// ps.print(qual);
 
 			if ((i % 25) < 24)
 				buffer.append(' ');
+			// ps.print(' ');
 			else
 				buffer.append('\n');
+			// ps.print('\n');
 		}
 
 		if ((quality.length % 25) != 0)
 			buffer.append('\n');
+		// ps.print('\n');
 
 		ps.print(buffer.toString());
 	}

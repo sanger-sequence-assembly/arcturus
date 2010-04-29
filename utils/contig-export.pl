@@ -34,11 +34,12 @@ my $clipsymbol;
 my $endregiontrim;
 my $endregiononly;
 my $gap4name;
+my $dir;
 
 my $validKeys  = "organism|instance|contig|contigs|fofn|focn|ignoreblocked|caf|"
                . "embl|fasta|quality|padded|mask|symbol|shrink|readsonly|noreads|"
                . "qualityclip|qc|qclipthreshold|qct|qclipsymbol|qcs|alltags|"
-               . "endregiontrim|ert|endegiononly|ero|verbose|help";
+               . "endregiontrim|ert|endegiononly|ero|verbose|help|dir";
 
 while (my $nextword = shift @ARGV) {
 
@@ -111,12 +112,16 @@ while (my $nextword = shift @ARGV) {
 
     $alltags       = 1            if ($nextword eq '-alltags');
 
+    $dir           = shift @ARGV  if ($nextword eq '-dir');
+
 #    $metadataonly = 0            if ($nextword eq '-full'); # redundent
 
 #    $ignblocked   = 1            if ($nextword eq '-ignoreblocked');
 
     &showUsage(0) if ($nextword eq '-help');
 }
+
+die "Failed to change working directory to $dir" if (defined($dir) && ! chdir($dir));
  
 &showUsage("Sorry, padded option not yet operational") if $padded;
 
@@ -378,7 +383,7 @@ sub showUsage {
     print STDERR "MANDATORY NON-EXCLUSIVE PARAMETERS:\n\n";
     print STDERR "-contig\t\tcontig name or ID, or comma-separated list of "
                . "names or IDs\n";
-    print STDERR "-fofn \t\t(focn) name of file with list of Contig IDs\n";
+    print STDERR "-fofn \t\t(focn) name of file with list of Contig IDs (use - for stdin)\n";
 #    print STDERR "-ignoreblock\t(no value) include contigs from blocked projects\n";
     print STDERR "\n";
     print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n";
@@ -425,6 +430,7 @@ sub showUsage {
     print STDERR "-gap4name\tadd the gap4name (lefthand read) to the identifier\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n\n";
+    print STDERR "-dir\t\tChange to this directory at start of processing\n";
     print STDERR "-verbose\t(no value) for some progress info\n";
     print STDERR "\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
@@ -436,9 +442,9 @@ sub showUsage {
 sub getNamesFromFile {
     my $file = shift; # file name
                                                                                 
-    &showUsage("File $file does not exist") unless (-e $file);
- 
-    my $FILE = new FileHandle($file,"r");
+    &showUsage("File $file does not exist") unless ($file eq "-" || -e $file);
+
+    my $FILE = new FileHandle($file);
  
     &showUsage("Can't access $file for reading") unless $FILE;
  

@@ -393,7 +393,6 @@ my %singleoptions; # for (possible) singleton export
 $exportoptions{logger} = $logger if $minerva;
 
 $exportoptions{scaffoldids} = $scaffold if $scaffold;
-$exportoptions{noscaffold} = 1 if (defined($scaffold) && $scaffold == 0);
 
 $exportoptions{endregiontrim} = $endregiontrim if $endregiontrim;
 
@@ -438,9 +437,7 @@ foreach my $option (keys %exportoptions) {
     $singleoptions{$option} = $exportoptions{$option};
 }
 
-$singleoptions{qualitymask} = $masking if defined($masking);
 $singleoptions{maxnrofreads} = 1;
-$singleoptions{noscaffold} = 1;
 $singleoptions{readsonly} = 1;
 
 # here we go

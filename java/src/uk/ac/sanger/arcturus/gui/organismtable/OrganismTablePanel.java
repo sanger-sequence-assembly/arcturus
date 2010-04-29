@@ -6,6 +6,7 @@ import java.awt.event.*;
 import java.awt.BorderLayout;
 
 import uk.ac.sanger.arcturus.*;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.gui.*;
 
 public class OrganismTablePanel extends JPanel implements MinervaClient {
@@ -49,7 +50,11 @@ public class OrganismTablePanel extends JPanel implements MinervaClient {
 				null, "Refresh the display", new Integer(KeyEvent.VK_R),
 				KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0)) {
 			public void actionPerformed(ActionEvent e) {
-				refresh();
+				try {
+					refresh();
+				} catch (ArcturusDatabaseException e1) {
+					Arcturus.logWarning("Failed to refresh organism table", e1);
+				}
 			}
 		};
 	
@@ -131,7 +136,7 @@ public class OrganismTablePanel extends JPanel implements MinervaClient {
 		return "OrganismTablePanel[instance=" + instance.getName() + "]";
 	}
 
-	public void refresh() {
+	public void refresh() throws ArcturusDatabaseException {
 		table.refresh();
 	}
 }

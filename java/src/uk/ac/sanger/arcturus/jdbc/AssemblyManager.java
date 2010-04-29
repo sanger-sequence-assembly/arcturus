@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.jdbc;
 
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import java.sql.*;
 import java.util.*;
@@ -12,7 +13,6 @@ import java.util.*;
 
 public class AssemblyManager extends AbstractManager {
 	private ArcturusDatabase adb;
-	private Connection conn;
 	private HashMap<Integer, Assembly> hashByID = new HashMap<Integer, Assembly>();
 	private PreparedStatement pstmtByID;
 	private PreparedStatement pstmtByName;
@@ -20,34 +20,45 @@ public class AssemblyManager extends AbstractManager {
 	/**
 	 * Creates a new ContigManager to provide contig management services to an
 	 * ArcturusDatabase object.
+	 * @throws ArcturusDatabaseException 
 	 */
 
-	public AssemblyManager(ArcturusDatabase adb) throws SQLException {
+	public AssemblyManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		this.adb = adb;
 
-		conn = adb.getConnection();
-
+		try {
+			setConnection(adb.getDefaultConnection());
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to initialise the assembly manager", conn, adb);
+		}
+	}
+	
+	protected void prepareConnection() throws SQLException {
 		String query = "select name,updated,created,creator from ASSEMBLY where assembly_id = ?";
 		pstmtByID = conn.prepareStatement(query);
 
 		query = "select assembly_id,updated,created,creator from ASSEMBLY where name = ?";
-		pstmtByName = conn.prepareStatement(query);
+		pstmtByName = conn.prepareStatement(query);	
 	}
 
 	public void clearCache() {
 		hashByID.clear();
 	}
 
-	public Assembly getAssemblyByID(int id) throws SQLException {
+	public Assembly getAssemblyByID(int id) throws ArcturusDatabaseException  {
 		return getAssemblyByID(id, true);
 	}
 
 	public Assembly getAssemblyByID(int id, boolean autoload)
-			throws SQLException {
+			throws ArcturusDatabaseException {
 		Object obj = hashByID.get(new Integer(id));
 
 		if (obj == null)
-			return autoload ? loadAssemblyByID(id) : null;
+			try {
+				return autoload ? loadAssemblyByID(id) : null;
+			} catch (SQLException e) {
+				adb.handleSQLException(e, "Failed to get assembly by ID=" + id, conn, this);
+			}
 
 		Assembly assembly = (Assembly) obj;
 
@@ -75,28 +86,33 @@ public class AssemblyManager extends AbstractManager {
 		return assembly;
 	}
 
-	public Assembly getAssemblyByName(String name) throws SQLException {
-		pstmtByName.setString(1, name);
-		ResultSet rs = pstmtByName.executeQuery();
-
+	public Assembly getAssemblyByName(String name) throws ArcturusDatabaseException {
 		Assembly assembly = null;
 
-		if (rs.next()) {
-			int assembly_id = rs.getInt(1);
+		try {
+			pstmtByName.setString(1, name);
+			ResultSet rs = pstmtByName.executeQuery();
 
-			assembly = (Assembly) hashByID.get(new Integer(assembly_id));
+			if (rs.next()) {
+				int assembly_id = rs.getInt(1);
 
-			if (assembly == null) {
-				java.util.Date updated = rs.getTimestamp(2);
-				java.util.Date created = rs.getTimestamp(3);
-				String creator = rs.getString(4);
+				assembly = (Assembly) hashByID.get(new Integer(assembly_id));
 
-				assembly = createAndRegisterNewAssembly(name, assembly_id,
-						updated, created, creator);
+				if (assembly == null) {
+					java.util.Date updated = rs.getTimestamp(2);
+					java.util.Date created = rs.getTimestamp(3);
+					String creator = rs.getString(4);
+
+					assembly = createAndRegisterNewAssembly(name, assembly_id,
+							updated, created, creator);
+				}
 			}
-		}
 
-		rs.close();
+			rs.close();
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get assembly by name=" + name, conn, this);			
+		}
 
 		return assembly;
 	}
@@ -115,68 +131,79 @@ public class AssemblyManager extends AbstractManager {
 		hashByID.put(new Integer(assembly.getID()), assembly);
 	}
 
-	public void preload() throws SQLException {
-		String query = "select assembly_id,name,updated,created,creator from ASSEMBLY";
+	public void preload() throws ArcturusDatabaseException {
+		try {
+			String query = "select assembly_id,name,updated,created,creator from ASSEMBLY";
 
-		Statement stmt = conn.createStatement();
+			Statement stmt = conn.createStatement();
 
-		ResultSet rs = stmt.executeQuery(query);
+			ResultSet rs = stmt.executeQuery(query);
 
-		while (rs.next()) {
-			int id = rs.getInt(1);
+			while (rs.next()) {
+				int id = rs.getInt(1);
 
-			String name = rs.getString(2);
-			java.util.Date updated = rs.getTimestamp(3);
-			java.util.Date created = rs.getTimestamp(4);
-			String creator = rs.getString(5);
+				String name = rs.getString(2);
+				java.util.Date updated = rs.getTimestamp(3);
+				java.util.Date created = rs.getTimestamp(4);
+				String creator = rs.getString(5);
 
-			Assembly assembly = (Assembly) hashByID.get(new Integer(id));
+				Assembly assembly = (Assembly) hashByID.get(new Integer(id));
 
-			if (assembly == null)
-				createAndRegisterNewAssembly(name, id, updated, created,
-						creator);
-			else {
-				assembly.setName(name);
-				assembly.setUpdated(updated);
-				assembly.setCreated(created);
-				assembly.setCreator(creator);
+				if (assembly == null)
+					createAndRegisterNewAssembly(name, id, updated, created,
+							creator);
+				else {
+					assembly.setName(name);
+					assembly.setUpdated(updated);
+					assembly.setCreated(created);
+					assembly.setCreator(creator);
+				}
 			}
-		}
 
-		rs.close();
-		stmt.close();
+			rs.close();
+			stmt.close();
+		} catch (SQLException e) {
+			adb.handleSQLException(e,
+					"Failed to preload assemblies", conn, this);
+		}
 	}
 
-	public Assembly[] getAllAssemblies() throws SQLException {
+	public Assembly[] getAllAssemblies() throws ArcturusDatabaseException {
 		preload();
-		Collection asms = hashByID.values();
+		Collection<Assembly> asms = hashByID.values();
 		Assembly[] assemblies = (Assembly[]) asms.toArray(new Assembly[0]);
 		Arrays.sort(assemblies);
 		return assemblies;
 	}
 
-	public void refreshAssembly(Assembly assembly) throws SQLException {
-		int id = assembly.getID();
+	public void refreshAssembly(Assembly assembly)
+			throws ArcturusDatabaseException {
+		try {
+			int id = assembly.getID();
 
-		pstmtByID.setInt(1, id);
-		ResultSet rs = pstmtByID.executeQuery();
+			pstmtByID.setInt(1, id);
+			ResultSet rs = pstmtByID.executeQuery();
 
-		if (rs.next()) {
-			String name = rs.getString(1);
-			java.util.Date updated = rs.getTimestamp(2);
-			java.util.Date created = rs.getTimestamp(3);
-			String creator = rs.getString(4);
+			if (rs.next()) {
+				String name = rs.getString(1);
+				java.util.Date updated = rs.getTimestamp(2);
+				java.util.Date created = rs.getTimestamp(3);
+				String creator = rs.getString(4);
 
-			assembly.setName(name);
-			assembly.setUpdated(updated);
-			assembly.setCreated(created);
-			assembly.setCreator(creator);
+				assembly.setName(name);
+				assembly.setUpdated(updated);
+				assembly.setCreated(created);
+				assembly.setCreator(creator);
+			}
+
+			rs.close();
+		} catch (SQLException e) {
+			adb.handleSQLException(e,
+					"Failed to refresh assemblies", conn, this);
 		}
-
-		rs.close();
 	}
 
-	public void refreshAllAssemblies() throws SQLException {
+	public void refreshAllAssemblies() throws ArcturusDatabaseException {
 		preload();
 	}
 }

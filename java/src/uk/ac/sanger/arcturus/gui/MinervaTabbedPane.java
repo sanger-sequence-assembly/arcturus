@@ -20,6 +20,7 @@ import uk.ac.sanger.arcturus.gui.contigtransfertable.ContigTransferTablePanel;
 import uk.ac.sanger.arcturus.gui.createcontigtransfers.CreateContigTransferPanel;
 import uk.ac.sanger.arcturus.gui.readfinder.ReadFinderPanel;
 import uk.ac.sanger.arcturus.gui.scaffoldmanager.ScaffoldManagerPanel;
+import uk.ac.sanger.arcturus.gui.siblingreadfinder.SiblingReadFinderPanel;
 import uk.ac.sanger.arcturus.gui.contigfinder.ContigFinderPanel;
 
 public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
@@ -119,6 +120,15 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 					"Find one or more reads",
 					KeyEvent.VK_F,
 					KeyStroke.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK),
+					false),
+					
+			new PermanentView(
+					SiblingReadFinderPanel.class,
+					"Find free sibling reads for project",
+					"Find free sibling reads",
+					"Find free sibling reads for project",
+					KeyEvent.VK_S,
+					KeyStroke.getKeyStroke(KeyEvent.VK_S, ActionEvent.CTRL_MASK),
 					false),
 					
 			new PermanentView(
@@ -295,7 +305,13 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	}
 
 	protected void addSharedFileMenuItems(JMenu menu) {
-		boolean iAmCoordinator = adb.isCoordinator();
+		boolean iAmCoordinator= false;
+		
+		try {
+			iAmCoordinator = adb.isCoordinator();
+		} catch (ArcturusDatabaseException e) {
+			Arcturus.logWarning("Failed to determine coordinator status", e);
+		}
 		
 		for (int i = 0; i < permanentViews.length; i++) {
 			PermanentView view = permanentViews[i];
