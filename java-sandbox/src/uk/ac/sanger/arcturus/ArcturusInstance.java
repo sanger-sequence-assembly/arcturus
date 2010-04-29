@@ -140,7 +140,13 @@ public class ArcturusInstance implements Iterator {
 			throw new ArcturusDatabaseException(e, "Failed to lookup cn=\"" + cn + "\" in LDAP database");
 		}
 
-		DataSource ds = (DataSource) res.getObject();
+		DataSource ds;
+		try {
+		    ds = (DataSource) res.getObject();
+		}
+		catch (NullPointerException e) {
+			throw new ArcturusDatabaseException(e,"Unknown organism database " + name);			
+		}
 		
 		String description = null;
 		

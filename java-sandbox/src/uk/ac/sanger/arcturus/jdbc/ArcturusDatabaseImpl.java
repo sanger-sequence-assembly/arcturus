@@ -623,6 +623,18 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		return contigManager.getCurrentContigs(options, 0);
 	}
 
+	public synchronized boolean isSingleReadCurrentContig(int cid) throws ArcturusDatabaseException {
+		return contigManager.isSingleReadCurrentContig(cid);
+	}
+	
+	public synchronized boolean canUserDeleteContig(int cid) throws ArcturusDatabaseException {
+		return contigManager.canUserDeleteContig(cid);
+	}
+	
+	public synchronized boolean deleteSingleReadCurrentContig(int cid) throws ArcturusDatabaseException {
+		return contigManager.deleteSingleReadCurrentContig(cid);
+	}
+		
 	public synchronized int countContigsByProject(int project_id, int minlen)
 			throws ArcturusDatabaseException {
 		if (logger != null && logger.isLoggable(Level.FINE))

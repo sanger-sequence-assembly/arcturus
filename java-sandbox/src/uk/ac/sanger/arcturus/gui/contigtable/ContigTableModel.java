@@ -7,6 +7,7 @@ import java.util.*;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Project;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
@@ -206,5 +207,29 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 
 	public Contig elementAt(int index) {
 		return (Contig) contigs.elementAt(index);
+	}
+	
+	// methods added by ejz on April 28, 2010; re: delete single-read contig
+	
+	public boolean hasSingleReadContigs() {
+	    boolean hasEligibleContigs = false;
+// return true if at least one single-read contig is selected
+	    int rowcount =  getRowCount();
+	    for (int row = 0 ; row < rowcount ; row++) {
+	        if (elementAt(row).getReadCount() == 1) hasEligibleContigs = true;	        
+	    }
+	    return hasEligibleContigs;
+	}
+	
+	public boolean userCanDeleteContigs() {
+        Contig contig = elementAt(0); // any contig will do
+        if (contig == null) return false;        
+	    try {
+	        return adb.canUserDeleteContig(contig.getID());
+ 	    }
+	    catch (ArcturusDatabaseException e) {
+		    Arcturus.logWarning("Failed to test access privilege", e);
+	    }
+	    return false;
 	}
 }

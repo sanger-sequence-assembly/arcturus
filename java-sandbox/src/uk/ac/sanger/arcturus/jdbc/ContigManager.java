@@ -1,9 +1,12 @@
 package uk.ac.sanger.arcturus.jdbc;
 
 import uk.ac.sanger.arcturus.data.*;
+
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.database.ContigProcessor;
+
+import uk.ac.sanger.arcturus.people.*;
 
 import java.sql.*;
 import java.util.*;
@@ -22,6 +25,7 @@ public class ContigManager extends AbstractManager {
 
 	protected PreparedStatement pstmtContigData = null;
 	protected PreparedStatement pstmtCurrentContigData = null;
+	protected PreparedStatement pstmtIsSingleReadCurrentContig = null;
 	protected PreparedStatement pstmtCountMappings = null;
 	protected PreparedStatement pstmtMappingData = null;
 	protected PreparedStatement pstmtCountSegments = null;
@@ -44,6 +48,10 @@ public class ContigManager extends AbstractManager {
 	protected PreparedStatement pstmtContigIDFromReadname = null;
 	
 	protected PreparedStatement pstmtChildContigs = null;
+
+	protected PreparedStatement pstmtDeleteSingleReadContig = null;
+	protected PreparedStatement pstmtNotLockedProjectForContig = null;
+	protected PreparedStatement pstmtCanUserDeleteContig = null;
 
 	protected ManagerEvent event = null;
 
@@ -95,6 +103,10 @@ public class ContigManager extends AbstractManager {
 				+ " from CURRENTCONTIGS" + " where contig_id = ?";
 
 		pstmtCurrentContigData = conn.prepareStatement(query);
+		
+		query = "select count(*) from CURRENTCONTIGS where contig_id = ? and nreads = 1";
+
+		pstmtIsSingleReadCurrentContig = conn.prepareStatement(query);
 
 		query = "select count(*) from MAPPING where contig_id = ?";
 
@@ -195,6 +207,28 @@ public class ContigManager extends AbstractManager {
 		query = "select contig_id from C2CMAPPING where parent_id = ?";
 		
 		pstmtChildContigs = conn.prepareStatement(query);
+		
+		query = "select count(*) from CONTIG join PROJECT using (project_id)"
+			  + " where contig_id = ?"
+			  + "   and lockdate is null and lockowner is null"
+			  + "   and status not in ('finished','quality checked','retired')";
+		
+		pstmtNotLockedProjectForContig = conn.prepareStatement(query);
+		
+		query = "delete CONTIG from CONTIG join PROJECT using (project_id)" 
+			  + " where contig_id = ? and nreads = 1 "       
+			  + "   and lockdate is null and lockowner is null"
+			  + "   and status not in ('finished','quality checked','retired')";
+		// NOTE: perhaps lockowner != null and lockowner=owner
+//		      + "   and (lockdate is null and lockowner is null or owner = null or lockowner = owner)" ??
+
+		pstmtDeleteSingleReadContig = conn.prepareStatement(query);
+		
+        query = "select count(*) from CONTIG join PROJECT using (project_id)" 
+              + " where contig_id = ? and (owner is null or owner = ?) "
+ 	          + "   and (lockdate is null and lockowner is null or owner is null or lockowner = owner)"
+ 		      + "   and status not in ('finished','quality checked','retired')";
+		pstmtCanUserDeleteContig = conn.prepareStatement(query);
 	}
 
 	protected void preloadSequencingVectors() throws SQLException {
@@ -1196,6 +1230,30 @@ public class ContigManager extends AbstractManager {
 		return found;
 	}
 
+	public boolean isSingleReadCurrentContig(int contig_id) throws ArcturusDatabaseException {
+		boolean found = false;
+		
+		try {
+			pstmtIsSingleReadCurrentContig.setInt(1, contig_id);
+
+			ResultSet rs = pstmtIsSingleReadCurrentContig.executeQuery();
+
+			if ( rs.next() ) {
+				if ( rs.getInt(1) == 1 ) 
+					found = true;
+			}
+
+			rs.close();
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e,
+					"Failed to test whether contig ID=" + contig_id + " is current",
+					conn, this);															
+		}
+
+		return found;
+	}
+
 	public int[] getCurrentContigIDList() throws ArcturusDatabaseException {
 		int[] ids = null;
 		
@@ -1330,6 +1388,46 @@ public class ContigManager extends AbstractManager {
 		fireEvent(event);
 
 		return processed;
+	}
+	
+	public boolean deleteSingleReadCurrentContig (int contig_id) throws ArcturusDatabaseException {
+		boolean success = false;
+		
+		if ( isSingleReadCurrentContig(contig_id) ) 
+			
+			try {				
+				pstmtDeleteSingleReadContig.setInt(1,contig_id);
+		        int rc = pstmtDeleteSingleReadContig.executeUpdate();
+				if ( rc == 1 )
+				    success = true;
+			} 
+			catch (SQLException e ){
+				throw new ArcturusDatabaseException (e,"Failed to remove contig " + contig_id);
+			}
+			
+		return success;
+	}	
+	
+	public boolean canUserDeleteContig(int contig_id) throws ArcturusDatabaseException {
+// method added by ejz on April 27, 2020; test privilege of user on contigs in the current project
+		boolean success = false;
+
+		try {
+ 			Person me = adb.findMe();
+ 			String user = me.getUID();
+			pstmtCanUserDeleteContig.setInt(1,contig_id);
+			pstmtCanUserDeleteContig.setString(2,user);
+//System.out.println("testing contig " + contig_id + " for user " + user);			
+			ResultSet rs = pstmtCanUserDeleteContig.executeQuery();
+			int count = rs.next() ? rs.getInt(1) : 0;
+			rs.close();
+			if (count == 1) 
+			    success = true;
+		}
+		catch (SQLException e ){
+			throw new ArcturusDatabaseException (e,"Failed to test access to contig " + contig_id);
+		}
+		return success;		
 	}
 	
 	public Set<Contig> getChildContigs(Contig parent) throws ArcturusDatabaseException {

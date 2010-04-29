@@ -248,6 +248,10 @@ public interface ArcturusDatabase {
 
 	public boolean isCurrentContig(int contigid) throws ArcturusDatabaseException;
 
+	public boolean isSingleReadCurrentContig(int contigid) throws ArcturusDatabaseException;
+
+	public boolean canUserDeleteContig(int contigid) throws ArcturusDatabaseException; // ???
+
 	public int[] getCurrentContigIDList() throws ArcturusDatabaseException;
 
 	public int countCurrentContigs(int minlen) throws ArcturusDatabaseException;
@@ -259,6 +263,8 @@ public interface ArcturusDatabase {
 
 	public int processCurrentContigs(int options,
 			ContigProcessor processor) throws ArcturusDatabaseException;
+
+	public boolean deleteSingleReadCurrentContig(int contigid) throws ArcturusDatabaseException;
 
 	public Set getCurrentContigs(int options, int minlen)
 			throws ArcturusDatabaseException;

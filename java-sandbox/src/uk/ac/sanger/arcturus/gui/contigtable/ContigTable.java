@@ -66,6 +66,19 @@ public class ContigTable extends SortableTable {
 		return clist;
 	}
 	
+	public boolean hasSingleReadContigSelectedForDelete() {
+		// method added by ejz on April 28, 2010
+	    boolean hasEligibleContig = false;
+	    // return true if one and only one single-read contig is selected
+	    ContigList clist = getSelectedValues();
+	    if (clist.size() == 1) {
+	        Contig contig = (Contig)clist.firstElement();
+	        if (contig.getReadCount() == 1)
+	            hasEligibleContig = true;
+	    }
+	    return hasEligibleContig;
+	}
+	
 	public void saveSelectedContigsAsCAF(File file) {
 		try {
 			PrintStream ps = new PrintStream(new FileOutputStream(file));
