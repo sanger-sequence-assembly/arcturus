@@ -4,9 +4,6 @@ import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
 import javax.swing.table.*;
 import javax.swing.event.*;
-
-import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
-
 import java.awt.event.*;
 import java.awt.Point;
 import java.awt.Component;
@@ -121,7 +118,7 @@ public class SortableTable extends JTable {
         return prefsize;
     }
     
-    public void refresh() throws ArcturusDatabaseException {
+    public void refresh() {
     	((SortableTableModel)getModel()).refresh();
     }
 }

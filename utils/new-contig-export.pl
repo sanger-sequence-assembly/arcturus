@@ -20,7 +20,7 @@ my $DEBUG = 0;
 
 my ($organism,$instance);
 
-my ($project,$fopn, $contig,$focn,$fofn,$assembly,$ignorelock);
+my ($project,$fopn, $contig,$focn,$fofn,$assembly);
 
 my $noscaffold;
 
@@ -90,9 +90,9 @@ my $screenkeys  = "undoedit|ue|removelowqualityreads|rlqr|removeinvalidreads|rir
 
 my $validkeys  = "organism|o|instance|i|"                               # dbase
                . "contig|c|focn|fofn|project|p|fopn|assembly|a|accept|" # dataset
-               . "ignorelock|il|noscaffold|ns|" # project status (of contigs)
-               . "minlen|minsize|ms|minreads|min|maxreads|max|"         # constraints
-               . "format|caf|baf|maf|fasta|embl|list|reverse|"          # output format
+               . "ignoreblocked|noscaffold|ns|" # project status (of contigs)
+               . "minlen|minsize|ms|minreads|min|maxreads|max|"  # constraints
+               . "format|caf|baf|maf|fasta|embl|reverse|"               # output format
 #   .|mask|symbol|shrink|"
                . "confirm|info|verbose|debug|help";                     # reporting
 
@@ -100,13 +100,11 @@ my $validkeys  = "organism|o|instance|i|"                               # dbase
 
 while (my $nextword = shift @ARGV) {
 print STDERR "$nextword validkeys '$validkeys' \n" if $verbose;
-#print STDERR "$nextword validkeys '$validkeys' \n";
     if ($nextword !~ /\-($validkeys)\b/) {
         &showUsage("Invalid keyword '$nextword' or parameter cannot be redefined");
     }
 elsif ($nextword =~ /\-($validkeys)\b/) {
 print STDERR "$nextword  matches  '$1'\n" if $verbose;
-#print STDERR "$nextword  matches  '$1'\n";
 }
 
 
@@ -199,18 +197,18 @@ print STDERR "$nextword  matches  '$1'\n" if $verbose;
 
     if ($nextword eq '-format') {
         $preset = shift @ARGV;
-        unless ($preset =~ /^(caf|baf|maf|fasta|embl|list)$/) {
+        unless ($preset =~ /^(caf|baf|maf|fasta|embl)$/) {
             &showUsage("Invalid output format $format");
         }
 # replace options by selected format and add 'file' option
-        $validkeys =~ s/caf\|maf\|fasta\|embl\|list/$preset|file/; 
+        $validkeys =~ s/caf\|maf\|fasta\|embl/$preset|file/; 
         $validkeys =~ s/format\|//;
     }
 
-    if ($nextword =~ /^\-(caf|baf|maf|fasta|embl|list|file)$/) {
+    if ($nextword =~ /^\-(caf|baf|maf|fasta|embl|file)$/) {
         $format = $1;
         $format = $preset if ($format eq 'file');
-        $validkeys =~ s/caf\|baf\|maf\|fasta\|embl\|list\|/$format\|/;
+        $validkeys =~ s/caf\|baf\|maf\|fasta\|embl\|/$format\|/;
         $validkeys =~ s/file\|//; # presence implies previous 'format' key
 # read the filename
         $filename  = shift @ARGV;
@@ -229,13 +227,12 @@ print STDERR "$nextword  matches  '$1'\n" if $verbose;
                        .  $paddedkeys.'|'.$screenkeys;
 	}
         elsif ($format eq 'fasta') {
-            $validkeys .= "|quality|q|readsonly|ro|gap4name|g4n|"
+            $validkeys .= "quality|q|readsonly|ro|gap4name|g4n|"
 		       .   $endonlykeys."|mask|symbol|shrink|"
                        .   $cliplqkeys.'|'.$marklqkeys.'|'.$endclipkeys
                        .   '|'.$paddedkeys.'|'.$screenkeys;
 # shrink|" ?
 #               . "|mask|symbol|"
-            $notags = 1;
         }
 	elsif ($format eq 'embl') {
 	    $validkeys .= $marklqkeys.'|'.$cliplqkeys.'|'
@@ -243,13 +240,6 @@ print STDERR "$nextword  matches  '$1'\n" if $verbose;
 	}
 	elsif ($format eq 'maf'){
             $validkeys .= "runlengthsubstitute|rls|";
-            $notags = 1;
-	}
-	elsif ($format eq 'list'){
-            $validkeys .= "|noreads|nr|gap4name|g4n|readsonly|ro|"
-	 	       .   $cliplqkeys.'|';
-#                       .  $paddedkeys.'|'.$screenkeys;
-            $notags = 1;
 	}
 	else {
 	}
@@ -259,7 +249,7 @@ print STDERR "$nextword  matches  '$1'\n" if $verbose;
     if ($nextword eq '-quality' || $nextword eq '-q') {
 # quality key implies fasta format
         $quality  = shift @ARGV;
-        unless (defined($quality) && $quality !~ /\b\-/) {
+        unless (defined($quality) && $quality !~ /$\-/) {
             &showUsage("Invalid or missing filename ($quality)");
         }
 	next;
@@ -324,12 +314,10 @@ print STDERR "$nextword  matches  '$1'\n" if $verbose;
     }            
 
     if ($nextword eq '-splittags'      || $nextword eq '-st') {
-        $splittags  = shift @ARGV;
+        $splittags = shift @ARGV;
     }            
 
-    if ($nextword eq '-ignorelock'     || $nextword eq '-il') {
-        $ignorelock = 1;
-    }
+#    $ignblocked   = 1            if ($nextword eq '-ignoreblocked');
 
     if ($nextword eq '-noscaffold'     || $nextword eq '-ns') {
         $noscaffold = 1;
@@ -338,13 +326,13 @@ print STDERR "$nextword  matches  '$1'\n" if $verbose;
 # low quality treatment
 
     if ($nextword eq '-marklowquality' || $nextword eq '-mlq') {
-#        $validkeys =~ s/$cliplqkeys\|//; # ?
+        $validkeys =~ s/$cliplqkeys//; # ?
         $validkeys .= $lqkeys;
         $marklowquality = 1;
     }
 
     if ($nextword eq '-cliplowquality' || $nextword eq '-clq') {
-#        $validkeys =~ s/$marklqkeys\|//; # ?
+        $validkeys =~ s/$marklqkeys//; # ?
         $validkeys .= $lqkeys;
         $cliplowquality = 1;
     }
@@ -508,8 +496,7 @@ my %contighash;
 my %projecthash;
 
 my %eoptions;
-$eoptions{noscaffold}  = 1 if $noscaffold;
-$eoptions{nolockcheck} = 1 if $ignorelock;
+$eoptions{noscaffold} = 1 if $noscaffold;
 
 while (@$contigs || @$projects) {
 
@@ -519,6 +506,7 @@ while (@$contigs || @$projects) {
         my $pid = $project->getProjectID();
         next if $projecthash{$pid}; # protect against duplicate project identifiers 
         my ($contigids,$status) = $project->getContigIDsForExport(%eoptions);
+# ?? IGNORE LOCKED should be an option ?
         unless ($contigids && @$contigids) {
 	    $logger->error("No contigs found or accessible for project "
                           .$project->getProjectName()." (id=$pid ? may be locked)");
@@ -570,8 +558,6 @@ while (@$contigs || @$projects) {
         $coptions{metaDataOnly} = $metadataonly; # redundent?
         $coptions{withRead}  = $identifier if ($identifier =~ /\D/);
         $coptions{contig_id} = $identifier if ($identifier !~ /\D/);
-
-#        $coptions{withTag} = $tagtype if $tagtype;
 # $options{ignoreblocked} = 1;
 
         $logger->info("Getting contig $identifier");
@@ -608,7 +594,6 @@ while (@$contigs || @$projects) {
 	}
 
         unless ($notags) {
-            $logger->info("Getting tags for $cnm");
             my $tags = $contig->getTags(1) || [];
             if (($includetags || $excludetags) && !@$tags) {
                  $logger->error("Contig $cnm has no tags");
@@ -672,23 +657,14 @@ print STDOUT "endRegionTrim; $contig  $clipped\n";
 # quality clip : remove high quality pads from consensus (e.g. to approximate "finished")
 
         if ($cliplowquality) {
-            $logger->info("quality clipping $cnm ($contig)");
-            my %lqoptions = (exportaschild=>1); #,components=>0);
+            $logger->info("quality clipping");
+            my %lqoptions = (exportaschild=>1,components=>0);
 #            $lqoptions{hqpm} = 0; # delete all "high" quality pads (and non ACGT)
 #            $lqoptions{minimum} = 0; # but keep all low quality bases
 # these deal with tags under remapping
             $lqoptions{components} = 1;
 #            $lqoptions{breaktags} = $splittags if $splittags;
 #            $lqoptions{nomergetaglist} = 'REPT';
-
-            if ($format eq 'list') {
-                $contig->getMappings(1);
-                $lqoptions{components} = 1;
-                $lqoptions{exportaschild} = 0;
-	    }
-
-            $logger->fine("Contig $cnm has tags")     if $contig->hasTags();
-            $logger->fine("Contig $cnm has mappings") if $contig->hasMappings();
 
             my ($clippedcontig,$status) = $contig->deleteLowQualityBases(%lqoptions);
 
@@ -699,10 +675,6 @@ print STDOUT "endRegionTrim; $contig  $clipped\n";
                 $clippedcontig->inheritTags(%tagoptions);
                 $contig->erase(); # garbage collection
                 $contig = $clippedcontig;
-
-	        unless ($contig->hasTags()) {
-	    	    $logger->info("Contig ".$contig->getContigName()." has no tags");
-                }
     	    }
 	    elsif (!$status) {
 		$logger->severe("Failed to clip contig ".$contig->getContigName());
@@ -712,7 +684,6 @@ print STDOUT "endRegionTrim; $contig  $clipped\n";
 # cleanup (remove low quality / very short reads) / unedit (replace edited reads by original)
 
         if ($removelowqualityreads) {
-            $logger->info("removing low-quality reads $cnm ($contig)");
 # remove bad/short reads from the assembly
             my ($newcontig,$status) = $contig->deleteLowQualityReads();
             $contig->erase(); # garbage collection
@@ -720,7 +691,6 @@ print STDOUT "endRegionTrim; $contig  $clipped\n";
         }
 
         if ($undoreadedits) {
-            $logger->info("undoing read edits $cnm ($contig)");
 # translate edited reads back to the original SCF
             my ($newcontig,$status) = $contig->undoReadEdits();
             $contig->erase(); # garbage collection
@@ -730,7 +700,6 @@ print STDOUT "endRegionTrim; $contig  $clipped\n";
 # remove invalid readnames
 
         if ($removeinvalidreads) {
-            $logger->info("removing invalid readnames $cnm ($contig)");
             my ($newcontig,$status) = $contig->removeInvalidReadNames();
 	    $logger->warning($status);
         }
@@ -738,7 +707,6 @@ print STDOUT "endRegionTrim; $contig  $clipped\n";
 # restore masked reads
 
         if ($restoremaskedreads) {
-            $logger->info("restoring masked reads $cnm ($contig)");
             my $status = $contig->restoreMaskedReads();
 	    $logger->error("number of reads restored: $status");
         }
@@ -757,7 +725,6 @@ $logger->info("return $contig ".$contig->isPadded() || 'not padded!');
         }
 
         if ($reverse) {
-            $logger->info("reversing $cnm ($contig)");
 # TO BE DEVELOPED
             my %roptions = (nonew=>1);
 undef %roptions;
@@ -830,28 +797,12 @@ $logger->info("return $contig ".($contig->isPadded() ? 'padded' : 'not padded!')
         elsif ($format eq 'embl') {
             $woptions{notags}      = 1 if $notags;
             $woptions{includetag} = $includetags if $includetags;
-            $woptions{includetag} = 'CDS,CDSM,CHAD' unless defined $woptions{includetag};
             $woptions{excludetag} = $excludetags if $excludetags;
-#$logger->info("Contig ".$contig->getContigName()." has tags") if $contig->hasTags();
-#$logger->info("$woptions{includetag} $woptions{excludetag} $woptions{notags} ") if $contig->hasTags();
             $err = $contig->writeToEMBL($fhDNA,0,%woptions);
 	}
 
         elsif ($format eq 'maf') {
             $err = $contig->writeToMaf($fhDNA,$fhQTY,$fhRDS,%woptions) ;
-	}
-
-        elsif ($format eq 'list') {
-#            $err = $contig->writePlacements($fhRDS,%woptions) ;
-            my $listed = &writeplacements($contig,$fhRDS,%woptions);
-            if ($listed && $listed != $nreads) {
-                $logger->warning("read-count mismatch : $listed  vs $nreads");
-                $err++;
-	    }
-	    elsif (!$listed) {
-                $logger->warning("$cnm has no mappings");
-                $err++;
-	    }
 	}
 
         $exportcount++ unless $err;
@@ -881,7 +832,7 @@ else {
     $logger->warning("$exportcount contigs have been exported") if $exportcount;
     $logger->warning("NO contigs have been exported") unless $exportcount;
     $logger->warning("There were no errors") unless $errorcount;
-    $logger->warning("$errorcount contigs had errors") if $errorcount;
+    $logger->warning("$errorcount Errors found") if $errorcount;
 }
 
 foreach my $handle ($fhDNA,$fhQTY,$fhRDS) {
@@ -908,27 +859,9 @@ sub getcontigsandprojects {
 # --- contig specification ---
 
     if ($contig) {
-# single ID or comma-separated list or range(s), or mixture of these
-        my $locn = &getNames($contig); # first split on possible commas
-        foreach my $contig (@$locn) {
-            unless ($contig =~ /\-/) {
-                push @$contigs,$contig;
-                next;
-	    }
-# it's a range defined
-            my @range = sort {$a <=> $b} split /\-/,$contig;
-            if (scalar(@range) > 2) {
-                print STDERR "Invalid contig range specification: $contig\n";
-                next;
-	    }
-            push @$contigs, ($range[0] .. $range[1]);
-        }
-# weedout duplicates
-        my $contigidhash = {};
-        foreach my $contig (@$contigs) {
-            $contigidhash->{$contig}++;
-	}
-        @$contigs = sort {$a <=> $b} keys %$contigidhash;
+# single ID or comma-separated list
+        my $locn = &getNames($contig);
+        push @$contigs,@$locn if $locn;
     }
 
     if ($focn && $focn =~ /\.agp/) {
@@ -1040,34 +973,6 @@ sub getProjects {
     return [@projects];
 }
 
-sub writeplacements {
-# dump the read placements
-    my $contig = shift;
-    my $FILE = shift; # obligatory file handle
-    my %options = @_;
-
-    my $mappings = $contig->getMappings(1) || return 0;
-
-    my $contigname = $contig->getContigName();
-
-    my %direction = ('1'=>'F' , '-1'=>'R');
-
-    my $count = 0;
-    foreach my $mapping (@$mappings) {
-        my @crange = $mapping->getObjectRange();
-        $crange[0] = 'undef' unless @crange;
-        my @rrange = $mapping->getMappedRange();
-        $rrange[0] = 'undef' unless @rrange;
-        my $readname = $mapping->getMappingName();
-        $readname =~ s/(\S+)\s.*$/$1/;
-        my $alignment = $mapping->getAlignment() || 'U';
-        $alignment = $direction{$alignment} if $direction{$alignment}; 
-        print $FILE "$contigname  $readname  @crange  @rrange  $alignment\n";
-        $count++;
-    }
-    return $count;
-}
-
 #----------------------------------------------------------------------------
 # file handles
 #----------------------------------------------------------------------------
@@ -1105,7 +1010,7 @@ sub getfilehandles {
 # FASTA format
 
     if ($format eq 'fasta' && $filename) {
-        $filename .= '.fna' unless ($filename =~ /\.fas$|fna|null/);
+        $filename .= '.fas' unless ($filename =~ /\.fas$|null/);
         $fhDNA = new FileHandle($filename, "w");
         unless ($fhDNA) {
             $logger->error("Failed to create FASTA sequence output file \"$filename\"");
@@ -1113,7 +1018,6 @@ sub getfilehandles {
 	    return undef;
 	}
         if (defined($quality)) {
-            $quality .= 'qual' unless ($quality =~ /\.qual$|null/);
             $fhQTY = new FileHandle($quality, "w"); 
             unless ($fhQTY) {
   	        $logger->error("Failed to create FASTA quality output file \"$quality\"");
@@ -1176,24 +1080,6 @@ sub getfilehandles {
         $fhRDS = $fhDNA;
     }
 
-
-# LIST output of placements
-
-    if ($format eq 'list' && $filename) { # 0 not allowed
-        $filename .= '.lis' unless ($filename =~ /\.lis$|null/);
-        unless ($fhRDS = new FileHandle($filename, "w")) {
-            &showUsage("Failed to create output file for placements \"$filename\"");
-        }
-        $fhDNA = $fhRDS;
-    }
-
-    elsif ($format eq 'list' && defined($filename)) { # = 0
-        $fhDNA = *STDOUT;
-        $fhQTY = $fhDNA;
-        $fhRDS = $fhDNA;
-    }
-
-
     return ($fhDNA,$fhQTY,$fhRDS);
 }
 
@@ -1234,9 +1120,6 @@ sub showUsage {
     }
     unless ($format && $format eq 'maf') {
         print STDERR "-maf\t\tMAF output file name root (not '0')\n";
-    }
-    unless ($format && $format eq 'list') {
-        print STDERR "-list\t\tFile name root for listing of placements ('0' for STDOUT)\n";
     }
     unless ($format) {
         print STDERR "\t\t***** CHOOSE AN OUTPUT FORMAT *****\n";

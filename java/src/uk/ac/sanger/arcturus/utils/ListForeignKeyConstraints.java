@@ -61,7 +61,7 @@ public class ListForeignKeyConstraints {
 
 			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 
-			Connection conn = adb.getDefaultConnection();
+			Connection conn = adb.getConnection();
 
 			if (conn == null) {
 				System.err.println("Connection is undefined");

@@ -10,7 +10,7 @@ my $project = 'ALL';
 
 my $vectordb = 'repeats.dbs'; # default
 
-my $minscore; # default undefined
+my $minscore = 30;
 
 my $tagid = 'REPT';
 
@@ -123,23 +123,22 @@ my $export = "/software/arcturus/utils/project-export "
            . "-caf $expfile -gap4name";
 
 # test stuff
-# my $alter  =  "$ENV{HOME}/arcturus/dev/utils/new-contig-export.pl "
+# my $alter  =  "$ENV{HOME}/arcturus/utils/new-contig-export.pl "
 #            . "-instance $instance -organism $organism "
 #            . "-project $project -confirm "
 #           . "-project $project -ignore problems,trash "
 #           . "-caf $expfile -notags";
-# $export = $alter;
 
 print STDOUT "\nexporting from Arcturus:\n$export\n";
 print STDOUT "Using previously exported file $expfile\n\n" if $noexport;
+#exit; # test
 
 system($export) unless $noexport;
 system("grep REPT $expfile");
 system("grep REPT $expfile | wc");
 
-my $caftag = "caftagfeature -tagid $tagid -vector $vectordb" .
-    (defined($minscore) ? " -minscore $minscore" : "") . 
-    " < $expfile  > $impfile";
+my $caftag = "caftagfeature -tagid $tagid -vector $vectordb "
+           . "-minscore $minscore < $expfile  > $impfile";
 
 print STDOUT "tagging caf file:\n$caftag\n\n";
 print STDOUT "Using previously tagged file $impfile\n\n" if $nomatch;
@@ -166,7 +165,7 @@ sub showUsage {
     print STDERR "$text\n\n" if $text;
 
     print STDERR "\nUsage:\n\n$0 -o [organism] -i [instance] -p [project:ALL]"
-                ."-v [vectors:repeats.dbs] -t [tagid:REPT] -m [minscore] "
+                ."-v [vectors:repeats.dbs] -t [tagid:REPT] -m [minscore:30] "
                 ."[-noexport:use existing export] [-nomatch:skip tagging] "
                 ."[-report] [-confirm:import result]";
     exit 0;

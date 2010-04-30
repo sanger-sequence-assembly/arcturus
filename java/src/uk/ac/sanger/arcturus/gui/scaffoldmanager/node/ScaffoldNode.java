@@ -15,14 +15,12 @@ public class ScaffoldNode extends SequenceNode {
 	private MutableTreeNode lastNode = null;
 	private int length = 0;
 	private int reads = 0;
-	private int ID;
 	private boolean forward;
 	private List<Contig> contigs = new Vector<Contig>();
 	
 	private Map<Project, Integer> projectWeightByLength = new HashMap<Project, Integer>();
 
-	public ScaffoldNode(int ID, boolean forward) {
-		this.ID = ID;
+	public ScaffoldNode(boolean forward) {
 		this.forward = forward;
 	}
 	
@@ -70,10 +68,6 @@ public class ScaffoldNode extends SequenceNode {
 	
 	private void addGapNode(GapNode node) {
 		length += node.length();
-	}
-	
-	public int getID() {
-		return ID;
 	}
 	
 	public int length() {
@@ -161,7 +155,7 @@ public class ScaffoldNode extends SequenceNode {
 	}
 
 	public String toString() {
-		return "Scaffold [#" + ID + "] of " + contigs.size() + " contigs, " +
+		return "Scaffold of " + contigs.size() + " contigs, " +
 			formatter.format(length) + " bp" + getProjectWeightsString();		
 	}
 

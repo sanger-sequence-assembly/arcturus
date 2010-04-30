@@ -3,12 +3,14 @@ package uk.ac.sanger.arcturus.gui.contigtable;
 import javax.swing.table.*;
 import java.awt.*;
 import java.util.*;
+import java.sql.SQLException;
+
+import uk.ac.sanger.arcturus.Arcturus;
 
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Project;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import uk.ac.sanger.arcturus.gui.SortableTableModel;
 
@@ -20,7 +22,7 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 	public final int COLUMN_READS = 4;
 	public final int COLUMN_CREATED = 5;
 
-	protected Vector<Contig> contigs = new Vector<Contig>();
+	protected Vector contigs = new Vector();
 	protected Project[] projects;
 	protected ContigComparator comparator;
 	protected int lastSortColumn = COLUMN_LENGTH;
@@ -33,7 +35,7 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 	protected final Color VIOLET2 = new Color(238, 238, 255);
 	protected final Color VIOLET3 = new Color(226, 226, 255);
 
-	public ContigTableModel(Project[] projects) throws ArcturusDatabaseException {
+	public ContigTableModel(Project[] projects) {
 		this.adb = (projects.length > 0 && projects[0] != null) ?
 					projects[0].getArcturusDatabase() : null;
 					
@@ -44,11 +46,16 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 		refresh();
 	}
 	
-	public void refresh() throws ArcturusDatabaseException  {
+	public void refresh()  {
 		contigs.clear();
 		
-		for (int i = 0; i < projects.length; i++)
-			contigs.addAll(projects[i].getContigs(true));
+		try {
+			for (int i = 0; i < projects.length; i++)
+				contigs.addAll(projects[i].getContigs(true));
+		}
+		catch (SQLException sqle) {
+			Arcturus.logWarning(sqle);
+		}
 		
 		resort();
 	}
@@ -106,7 +113,7 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 	}
 
 	protected Contig getContigAtRow(int row) {
-		return contigs.elementAt(row);
+		return (Contig) contigs.elementAt(row);
 	}
 
 	public Object getValueAt(int row, int col) {

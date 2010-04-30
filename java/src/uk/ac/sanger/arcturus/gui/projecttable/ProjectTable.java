@@ -8,6 +8,7 @@ import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 import javax.swing.table.*;
 
+import java.sql.SQLException;
 import java.util.*;
 
 import uk.ac.sanger.arcturus.Arcturus;
@@ -20,7 +21,7 @@ import uk.ac.sanger.arcturus.people.*;
 
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
+import uk.ac.sanger.arcturus.database.ProjectLockException;
 
 public class ProjectTable extends SortableTable {
 	protected final Color paleYellow = new Color(255, 255, 238);
@@ -46,7 +47,7 @@ public class ProjectTable extends SortableTable {
 	
 	protected Person[] allUsers = null;
 
-	public ProjectTable(ProjectTableModel ptm) throws ArcturusDatabaseException {
+	public ProjectTable(ProjectTableModel ptm) {
 		super((SortableTableModel) ptm);
 
 		adb = ptm.adb;
@@ -69,11 +70,14 @@ public class ProjectTable extends SortableTable {
 
 		createPopupMenus();
 		
-
-		allUsers = adb.getAllUsers(true);
+		try {
+			allUsers = adb.getAllUsers(true);
+		} catch (SQLException e) {
+			Arcturus.logWarning(e);
+		}
 	}
 
-	private void createPopupMenus() throws ArcturusDatabaseException {
+	private void createPopupMenus() {
 		popupLock.add(itemUnlockProject);
 		popupLock.addSeparator();
 		popupLock.add(itemLockAsOwner);
@@ -107,11 +111,36 @@ public class ProjectTable extends SortableTable {
 			}
 
 			public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
+				boolean noOwner = projectForPopup.isUnowned();
+
+				String pname = projectForPopup.getName();
+
 				try {
-					updatePopupMenu();
-				} catch (ArcturusDatabaseException e1) {
-					Arcturus.logWarning("Failed to update project table popup menu", e1);
+					itemUnlockProject.setEnabled(adb.canUserUnlockProject(projectForPopup, me));
+				} catch (SQLException sqle) {
+					Arcturus.logWarning("Failed to obtain user privileges", sqle);
 				}
+				
+				itemUnlockProject.setText("Unlock " + pname);
+
+				try {
+					itemLockAsOwner.setEnabled(adb.canUserLockProjectForOwner(projectForPopup, me) &&
+							!projectForPopup.isMine());
+				} catch (SQLException sqle) {
+					Arcturus.logWarning("Failed to obtain user privileges", sqle);
+				}
+
+				itemLockAsOwner.setText(noOwner ? "(" + pname
+						+ " has no owner)" : "Set lock on " + pname + " for "
+						+ projectForPopup.getOwner().getName());
+
+				try {
+					itemLockAsMe.setEnabled(adb.canUserLockProject(projectForPopup, me));
+				} catch (SQLException sqle) {
+					Arcturus.logWarning("Failed to obtain user privileges", sqle);
+				}
+				
+				itemLockAsMe.setText("Acquire lock on " + pname);
 			}
 		});
 		
@@ -124,29 +153,6 @@ public class ProjectTable extends SortableTable {
 				displaySetOwnerDialog();
 			}
 		});	
-	}
-
-	private void updatePopupMenu() throws ArcturusDatabaseException {
-		boolean noOwner = projectForPopup.isUnowned();
-
-		String pname = projectForPopup.getName();
-
-		itemUnlockProject.setEnabled(adb.canUserUnlockProject(projectForPopup, me));
-		
-		itemUnlockProject.setText("Unlock " + pname);
-
-
-		itemLockAsOwner.setEnabled(adb.canUserLockProjectForOwner(projectForPopup, me) &&
-					!projectForPopup.isMine());
-
-		itemLockAsOwner.setText(noOwner ? "(" + pname
-				+ " has no owner)" : "Set lock on " + pname + " for "
-				+ projectForPopup.getOwner().getName());
-
-
-		itemLockAsMe.setEnabled(adb.canUserLockProject(projectForPopup, me));
-		
-		itemLockAsMe.setText("Acquire lock on " + pname);
 	}
 	
 	private void displaySetOwnerDialog() {
@@ -299,22 +305,14 @@ public class ProjectTable extends SortableTable {
 
 		MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(this);
 
-		ContigTablePanel ctp = null;
-		
-		try {
-			ctp = new ContigTablePanel(mtp, projects);
-		} catch (ArcturusDatabaseException e) {
-			Arcturus.logWarning("Failed to create contig table panel", e);
-		}
+		ContigTablePanel ctp = new ContigTablePanel(mtp, projects);
 
-		if (ctp != null) {
-			mtp.add(title, ctp);
+		mtp.add(title, ctp);
 
-			JFrame frame = (JFrame) SwingUtilities.getRoot(mtp);
-			frame.pack();
+		JFrame frame = (JFrame) SwingUtilities.getRoot(mtp);
+		frame.pack();
 
-			mtp.setSelectedComponent(ctp);
-		}
+		mtp.setSelectedComponent(ctp);
 	}
 
 	public void scaffoldSelectedProjects() {

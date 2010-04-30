@@ -12,10 +12,10 @@ import java.awt.event.*;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.sql.SQLException;
 
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.data.Organism;
-import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.gui.*;
 
 public class OrganismTreePanel extends JPanel implements MinervaClient {
@@ -34,7 +34,8 @@ public class OrganismTreePanel extends JPanel implements MinervaClient {
 		try {
 			model = new OrganismTreeModel(instances);
 		} catch (NamingException e) {
-			Arcturus.logWarning(
+			Arcturus
+					.logWarning(
 							"An error occurred when creating an organism tree model",
 							e);
 		}
@@ -170,7 +171,6 @@ public class OrganismTreePanel extends JPanel implements MinervaClient {
 
 		if (node instanceof OrganismNode) {
 			OrganismNode onode = (OrganismNode) node;
-
 			openOrganismForNode(onode);
 		}
 	}
@@ -180,8 +180,9 @@ public class OrganismTreePanel extends JPanel implements MinervaClient {
 
 		try {
 			Minerva.getInstance().createAndShowOrganismDisplay(organism);
-		} catch (ArcturusDatabaseException e) {
-			Arcturus.logWarning("Failed to open organism display for " + onode.getName(), e);
+		} catch (SQLException e) {
+			Arcturus.logWarning("An error occurred when trying to display "
+					+ organism.getName(), e);
 		}
 	}
 

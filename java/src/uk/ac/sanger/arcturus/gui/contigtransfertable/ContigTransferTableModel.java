@@ -3,6 +3,9 @@ package uk.ac.sanger.arcturus.gui.contigtransfertable;
 import javax.swing.table.*;
 import java.awt.*;
 import java.util.*;
+import java.sql.SQLException;
+
+import uk.ac.sanger.arcturus.Arcturus;
 
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Project;
@@ -10,7 +13,6 @@ import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.people.Person;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import uk.ac.sanger.arcturus.contigtransfer.*;
 
@@ -45,7 +47,7 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 	protected int dateCutoff = 0;
 	protected int showStatus = ContigTransferRequest.ALL;
 
-	public ContigTransferTableModel(ArcturusDatabase adb, Person user, int mode) throws ArcturusDatabaseException {
+	public ContigTransferTableModel(ArcturusDatabase adb, Person user, int mode) {
 		this.adb = adb;
 		this.user = user;
 		this.mode = mode;
@@ -55,8 +57,12 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 		refresh();
 	}
 
-	public void refresh() throws ArcturusDatabaseException {
-		allRequests = adb.getContigTransferRequestsByUser(user, mode);
+	public void refresh() {
+		try {
+			allRequests = adb.getContigTransferRequestsByUser(user, mode);
+		} catch (SQLException sqle) {
+			Arcturus.logWarning(sqle);
+		}
 
 		applyFilters();
 		resort();
@@ -99,7 +105,7 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 		}
 	}
 
-	public Class<?> getColumnClass(int col) {
+	public Class getColumnClass(int col) {
 		switch (col) {
 			case COLUMN_OLD_PROJECT:
 			case COLUMN_NEW_PROJECT:

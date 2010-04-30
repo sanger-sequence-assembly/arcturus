@@ -1,5 +1,6 @@
 package uk.ac.sanger.arcturus.gui.common.contigtransfer;
 
+import java.sql.SQLException;
 import java.util.Comparator;
 import java.util.Set;
 import java.util.SortedSet;
@@ -7,9 +8,9 @@ import java.util.TreeSet;
 
 import javax.swing.JMenu;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.gui.VerticalGridLayout;
 import uk.ac.sanger.arcturus.people.Person;
 
@@ -25,17 +26,21 @@ public class ContigTransferMenu extends JMenu {
 		this.adb = adb;
 	}
 	
-	public void refreshMenu() throws ArcturusDatabaseException {
+	public void refreshMenu() {
 		removeAll();
 		
 		Person me = adb.findMe();
 
 		Set<Project> mypset = null;
 		
-		if (adb.isCoordinator())
-			mypset = adb.getAllProjects();
-		else
-			mypset = adb.getProjectsForOwner(me);
+		try {
+			if (adb.isCoordinator())
+				mypset = adb.getAllProjects();
+			else
+				mypset = adb.getProjectsForOwner(me);
+		} catch (SQLException sqle) {
+			Arcturus.logWarning("Error whilst enumerating my projects", sqle);
+		}
 
 		SortedSet<Project> myProjects = new TreeSet<Project>(comparator);
 		
@@ -51,7 +56,11 @@ public class ContigTransferMenu extends JMenu {
 			
 			Set<Project> bin = null;
 
-			bin = adb.getBinProjects();
+			try {
+				bin = adb.getBinProjects();
+			} catch (SQLException sqle) {
+				Arcturus.logWarning("Error whilst finding the BIN project", sqle);
+			}
 
 			if (bin != null) {
 				myProjects.clear();

@@ -3,10 +3,11 @@ package uk.ac.sanger.arcturus.gui.contigtransfertable;
 import java.util.Comparator;
 import java.util.Date;
 
+import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.people.Person;
 import uk.ac.sanger.arcturus.contigtransfer.*;
 
-public class RequestComparator  implements Comparator<ContigTransferRequest> {
+public class RequestComparator  implements Comparator {
 	protected boolean ascending;
 	protected int type;
 
@@ -35,7 +36,10 @@ public class RequestComparator  implements Comparator<ContigTransferRequest> {
 		return ascending;
 	}
 
-	public int compare(ContigTransferRequest req1, ContigTransferRequest req2) {
+	public int compare(Object o1, Object o2) {
+		ContigTransferRequest req1 = (ContigTransferRequest)o1;
+		ContigTransferRequest req2 = (ContigTransferRequest)o2;
+		
 		switch (type) {
 			case ContigTransferTableModel.COLUMN_REQUEST_ID:
 				return compareIntegers(req1.getRequestID(), req2.getRequestID());

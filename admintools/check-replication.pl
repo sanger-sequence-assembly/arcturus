@@ -13,6 +13,11 @@ my $slaves = [
 	      { 'host' => 'mcs3a',
 		'port' => 15002,
 		'username' => 'monitor',
+		'password' => 'WhoWatchesTheWatchers' },
+
+	      { 'host' => 'mcs4a',
+		'port' => 15002,
+		'username' => 'monitor',
 		'password' => 'WhoWatchesTheWatchers' }
 	      ];
 
@@ -54,7 +59,7 @@ sub checkMaster {
     my $dbh = &getConnection($master);
 
     unless (defined($dbh)) {
-	print "    ***** Failed to connect to master: $DBI::errstr *****\n";
+	print "\t ***** Failed to connect to master: $DBI::errstr *****\n";
 	return;
     }
 
@@ -67,9 +72,9 @@ sub checkMaster {
     my $row = $sth->fetchrow_hashref();
 
     if (defined($row)) {
-	printf "   Current log file on master:   %-20s at position %10d\n", $row->{'File'}, $row->{'Position'};
+	print "\tLog file on master is ", $row->{'File'}, " at position ", $row->{'Position'},"\n";
     } else {
-	print "   ***** Failed to get master status from $name: $DBI::errstr *****\n"
+	print "\t***** Failed to get master status from $name: $DBI::errstr *****\n"
     }
 
     $sth->finish();
@@ -87,7 +92,7 @@ sub checkSlave {
     my $dbh = &getConnection($slave);
 
     unless (defined($dbh)) {
-	print "    ***** Failed to connect to slave: $DBI::errstr *****\n";
+	print "\t ***** Failed to connect to slave: $DBI::errstr *****\n";
 	return;
     }
  
@@ -100,7 +105,7 @@ sub checkSlave {
     my $row = $sth->fetchrow_hashref();
 
     if (defined($row)) {
-	print "   Master is ",$row->{'Master_Host'},":",$row->{'Master_Port'},"\n";
+	print "\tMaster is ",$row->{'Master_Host'},":",$row->{'Master_Port'},"\n";
 
 	my $master = { 'host' => $row->{'Master_Host'},
 		       'port' => $row->{'Master_Port'},
@@ -110,49 +115,47 @@ sub checkSlave {
 
 	&checkMaster($master);
 
-	printf "   I/O thread log file on slave: %-20s read to     %10d\n",
-        $row->{'Master_Log_File'}, $row->{'Read_Master_Log_Pos'};
-
-	printf "   SQL thread log file on slave: %-20s executed to %10d\n",
-	$row->{'Relay_Master_Log_File'}, $row->{'Exec_Master_Log_Pos'};
+	print "\tLog file on slave is ", $row->{'Master_Log_File'},
+	" read to ",$row->{'Read_Master_Log_Pos'},
+	", executed to ", $row->{'Exec_Master_Log_Pos'}, "\n";
 
 	my $iostatus = $row->{'Slave_IO_Running'};
 
 	if ($iostatus eq 'Yes') {
-	    print "   I/O thread is running\n";
+	    print "\tIO thread is running\n";
 	} else {
-	    print "   ***** I/O thread is NOT running *****\n";
+	    print "\t***** IO thread is NOT running *****\n";
 	}
 
 	my $sqlstatus = $row->{'Slave_SQL_Running'};
 
 	if ($sqlstatus eq 'Yes') {
-	    print "   SQL thread is running\n";
+	    print "\tSQL thread is running\n";
 	} else {
-	    print "   ***** SQL thread is NOT running *****\n";
+	    print "\t***** SQL thread is NOT running *****\n";
 	}
 
 	my $errno = $row->{'Last_Errno'};
 	my $errmsg = $row->{'Last_Error'};
 
 	if ($errno != 0 || (defined($errmsg) && length($errmsg) > 0)) {
-	    print "   ***** Last error: ($errno) $errmsg\n";
+	    print "\t***** Last error: ($errno) $errmsg\n";
 	}
 
 	my $lag = $row->{'Seconds_Behind_Master'};
 
 	if (defined($lag)) {
 	    if ($lag == 0) {
-		print "   Slave is in synch with master\n";
+		print "\tSlave is in synch with master\n";
 	    } else {
-		print "   Slave is $lag seconds behind master\n";
+		print "\tSlave is $lag seconds behind master\n";
 	    }
 	} else {
-	    print "   ***** Unable to determine slave's time lag behind master *****\n";
+	    print "\t***** Unable to determine slave's time lag behind master *****\n";
 	}
 	print "\n";
     } else {
-	print "    ***** Failed to get slave status from $name *****\n";
+	print "\t ***** Failed to get slave status from $name *****\n";
     }
 
     $sth->finish();

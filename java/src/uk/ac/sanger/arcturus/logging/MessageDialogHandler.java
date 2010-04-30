@@ -1,13 +1,10 @@
 package uk.ac.sanger.arcturus.logging;
 
+import java.sql.SQLException;
 import java.util.logging.*;
 import javax.swing.*;
 
 public class MessageDialogHandler extends Handler {
-	public MessageDialogHandler() {
-		setFormatter(new ShortMessageFormatter());
-	}
-	
 	public void close() throws SecurityException {
 		// Does nothing
 	}
@@ -17,9 +14,6 @@ public class MessageDialogHandler extends Handler {
 	}
 
 	public void publish(LogRecord record) {
-		if (!isLoggable(record))
-			return;
-		
 		Level level = record.getLevel();
 
 		int type = JOptionPane.INFORMATION_MESSAGE;
@@ -51,7 +45,44 @@ public class MessageDialogHandler extends Handler {
 				"Minerva cannot find a required Java class: " + throwable.getMessage() + "\n" +
 				record.getMessage();
 			} else {
-				message = getFormatter().format(record);
+				StringBuffer sb = new StringBuffer();
+
+				sb.append("An error has occurred.  Please notify a developer.\n\n");
+
+				sb.append(throwable.getClass().getName() + ": "
+						+ throwable.getMessage() + "\n");
+				
+				if (throwable instanceof SQLException) {
+					SQLException sqle = (SQLException)throwable;
+					
+					sb.append("\nSQL error code : " + sqle.getErrorCode() + "\n");
+					sb.append("SQL state : " + sqle.getSQLState() + "\n");
+				}
+
+				StackTraceElement[] ste = throwable.getStackTrace();
+
+				boolean showAll = ste.length <= 10;
+
+				for (int i = 0; i < ste.length; i++)
+					if (showAll
+							|| ste[i].getClassName().startsWith(
+									"uk.ac.sanger.arcturus"))
+						sb.append("  [" + i + "]: " + ste[i] + "\n");
+				
+				Throwable cause = throwable.getCause();
+				
+				if (cause != null) {
+					sb.append("\n\nCAUSE: " + cause.getClass().getName() + " : " + cause.getMessage() + "\n");
+					
+					ste = cause.getStackTrace();
+					
+					for (int i = 0; i < ste.length; i++)
+						if (ste[i].getClassName().startsWith(
+										"uk.ac.sanger.arcturus"))
+							sb.append("  [" + i + "]: " + ste[i] + "\n");
+				}
+
+				message = sb.toString();
 			}
 		}
 

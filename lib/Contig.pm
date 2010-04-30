@@ -439,47 +439,14 @@ sub setSequence {
 sub getSequence {
 # return the DNA (possibly) using delayed loading
     my $this = shift;
-    my %options = @_;
-
     $this->importSequence() unless defined($this->{Sequence});
-
-    return $this->{Sequence} unless $options{minNX};
-
-    return &replaceNbyX($this->{Sequence},$options{minNX});
+    return $this->{Sequence};
 }
 
 sub hasSequence {
 # return s true if both DNA and BaseQuality are defined 
     my $this = shift;
     return ($this->{Sequence} && $this->{BaseQuality});
-}
-
-sub replaceNbyX { # SHOULD GO TO ContigHelper.pm
-# private helper method with getSequence for MAF export: substitute
-# sequences of 'N's in the consensus sequence by 'X's and a few 'N's 
-    my $sequence = shift;
-    my $min      = shift; # minimum length of the string;
-
-# first replace all Ns by X
-
-    if ($min && $sequence =~ s/[N\?]/X/ig) {
-
-# then change contiguous runs of X smaller than $min back to N
-
-        my $X = 'X';
-        my $N = 'N';
-        my $i = 1;
-
-        while ($i++ < $min) {
-            $sequence =~ s/([ACTG\?])($X)(?=[ACTG\?])/$1$N/ig;
-            $X .= 'X';
-            $N .= 'N';
-        }
-
-        return $sequence;
-    }
-
-    return 0;
 }
 
 #------------------------------------------------------------------- 
@@ -723,7 +690,8 @@ sub importer {
     elsif ($Component) {
 # test type of input object against specification
         my $instanceref = ref($Component);
-        if ($class ne $instanceref) {
+        if ($class ne $instanceref && $instanceref !~ /$class/) { # allow subclasses
+#        if ($class ne $instanceref) {
             die "Contig->importer expects a(n array of) $class instance(s) as input";
         }
         $this->{$buffername} = [] if !defined($this->{$buffername});
@@ -1074,9 +1042,10 @@ sub writeToCaf {
 # if there are no reads, use delayed loading
         my $reads = $this->getReads(1);
 # test consistency of pad status
-        unless ($this->testPadStatus()) {
+        unless (my $ps = $this->testPadStatus()) {
             my $logger = &verifyLogger('writeToCaf');
-            $logger->error("Inconsistent pad status in contig $contigname");
+            $logger->error("Inconsistent pad status in contig $contigname") if defined $ps;
+            $logger->error("No reads found for contig $contigname")     unless defined $ps;
             return 1; # error status
         } 
 # in frugal mode we bunch the reads in blocks to improve speed (and reduce memory)
@@ -1158,7 +1127,7 @@ sub writeToFasta {
     my $QFILE = shift; # optional, ibid for Quality Data
     my %options = @_;
 
-    &verifyKeys('writeToFasta',\%options,'readsonly','gap4name','minNX');
+    &verifyKeys('writeToFasta',\%options,'readsonly','gap4name','qualitymask');
 
     return "Missing file handle for Fasta output" unless $DFILE;
 
@@ -1310,7 +1279,7 @@ sub writeToMaf {
     my $RFILE = shift; # obligatory file handle for Placed Reads
     my %options = @_;  # minNX=>n , supercontigname=> , contigzeropoint=> 
 
-    &verifyKeys('writeToMaf',\%options,'minNX','supercontigname');
+    &verifyKeys('writeToMaf',\%options,'minNX','supercontigname','contigzeropoint');
 
     my $report = '';
 
@@ -1330,9 +1299,10 @@ sub writeToMaf {
 
     my $minNX = $options{minNX};
     $minNX = 3 unless defined($minNX);
+    $this->filterSequence(minNX=>$minNX) if $minNX;
 # replace sequences of consecutive non-base by X's
     if (my $sequence = $this->getSequence()) {
-        $this->writeToFasta($DFILE,$QFILE,minNX=>$minNX);
+        $this->writeToFasta($DFILE,$QFILE);
     }
     else {
         return 0,"Missing sequence for contig ".$this->getContigName();
@@ -1371,8 +1341,11 @@ sub writeToMaf {
             $success = 0;
 	    next;
 	}
-        my $lqleft = $read->getLowQualityLeft();
-        my $length = $read->getLowQualityRight() - $lqleft + 1;
+# TO BE TESTED 0 l+1 or 1 l ??
+        my $lqleft  = $read->getLowQualityLeft()  || 1;
+        my $lqright = $read->getLowQualityRight() || $read->getSequenceLength();
+
+        my $length = $lqright - $lqleft + 1;
         my $alignment = ($mapping->getAlignment() > 0) ? 0 : 1;
         my $supercontigstart  = $contigzeropoint + $range[0];
         print $RFILE "* $readname $lqleft $length $alignment " .
@@ -1819,6 +1792,13 @@ sub disassemble {
     my %options = @_;
     &verifyKeys('disassemble',\%options,'tagstart','tagfinal');
     return ContigHelper->disassemble($this,%options);
+}
+
+sub filterSequence {
+    my $this = shift;
+    my %options = @_;
+    &verifyKeys('disassemble',\%options,'minNX');
+    return ContigHelper->filterSequence($this,%options);
 }
 
 #---------------------------

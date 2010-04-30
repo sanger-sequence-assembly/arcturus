@@ -295,7 +295,7 @@ sub FilterMatches {
 sub readqhash {
     $file = shift;
 
-    die "Cannot open quality file" unless open(QFILE, $file);
+    die "Cannot open quality file $file" unless open(QFILE, $file);
 
     $hash = {};
 

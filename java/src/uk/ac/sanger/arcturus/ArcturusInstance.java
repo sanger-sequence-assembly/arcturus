@@ -7,7 +7,6 @@ import java.sql.*;
 import javax.sql.*;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.data.Organism;
 import uk.ac.sanger.arcturus.jdbc.ArcturusDatabaseImpl;
 
@@ -127,18 +126,13 @@ public class ArcturusInstance implements Iterator {
 	 */
 
 	public ArcturusDatabase findArcturusDatabase(String name)
-			throws ArcturusDatabaseException {
+			throws NamingException, SQLException {
 		if (name == null)
 			return null;
 		
 		String cn = "cn=" + name;
 		
-		SearchResult res;
-		try {
-			res = lookup(cn);
-		} catch (NamingException e) {
-			throw new ArcturusDatabaseException(e, "Failed to lookup cn=\"" + cn + "\" in LDAP database");
-		}
+		SearchResult res = lookup(cn);
 
 		DataSource ds = (DataSource) res.getObject();
 		
@@ -149,15 +143,8 @@ public class ArcturusInstance implements Iterator {
 		Attribute attr = attrs.get("description");
 		
 		if (attr != null) {
-			Object value = null;
-			
-			try {
-				value = attr.get();
-			} catch (NamingException e) {
-				throw new ArcturusDatabaseException(e, "Failed to obtain the description attribute for cn=\"" + cn + "\" in LDAP database");
-			}
-			
-			if (value != null && value instanceof String)
+			Object value = attr.get();
+			if (value instanceof String)
 				description = (String)value;
 		}
 
@@ -198,7 +185,7 @@ public class ArcturusInstance implements Iterator {
 	 */
 	
 	public ArcturusDatabase getDefaultDatabase()
-		throws ArcturusDatabaseException {
+		throws NamingException, SQLException {
 		String organism = Arcturus.getProperty("arcturus.organism");
 
 		return findArcturusDatabase(organism);
@@ -259,14 +246,16 @@ public class ArcturusInstance implements Iterator {
 	 * the Arcturus database objects in this instance's LDAP directory.
 	 * 
 	 * @return an iterator, which is actually a reference to the current object.
-	 * @throws ArcturusDatabaseException 
 	 */
 
-	public Iterator iterator() throws ArcturusDatabaseException {
+	public Iterator iterator() {
 		try {
 			ne = context.listBindings("");
 			nextADB = getNextADB(ne);
 		} catch (NamingException ne) {
+			ne = null;
+			nextADB = null;
+		} catch (SQLException sqle) {
 			ne = null;
 			nextADB = null;
 		}
@@ -304,7 +293,7 @@ public class ArcturusInstance implements Iterator {
 			nextADB = getNextADB(ne);
 		} catch (NamingException ne) {
 			nextADB = null;
-		} catch (ArcturusDatabaseException e) {
+		} catch (SQLException sqle) {
 			nextADB = null;
 		}
 
@@ -326,7 +315,7 @@ public class ArcturusInstance implements Iterator {
 	}
 
 	private ArcturusDatabase getNextADB(NamingEnumeration ne)
-			throws NamingException, ArcturusDatabaseException {
+			throws NamingException, SQLException {
 		while (ne != null && ne.hasMore()) {
 			Binding bd = (Binding) ne.next();
 

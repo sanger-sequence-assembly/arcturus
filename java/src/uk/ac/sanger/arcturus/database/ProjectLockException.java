@@ -1,7 +1,7 @@
 package uk.ac.sanger.arcturus.database;
 
 
-public class ProjectLockException extends Exception {
+public class ProjectLockException extends ArcturusDatabaseException {
 	public static final int OK = 0;
 	public static final int PROJECT_IS_LOCKED = 1;
 	public static final int PROJECT_IS_UNLOCKED = 2;

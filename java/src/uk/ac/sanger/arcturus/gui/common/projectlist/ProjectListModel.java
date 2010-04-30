@@ -1,24 +1,31 @@
 package uk.ac.sanger.arcturus.gui.common.projectlist;
 
+import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Set;
 
 import javax.swing.AbstractListModel;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 public class ProjectListModel extends AbstractListModel {
 	ProjectProxy[] projects;
 	ArcturusDatabase adb;
 
-	public ProjectListModel(ArcturusDatabase adb) throws ArcturusDatabaseException {
+	public ProjectListModel(ArcturusDatabase adb) {
 		this.adb = adb;
-		refresh();
+		try {
+			refresh();
+		} catch (SQLException sqle) {
+			Arcturus.logWarning(
+					"An error occurred when initialising the project list",
+					sqle);
+		}
 	}
 
-	public void refresh() throws ArcturusDatabaseException {
+	public void refresh() throws SQLException {
 		Set<Project> projectset = adb.getAllProjects();
 		
 		int activeCount = 0;

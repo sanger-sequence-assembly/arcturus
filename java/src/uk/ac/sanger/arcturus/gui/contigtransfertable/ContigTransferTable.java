@@ -14,7 +14,6 @@ import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.contigtransfer.*;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.gui.SortableTable;
 import uk.ac.sanger.arcturus.gui.WarningFrame;
 
@@ -59,7 +58,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 
 	protected Person me;
 
-	public ContigTransferTable(ContigTransferTableModel cttm) throws ArcturusDatabaseException {
+	public ContigTransferTable(ContigTransferTableModel cttm) {
 		super(cttm);
 
 		adb = cttm.getArcturusDatabase();
@@ -175,8 +174,11 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 				refresh();
 			} catch (ContigTransferRequestException e) {
 				notifyFailure(e, ContigTransferRequest.CANCELLED);
-			} catch (ArcturusDatabaseException e) {
-				notifyFailure(e, request, ContigTransferRequest.CANCELLED);
+			} catch (SQLException e) {
+				Arcturus
+						.logWarning(
+								"SQL exception whilst cancelling a contig transfer request",
+								e);
 			}
 		}
 	}
@@ -197,9 +199,11 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 				refresh();
 			} catch (ContigTransferRequestException e) {
 				notifyFailure(e, ContigTransferRequest.REFUSED);
-			} 
-			catch (ArcturusDatabaseException e) {
-				notifyFailure(e, request, ContigTransferRequest.REFUSED);
+			} catch (SQLException e) {
+				Arcturus
+						.logWarning(
+								"SQL exception whilst refusing a contig transfer request",
+								e);
 			}
 		}
 	}
@@ -220,9 +224,11 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 				refresh();
 			} catch (ContigTransferRequestException e) {
 				notifyFailure(e, ContigTransferRequest.APPROVED);
-			}
-			catch (ArcturusDatabaseException e) {
-					notifyFailure(e, request, ContigTransferRequest.APPROVED);
+			} catch (SQLException e) {
+				Arcturus
+						.logWarning(
+								"SQL exception whilst approving a contig transfer request",
+								e);
 			}
 		}
 	}
@@ -242,9 +248,11 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 				refresh();
 			} catch (ContigTransferRequestException e) {
 				notifyFailure(e, ContigTransferRequest.DONE);
-			}
-			catch (ArcturusDatabaseException e) {
-				notifyFailure(e, request, ContigTransferRequest.DONE);
+			} catch (SQLException e) {
+				Arcturus
+						.logWarning(
+								"SQL exception whilst executing a contig transfer request",
+								e);
 			}
 		}
 	}
@@ -285,7 +293,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 			ContigTransferTableModel model = (ContigTransferTableModel) getModel();
 			
 			for (int i = 0; i < rows.length; i++)
-				requests[i] = model.getRequestForRow(rows[i]);
+				requests[i] = model.getRequestForRow(i);
 			
 			ProgressMonitor monitor = new ProgressMonitor(window,
 					"Processing contig transfer requests",
@@ -294,13 +302,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 			monitor.setMillisToDecideToPopup(50);
 			monitor.setMillisToPopup(100);
 			
-			ContigTransferWorker worker = null;
-			
-			try {
-				worker = new ContigTransferWorker(this, adb, requests, newStatus, monitor);
-			} catch (ArcturusDatabaseException e) {
-				Arcturus.logWarning("Failed to create a contig transfer worker", e);
-			}
+			ContigTransferWorker worker = new ContigTransferWorker(this, adb, requests, newStatus, monitor);
 			
 			worker.execute();
 		}
@@ -332,10 +334,6 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 		warningFrame.setVisible(true);
 	}
 
-	protected void notifyFailure(ArcturusDatabaseException e, ContigTransferRequest request, int newStatus) {
-	
-	}
-
 	protected void notifyFailure(ContigTransferRequestException e, int newStatus) {
 		String reason = e.getMessage();
 		ContigTransferRequest request = e.getRequest();
@@ -355,7 +353,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 		System.err.println(message);
 	}
 
-	protected void displayPopupMenu(MouseEvent e) throws ArcturusDatabaseException {
+	protected void displayPopupMenu(MouseEvent e) {
 		Point point = e.getPoint();
 
 		int row = rowAtPoint(point);
@@ -372,10 +370,16 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 				ContigTransferRequest request = ((ContigTransferTableModel) getModel())
 						.getRequestForRow(rows[i]);
 
-				canCancel &= adb.canCancelRequest(request, me);
-				canRefuse &= adb.canRefuseRequest(request, me);
-				canApprove &= adb.canApproveRequest(request, me);
-				canExecute &= adb.canExecuteRequest(request, me);
+				try {
+					canCancel &= adb.canCancelRequest(request, me);
+					canRefuse &= adb.canRefuseRequest(request, me);
+					canApprove &= adb.canApproveRequest(request, me);
+					canExecute &= adb.canExecuteRequest(request, me);
+				} catch (SQLException sqle) {
+					Arcturus.logWarning(
+									"An error occurred whilst checking user credentals",
+									sqle);
+				}
 			}
 
 			itemCancelMultipleRequests.setEnabled(canCancel);
@@ -390,24 +394,26 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 
 			singleRequestPopupMenu.setRequest(request);
 
-			itemCancelRequest.setEnabled(adb.canCancelRequest(request, me));
-			itemRefuseRequest.setEnabled(adb.canRefuseRequest(request, me));
-			itemApproveRequest.setEnabled(adb.canApproveRequest(request, me));
-			itemExecuteRequest.setEnabled(adb.canExecuteRequest(request, me));
+			try {
+				itemCancelRequest.setEnabled(adb.canCancelRequest(request, me));
+				itemRefuseRequest.setEnabled(adb.canRefuseRequest(request, me));
+				itemApproveRequest.setEnabled(adb.canApproveRequest(request, me));
+				itemExecuteRequest.setEnabled(adb.canExecuteRequest(request, me));
+			} catch (SQLException sqle) {
+				Arcturus.logWarning(
+								"An error occurred whilst checking user credentals",
+								sqle);
+			}
 
 			singleRequestPopupMenu.show(e.getComponent(), e.getX(), e.getY());
 		}
 	}
 
-	private void handleMouseEvent(MouseEvent event) {
-		if (event.isPopupTrigger()) {
-			try {
-				displayPopupMenu(event);
-			} catch (ArcturusDatabaseException e) {
-				Arcturus.logWarning("Failed to display pupup menu", e);
-			}
-		} else if (event.getID() == MouseEvent.MOUSE_CLICKED) {
-			Point point = event.getPoint();
+	private void handleMouseEvent(MouseEvent e) {
+		if (e.isPopupTrigger()) {
+			displayPopupMenu(e);
+		} else if (e.getID() == MouseEvent.MOUSE_CLICKED) {
+			Point point = e.getPoint();
 
 			int row = rowAtPoint(point);
 			int column = columnAtPoint(point);

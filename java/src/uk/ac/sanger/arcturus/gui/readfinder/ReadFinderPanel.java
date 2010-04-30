@@ -5,7 +5,6 @@ import uk.ac.sanger.arcturus.readfinder.*;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -211,41 +210,44 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 		
 		onlyFreeReads = cbxOnlyFreeReads.isSelected();
 		
-		ReadFinderWorker worker = new ReadFinderWorker(readFinder, readnames, onlyFreeReads, this);
+		Task task = new Task(readFinder, readnames, onlyFreeReads, this);
 		
-		worker.execute();
+		task.start();
 	}
 	
-	class ReadFinderWorker extends SwingWorker<Void, Void> {
+	class Task extends Thread {
 		protected final String[] readnames;
 		protected final ReadFinder readFinder;
 		protected final boolean onlyFreeReads;
 		protected final ReadFinderEventListener listener;
 		
-		public ReadFinderWorker(ReadFinder readFinder, String[] readnames, boolean onlyFreeReads, 
+		public Task(ReadFinder readFinder, String[] readnames, boolean onlyFreeReads, 
 				ReadFinderEventListener listener) {
 			this.readFinder = readFinder;
 			this.readnames = readnames;
 			this.onlyFreeReads = onlyFreeReads;
 			this.listener = listener;
 		}
-
-		protected Void doInBackground() throws Exception {
-			try {
-				for (int i = 0; i < readnames.length; i++) {
+		
+		public void run() {
+			boolean ok = true;
+			
+			for (int i = 0; i < readnames.length && ok; i++) {
+				try {
 					readFinder.findRead(readnames[i], onlyFreeReads, listener);
 				}
-			}
-			catch (ArcturusDatabaseException e) {
-				Arcturus.logWarning("An error occurred whilst finding free reads", e);
+				catch (SQLException sqle) {
+					Arcturus.logWarning("An error occurred whilst searching for " + readnames[i], sqle);
+					ok = false;
+					//ok = readFinder.isValid(5);
+				}
 			}
 			
-			return null;
-		}
-		
-		protected void done() {
-			actionFindReads.setEnabled(true);
-		}
+			SwingUtilities.invokeLater(new Runnable() {
+				public void run() {
+					actionFindReads.setEnabled(true);
+				}});
+		}	
 	}
 
 	public void readFinderUpdate(final ReadFinderEvent event) {

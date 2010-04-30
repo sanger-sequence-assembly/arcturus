@@ -18,7 +18,7 @@ public class Oligo implements Comparable {
 	
 	public Oligo(String name, String sequence) {
 		this.name = name;
-		this.sequence = sequence.toUpperCase().replaceAll("[^ACGTN]", "");
+		this.sequence = sequence.toUpperCase();
 		revsequence = reverseComplement(sequence);
 		
 		palindrome = sequence.equalsIgnoreCase(revsequence);

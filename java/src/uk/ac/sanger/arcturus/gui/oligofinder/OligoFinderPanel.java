@@ -5,31 +5,16 @@ import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectListModel;
 import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectProxy;
 import uk.ac.sanger.arcturus.oligo.*;
-import uk.ac.sanger.arcturus.oligo.OligoFinderEvent.Type;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.event.*;
 
-import java.awt.BorderLayout;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
+import java.sql.SQLException;
+import java.awt.*;
 import java.awt.event.*;
-
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
-import java.util.Vector;
+import java.util.*;
 import java.io.*;
 import java.text.*;
 
@@ -69,7 +54,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 
 	protected DecimalFormat df = new DecimalFormat();
 
-	public OligoFinderPanel(MinervaTabbedPane parent, ArcturusDatabase adb) throws ArcturusDatabaseException {
+	public OligoFinderPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
 		super(parent, adb);
 
 		df.setGroupingSize(3);
@@ -295,9 +280,16 @@ public class OligoFinderPanel extends MinervaPanel implements
 	protected void createClassSpecificMenus() {
 	}
 
-	public void refresh() throws ArcturusDatabaseException {
-		if (plm != null)
-			plm.refresh();
+	public void refresh() {
+		if (plm != null) {
+			try {
+				plm.refresh();
+			} catch (SQLException sqle) {
+				Arcturus.logWarning(
+						"An error occurred when refreshing the project list",
+						sqle);
+			}
+		}
 	}
 
 	public void closeResources() {
@@ -367,9 +359,6 @@ public class OligoFinderPanel extends MinervaPanel implements
 		}
 
 		Oligo[] oligos = parseOligos(txtOligoList.getText());
-		
-		if (oligos == null || oligos.length == 0)
-			return;
 
 		txtMessages.append("Searching for oligos:\n\n");
 
@@ -381,72 +370,51 @@ public class OligoFinderPanel extends MinervaPanel implements
 		txtMessages.append("\n\n");
 
 		boolean freereads = cbFreeReads.isSelected();
-		
-		OligoFinderWorker worker = new OligoFinderWorker(this, finder, oligos, projects, freereads);
-		
-		worker.execute();
+
+		Task task = new Task(finder, oligos, projects, freereads);
+
+		task.setName("OligoSearch");
+		task.start();
 	}
-	
-	class OligoFinderWorker extends SwingWorker<Void, OligoFinderEvent> {
+
+	class Task extends Thread {
 		protected final OligoFinder finder;
 		protected final Oligo[] oligos;
 		protected final int[] projects;
 		protected boolean freereads;
-		protected OligoFinderPanel parent;
-		protected ArcturusDatabaseException pendingException = null;
-
-		public OligoFinderWorker(OligoFinderPanel parent, OligoFinder finder, Oligo[] oligos, int[] projects,
+		
+		public Task(OligoFinder finder, Oligo[] oligos, int[] projects,
 				boolean freereads) {
-			this.parent = parent;
 			this.finder = finder;
 			this.oligos = oligos;
 			this.projects = projects;
-			this.freereads = freereads;		
+			this.freereads = freereads;
 		}
-		
-		protected Void doInBackground() throws Exception {
+
+		public void run() {
 			try {
 				finder.findMatches(oligos, projects, freereads);
+			} catch (SQLException sqle) {
+				Arcturus.logWarning("An error occurred whilst finding matches",
+						sqle);
 			}
-			catch (ArcturusDatabaseException e) {
-				pendingException = e;
-				return null;
-			}
-			
-			return null;
-		}
-		
-		protected void process(List<OligoFinderEvent> events) {
-			for (OligoFinderEvent event : events)
-				parent.oligoFinderUpdate(event);
-		}
-		
-		protected void done() {
-			if (pendingException != null) {
-				OligoFinderEvent event = new OligoFinderEvent(finder);
-				event.setException(pendingException);
-				parent.oligoFinderUpdate(event);
-			}
-		
-			parent.setSearchInProgress(false);
-			parent.updateFindOligosButton();
 		}
 	}
 
 	protected Oligo[] parseOligos(String text) {
 		String[] lines = text.split("[\n\r]+");
 
-		List<Oligo> oligoList = new Vector<Oligo>();
+		Oligo[] oligos = new Oligo[lines.length];
 
 		int anon = 0;
 
 		for (int i = 0; i < lines.length; i++) {
-			String[] words = lines[i].trim().split("\\s");
+			String[] words = lines[i].split("\\s");
 
 			String name;
 			String sequence;
 
-			if (words.length < 1 || words[0].length() == 0)
+			if (words.length < 1)
 				continue;
 
 			if (words.length == 1) {
@@ -457,52 +425,45 @@ public class OligoFinderPanel extends MinervaPanel implements
 				sequence = words[1];
 			}
 
-			oligoList.add(new Oligo(name, sequence));
+			oligos[i] = new Oligo(name, sequence);
 		}
-
-		Oligo[] oligos = oligoList.toArray(new Oligo[0]);
 
 		return oligos;
 	}
 
 	public void oligoFinderUpdate(OligoFinderEvent event) {
-		Type type = event.getType();
+		int type = event.getType();
 		int value = event.getValue();
-		
-		Date now = new Date();
 
 		switch (type) {
-			case START_CONTIGS:
+			case OligoFinderEvent.START_CONTIGS:
 				oligomatches.clear();
 				bpdone = 0;
 				initProgressBar(pbarContigProgress, value);
-				postMessage("\nTIMESTAMP: " + now + "\n");
 				postMessage("\nStarting oligo search in " + df.format(value)
 						+ " bp of contig consensus sequence\n");
 				break;
 
-			case ENUMERATING_FREE_READS:
-				postMessage("\nTIMESTAMP: " + now + "\n");
+			case OligoFinderEvent.ENUMERATING_FREE_READS:
 				postMessage("\nMaking a list of free reads.  This may take some time.  Please be patient.\n");
 				break;
 
-			case START_READS:
+			case OligoFinderEvent.START_READS:
 				oligomatches.clear();
 				bpdone = 0;
-				postMessage("\nTIMESTAMP: " + now + "\n");
 				initProgressBar(pbarReadProgress, value);
 				postMessage("\nStarting oligo search in " + df.format(value)
 						+ " free reads\n");
 				break;
 
-			case START_SEQUENCE:
+			case OligoFinderEvent.START_SEQUENCE:
 				break;
 
-			case FOUND_MATCH:
+			case OligoFinderEvent.FOUND_MATCH:
 				addMatch(event);
 				break;
 
-			case FINISH_SEQUENCE:
+			case OligoFinderEvent.FINISH_SEQUENCE:
 				if (event.getDNASequence().isContig()) {
 					bpdone += value;
 					incrementProgressBar(pbarContigProgress, bpdone);
@@ -512,19 +473,19 @@ public class OligoFinderPanel extends MinervaPanel implements
 				}
 				break;
 
-			case FINISH_CONTIGS:
+			case OligoFinderEvent.FINISH_CONTIGS:
 				setProgressBarToDone(pbarContigProgress);
 				postMessage("Finished.\n");
 				reportMatches(false);
 				break;
 
-			case FINISH_READS:
+			case OligoFinderEvent.FINISH_READS:
 				setProgressBarToDone(pbarReadProgress);
 				postMessage("Finished.\n");
 				reportMatches(terse);
 				break;
 
-			case FINISH:
+			case OligoFinderEvent.FINISH:
 				SwingUtilities.invokeLater(new Runnable() {
 					public void run() {
 						actionFindOligos.setEnabled(true);
@@ -537,14 +498,6 @@ public class OligoFinderPanel extends MinervaPanel implements
 				});
 				break;
 
-			case MESSAGE:
-				postMessage("\n{MESSAGE [" + now + "] : " + event.getMessage() + "}\n");
-				break;
-				
-			case EXCEPTION:
-				postMessage("***** WARNING [" + now + "] : " + event.getMessage() + " *****");
-				break;
-				
 			default:
 				break;
 		}
@@ -686,10 +639,6 @@ public class OligoFinderPanel extends MinervaPanel implements
 			}
 		});
 
-	}
-	
-	protected void setSearchInProgress(boolean inProgress) {
-		searchInProgress = inProgress;
 	}
 	
 	protected void updateFindOligosButton() {

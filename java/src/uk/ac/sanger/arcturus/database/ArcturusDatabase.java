@@ -6,6 +6,7 @@ import java.sql.SQLException;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
+import java.util.zip.DataFormatException;
 
 import javax.sql.DataSource;
 
@@ -113,12 +114,12 @@ public interface ArcturusDatabase {
 	 * @return a java.sql.Connection which can be used to communicate with the
 	 *         database.
 	 * 
-	 * @throws ArcturusDatabaseException
+	 * @throws SQLException
 	 *             in the event of an error when establishing a connection with
 	 *             the database.
 	 */
 
-	public Connection getDefaultConnection() throws ArcturusDatabaseException;
+	public Connection getConnection() throws SQLException;
 
 	/**
 	 * Establishes a unique (non-cached) JDBC connection to a database, using
@@ -130,13 +131,13 @@ public interface ArcturusDatabase {
 	 * @return a java.sql.Connection which can be used to communicate with the
 	 *         database.
 	 * 
-	 * @throws ArcturusDatabaseException
+	 * @throws SQLException
 	 *             in the event of an error when establishing a connection with
 	 *             the database.
 	 */
 
 	public Connection getPooledConnection(Object owner)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	/**
 	 * Sets the logger for this object.
@@ -161,319 +162,322 @@ public interface ArcturusDatabase {
 	
 	public void clearCache(int type);
 	
-	public void preload(int type) throws ArcturusDatabaseException;
+	public void preload(int type) throws SQLException;
 
-	public Clone getCloneByName(String name) throws ArcturusDatabaseException;
+	public Clone getCloneByName(String name) throws SQLException;
 
-	public Clone getCloneByID(int id) throws ArcturusDatabaseException;
+	public Clone getCloneByID(int id) throws SQLException;
 
-	public Ligation getLigationByName(String name) throws ArcturusDatabaseException;
+	public Ligation getLigationByName(String name) throws SQLException;
 
-	public Ligation getLigationByID(int id) throws ArcturusDatabaseException;
+	public Ligation getLigationByID(int id) throws SQLException;
 
-	public Template getTemplateByName(String name) throws ArcturusDatabaseException;
+	public Template getTemplateByName(String name) throws SQLException;
 
 	public Template getTemplateByName(String name, boolean autoload)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
-	public Template getTemplateByID(int id) throws ArcturusDatabaseException;
+	public Template getTemplateByID(int id) throws SQLException;
 
 	public Template getTemplateByID(int id, boolean autoload)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public Template findOrCreateTemplate(int id, String name,
 			Ligation ligation);
 
-	public Read getReadByName(String name) throws ArcturusDatabaseException;
+	public Read getReadByName(String name) throws SQLException;
 
 	public Read getReadByName(String name, boolean autoload)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
-	public Read getReadByID(int id) throws ArcturusDatabaseException;
+	public Read getReadByID(int id) throws SQLException;
 
 	public Read getReadByID(int id, boolean autoload)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public int loadReadsByTemplate(int template_id)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public Read findOrCreateRead(int id, String name,
 			Template template, java.util.Date asped, String strand,
 			String primer, String chemistry);
 
-	public int[] getUnassembledReadIDList() throws ArcturusDatabaseException;
+	public int[] getUnassembledReadIDList() throws SQLException;
 
 	public Sequence getSequenceByReadID(int readid)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public Sequence getSequenceByReadID(int readid, boolean autoload)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public Sequence getFullSequenceByReadID(int readid)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public Sequence getFullSequenceByReadID(int readid,
-			boolean autoload) throws ArcturusDatabaseException;
+			boolean autoload) throws SQLException;
 
 	public Sequence getSequenceBySequenceID(int seqid)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public Sequence getSequenceBySequenceID(int seqid, boolean autoload)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public Sequence getFullSequenceBySequenceID(int seqid)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public Sequence getFullSequenceBySequenceID(int seqid,
-			boolean autoload) throws ArcturusDatabaseException;
+			boolean autoload) throws SQLException;
 
 	public void getDNAAndQualityForSequence(Sequence sequence)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public Sequence findOrCreateSequence(int seq_id, int length);
 
 	public Contig getContigByID(int id, int options)
-			throws ArcturusDatabaseException;
+			throws SQLException, DataFormatException;
 
-	public Contig getContigByID(int id) throws ArcturusDatabaseException;
+	public Contig getContigByID(int id) throws SQLException,
+			DataFormatException;
 
 	public Contig getContigByReadName(String readname, int options)
-			throws ArcturusDatabaseException;
+			throws SQLException, DataFormatException;
 
 	public Contig getContigByReadName(String readname)
-			throws ArcturusDatabaseException;
+			throws SQLException, DataFormatException;
 
 	public void updateContig(Contig contig, int options)
-			throws ArcturusDatabaseException;
+			throws SQLException, DataFormatException;
 
-	public boolean isCurrentContig(int contigid) throws ArcturusDatabaseException;
+	public boolean isCurrentContig(int contigid) throws SQLException;
 
-	public int[] getCurrentContigIDList() throws ArcturusDatabaseException;
+	public int[] getCurrentContigIDList() throws SQLException;
 
-	public int countCurrentContigs(int minlen) throws ArcturusDatabaseException;
+	public int countCurrentContigs(int minlen) throws SQLException;
 
-	public int countCurrentContigs() throws ArcturusDatabaseException;
+	public int countCurrentContigs() throws SQLException;
 
 	public int processCurrentContigs(int options, int minlen,
-			ContigProcessor processor) throws ArcturusDatabaseException;
+			ContigProcessor processor) throws SQLException, DataFormatException;
 
 	public int processCurrentContigs(int options,
-			ContigProcessor processor) throws ArcturusDatabaseException;
+			ContigProcessor processor) throws SQLException, DataFormatException;
 
 	public Set getCurrentContigs(int options, int minlen)
-			throws ArcturusDatabaseException;
+			throws SQLException, DataFormatException;
 
-	public Set getCurrentContigs(int options) throws ArcturusDatabaseException;
+	public Set getCurrentContigs(int options) throws SQLException,
+			DataFormatException;
 
 	public int countContigsByProject(int project_id, int minlen)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public int countContigsByProject(int project_id)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public int processContigsByProject(int project_id, int options,
-			int minlen, ContigProcessor processor) throws ArcturusDatabaseException;
+			int minlen, ContigProcessor processor) throws SQLException,
+			DataFormatException;
 
 	public int processContigsByProject(int project_id, int options,
-			ContigProcessor processor) throws ArcturusDatabaseException;
+			ContigProcessor processor) throws SQLException, DataFormatException;
 
 	public Set<Contig> getContigsByProject(int project_id,
-			int options, int minlen) throws ArcturusDatabaseException;
+			int options, int minlen) throws SQLException, DataFormatException;
 
 	public Set getContigsByProject(int project_id, int options)
-			throws ArcturusDatabaseException;
+			throws SQLException, DataFormatException;
 
 	public Set<Contig> getChildContigs(Contig parent)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
-	public Project getProjectByID(int id) throws ArcturusDatabaseException;
+	public Project getProjectByID(int id) throws SQLException;
 
 	public Project getProjectByID(int id, boolean autoload)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public Project getProjectByName(Assembly assembly, String name)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
-	public Set<Project> getAllProjects() throws ArcturusDatabaseException;
+	public Set<Project> getAllProjects() throws SQLException;
 
 	public Set<Project> getProjectsForOwner(Person owner)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 	
-	public Set<Project>getBinProjects() throws ArcturusDatabaseException;
+	public Set<Project>getBinProjects() throws SQLException;
 
-	public void refreshProject(Project project) throws ArcturusDatabaseException;
+	public void refreshProject(Project project) throws SQLException;
 
-	public void refreshAllProject() throws ArcturusDatabaseException;
+	public void refreshAllProject() throws SQLException;
 
 	public void setAssemblyForProject(Project project,
-			Assembly assembly) throws ArcturusDatabaseException;
+			Assembly assembly) throws SQLException;
 
 	public void getProjectSummary(Project project, int minlen,
-			int minreads, ProjectSummary summary) throws ArcturusDatabaseException;
+			int minreads, ProjectSummary summary) throws SQLException;
 
 	public ProjectSummary getProjectSummary(Project project,
-			int minlen, int minreads) throws ArcturusDatabaseException;
+			int minlen, int minreads) throws SQLException;
 
 	public void getProjectSummary(Project project, int minlen,
-			ProjectSummary summary) throws ArcturusDatabaseException;
+			ProjectSummary summary) throws SQLException;
 
 	public void getProjectSummary(Project project,
-			ProjectSummary summary) throws ArcturusDatabaseException;
+			ProjectSummary summary) throws SQLException;
 
 	public ProjectSummary getProjectSummary(Project project, int minlen)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public ProjectSummary getProjectSummary(Project project)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public Map getProjectSummary(int minlen, int minreads)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
-	public Map getProjectSummary(int minlen) throws ArcturusDatabaseException;
+	public Map getProjectSummary(int minlen) throws SQLException;
 
-	public Map getProjectSummary() throws ArcturusDatabaseException;
+	public Map getProjectSummary() throws SQLException;
 
 	public boolean canUserUnlockProject(Project project, Person user)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public boolean canUserLockProjectForSelf(Project project,
-			Person user) throws ArcturusDatabaseException;
+			Person user) throws SQLException;
 
 	public boolean canUserLockProject(Project project, Person user)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public boolean canUserLockProjectForOwner(Project project,
-			Person user) throws ArcturusDatabaseException;
+			Person user) throws SQLException;
 
-	public boolean unlockProject(Project project) throws ArcturusDatabaseException,
+	public boolean unlockProject(Project project) throws SQLException,
 			ProjectLockException;
 
-	public boolean lockProject(Project project) throws ArcturusDatabaseException,
+	public boolean lockProject(Project project) throws SQLException,
 			ProjectLockException;
 
 	public boolean unlockProjectForExport(Project project)
-			throws ArcturusDatabaseException, ProjectLockException;
+			throws SQLException, ProjectLockException;
 
 	public boolean lockProjectForExport(Project project)
-			throws ArcturusDatabaseException, ProjectLockException;
+			throws SQLException, ProjectLockException;
 
 	public boolean lockProjectForOwner(Project project)
-			throws ArcturusDatabaseException, ProjectLockException;
+			throws SQLException, ProjectLockException;
 
 	public boolean setProjectLockOwner(Project project, Person person)
-			throws ArcturusDatabaseException, ProjectLockException;
+			throws SQLException, ProjectLockException;
 
 	public void setProjectOwner(Project project, Person person)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public boolean createNewProject(Assembly assembly, String name,
-			Person owner, String directory) throws ArcturusDatabaseException, IOException;
+			Person owner, String directory) throws SQLException, IOException;
 
 	public boolean canUserChangeProjectStatus(Project project,
-			Person user) throws ArcturusDatabaseException;
+			Person user) throws SQLException;
 
 	public boolean canUserChangeProjectStatus(Project project)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public boolean changeProjectStatus(Project project, int status)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
-	public boolean retireProject(Project project) throws ArcturusDatabaseException;
+	public boolean retireProject(Project project) throws SQLException;
 
 	public Project getBinForProject(Project project)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
-	public Assembly getAssemblyByID(int id) throws ArcturusDatabaseException;
+	public Assembly getAssemblyByID(int id) throws SQLException;
 
 	public Assembly getAssemblyByID(int id, boolean autoload)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
-	public Assembly getAssemblyByName(String name) throws ArcturusDatabaseException;
+	public Assembly getAssemblyByName(String name) throws SQLException;
 
-	public Assembly[] getAllAssemblies() throws ArcturusDatabaseException;
+	public Assembly[] getAllAssemblies() throws SQLException;
 
-	public void refreshAssembly(Assembly assembly) throws ArcturusDatabaseException;
+	public void refreshAssembly(Assembly assembly) throws SQLException;
 
-	public void refreshAllAssemblies() throws ArcturusDatabaseException;
+	public void refreshAllAssemblies() throws SQLException;
 
 	public boolean hasFullPrivileges(Person person);
 
-	public boolean hasFullPrivileges() throws ArcturusDatabaseException;
+	public boolean hasFullPrivileges() throws SQLException;
 
-	public boolean isCoordinator(Person person) throws ArcturusDatabaseException;
+	public boolean isCoordinator(Person person);
 
-	public boolean isCoordinator() throws ArcturusDatabaseException;
+	public boolean isCoordinator();
 
 	public Person[] getAllUsers(boolean includeNobody)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
-	public Person[] getAllUsers() throws ArcturusDatabaseException;
+	public Person[] getAllUsers() throws SQLException;
 
-	public Person findUser(String username) throws ArcturusDatabaseException;
+	public Person findUser(String username);
 
-	public Person findMe() throws ArcturusDatabaseException;
+	public Person findMe();
 
 	public boolean isMe(Person person);
 
 	public ContigTransferRequest[] getContigTransferRequestsByUser(
-			Person user, int mode) throws ArcturusDatabaseException;
+			Person user, int mode) throws SQLException;
 
 	public ContigTransferRequest createContigTransferRequest(
 			Person requester, int contigId, int toProjectId)
-			throws ContigTransferRequestException, ArcturusDatabaseException;
+			throws ContigTransferRequestException, SQLException;
 
 	public ContigTransferRequest createContigTransferRequest(
 			int contigId, int toProjectId)
-			throws ContigTransferRequestException, ArcturusDatabaseException;
+			throws ContigTransferRequestException, SQLException;
 
 	public ContigTransferRequest createContigTransferRequest(
 			Person requester, Contig contig, Project project)
-			throws ContigTransferRequestException, ArcturusDatabaseException;
+			throws ContigTransferRequestException, SQLException;
 
 	public ContigTransferRequest createContigTransferRequest(
 			Contig contig, Project project)
-			throws ContigTransferRequestException, ArcturusDatabaseException;
+			throws ContigTransferRequestException, SQLException;
 
 	public void reviewContigTransferRequest(
 			ContigTransferRequest request, Person reviewer, int newStatus)
-			throws ContigTransferRequestException, ArcturusDatabaseException;
+			throws ContigTransferRequestException, SQLException;
 
 	public void reviewContigTransferRequest(int requestId,
 			Person reviewer, int newStatus)
-			throws ContigTransferRequestException, ArcturusDatabaseException;
+			throws ContigTransferRequestException, SQLException;
 
 	public void reviewContigTransferRequest(int requestId,
-			int newStatus) throws ContigTransferRequestException, ArcturusDatabaseException;
+			int newStatus) throws ContigTransferRequestException, SQLException;
 
 	public void executeContigTransferRequest(
 			ContigTransferRequest request, Person reviewer,
 			boolean notifyListeners) throws ContigTransferRequestException,
-			ArcturusDatabaseException;
+			SQLException;
 
 	public void executeContigTransferRequest(int requestId,
 			Person reviewer, boolean notifyListeners)
-			throws ContigTransferRequestException, ArcturusDatabaseException;
+			throws ContigTransferRequestException, SQLException;
 
 	public void executeContigTransferRequest(int requestId,
 			boolean notifyListeners) throws ContigTransferRequestException,
-			ArcturusDatabaseException;
+			SQLException;
 
 	public void setDebugging(boolean debugging);
 
 	public boolean canCancelRequest(ContigTransferRequest request,
-			Person person) throws ArcturusDatabaseException;
+			Person person) throws SQLException;
 
 	public boolean canRefuseRequest(ContigTransferRequest request,
-			Person person) throws ArcturusDatabaseException;
+			Person person) throws SQLException;
 
 	public boolean canApproveRequest(ContigTransferRequest request,
-			Person person) throws ArcturusDatabaseException;
+			Person person) throws SQLException;
 
 	public boolean canExecuteRequest(ContigTransferRequest request,
-			Person person) throws ArcturusDatabaseException;
+			Person person) throws SQLException;
 
 	public void moveContigs(Project fromProject, Project toProject)
-			throws ArcturusDatabaseException;
+			throws SQLException;
 
 	public void addProjectChangeEventListener(Project project,
 			ProjectChangeEventListener listener);
@@ -487,8 +491,5 @@ public interface ArcturusDatabase {
 	public void notifyProjectChangeEventListeners(
 			ProjectChangeEvent event, Class listenerClass);
 
-	public String[] getAllDirectories() throws ArcturusDatabaseException;
-	
-	public void handleSQLException(SQLException e, String message, Connection conn, Object source)
-			throws ArcturusDatabaseException;
+	public String[] getAllDirectories();
 }

@@ -3,12 +3,12 @@ package uk.ac.sanger.arcturus.gui.projecttable;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.data.Assembly;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.database.ProjectLockException;
 import uk.ac.sanger.arcturus.utils.ProjectSummary;
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.people.Person;
 
+import java.sql.SQLException;
 import java.util.Date;
 
 public class ProjectProxy {
@@ -17,24 +17,24 @@ public class ProjectProxy {
 	protected boolean importing = false;
 	protected boolean exporting = false;
 
-	public ProjectProxy(Project project, int minlen, int minreads) throws ArcturusDatabaseException {
+	public ProjectProxy(Project project, int minlen, int minreads) throws SQLException {
 		this.project = project;
 		
 		if (project != null)
 			summary = project.getProjectSummary(minlen, minreads);
 	}
 
-	public void refreshSummary(int minlen) throws ArcturusDatabaseException {		
+	public void refreshSummary(int minlen) throws SQLException {		
 		if (project != null)
 			summary = project.getProjectSummary(minlen);
 	}
 
-	public void refreshSummary() throws ArcturusDatabaseException {
+	public void refreshSummary() throws SQLException {
 		if (project != null)
 			summary = project.getProjectSummary();
 	}
 	
-	public void refreshSummary(int minlen, int minreads) throws ArcturusDatabaseException {
+	public void refreshSummary(int minlen, int minreads) throws SQLException {
 		if (project != null)
 			summary = project.getProjectSummary(minlen, minreads);
 	}
@@ -147,16 +147,20 @@ public class ProjectProxy {
 		return exporting;
 	}
 
-	public void setOwner(Person person) throws ArcturusDatabaseException {
+	public void setOwner(Person person) {
 		if (project == null || project.getArcturusDatabase() == null)
 			return;
 		
 		ArcturusDatabase adb = project.getArcturusDatabase();
 		
-		adb.setProjectOwner(project, person);
+		try {
+			adb.setProjectOwner(project, person);
+		} catch (SQLException e) {
+			Arcturus.logSevere("Unable to set owner for " + project.getName() + " to " + person, e);
+		}
 	}
 
-	public void setLockOwner(Person person) throws ArcturusDatabaseException {
+	public void setLockOwner(Person person) {
 		if (project == null || project.getArcturusDatabase() == null)
 			return;
 		
@@ -164,6 +168,8 @@ public class ProjectProxy {
 		
 		try {
 			adb.setProjectLockOwner(project, person);
+		} catch (SQLException e) {
+			Arcturus.logSevere("Unable to set lock on " + project.getName() + " for " + person, e);
 		} catch (ProjectLockException e) {
 			Arcturus.logSevere("Unable to set lock on " + project.getName() + " for " + person, e);
 		}

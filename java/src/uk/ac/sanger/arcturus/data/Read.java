@@ -124,9 +124,7 @@ public class Read extends Core {
 
 	public void setTemplate(Template template) {
 		this.template = template;
-		
-		if (template != null)
-			template.addRead(this);
+		template.addRead(this);
 	}
 
 	/**

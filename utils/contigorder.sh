@@ -32,20 +32,23 @@ then
     exit 2
 fi
 
-###
-### Ensure we have our environment set up
-###
 export STADENROOT=$BADGER/opt/staden_production
-STADEN_PREPEND=1 . $STADENROOT/share/staden/staden.profile
+
+###
+### The next few lines are borrowed from the Staden gap4 wrapper script
+###
+
+STADEN_PREPEND=1 . $STADENROOT/staden.profile
+export TCL_LIBRARY=$STADLIB/tcl
+export TK_LIBRARY=$STADLIB/tk
+
+STASH=${STADENROOT}/linux-x86_64-bin/stash
 
 ###
 ### Now run the script
 ###
-tclsh <<EOF
-source \$env(STADTABL)/shlib.conf
-load \$env(STADLIB)/\${lib_prefix}tk_utils\${lib_suffix}
-load_package tk_utils
-tk_utils_init
+
+${STASH} <<EOF
 load_package gap
 set io [open_db -name $FILE -version $VERSION -access r]
 set db [io_read_database \$io]

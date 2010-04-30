@@ -45,20 +45,12 @@ fi
 echo -n "Enter MySQL instance [${MYSQL_INSTANCES}] > "
 read node
 
-###
-### Derive default MySQL database name from organism name.
-### First, convert to uppercase.  Then change any forbidden characters to
-### underscores.
-###
-
-defaultdbname=`echo $organism | tr '[a-z]' '[A-Z]' | sed -e 's/[^A-Z0-9_]/_/g'`
-
-echo -n "Enter MySQL database name (hit RETURN to default to ${defaultdbname}) > "
+echo -n "Enter MySQL database name (hit RETURN to default to ${organism}) > "
 read dbname
 
 if [ "x$dbname" == "x" ]
 then
-    dbname=$defaultdbname
+    dbname=$organism
 fi
 
 echo -n "Enter Group/Genus (e.g. Bacteria/Clostridium) > "

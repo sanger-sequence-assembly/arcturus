@@ -3,15 +3,11 @@ package uk.ac.sanger.arcturus.pooledconnection;
 import java.lang.management.ManagementFactory;
 import java.sql.*;
 import java.util.*;
-import java.util.Date;
-
 import javax.management.*;
 
 import uk.ac.sanger.arcturus.Arcturus;
 
 public class PooledConnection implements Connection, PooledConnectionMBean {
-	private static final int DEFAULT_WAIT_TIMEOUT = 5 * 24 * 3600;
-	
 	private static int counter = 0;
 
 	private final int ID;
@@ -22,11 +18,11 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 
 	private Connection conn;
 
+	private boolean inuse;
+
 	private long timestamp;
 
 	private long lastLeaseTime = Integer.MIN_VALUE;
-	
-	private Date lastLeaseDate;
 
 	private long totalLeaseTime = 0;
 
@@ -39,7 +35,7 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 	public PooledConnection(Connection conn, ConnectionPool pool) {
 		this.conn = conn;
 		this.pool = pool;
-		this.owner = null;
+		this.inuse = false;
 		this.timestamp = 0;
 
 		synchronized (pool) {
@@ -64,8 +60,6 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 			
 			rs.close();
 			stmt.close();
-			
-			setWaitTimeout(DEFAULT_WAIT_TIMEOUT);
 		}
 		catch (SQLException sqle) {
 			// Unable to get connection ID -- maybe we're not talking
@@ -111,38 +105,26 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 		}
 	}
 
-	protected void closeConnection() {
-		try {
-			if (conn != null && !conn.isClosed())
-				conn.close();
-		}
-		catch (SQLException e) {
-			// Do nothing
-		}
-		
+	protected void closeConnection() throws SQLException {
+		if (conn != null && !conn.isClosed())
+			conn.close();
+
 		conn = null;
 
 		unregisterAsMBean();
 	}
 
 	public synchronized boolean lease(Object owner) {
-		if (conn == null)
+		if (inuse || conn == null) {
 			return false;
-		
-		if (this.owner != null)
-			return false;
-		
-		leaseCounter++;
-		timestamp = System.currentTimeMillis();
-		lastLeaseTime = timestamp;
-		lastLeaseDate = new Date(lastLeaseTime);
-		this.owner = owner;
-		
-		Arcturus.logInfo("PooledConnection #" + ID +
-				" [" + connectionID +
-				"] leased to " + owner.getClass().getName() + " at " + lastLeaseDate);
-			
-		return true;
+		} else {
+			leaseCounter++;
+			inuse = true;
+			timestamp = System.currentTimeMillis();
+			lastLeaseTime = timestamp;
+			this.owner = owner;
+			return true;
+		}
 	}
 
 	public int getLeaseCounter() {
@@ -162,16 +144,20 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 		return true;
 	}
 
+	public boolean inUse() {
+		return inuse;
+	}
+
 	public boolean isInUse() {
-		return owner != null;
+		return inuse;
 	}
 
 	public long getLastUse() {
 		return timestamp;
 	}
 
-	public Date getLastLeaseTime() {
-		return lastLeaseDate;
+	public long getLastLeaseTime() {
+		return lastLeaseTime;
 	}
 
 	public long getTotalLeaseTime() {
@@ -179,11 +165,11 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 	}
 
 	public long getCurrentLeaseTime() {
-		return owner != null ? System.currentTimeMillis() - lastLeaseTime : 0;
+		return inuse ? System.currentTimeMillis() - lastLeaseTime : 0;
 	}
 
 	public long getIdleTime() {
-		return owner != null ? 0 : System.currentTimeMillis() - timestamp;
+		return inuse ? 0 : System.currentTimeMillis() - timestamp;
 	}
 
 	public Object getOwner() {
@@ -200,11 +186,10 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 
 	public synchronized void close() throws SQLException {
 		timestamp = System.currentTimeMillis();
-		Date date = new Date(timestamp);
-		Arcturus.logInfo("PooledConnection #" + ID + " closed by " + owner.getClass().getName() + " at " + date);
 		totalLeaseTime += (timestamp - lastLeaseTime);
 		owner = null;
-		pool.releaseConnection(this);
+		inuse = false;
+		pool.returnConnection(this);
 	}
 
 	protected Connection getConnection() {

@@ -5,7 +5,6 @@ import uk.ac.sanger.arcturus.data.Sequence;
 import uk.ac.sanger.arcturus.data.Clipping;
 import uk.ac.sanger.arcturus.data.Tag;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import java.sql.*;
 import java.util.*;
@@ -27,8 +26,9 @@ import java.util.zip.*;
 
 public class SequenceManager extends AbstractManager {
 	private ArcturusDatabase adb;
-	private HashMap<Integer, Sequence> hashByReadID;
-	private HashMap<Integer, Sequence> hashBySequenceID;
+	private Connection conn;
+	private HashMap hashByReadID;
+	private HashMap hashBySequenceID;
 	private PreparedStatement pstmtByReadID;
 	private PreparedStatement pstmtFullByReadID;
 	private PreparedStatement pstmtBySequenceID;
@@ -45,20 +45,11 @@ public class SequenceManager extends AbstractManager {
 	 * an ArcturusDatabase object.
 	 */
 
-	public SequenceManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
+	public SequenceManager(ArcturusDatabase adb) throws SQLException {
 		this.adb = adb;
 
-		hashByReadID = new HashMap<Integer, Sequence>();
-		hashBySequenceID = new HashMap<Integer, Sequence>();
-		
-		try {
-			setConnection(adb.getDefaultConnection());
-		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to initialise the sequence manager", conn, adb);
-		}
-	}
-	
-	protected void prepareConnection() throws SQLException {
+		conn = adb.getConnection();
+
 		String query = "select SEQ2READ.seq_id,version,seqlen from SEQ2READ left join SEQUENCE using(seq_id)"
 				+ "where read_id = ? order by version desc limit 1";
 		pstmtByReadID = conn.prepareStatement(query);
@@ -88,6 +79,9 @@ public class SequenceManager extends AbstractManager {
 		
 		query = "select tagtype,pstart,pfinal,comment from READTAG where seq_id = ? and deprecated='N'";
 		pstmtTags = conn.prepareStatement(query);
+
+		hashByReadID = new HashMap();
+		hashBySequenceID = new HashMap();
 	}
 
 	public void clearCache() {
@@ -95,7 +89,7 @@ public class SequenceManager extends AbstractManager {
 		hashBySequenceID.clear();
 	}
 	
-	public void preload() throws ArcturusDatabaseException {
+	public void preload() throws SQLException {
 		// This method does nothing, as we never want to pre-load all sequences.
 	}
 
@@ -114,37 +108,33 @@ public class SequenceManager extends AbstractManager {
 	 *         highest version number will be returned.
 	 */
 
-	public Sequence getSequenceByReadID(int readid) throws ArcturusDatabaseException {
+	public Sequence getSequenceByReadID(int readid) throws SQLException {
 		return getSequenceByReadID(readid, true);
 	}
 
 	public Sequence getSequenceByReadID(int readid, boolean autoload)
-			throws ArcturusDatabaseException {
+			throws SQLException {
 		Object obj = hashByReadID.get(new Integer(readid));
 
 		return (obj == null && autoload) ? loadSequenceByReadID(readid)
 				: (Sequence) obj;
 	}
 
-	private Sequence loadSequenceByReadID(int readid) throws ArcturusDatabaseException {
+	private Sequence loadSequenceByReadID(int readid) throws SQLException {
+		pstmtByReadID.setInt(1, readid);
+		ResultSet rs = pstmtByReadID.executeQuery();
+
 		Sequence sequence = null;
 
-		try {
-			pstmtByReadID.setInt(1, readid);
-			ResultSet rs = pstmtByReadID.executeQuery();
-
-			if (rs.next()) {
-				Read read = adb.getReadByID(readid);
-				int seqid = rs.getInt(1);
-				int version = rs.getInt(2);
-				sequence = createAndRegisterNewSequence(seqid, read, version,
-						null, null);
-			}
-
-			rs.close();
-		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to load sequence by read ID=" + readid, conn, this);
+		if (rs.next()) {
+			Read read = adb.getReadByID(readid);
+			int seqid = rs.getInt(1);
+			int version = rs.getInt(2);
+			sequence = createAndRegisterNewSequence(seqid, read, version, null,
+					null);
 		}
+
+		rs.close();
 
 		setClippings(sequence);
 		loadTagsForSequence(sequence);
@@ -167,12 +157,12 @@ public class SequenceManager extends AbstractManager {
 	 *         highest version number will be returned.
 	 */
 
-	public Sequence getSequenceByRead(Read read) throws ArcturusDatabaseException {
+	public Sequence getSequenceByRead(Read read) throws SQLException {
 		return getSequenceByRead(read, true);
 	}
 
 	public Sequence getSequenceByRead(Read read, boolean autoload)
-			throws ArcturusDatabaseException {
+			throws SQLException {
 		int readid = read.getID();
 		Object obj = hashByReadID.get(new Integer(readid));
 
@@ -180,27 +170,22 @@ public class SequenceManager extends AbstractManager {
 				: (Sequence) obj;
 	}
 
-	private Sequence loadSequenceByRead(Read read) throws ArcturusDatabaseException {
+	private Sequence loadSequenceByRead(Read read) throws SQLException {
+		int readid = read.getID();
+		pstmtByReadID.setInt(1, readid);
+		ResultSet rs = pstmtByReadID.executeQuery();
+
 		Sequence sequence = null;
 
-		int readid = read.getID();
-		
-		try {
-			pstmtByReadID.setInt(1, readid);
-			ResultSet rs = pstmtByReadID.executeQuery();
-
-			if (rs.next()) {
-				int seqid = rs.getInt(1);
-				int version = rs.getInt(2);
-				int seqlen = rs.getInt(3);
-				sequence = createAndRegisterNewSequence(seqid, read, version,
-						seqlen);
-			}
-
-			rs.close();
-		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to load sequence by read ID=" + readid, conn, this);
+		if (rs.next()) {
+			int seqid = rs.getInt(1);
+			int version = rs.getInt(2);
+			int seqlen = rs.getInt(3);
+			sequence = createAndRegisterNewSequence(seqid, read, version,
+					seqlen);
 		}
+
+		rs.close();
 
 		setClippings(sequence);
 		loadTagsForSequence(sequence);
@@ -223,12 +208,12 @@ public class SequenceManager extends AbstractManager {
 	 *         highest version number will be returned.
 	 */
 
-	public Sequence getFullSequenceByReadID(int readid) throws ArcturusDatabaseException {
+	public Sequence getFullSequenceByReadID(int readid) throws SQLException {
 		return getFullSequenceByReadID(readid, true);
 	}
 
 	public Sequence getFullSequenceByReadID(int readid, boolean autoload)
-			throws ArcturusDatabaseException {
+			throws SQLException {
 		Object obj = hashByReadID.get(new Integer(readid));
 
 		if (obj == null)
@@ -242,31 +227,24 @@ public class SequenceManager extends AbstractManager {
 		return sequence;
 	}
 
-	private Sequence loadFullSequenceByReadID(int readid) throws ArcturusDatabaseException {
+	private Sequence loadFullSequenceByReadID(int readid) throws SQLException {
+		pstmtFullByReadID.setInt(1, readid);
+		ResultSet rs = pstmtFullByReadID.executeQuery();
+
 		Sequence sequence = null;
 
-		try {
-			pstmtFullByReadID.setInt(1, readid);
-			ResultSet rs = pstmtFullByReadID.executeQuery();
-
-			if (rs.next()) {
-				Read read = adb.getReadByID(readid);
-				int seqid = rs.getInt(1);
-				int version = rs.getInt(2);
-				int seqlen = rs.getInt(3);
-				byte[] dna = decodeCompressedData(rs.getBytes(4), seqlen);
-				byte[] quality = decodeCompressedData(rs.getBytes(5), seqlen);
-				sequence = createAndRegisterNewSequence(seqid, read, version,
-						dna, quality);
-			}
-
-			rs.close();
-		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to load full sequence by read ID=" + readid, conn, this);
+		if (rs.next()) {
+			Read read = adb.getReadByID(readid);
+			int seqid = rs.getInt(1);
+			int version = rs.getInt(2);
+			int seqlen = rs.getInt(3);
+			byte[] dna = decodeCompressedData(rs.getBytes(4), seqlen);
+			byte[] quality = decodeCompressedData(rs.getBytes(5), seqlen);
+			sequence = createAndRegisterNewSequence(seqid, read, version, dna,
+					quality);
 		}
-		catch (DataFormatException e) {
-			throw new ArcturusDatabaseException(e, "Failed to decompress DNA and quality for sequence by read ID=" + readid, conn, adb);
-		}
+
+		rs.close();
 
 		setClippings(sequence);
 		loadTagsForSequence(sequence);
@@ -284,38 +262,34 @@ public class SequenceManager extends AbstractManager {
 	 * @return the Sequence object corresponding to the given ID.
 	 */
 
-	public Sequence getSequenceBySequenceID(int seqid) throws ArcturusDatabaseException {
+	public Sequence getSequenceBySequenceID(int seqid) throws SQLException {
 		return getSequenceBySequenceID(seqid, true);
 	}
 
 	public Sequence getSequenceBySequenceID(int seqid, boolean autoload)
-			throws ArcturusDatabaseException {
+			throws SQLException {
 		Object obj = hashBySequenceID.get(new Integer(seqid));
 
 		return (obj == null && autoload) ? loadSequenceBySequenceID(seqid)
 				: (Sequence) obj;
 	}
 
-	private Sequence loadSequenceBySequenceID(int seqid) throws ArcturusDatabaseException {
+	private Sequence loadSequenceBySequenceID(int seqid) throws SQLException {
+		pstmtBySequenceID.setInt(1, seqid);
+		ResultSet rs = pstmtBySequenceID.executeQuery();
+
 		Sequence sequence = null;
 
-		try {
-			pstmtBySequenceID.setInt(1, seqid);
-			ResultSet rs = pstmtBySequenceID.executeQuery();
-
-			if (rs.next()) {
-				int readid = rs.getInt(1);
-				Read read = adb.getReadByID(readid);
-				int version = rs.getInt(2);
-				int seqlen = rs.getInt(3);
-				sequence = createAndRegisterNewSequence(seqid, read, version,
-						seqlen);
-			}
-
-			rs.close();
-		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to full sequence by ID=" + seqid, conn, this);
+		if (rs.next()) {
+			int readid = rs.getInt(1);
+			Read read = adb.getReadByID(readid);
+			int version = rs.getInt(2);
+			int seqlen = rs.getInt(3);
+			sequence = createAndRegisterNewSequence(seqid, read, version,
+					seqlen);
 		}
+
+		rs.close();
 
 		setClippings(sequence);
 		loadTagsForSequence(sequence);
@@ -333,12 +307,12 @@ public class SequenceManager extends AbstractManager {
 	 * @return the Sequence object corresponding to the given ID.
 	 */
 
-	public Sequence getFullSequenceBySequenceID(int seqid) throws ArcturusDatabaseException {
+	public Sequence getFullSequenceBySequenceID(int seqid) throws SQLException {
 		return getFullSequenceBySequenceID(seqid, true);
 	}
 
 	public Sequence getFullSequenceBySequenceID(int seqid, boolean autoload)
-			throws ArcturusDatabaseException {
+			throws SQLException {
 		Object obj = hashBySequenceID.get(new Integer(seqid));
 
 		if (obj == null)
@@ -353,31 +327,24 @@ public class SequenceManager extends AbstractManager {
 	}
 
 	private Sequence loadFullSequenceBySequenceID(int seqid)
-			throws ArcturusDatabaseException {
+			throws SQLException {
+		pstmtFullBySequenceID.setInt(1, seqid);
+		ResultSet rs = pstmtFullBySequenceID.executeQuery();
+
 		Sequence sequence = null;
 
-		try {
-			pstmtFullBySequenceID.setInt(1, seqid);
-			ResultSet rs = pstmtFullBySequenceID.executeQuery();
-
-			if (rs.next()) {
-				int readid = rs.getInt(1);
-				Read read = adb.getReadByID(readid);
-				int version = rs.getInt(2);
-				int seqlen = rs.getInt(3);
-				byte[] dna = decodeCompressedData(rs.getBytes(4), seqlen);
-				byte[] quality = decodeCompressedData(rs.getBytes(5), seqlen);
-				sequence = createAndRegisterNewSequence(seqid, read, version,
-						dna, quality);
-			}
-
-			rs.close();
-		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to load full sequence by ID=" + seqid, conn, this);
+		if (rs.next()) {
+			int readid = rs.getInt(1);
+			Read read = adb.getReadByID(readid);
+			int version = rs.getInt(2);
+			int seqlen = rs.getInt(3);
+			byte[] dna = decodeCompressedData(rs.getBytes(4), seqlen);
+			byte[] quality = decodeCompressedData(rs.getBytes(5), seqlen);
+			sequence = createAndRegisterNewSequence(seqid, read, version, dna,
+					quality);
 		}
-		catch (DataFormatException e) {
-			throw new ArcturusDatabaseException(e, "Failed to decompress DNA and quality for sequence ID=" + seqid, conn, adb);
-		}
+
+		rs.close();
 
 		setClippings(sequence);
 		loadTagsForSequence(sequence);
@@ -395,36 +362,33 @@ public class SequenceManager extends AbstractManager {
 	 */
 
 	public void getDNAAndQualityForSequence(Sequence sequence)
-			throws ArcturusDatabaseException {
+			throws SQLException {
 		int seqid = sequence.getID();
-		
-		try {
-			pstmtDNAAndQualityBySequenceID.setInt(1, seqid);
-			ResultSet rs = pstmtDNAAndQualityBySequenceID.executeQuery();
+		pstmtDNAAndQualityBySequenceID.setInt(1, seqid);
+		ResultSet rs = pstmtDNAAndQualityBySequenceID.executeQuery();
 
-			if (rs.next()) {
-				int seqlen = rs.getInt(1);
-				byte[] dna = decodeCompressedData(rs.getBytes(2), seqlen);
-				byte[] quality = decodeCompressedData(rs.getBytes(3), seqlen);
-				sequence.setDNA(dna);
-				sequence.setQuality(quality);
-			}
+		if (rs.next()) {
+			int seqlen = rs.getInt(1);
+			byte[] dna = decodeCompressedData(rs.getBytes(2), seqlen);
+			byte[] quality = decodeCompressedData(rs.getBytes(3), seqlen);
+			sequence.setDNA(dna);
+			sequence.setQuality(quality);
+		}
 
-			rs.close();
-		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to get DNA and quality for sequence ID=" + seqid, conn, this);
-		}
-		catch (DataFormatException e) {
-			throw new ArcturusDatabaseException(e, "Failed to decompress DNA and quality for sequence ID=" + seqid, conn, adb);
-		}
+		rs.close();
 	}
 
-	byte[] decodeCompressedData(byte[] compressed, int length) throws DataFormatException {
+	byte[] decodeCompressedData(byte[] compressed, int length) {
 		byte[] buffer = new byte[length];
 
-		decompresser.setInput(compressed, 0, compressed.length);
-		decompresser.inflate(buffer, 0, buffer.length);
-		decompresser.reset();
+		try {
+			decompresser.setInput(compressed, 0, compressed.length);
+			decompresser.inflate(buffer, 0, buffer.length);
+			decompresser.reset();
+		} catch (DataFormatException dfe) {
+			buffer = null;
+			dfe.printStackTrace();
+		}
 
 		return buffer;
 	}
@@ -493,57 +457,52 @@ public class SequenceManager extends AbstractManager {
 	 * of the sequence.
 	 */
 
-	private void setClippings(Sequence sequence) throws ArcturusDatabaseException {
+	private void setClippings(Sequence sequence) throws SQLException {
 		int seqid = sequence.getID();
 
-		try {
-			pstmtQualityClipping.setInt(1, seqid);
+		pstmtQualityClipping.setInt(1, seqid);
 
-			ResultSet rs = pstmtQualityClipping.executeQuery();
+		ResultSet rs = pstmtQualityClipping.executeQuery();
 
-			if (rs.next()) {
-				int qleft = rs.getInt(1);
-				int qright = rs.getInt(2);
-				sequence.setQualityClipping(new Clipping(Clipping.QUAL, qleft,
-						qright));
-			}
-
-			rs.close();
-
-			pstmtCloningVectorClipping.setInt(1, seqid);
-
-			rs = pstmtCloningVectorClipping.executeQuery();
-
-			if (rs.next()) {
-				int cvleft = rs.getInt(1);
-				int cvright = rs.getInt(2);
-				sequence.setCloningVectorClipping(new Clipping(Clipping.CVEC,
-						cvleft, cvright));
-			}
-
-			rs.close();
-
-			pstmtSequenceVectorClipping.setInt(1, seqid);
-
-			rs = pstmtSequenceVectorClipping.executeQuery();
-
-			while (rs.next()) {
-				int svleft = rs.getInt(1);
-				int svright = rs.getInt(2);
-
-				Clipping clipping = new Clipping(Clipping.SVEC, svleft, svright);
-
-				if (svleft == 1)
-					sequence.setSequenceVectorClippingLeft(clipping);
-				else
-					sequence.setSequenceVectorClippingRight(clipping);
-			}
-
-			rs.close();
-		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to set clipping data for sequence ID=" + seqid,
-					conn, this);
+		if (rs.next()) {
+			int qleft = rs.getInt(1);
+			int qright = rs.getInt(2);
+			sequence.setQualityClipping(new Clipping(Clipping.QUAL, qleft,
+					qright));
 		}
+
+		rs.close();
+
+		pstmtCloningVectorClipping.setInt(1, seqid);
+
+		rs = pstmtCloningVectorClipping.executeQuery();
+
+		if (rs.next()) {
+			int cvleft = rs.getInt(1);
+			int cvright = rs.getInt(2);
+			sequence.setCloningVectorClipping(new Clipping(Clipping.CVEC,
+					cvleft, cvright));
+		}
+
+		rs.close();
+
+		pstmtSequenceVectorClipping.setInt(1, seqid);
+
+		rs = pstmtSequenceVectorClipping.executeQuery();
+
+		while (rs.next()) {
+			int svleft = rs.getInt(1);
+			int svright = rs.getInt(2);
+
+			Clipping clipping = new Clipping(Clipping.SVEC, svleft, svright);
+
+			if (svleft == 1)
+				sequence.setSequenceVectorClippingLeft(clipping);
+			else
+				sequence.setSequenceVectorClippingRight(clipping);
+		}
+
+		rs.close();
 	}
 
 	public Sequence findOrCreateSequence(int seq_id, int length) {
@@ -559,33 +518,28 @@ public class SequenceManager extends AbstractManager {
 		return sequence;
 	}
 
-	private void loadTagsForSequence(Sequence sequence) throws ArcturusDatabaseException {
-		int seqid = sequence.getID();
+	private void loadTagsForSequence(Sequence sequence) throws SQLException {
+		int seq_id = sequence.getID();
 
 		Vector<Tag> tags = sequence.getTags();
 		
 		if (tags != null)
 			tags.clear();
 
-		try {
-			pstmtTags.setInt(1, seqid);
-			ResultSet rs = pstmtTags.executeQuery();
+		pstmtTags.setInt(1, seq_id);
+		ResultSet rs = pstmtTags.executeQuery();
 
-			while (rs.next()) {
-				String type = rs.getString(1);
-				int pstart = rs.getInt(2);
-				int pfinal = rs.getInt(3);
-				String comment = rs.getString(4);
+		while (rs.next()) {
+			String type = rs.getString(1);
+			int pstart = rs.getInt(2);
+			int pfinal = rs.getInt(3);
+			String comment = rs.getString(4);
+			
+			Tag tag = new Tag(type, pstart, pfinal, comment);
 
-				Tag tag = new Tag(type, pstart, pfinal, comment);
-
-				sequence.addTag(tag);
-			}
-
-			rs.close();
-		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to set load tags for sequence ID=" + seqid,
-					conn, this);
+			sequence.addTag(tag);
 		}
+
+		rs.close();
 	}
 }

@@ -2,14 +2,14 @@ package uk.ac.sanger.arcturus.gui.projecttable;
 
 import javax.swing.event.TableModelEvent;
 import javax.swing.table.*;
+import java.sql.*;
 import java.util.*;
 
-import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.gui.SortableTableModel;
 import uk.ac.sanger.arcturus.people.Person;
+import uk.ac.sanger.arcturus.Arcturus;
 
 class ProjectTableModel extends AbstractTableModel implements
 		SortableTableModel {
@@ -40,7 +40,7 @@ class ProjectTableModel extends AbstractTableModel implements
 	protected static final int LOCKED_COLUMN = 8;
 	protected static final int STATUS_COLUMN = 9;
 
-	public ProjectTableModel(ArcturusDatabase adb) throws ArcturusDatabaseException {
+	public ProjectTableModel(ArcturusDatabase adb) {
 		this.adb = adb;
 		canEditUser = adb.isCoordinator();
 		comparator = new ProjectComparator();
@@ -48,23 +48,26 @@ class ProjectTableModel extends AbstractTableModel implements
 		populateProjectsArray();
 	}
 
-	protected void populateProjectsArray() throws ArcturusDatabaseException {
+	protected void populateProjectsArray() {
 		refresh();
 		sortOnColumn(TOTAL_LENGTH_COLUMN);
 	}
 
-	public void refresh() throws ArcturusDatabaseException {
+	public void refresh() {
 		projects.clear();
 
+		try {
+			Set<Project> projectset = adb.getAllProjects();
 
-		Set<Project> projectset = adb.getAllProjects();
+			for (Project project : projectset) {
+				if (displayRetiredProjects || !project.isRetired())				
+					projects.add(new ProjectProxy(project, minlen, minreads));
+			}
 
-		for (Project project : projectset) {
-			if (displayRetiredProjects || !project.isRetired())				
-				projects.add(new ProjectProxy(project, minlen, minreads));
+			resort();
+		} catch (SQLException sqle) {
+			Arcturus.logWarning("Error whilst refreshing project table", sqle);
 		}
-
-		resort();
 	}
 
 	private void resort() {
@@ -219,11 +222,7 @@ class ProjectTableModel extends AbstractTableModel implements
 
 					ProjectProxy project = getProjectAtRow(row);
 
-					try {
-						project.setOwner(person);
-					} catch (ArcturusDatabaseException e) {
-						Arcturus.logWarning("Failed to set owner of project ID=" + project.getID() + " to " + person.getUID(), e);
-					}
+					project.setOwner(person);
 
 					fireTableChanged(new TableModelEvent(this, row));
 					//fireTableCellUpdated(row, col);				
@@ -236,11 +235,7 @@ class ProjectTableModel extends AbstractTableModel implements
 
 					ProjectProxy project = getProjectAtRow(row);
 
-					try {
-						project.setLockOwner(person);
-					} catch (ArcturusDatabaseException e) {
-						Arcturus.logWarning("Failed to set lock owner of project ID=" + project.getID() + " to " + person.getUID(), e);
-					}
+					project.setLockOwner(person);
 
 					fireTableChanged(new TableModelEvent(this, row));
 					//fireTableCellUpdated(row, col);								
@@ -352,21 +347,11 @@ class ProjectTableModel extends AbstractTableModel implements
 
 	protected void setMinimumReads(int minreads) {
 		this.minreads = minreads;
-		
-		try {
-			refresh();
-		} catch (ArcturusDatabaseException e) {
-			Arcturus.logWarning("Failed to refresh project table model after setting minimum read count", e);
-		}
+		refresh();
 	}
 
 	public void showRetiredProjects(boolean show) {
 		this.displayRetiredProjects = show;
-		
-		try {
-			refresh();
-		} catch (ArcturusDatabaseException e) {
-			Arcturus.logWarning("Failed to refresh project table model after altering show-retired-projects flag", e);
-		}
+		refresh();
 	}
 }

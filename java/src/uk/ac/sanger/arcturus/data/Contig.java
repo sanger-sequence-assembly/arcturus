@@ -4,6 +4,7 @@ import uk.ac.sanger.arcturus.database.*;
 
 import java.util.*;
 import java.util.zip.DataFormatException;
+import java.sql.SQLException;
 
 /**
  * This class represents a contig.
@@ -203,7 +204,7 @@ public class Contig extends Core {
 		"]";
 	}
 	
-	public void update(int options) throws ArcturusDatabaseException,
+	public void update(int options) throws SQLException,
 		DataFormatException {
 		adb.updateContig(this, options);
 	}

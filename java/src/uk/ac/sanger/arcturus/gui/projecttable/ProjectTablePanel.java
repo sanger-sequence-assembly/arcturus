@@ -11,17 +11,19 @@ import java.awt.event.*;
 import java.awt.print.PrinterException;
 
 import java.io.IOException;
+import java.sql.SQLException;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Assembly;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.people.*;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEventListener;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEventNotifier;
+
+import com.mysql.jdbc.MysqlErrorNumbers;
 
 public class ProjectTablePanel extends MinervaPanel implements
 		ProjectChangeEventListener {
@@ -39,7 +41,7 @@ public class ProjectTablePanel extends MinervaPanel implements
 	
 	private final static boolean allowBinImport = Arcturus.getBoolean("project.allowbinimport");
 
-	public ProjectTablePanel(MinervaTabbedPane parent, ArcturusDatabase adb) throws ArcturusDatabaseException {
+	public ProjectTablePanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
 		super(parent, adb);
 
 		panelNewProject = new NewProjectPanel(this, adb);
@@ -144,9 +146,12 @@ public class ProjectTablePanel extends MinervaPanel implements
 			boolean canRetire = false;
 
 			try {
-				canRetire = adb.canUserChangeProjectStatus(project) && !project.isRetired();
-			} catch (ArcturusDatabaseException e) {
-				Arcturus.logWarning("Failed to check whether user can change project status", e);
+				canRetire = adb.canUserChangeProjectStatus(project)
+						&& !project.isRetired();
+			} catch (SQLException e) {
+				Arcturus.logWarning(
+						"A problem occurred when checking whether the user can retire project "
+								+ project.getName(), e);
 			}
 
 			actionRetireProject.setEnabled(canRetire);
@@ -288,16 +293,8 @@ public class ProjectTablePanel extends MinervaPanel implements
 
 	protected boolean canExport(ProjectProxy proxy) {
 		Person owner = proxy.getOwner();
-		
-		boolean coordinator = false;
 
-		try {
-			coordinator = adb.isCoordinator();
-		} catch (ArcturusDatabaseException e) {
-			Arcturus.logWarning("Failed to check whether the user is a coordinator", e);
-		}
-		
-		return coordinator || proxy.isMine() || owner == null;
+		return adb.isCoordinator() || proxy.isMine() || owner == null;
 	}
 
 	protected void exportToGap4() {
@@ -349,16 +346,8 @@ public class ProjectTablePanel extends MinervaPanel implements
 
 	protected boolean canImport(ProjectProxy proxy) {
 		Person owner = proxy.getOwner();
-		
-		boolean coordinator = false;
-		
-		try {
-			coordinator = adb.isCoordinator();
-		} catch (ArcturusDatabaseException e) {
-			Arcturus.logWarning("Failed to check whether the user is a coordinator", e);
-		}
 
-		return coordinator || proxy.isMine() || owner == null;
+		return adb.isCoordinator() || proxy.isMine() || owner == null;
 	}
 
 	protected void importFromGap4() {
@@ -419,11 +408,9 @@ public class ProjectTablePanel extends MinervaPanel implements
 		ProjectProxy proxy = table.getSelectedProject();
 		Project project = proxy.getProject();
 		String projectName = project.getName();
-		
-		try {
-			boolean canChangeProject = adb.canUserChangeProjectStatus(project);
 
-			if (!canChangeProject) {
+		try {
+			if (!adb.canUserChangeProjectStatus(project)) {
 				JOptionPane.showMessageDialog(this,
 						"You do not have the authority to retire Project "
 								+ projectName, "Cannot retire project "
@@ -442,9 +429,10 @@ public class ProjectTablePanel extends MinervaPanel implements
 
 			if (adb.retireProject(project))
 				model.refresh();
-		}
-		catch (ArcturusDatabaseException e) {
-			Arcturus.logWarning("Failed to retre project", e);
+		} catch (SQLException e) {
+			Arcturus.logWarning(
+					"An error occurred when trying to retire project "
+							+ projectName, e);
 		}
 	}
 
@@ -462,7 +450,7 @@ public class ProjectTablePanel extends MinervaPanel implements
 		// Does nothing
 	}
 
-	public void refresh() throws ArcturusDatabaseException {
+	public void refresh() {
 		model.refresh();
 	}
 
@@ -485,11 +473,7 @@ public class ProjectTablePanel extends MinervaPanel implements
 
 	public void projectChanged(ProjectChangeEvent event) {
 		if (event.getType() == ProjectChangeEvent.CONTIGS_CHANGED)
-			try {
-				refresh();
-			} catch (ArcturusDatabaseException e) {
-				Arcturus.logWarning("Failed to refresh project table panel", e);
-			}
+			refresh();
 	}
 
 	private void createNewProject() {
@@ -539,15 +523,23 @@ public class ProjectTablePanel extends MinervaPanel implements
 					ProjectChangeEvent event = new ProjectChangeEvent(this, ProjectChangeEventNotifier.ANY_PROJECT, ProjectChangeEvent.CREATED);
 					adb.notifyProjectChangeEventListeners(event, null);
 				}
-			} catch (ArcturusDatabaseException e) {
-				Arcturus.logSevere(
+			} catch (SQLException e) {
+				if (e.getErrorCode() == MysqlErrorNumbers.ER_DUP_ENTRY)
+					JOptionPane.showMessageDialog(this, "Project " + name
+							+ " already exists in assembly " + assembly,
+							"Failed to create the project",
+							JOptionPane.WARNING_MESSAGE);
+				else
+					Arcturus
+							.logSevere(
+									"An error occurred when trying to create a new project",
+									e);
+			} catch (IOException ioe) {
+				Arcturus
+						.logSevere(
 								"An error occurred when trying to create a new project",
-								e);
-			}
-			catch (IOException e) {
-				Arcturus.logSevere(
-						"An error occurred when trying to create a new project",
-						e);
+								ioe);
+
 			}
 		}
 

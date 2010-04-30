@@ -1,24 +1,29 @@
 package uk.ac.sanger.arcturus.oligo;
 
 public class OligoFinderEvent {
-	public enum Type { UNKNOWN, START_CONTIGS, START_READS, START_SEQUENCE, FOUND_MATCH, FINISH_SEQUENCE, FINISH_CONTIGS, FINISH_READS,
-		ENUMERATING_FREE_READS, FINISH, MESSAGE, EXCEPTION
-	}
-		
+	public static final int UNKNOWN = 0;
+	public static final int START_CONTIGS = 1;
+	public static final int START_READS = 2;
+	public static final int START_SEQUENCE = 3;
+	public static final int FOUND_MATCH = 4;
+	public static final int FINISH_SEQUENCE = 5;
+	public static final int FINISH_CONTIGS = 6;
+	public static final int FINISH_READS = 7; 
+	public static final int ENUMERATING_FREE_READS = 8;
+	public static final int FINISH = 9;
+	
 	private OligoFinder source;
-	private Type type = Type.UNKNOWN;
+	private int type = UNKNOWN;
 	private Oligo oligo;
 	private DNASequence sequence;
 	private int value;
 	private boolean forward;
-	private String message;
-	private Exception exception;
 	
 	public OligoFinderEvent(OligoFinder source) {
 		this.source = source;
 	}
 	
-	public void setEvent(Type type, Oligo oligo, DNASequence sequence, int value, boolean forward) {
+	public void setEvent(int type, Oligo oligo, DNASequence sequence, int value, boolean forward) {
 		this.type = type;
 		this.oligo = oligo;
 		this.value = value;
@@ -26,25 +31,16 @@ public class OligoFinderEvent {
 		this.sequence = sequence;
 	}
 	
-	public void setEvent(Type type, Oligo oligo, int value, boolean forward) {
+	public void setEvent(int type, Oligo oligo, int value, boolean forward) {
 		this.type = type;
 		this.oligo = oligo;
 		this.value = value;
 		this.forward = forward;
 	}
-	
-	public void setEvent(Type type, String message) {
-		this.type = type;
-		this.message = message;
-	}
-	
-	public void setException(Exception exception) {
-		this.exception = exception;
-	}
 
 	public OligoFinder getSource() { return source; }
 	
-	public Type getType() { return type; }
+	public int getType() { return type; }
 	
 	public Oligo getOligo() { return oligo; }
 	
@@ -59,12 +55,4 @@ public class OligoFinderEvent {
 	public int getValue() { return value; }
 	
 	public boolean isForward() { return forward; } 
-	
-	public String getMessage() {
-		return message;
-	}
-	
-	public Exception getException() {
-		return exception;
-	}
 }

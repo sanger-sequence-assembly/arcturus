@@ -14,6 +14,8 @@ public class ProjectComparator implements Comparator<ProjectProxy> {
 	public static final int BY_CONTIG_UPDATED_DATE = 7;
 	public static final int BY_PROJECT_UPDATED_DATE = 8;
 	public static final int BY_NAME = 9;
+	
+	private final boolean useContigChange = true;
 
 	protected boolean ascending;
 	protected int type;
@@ -68,7 +70,9 @@ public class ProjectComparator implements Comparator<ProjectProxy> {
 				return compareByNewestContigCreated(p1, p2);
 
 			case BY_CONTIG_UPDATED_DATE:
-				return compareByMostRecentContigChange(p1, p2);
+				return useContigChange ?
+						compareByMostRecentContigChange(p1, p2) :
+							compareByMostRecentContigUpdated(p1, p2);
 
 			case BY_PROJECT_UPDATED_DATE:
 				return compareByProjectUpdated(p1, p2);

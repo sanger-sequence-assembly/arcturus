@@ -4,13 +4,14 @@ import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.event.*;
 
+import java.sql.SQLException;
 import java.util.StringTokenizer;
+import java.util.zip.DataFormatException;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.Arrays;
@@ -122,14 +123,9 @@ public class ContigFinderPanel extends MinervaPanel {
 		actionFindContigs = new MinervaAbstractAction("Find contigs", null,
 				"Find contigs", new Integer(KeyEvent.VK_I), KeyStroke
 						.getKeyStroke(KeyEvent.VK_I, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent event) {
+			public void actionPerformed(ActionEvent e) {
 				setEnabled(false);
-				
-				try {
-					findContigs();
-				} catch (ArcturusDatabaseException e) {
-					Arcturus.logWarning("Failed to find contigs", e);
-				}
+				findContigs();
 			}
 		};
 
@@ -160,7 +156,7 @@ public class ContigFinderPanel extends MinervaPanel {
 	public void closeResources() {
 	}
 
-	private void findContigs() throws ArcturusDatabaseException {
+	private void findContigs() {
 		String text = txtContigList.getText();
 
 		StringTokenizer st = new StringTokenizer(text);
@@ -173,45 +169,49 @@ public class ContigFinderPanel extends MinervaPanel {
 		updateFindContigsButton();
 	}
 
-	private void findContig(String contigname) throws ArcturusDatabaseException {
-		int contig_id = 0;
-		
+	private void findContig(String contigname) {
 		try {
-			contig_id = Integer.parseInt(contigname);
+			int contig_id = Integer.parseInt(contigname);
+
+			Contig parent = adb.getContigByID(contig_id);
+
+			if (parent == null) {
+				report("Contig " + contigname + " does not exist\n\n");
+			} else {
+				Set<Contig> children = getCurrentChildren(parent);
+
+				report(contigInfo(parent));
+
+				if (children == null || children.isEmpty()) {
+					report(" is a current contig\n\n");
+				} else {
+					int nkids = children.size();
+
+					report(" has " + nkids + " current"
+							+ (nkids < 2 ? " child" : " children") + ":\n\n");
+
+					Contig[] contigs = children.toArray(new Contig[0]);
+
+					Arrays.sort(contigs, comparator);
+
+					for (Contig contig : contigs) {
+						report("\t" + contigInfo(contig) + "\n\n");
+					}
+				}
+			}
+
+			report(SEPARATOR);
 		} catch (NumberFormatException nfe) {
 			String message = "That is not a valid contig ID.\nMinerva was expecting a number,\nbut got \"" + contigname + "\"";
 			String title = "That is not a valid contig ID";
 			JOptionPane.showMessageDialog(this, message, title, JOptionPane.ERROR_MESSAGE);
-		} 
-		
-		Contig parent = adb.getContigByID(contig_id);
-
-		if (parent == null) {
-			report("Contig " + contigname + " does not exist\n\n");
-		} else {
-			Set<Contig> children = getCurrentChildren(parent);
-
-			report(contigInfo(parent));
-
-			if (children == null || children.isEmpty()) {
-				report(" is a current contig\n\n");
-			} else {
-				int nkids = children.size();
-
-				report(" has " + nkids + " current"
-						+ (nkids < 2 ? " child" : " children") + ":\n\n");
-
-				Contig[] contigs = children.toArray(new Contig[0]);
-
-				Arrays.sort(contigs, comparator);
-
-				for (Contig contig : contigs) {
-					report("\t" + contigInfo(contig) + "\n\n");
-				}
-			}
+		} catch (SQLException sqle) {
+			Arcturus.logWarning("Error whilst finding contig " + contigname,
+					sqle);
+		} catch (DataFormatException dfe) {
+			Arcturus.logWarning("Error whilst finding contig " + contigname,
+					dfe);
 		}
-
-		report(SEPARATOR);
 	}
 
 	private String contigInfo(Contig contig) {
@@ -227,12 +227,12 @@ public class ContigFinderPanel extends MinervaPanel {
 		txtMessages.append(text);
 	}
 
-	private Set<Contig> getCurrentChildren(Contig parent) throws ArcturusDatabaseException {
+	private Set<Contig> getCurrentChildren(Contig parent) throws SQLException {
 		return getCurrentChildren(parent, 0);
 	}
 
 	private Set<Contig> getCurrentChildren(Contig parent, int level)
-			throws ArcturusDatabaseException {
+			throws SQLException {
 		Set<Contig> resultSet = new HashSet<Contig>();
 
 		Set<Contig> children = adb.getChildContigs(parent);

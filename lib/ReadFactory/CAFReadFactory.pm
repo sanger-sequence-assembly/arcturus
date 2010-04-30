@@ -132,21 +132,6 @@ sub CAFFileParser {
         chomp $record;
         $this->loginfo("Processing line $line") if !($line%100000);
         next if ($record !~ /\S/); # skip empty lines 
-# add subsequent lines if continuation mark '\n\' present
-        while ($record =~ /\\n\\\s*$/) {
-            my $extension;
-            if (defined($extension = <$CAF>)) {
-                chomp $extension;
-                $record .= $extension;
-# $record =~ s/\\n\\\s*\"/\"/; # replace redundant continuation
-                $line++;
-            }
-            elsif ($record !~ /\"\s*$/) {
-# end of file encountered: complete continued record
-                $record .= '"' if ($record =~ /\"/); # closing quote
-            }
-        }
-        $record =~ s/[\\n\\]+\s*\"/\"/; # remove redundant continuation
 
         if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*:\s*(\S+)/) {
 # there is a new object name
@@ -359,25 +344,6 @@ sub CAFFileParser {
 # $items[2] is vector name? check?
                 next;
             }
-# special provision for "stolen": work into a warning tag
-	    elsif ($record =~ /stole[n]?(.*)/i) {
-                my $info = $1 || '';
-                $info =~ s/([\"\'])([^\"\']+)\1/$2/;
-                $info = "Stolen ".$info; 
-                my $rstart = 1;     
-                my $rfinal = $Read->getSequenceLength();
-# if length not found, try clipping range
-                unless ($rfinal) {
-                    my $lql = $Read->getLowQualityLeft();
-                    my $lqr = $Read->getLowQualityRight();
-                    $rstart = $lql + 1 if defined($lql);
-                    $rfinal = $lqr - 1 if defined($lqr);
-                    $rfinal = 1 unless defined $rfinal;
-		}
- 	        my $tag = TagFactory->makeTag('WARN',$rstart,$rfinal);
-                $tag->setTagComment($info) if $info;
-                $Read->addTag($tag);
-    	    }
 
             else {
 		$this->logwarning("not recognized: $line  $record");

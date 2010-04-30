@@ -4,7 +4,7 @@ use strict;
 
 use Exporter;
 
-use ArcturusDatabase::ADBRead;
+use ArcturusDatabase::ADBMapping;
 
 use TagFactory::TagFactory;
 
@@ -14,11 +14,13 @@ use Digest::MD5 qw(md5 md5_hex md5_base64);
 use Contig;
 use Mapping;
 
-our @ISA = qw(ArcturusDatabase::ADBRead Exporter);
+our @ISA = qw(ArcturusDatabase::ADBMapping Exporter);
 
 our @EXPORT = qw(getCurrentContigs); # DEPRECATE when view can be used
 
 use ArcturusDatabase::ADBRoot qw(queryFailed);
+
+my $NEW = 1;
 
 #-----------------------------------------------------------------------------
 # constructor and initialisation via constructor of superclass
@@ -260,7 +262,7 @@ sub getCachedContig {
 
     my $contig_id = $options{contig_id} || 0; # if undefined, returns undef
 
-print STDOUT "getting cached contig $contig_id\n";
+#print STDOUT "getting cached contig $contig_id\n";
     return ( $cache->{$contig_id} ||= $this->getContig(%options) );
 }
 
@@ -537,6 +539,7 @@ sub putContig {
             $previous = 0; # reject the match
 	}
 
+print STDERR "TESTING PREVIOUS \n";
         if ($previous && $contig->isEqual($previous)) {
 # add the contig ID to the contig
 
@@ -579,12 +582,23 @@ sub putContig {
 # NOTE: this may be done outside this method .... ?
 
     $message .= "$contigname is new ";
+print STDERR "$message\n";
     if ($this->getParentContigsForContig($contig,usereads=>1)) {
         my @parentids = $contig->getParentContigIDs();
         $message .= "and has parent(s) : @parentids ";
         if ($options{prohibitparent}) {
             return 0,"$message  ('prohibitparent' option active)";
         }
+print STDERR "$message\n";
+# screen the mappings of the parent(s) against the ones of the input contig
+# to get a list of the mappings which have to have their segments instantiated
+        my $parentcontigs = $contig->getParentContigs();
+        foreach my $parentcontig (@$parentcontigs) {
+	    $parentcontig->getMappings(1); # delayed loading of regular mappings
+	}
+        my $tocomplete_arrayref = &screenparentmappings($contig);
+print STDERR scalar(@$tocomplete_arrayref)." mappings to have segments loaded\n";
+        $this->getCanonicalSegmentsForRegularMappings($tocomplete_arrayref);
 # set-up the contig-to-contig mappings between the new contig and its parents
         my $msg = $contig->linkToParents(); # forcelink option?
         $message .= "; ".$msg if $msg;
@@ -629,7 +643,7 @@ sub putContig {
             foreach my $key ('annotation','finishing','markftags') {
                 $tagscreenoptions{$key} = $options{$key} if defined $options{$key};
 	    }
-            $contig->inheritTags(%tagscreenoptions);
+#            $contig->inheritTags(%tagscreenoptions); # REMOVE WHEN REFACTORING IMPORT!
 	}
     }
     else {
@@ -650,6 +664,7 @@ sub putContig {
     $dbh->{RaiseError} = 1;
 
     my $contigid = 0;
+print STDERR "PUTCONTIG\n";
 
     eval {
 	$dbh->begin_work;
@@ -658,19 +673,24 @@ sub putContig {
 
 	$this->{lastinsertedcontigid} = $contigid;
 
+print STDERR "PUTCONTIG new contig_id $contigid\n";
 	return 0, "Failed to insert metadata for $contigname" unless $contigid;
 
 	$contig->setContigID($contigid);
 
 # then load the overall mappings (and put the mapping ID's in the instances)
 
+print STDERR "calling putReadMappingsForContig\n";
 	die "Failed to insert read-to-contig mappings for $contigname"
-	    unless &putMappingsForContig($dbh,$contig,$log,type=>'read');
-
+	    unless $this->putReadMappingsForContig($contig);
+#exit;
 # the CONTIG2CONTIG mappings
 
+print STDERR "returned from putReadMappingsForContig\n";
+print STDERR "calling putMappingsForContig\n";
 	die "Failed to insert contig-to-contig mappings for $contigname"
 	    unless &putMappingsForContig($dbh,$contig,$log,type=>'contig');
+print STDERR "returned from putMappingsForContig\n"; #exit;
 
 # and contig tags?
 
@@ -776,6 +796,61 @@ sub getSequenceIDsForContig {
     }
 
     return 1,scalar(@$reads)." processed";
+}
+
+sub screenparentmappings {
+# private: load a minimal set of segments to enable mapping comparison
+    my $contig = shift;
+print STDERR "ENTER screenparentmappings\n";
+
+    &verifyPrivate($contig,'screenparentmappings');
+
+# build a hash list to enable identification of mappings in contig
+
+    my $counterpart_hashref = {};
+
+    my $contigmapping_arrayref = $contig->getMappings() || return 0;
+    foreach my $mapping (@$contigmapping_arrayref) {
+        my $key = $mapping->getSequenceID();
+        $counterpart_hashref->{$key} = $mapping if $key;
+        $key = $mapping->getMappingName();
+        $counterpart_hashref->{$key} = $mapping if $key;
+    }
+
+    my $parentcontig_arrayref = $contig->getParentContigs();
+
+    my $readsneedingversions = [];
+    my $mappingstobecompleted = [];
+    foreach my $parentcontig (@$parentcontig_arrayref) {
+print STDERR "Testing parent contig ".$parentcontig->getContigName()."\n";
+        my $parentmapping_arrayref = $parentcontig->getMappings(); # as is
+        foreach my $mapping (@$parentmapping_arrayref) {
+# identify this mapping's counterpart in the contig mapping list
+            my ($key,$counterpart);
+            $key = $mapping->getSequenceID();
+            $counterpart = $counterpart_hashref->{$key} if $key;
+#print STDERR "parentmapping $mapping  key $key  cpart $counterpart \n";
+            unless ($counterpart) {
+		$key = $mapping->getMappingName();
+                $counterpart = $counterpart_hashref->{$key};
+                next unless $counterpart;
+	    }
+# test equality of the canonical mapping
+            my ($is_identical,@params) = $counterpart->isEqual($mapping);
+            next if $is_identical;
+# add to the list of mappings which do not match for further processing
+            push @$mappingstobecompleted, $mapping; 
+# test if we are possibly dealing with different read sequences
+            my $mseqid = $mapping->getSequenceID();
+            my $cseqid = $counterpart->getSequenceID();
+            next if (!$mseqid || !$cseqid || $mseqid == $cseqid);
+
+# add the readname to output list
+            push @$readsneedingversions,$key;
+#            push @$readsneedingversions,$mseqid,$cseqid; ?
+        }
+    }     
+    return $mappingstobecompleted;
 }
 
 sub allocateContigToProject {
@@ -920,8 +995,8 @@ sub putMetaDataForContig {
     &verifyPrivate($dbh,"informUsersOfChange");
 
     my $query = "insert into CONTIG "
-              . "(gap4name,length,ncntgs,nreads,newreads,cover,creator"
-              . ",origin,created,readnamehash,project_id) "
+              . "(gap4name,length,ncntgs,nreads,newreads,cover,creator,"
+              . " origin,created,readnamehash,project_id) "
               . "VALUES (?,?,?,?,?,?,?,?,now(),?,?)";
 
     my $sth = $dbh->prepare_cached($query);
@@ -933,7 +1008,7 @@ sub putMetaDataForContig {
                 $contig->getNumberOfNewReads(),
                 $contig->getAverageCover(),
                 $creator,
-                $contig->getOrigin(),
+                $contig->getOrigin() || 'Other',
                 $readhash,
 		$default_project_id);
 
@@ -1083,7 +1158,14 @@ sub deleteContig {
 # methods dealing with Mappings
 #---------------------------------------------------------------------------------
 
-sub getReadMappingsForContig {
+sub getReadMappingsForContig { 
+    return &oldgetReadMappingsForContig(@_) unless $NEW;
+    my $this = shift;
+print STDERR "Using newgetReadMappingsForContig\n";
+    return $this->newgetReadMappingsForContig(@_);
+}
+
+sub oldgetReadMappingsForContig {
 # adds an array of read-to-contig MAPPINGS to the input Contig instance
     my $this = shift;
     my $contig = shift;
@@ -1155,7 +1237,13 @@ sub getReadMappingsForContig {
     $contig->addMapping([@mappings]);
 }
 
-sub getContigMappingsForContig {
+sub getContigMappingsForContig { 
+    return &oldgetContigMappingsForContig(@_) unless $NEW;
+print STDERR "Using getContigMappingsForContig\n";
+    return &getContigMappingsForContig(@_);
+}
+
+sub oldgetContigMappingsForContig {
 # adds an array of contig-to-contig MAPPINGS to the input Contig instance
     my $this = shift;
     my $contig = shift;
@@ -1239,7 +1327,7 @@ sub getContigMappingsForContig {
     return $generation;
 }
 
-sub putMappingsForContig {
+sub putMappingsForContig { # superseded by putReadMappingsForContig putContigMappingsForContig
 # private method, write mapping contents to (C2C)MAPPING & (C2C)SEGMENT tables
     my $dbh = shift; # database handle
     my $contig = shift;
@@ -1310,6 +1398,7 @@ sub putMappingsForContig {
                     $cstart,
                     $cfinish,
                     $mapping->getAlignmentDirection());
+print STDOUT "mquery: $mquery  d: @data\n";
 
         my $rc = $sth->execute(@data) || &queryFailed($mquery,@data);
 

@@ -2,8 +2,6 @@ package uk.ac.sanger.arcturus.oligo;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
-import uk.ac.sanger.arcturus.oligo.OligoFinderEvent.Type;
 
 import java.sql.*;
 import java.util.zip.*;
@@ -15,7 +13,6 @@ import java.util.regex.Matcher;
 import com.mysql.jdbc.MysqlErrorNumbers;
 
 public class OligoFinder {
-	private ArcturusDatabase adb;
 	private Connection conn = null;
 
 	private OligoFinderEventListener listener;
@@ -25,10 +22,8 @@ public class OligoFinder {
 	
 	private int passValue;
 	
-	private final int CONNECTION_VALIDATION_TIMEOUT = 10;
-	
-	private final int RETRY_INTERVAL = 10;
-	private final int MAX_RETRY_ATTEMPTS = 5;
+	private final int RETRY_INTERVAL = 10000;
+	private final int RETRY_ATTEMPTS = 5;
 	
 	// The name of the temporary table for busy reads (reads which are in current contigs)
 	private final String BUSY_READS = "tmpBUSYREADS";
@@ -37,12 +32,10 @@ public class OligoFinder {
 	private final String FREE_READS = "tmpFREEREADS";
 	
 	private final String CREATE_BUSY_READS_TABLE =
-		"create temporary table if not exists " + BUSY_READS +
-			" (read_id int not null primary key) ENGINE=InnoDB";
+		"create temporary table if not exists " + BUSY_READS + " (read_id int not null primary key)";
 	
 	private final String CREATE_FREE_READS_TABLE =
-		"create temporary table if not exists " + FREE_READS +
-			" (read_id int not null primary key, readname char(64) not null) ENGINE=InnoDB";
+		"create temporary table if not exists " + FREE_READS + " (read_id int not null primary key, readname char(64) not null)";
 	
 	private final String GET_PASS_VALUE = "select status_id from STATUS where name = ?";
 	
@@ -74,31 +67,21 @@ public class OligoFinder {
 		" where SR.version=0 and SR.seq_id=S.seq_id order by R.read_id";
 	private PreparedStatement pstmtGetReadSequences;
 
-	public OligoFinder(ArcturusDatabase adb, OligoFinderEventListener listener) throws ArcturusDatabaseException {
-		this.adb = adb;
-		this.listener = listener;
-		
+	public OligoFinder(ArcturusDatabase adb, OligoFinderEventListener listener) {
 		event = new OligoFinderEvent(this);
-	}
-	
-	private void checkConnection() throws SQLException, ArcturusDatabaseException {
-		if (conn != null && conn.isValid(CONNECTION_VALIDATION_TIMEOUT))
-			return;
-		
-		if (conn != null) {
-			Arcturus.logInfo("OligoFinder: connection was invalid, obtaining a new one");
-			conn.close();
-		}
-		
-		prepareConnection();
-	}
-	
-	private void prepareConnection() throws SQLException, ArcturusDatabaseException {
-		conn = adb.getPooledConnection(this);
+
+		this.listener = listener;
+
+		try {
+			conn = adb.getPooledConnection(this);
 			
-		createTemporaryTables();
-		passValue = getPassValue();
-		prepareStatements();
+			createTemporaryTables();
+			passValue = getPassValue();
+			prepareStatements();
+		} catch (SQLException sqle) {
+			Arcturus.logWarning("Error when initialising database connection",
+					sqle);
+		}
 	}
 
 	private int getPassValue() throws SQLException {
@@ -159,24 +142,17 @@ public class OligoFinder {
 	
 	public synchronized int findMatches(Oligo[] oligos, int[] projectIDs,
 			boolean searchFreeReads)
-			throws ArcturusDatabaseException {
+			throws SQLException {
 		int found = 0;
-
-		try {
-			checkConnection();
-
-			if (projectIDs != null && projectIDs.length > 0)
-				found += findContigMatches(oligos, projectIDs);
-
-			if (searchFreeReads)
-				found += findFreeReadMatches(oligos);
-		}
-		catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "An error occurred when finding oligo matches", conn, adb);
-		}
+		
+		if (projectIDs != null && projectIDs.length > 0)
+			found += findContigMatches(oligos, projectIDs);
+		
+		if (searchFreeReads)
+			found += findFreeReadMatches(oligos);
 
 		if (listener != null) {
-			event.setEvent(Type.FINISH, null, null, -1, false);
+			event.setEvent(OligoFinderEvent.FINISH, null, null, -1, false);
 			listener.oligoFinderUpdate(event);
 		}
 
@@ -187,7 +163,7 @@ public class OligoFinder {
 		int totlen = getTotalContigLength(projectIDs);
 
 		if (listener != null) {
-			event.setEvent(Type.START_CONTIGS, null, null,
+			event.setEvent(OligoFinderEvent.START_CONTIGS, null, null,
 					totlen, false);
 			listener.oligoFinderUpdate(event);
 		}
@@ -198,7 +174,7 @@ public class OligoFinder {
 			found += findContigMatches(oligos, projectIDs[i]);
 
 		if (listener != null) {
-			event.setEvent(Type.FINISH_CONTIGS, null, null, -1,
+			event.setEvent(OligoFinderEvent.FINISH_CONTIGS, null, null, -1,
 					false);
 			listener.oligoFinderUpdate(event);
 		}
@@ -241,7 +217,7 @@ public class OligoFinder {
 
 	private int findFreeReadMatches(Oligo[] oligos) throws SQLException {
 		if (listener != null) {
-			event.setEvent(Type.ENUMERATING_FREE_READS, null, null,
+			event.setEvent(OligoFinderEvent.ENUMERATING_FREE_READS, null, null,
 					0, false);
 			listener.oligoFinderUpdate(event);
 		}
@@ -249,18 +225,15 @@ public class OligoFinder {
 		int nreads = countFreeReads();
 		
 		if (listener != null) {
-			event.setEvent(Type.START_READS, null, null,
+			event.setEvent(OligoFinderEvent.START_READS, null, null,
 					nreads, false);
 			listener.oligoFinderUpdate(event);
 		}
 		
-		int found = 0;
-		
-		if (nreads > 0)
-			found = scanFreeReads(oligos);
+		int found = scanFreeReads(oligos);
 
 		if (listener != null) {
-			event.setEvent(Type.FINISH_READS, null, null,
+			event.setEvent(OligoFinderEvent.FINISH_READS, null, null,
 					-1, false);
 			listener.oligoFinderUpdate(event);
 		}
@@ -269,32 +242,24 @@ public class OligoFinder {
 	}
 
 	private int countFreeReads() throws SQLException {
-		int busyreads = updateBusyReadsTable();
-		
-		if (busyreads < 0)
-			return -1;
-		else
-			return updateFreeReadsTable();
-	}
-	
-	private boolean isNonFatalException(SQLException e) {
-		return e instanceof SQLTransactionRollbackException || 
-			e.getErrorCode() == MysqlErrorNumbers.ER_LOCK_WAIT_TIMEOUT;
+		updateBusyReadsTable();
+		return updateFreeReadsTable();
 	}
 	
 	private int retryDatabaseOperation(PreparedStatement emptyStatement, PreparedStatement populateStatement, int retryInterval, int retryAttempts)
 		throws SQLException {
 		int rows = -1;
 		
+		boolean done = false;
 		int tries = 0;
 		
-		while (tries <= retryAttempts) {
+		while (!done && tries < retryAttempts) {
 			try {
-				logMessage("Attempt #" + tries);
+				System.err.println("Attempt #" + (tries+1));
 				
 				rows = emptyStatement.executeUpdate();
 				
-				logMessage("Deleted " + rows + " rows");
+				System.err.println("\tDeleted " + rows + " rows");
 				
 				long ticks = System.currentTimeMillis();
 
@@ -302,35 +267,19 @@ public class OligoFinder {
 
 				ticks = System.currentTimeMillis() - ticks;
 				
-				logMessage("Table populated with " + rows + " rows in " + ticks + " ms");
+				System.err.println("\tTable populated with " + rows + " rows in " + ticks + " ms");
 				
-				return rows;
+				done = true;
 			}
 			catch (SQLException sqle) {
-				if (isNonFatalException(sqle)) {
-					if (tries < retryAttempts) {
+				if (sqle instanceof SQLTransactionRollbackException || 
+						sqle.getErrorCode() == MysqlErrorNumbers.ER_LOCK_WAIT_TIMEOUT) {
+					try {
 						tries++;
-						
-						try {
-							if (listener != null) {
-								event.setEvent(Type.MESSAGE, "The database is busy.  Minerva will wait for " + retryInterval + " seconds and try again.");
-								event.setException(sqle);
-								listener.oligoFinderUpdate(event);
-							}		
-							
-							long ticks = 1000 * retryInterval;
-							Thread.sleep(ticks);
-						} catch (InterruptedException ie) {
-						}
-					} else {
-						if (listener != null) {
-							event.setEvent(Type.EXCEPTION, "Minerva cannot enumerate the free reads because the database is busy.\nPlease try again in a few minutes.");
-							event.setException(sqle);
-							listener.oligoFinderUpdate(event);
-						}		
-						
-						return -1;
-					}
+						Thread.sleep(retryInterval);
+					} catch (InterruptedException ie) {
+						return rows;
+					}				
 				} else
 					throw sqle;
 			}
@@ -340,23 +289,16 @@ public class OligoFinder {
 	}
 	
 	private int updateBusyReadsTable() throws SQLException {
-		logMessage("Updating busy reads table ...");
-		return retryDatabaseOperation(pstmtEmptyBusyReadsTable, pstmtPopulateBusyReadsTable, RETRY_INTERVAL, MAX_RETRY_ATTEMPTS);
+		System.err.println("\nUpdating busy reads table ...");
+		return retryDatabaseOperation(pstmtEmptyBusyReadsTable, pstmtPopulateBusyReadsTable, RETRY_INTERVAL, RETRY_ATTEMPTS);
 	}
 	
 	private int updateFreeReadsTable() throws SQLException {
-		logMessage("Updating free reads table ...");
+		System.err.println("\nUpdating free reads table ...");
 
 		pstmtPopulateFreeReadsTable.setInt(1, passValue);
 
-		return retryDatabaseOperation(pstmtEmptyFreeReadsTable, pstmtPopulateFreeReadsTable, RETRY_INTERVAL, MAX_RETRY_ATTEMPTS);
-	}
-	
-	private void logMessage(String message) {
-		if (listener != null) {
-			event.setEvent(Type.MESSAGE, message);
-			listener.oligoFinderUpdate(event);
-		}
+		return retryDatabaseOperation(pstmtEmptyFreeReadsTable, pstmtPopulateFreeReadsTable, RETRY_INTERVAL, RETRY_ATTEMPTS);
 	}
 	
 	private int scanFreeReads(Oligo[] oligos) throws SQLException {
@@ -405,7 +347,7 @@ public class OligoFinder {
 		int found = 0;
 
 		if (listener != null) {
-			event.setEvent(Type.START_SEQUENCE, null, dnaSequence,
+			event.setEvent(OligoFinderEvent.START_SEQUENCE, null, dnaSequence,
 					0, false);
 			listener.oligoFinderUpdate(event);
 		}
@@ -419,7 +361,7 @@ public class OligoFinder {
 		int sequencelen = sequence == null ? 0 : sequence.length();
 
 		if (listener != null) {
-			event.setEvent(Type.FINISH_SEQUENCE, null,
+			event.setEvent(OligoFinderEvent.FINISH_SEQUENCE, null,
 					sequencelen, false);
 			listener.oligoFinderUpdate(event);
 		}
@@ -458,7 +400,7 @@ public class OligoFinder {
 	
 	private void reportMatch(Oligo oligo, int offset, boolean forward) {
 		if (listener != null) {
-			event.setEvent(Type.FOUND_MATCH, oligo,
+			event.setEvent(OligoFinderEvent.FOUND_MATCH, oligo,
 					offset, forward);
 			listener.oligoFinderUpdate(event);
 		}
@@ -490,12 +432,8 @@ public class OligoFinder {
 		return data;
 	}
 
-	public void close() throws ArcturusDatabaseException {
-		try {
-			closeConnection();
-		} catch (SQLException e) {
-			throw new ArcturusDatabaseException(e, "An error occurred whilst closing an OligoFinder", conn, adb);
-		}
+	public void close() throws SQLException {
+		closeConnection();
 	}
 
 	private void closeConnection() throws SQLException {

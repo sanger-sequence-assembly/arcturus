@@ -4,7 +4,10 @@ use strict;
 
 use Contig;
 
-use Mapping;
+use Mapping; # to be removed later
+
+use RegularMapping;
+use CanonicalMapping;
 
 use Read;
 
@@ -481,11 +484,50 @@ sub emblFileParser {
 
 my $INVENTORY; # class variable
 
-#------------- building an inventory of contigs and reads --------------------
+sub getInventory {
+# returns reference to inventory hash or undef
+    my $class = shift;
 
-sub cafFileInventory {
+    my $inventory_hash;
+
+    $inventory_hash = $class->{inventory} if ref($class); # called on an instance
+
+    $inventory_hash = $INVENTORY if (!$inventory_hash && ref($INVENTORY) eq 'HASH');
+
+    $inventory_hash = &buildCafFileInventory(@_) if @_; # try if input is given
+
+    return $inventory_hash if $inventory_hash; # no storage on inventory handle
+
+# there is no valid inventory
+
+    my $logger = verifyLogger('getInventory');
+    $logger->error("*** missing inventory ***");
+    return undef;
+}
+
+sub cafFileInventory { return &buildInventory(shift,inventory=>1,@_);} # temporary alias
+
+sub buildInventory {
 # build an inventory of objects in the CAF file
     my $class = shift;
+    my $caffile = shift; # caf file name or 0 
+    my %options = @_; # progress=> , linelimit=>
+
+    my $inventory_hash = &buildCafFileInventory($caffile,%options);
+
+    $class->{inventory} = $inventory_hash if ref($class); # store on instance hash
+
+    $INVENTORY = $inventory_hash unless ref($class);      # store on class variable
+
+    return $inventory_hash if $options{inventory};
+
+    return scalar(keys %$inventory_hash) - 1 if $inventory_hash;
+
+    return undef; # build failed
+}
+
+sub buildCafFileInventory {
+ # build an inventory of objects in the CAF file
     my $caffile = shift; # caf file name or 0 
     my %options = @_;
 
@@ -566,6 +608,10 @@ sub cafFileInventory {
             if ($identifier && $datatype && $datatype eq 'Sequence') {
                 $inventory->{$identifier}->{Is} = $objecttype;
                 if ($objecttype eq 'contig') {
+                    if (my $rank = $inventory->{$identifier}->{Rank}) {
+   	                $logger->severe("multiple occurrence of contig $identifier : "
+                                       ."previous rank:$rank  new:".$contigcounter+1);
+ 		    }
                     $inventory->{$identifier}->{Rank} = ++$contigcounter;
                 }
 	    }
@@ -593,34 +639,22 @@ sub cafFileInventory {
 	    elsif ($identifier) {
 		$logger->error("l:$linecount $errormsg outside Sequence object");
 	    }
-        }        
+        }
+        elsif ($record =~ /^Tag/) {
+            my $objecttype = $inventory->{$identifier}->{Is};
+#            next if ($objecttype eq 'contig');    
+            $inventory->{$identifier}->{tags}++;
+	}
         $location = tell($CAF);
     }
 
     $CAF->close() if $CAF;
 
-    $class->{inventory} = $inventory if ref($class); # store on instance hash
-
-    $INVENTORY = $inventory unless ref($class);      # store on class variable
-
     return $inventory;
 }
-
-sub getInventory {
-    my $class = shift;
-
-    return $class->{inventory} if ref($class); # called on an instance
-
-    return $INVENTORY if (ref($INVENTORY) eq 'HASH');
-
-# there is no valid inventory
-
-    my $logger = verifyLogger('getInventory');
-    $logger->error("*** missing inventory ***");
-    return undef;
-}
-    
-my %headers = (Sequence=>'SQ',DNA=>'DNA',BaseQuality=>'BQ',segments=>'Segs');
+   
+my %headers = (Sequence=>'SQ',DNA=>'DNA',BaseQuality=>'BQ',segments=>'Segs',
+               tags=>'Tags',rid=>'read ID', sid=>'sequence ID',V=>'version');
 
 sub listInventoryForObject {
 # returns a list of inventory items for the give object name
@@ -631,7 +665,8 @@ sub listInventoryForObject {
 
     my $report = sprintf ("%24s",$objectname);
     my $objectdata = $inventory->{$objectname} || return $report." no data";
-    foreach my $type ('Sequence', 'DNA', 'BaseQuality','segments') {
+    my @types = ('Sequence', 'DNA', 'BaseQuality','rid','sid','VSN','tags');
+    foreach my $type (@types) {
         next unless defined $objectdata->{$type};
         my $data = $objectdata->{$type};
         $data = $data->[0] if (ref($data) eq 'ARRAY');
@@ -652,6 +687,85 @@ sub removeObjectFromInventory {
     foreach my $objectname (@$objectnames) {
         delete $inventory->{$objectname};
     }
+}
+
+#------------- return read or contig names --------------
+
+sub getContigNames {
+    my $class = shift;
+    return &getNames(&getInventory($class),'contig');
+}
+
+sub getContigNamesWithTags {
+    my $class = shift;
+    return &getNames(&getInventory($class),'contig',1);
+}
+
+sub getReadNames {
+    my $class = shift;
+    return &getNames(&getInventory($class),'read');
+}
+
+sub getReadNamesWithTags {
+    my $class = shift;
+    return &getNames(&getInventory($class),'read',1);
+}
+
+sub getNames {
+# private
+    my $inventory = shift;
+    my $classtype = shift;
+    my $withtag = shift; # optional
+
+    my $namelist;
+
+    foreach my $objectname (keys %$inventory) {
+# ignore non-objects
+        my $objectdata = $inventory->{$objectname};
+# Read and Contig objects have data store as a hash; if no hash, ignore 
+        next unless (ref($objectdata) eq 'HASH');
+
+        my $objecttype = $objectdata->{Is};
+        next unless ($objecttype =~ /$classtype/);
+        next if ($withtag && !$objectdata->{tags});
+        push @$namelist,$objectname;
+    }
+
+    @$namelist = sort {$inventory->{$a}->{Sequence}->[0] <=> $inventory->{$b}->{Sequence}->[0]} @$namelist;
+
+    return $namelist;
+}
+
+#------------- assigning read sequence and version -------------------------------
+
+sub putReadSequenceIDs {
+# puts read sequence version info in inventory; returns reads not identified 
+    my $class = shift;
+    my $readversionhash = shift; # read sequence id and version
+
+    my @readnames = keys %$readversionhash;
+
+    my $reads = $class->readExtractor(\@readnames,$readversionhash) || [];
+
+    my $inventory = &getInventory($class);
+
+# pick up the reads with read_id and sequence_id defined, and split out those not
+
+    my @newversion;
+    foreach my $read (@$reads) {
+        my $seq_id = $read->getSequenceID();
+        unless ($seq_id) {
+	    print STDERR "No sequence ID for ".$read->getReadName()."\n";
+            push @newversion,$read;
+	    next;
+	}
+        my $rinventory = $inventory->{$read->getReadName()};
+        $rinventory->{rid} = $read->getReadID();
+        $rinventory->{sid} = $read->getSequenceID();
+        $rinventory->{VSN} = $read->getVersion();
+    }
+
+    return [@newversion];
 }
 
 #------------- building Contig and Read instances from the caf file --------------
@@ -676,8 +790,8 @@ sub contigExtractor {
     my $readversionhash = shift;
     my %options = @_; 
 
-# options : contignamefilter, usepadded, consensus, contigtaglist, ignoretaglist
-#           readtaglist, noreadsequence, noreads
+# options : usepadded, consensus, contigtaglist, ignoretaglist
+#           readtaglist, noreadsequence, addreads
 
     &verifyParameter($contignames,'contigExtractor','ARRAY');
 
@@ -687,12 +801,9 @@ sub contigExtractor {
 
 # -------------- options processing (used in this module)
 
-    my $consensus  = $options{consensus};        # include consensus, default not
-    my $namefilter = $options{contignamefilter}; # select specific contigs
+    my $consensus = $options{consensus}; # include consensus, default not
 
-# default DNA and BaseQuality only added for edited reads
-
-    my $noreads    = $options{noreads} || 0;
+    my $addreads  = $options{addreads};
 
 # -------------- options processing (passed on to sub-modules)
 
@@ -713,14 +824,6 @@ sub contigExtractor {
 
     my $CAF = &getFileHandle($inventory);
 
-#    my $caffile = $inventory->{caffilename};
-#    my $CAF = new FileHandle($caffile,"r");
-
-#    unless ($CAF) {
-#	$logger->error("Invalid CAF file specification $caffile");
-#        return undef;
-#    }
-
 # --------------- main
 
 # initiate output list; use hash to filter out double entries
@@ -734,7 +837,6 @@ sub contigExtractor {
     push @contigitems,'DNA','BaseQuality' if $consensus;
 
     foreach my $contigname (@$contignames) {
-        next if ($namefilter && $contigname !~ /$namefilter/);
         my $cinventory = $inventory->{$contigname};
         unless ($cinventory) {
 	    $logger->error("Missing contig $contigname");
@@ -760,7 +862,7 @@ sub contigExtractor {
         my ($contig,$type,$fileposition,$line) = @$stack;
         seek $CAF, $fileposition, 00; # position the file 
         if ($type == 0) {
-           ($status,$line) = &parseContig      ($CAF,$contig,$line,%options);
+           ($status,$line) = &parseContig      ($CAF,$contig,$line,%options); # pass options
         }
         elsif ($type == 1) {
            ($status,$line) = &parseDNA         ($CAF,$contig,$line);
@@ -769,16 +871,27 @@ sub contigExtractor {
            ($status,$line) = &parseBaseQuality ($CAF,$contig,$line);
         }
 
-        next if $type;
-# and collect the readnames in this contig
+        next if $type; 
+
+# complete the mappings by adding a (possible) sequence id
+
+        if (my $mapping_arrayref = $contig->getMappings()) {
+            foreach my $mapping (@$mapping_arrayref) {
+                my $readname = $mapping->getMappingName();
+                my $seq_id = $inventory->{$readname}->{sid} || next;
+                $mapping->setSequenceID($seq_id);
+	    }
+	}
+        
+# and collect the reads in this contig
+
         my $reads = $contig->getReads();
-        unless ($reads && @$reads) {
-	    $logger->error("contig ". $contig->getContigName()
-                          ." has no reads specified");
+        unless (!$addreads || $reads && @$reads) {
+	    $logger->error("contig ". $contig->getContigName()." has no reads");
             next;
 	}
 
-        next if $noreads;
+        next unless $addreads;
 
         push @reads,@$reads;
     }
@@ -875,6 +988,10 @@ sub readExtractor {
             next unless $itemlocation;
             push @readstack,[($read,$components{$item},@$itemlocation)];
 	}
+# preload read_id,seq_id,version (if they are available)
+        $read->setReadID     ($rinventory->{rid});
+        $read->setSequenceID ($rinventory->{sid});
+        $read->setVersion    ($rinventory->{VSN});
     }        
 
 # and collect all the required read items
@@ -911,17 +1028,16 @@ sub readExtractor {
                 next unless ($seq_hash eq $versionhash->{seq_hash});
                 next unless ($bql_hash eq $versionhash->{qual_hash});
 # both hashes match: this read version is in the database
-                $read->setReadID($versionhash->{read_id});
-                $read->setSequenceID($versionhash->{seq_id});
-                $read->setVersion($version);
+                $read->setReadID     ($versionhash->{read_id});
+                $read->setSequenceID ($versionhash->{seq_id});
+                $read->setVersion    ($version);
 $logger->fine("version $version identified for read $readname");
 # remove sequence data
                 $read->setSequence(undef);    
                 $read->setBaseQuality(undef);
 	    }
-	}       
+	}
     }
-
     return $extractedreads;
 }
 
@@ -1051,561 +1167,8 @@ sub closeFileHandle {
 }
 
 #------------------------------------------------------------------------------
-# sequencial caf file parser (small files)
+# parse and extract Sequence, DNA and BaseQuality blocks
 #------------------------------------------------------------------------------
-
-sub cafFileParser {
-# build contig objects from a Fasta file 
-    my $class = shift;
-    my $caffile = shift; # caf file name or 0 
-    my %options = @_;
-
-# open logfile handle for output
-
-    my $logger = &verifyLogger('cafFileParser');
-
-    $logger->error(": TO BE DPRECATED");
-
-# open file handle for input CAF file
-
-    my $CAF;
-    if ($caffile) {
-        $CAF = new FileHandle($caffile, "r");
-    }
-    else {
-        $CAF = *STDIN;
-        $caffile = "STDIN";
-    }
-
-    unless ($CAF) {
-	$logger->severe("Invalid CAF file specification $caffile");
-        return undef;
-    }
-
-#-----------------------------------------------------------------------------
-# collect options   
-#-----------------------------------------------------------------------------
-
-    my $lineLimit = $options{linelimit}    || 0; # test purposes
-    my $progress  = $options{progress}     || 0; # true or false progress (on STDERR)
-    my $usePadded = $options{acceptpadded} || 0; # true or false allow padded contigs
-    my $consensus = $options{consensus}    || 0; # true or false build consensus
-
-    my $readlimit = $options{readlimit};
-
-my $lowMemory = $options{lowmemory}    || 0; # true or false minimise memory
-
-# object name filters
-
-    my $contignamefilter = $options{contignamefilter} || ''; 
-my $readnamefilter   = $options{readnamefilter}  || ''; # test purposes
-
-    my $blockobject = $options{blockobject};
-    $blockobject = {} if (ref($blockobject) ne 'HASH');
-
-# set-up tag selection
-
-    my $readtaglist = $options{readtaglist};
-    $readtaglist =~ s/\W/|/g if ($readtaglist && $readtaglist !~ /\\/);
-    $readtaglist = '\w{3,4}' unless $readtaglist; # default
-    $logger->fine("Read tags to be processed: $readtaglist");
-$logger->warning("Read tags to be processed: $readtaglist");
-
-    my $contigtaglist = $options{contigtaglist};
-    $contigtaglist =~ s/\W/|/g if ($contigtaglist && $contigtaglist !~ /\\/);
-    $contigtaglist = '\w{3,4}' unless $contigtaglist; # default
-    $logger->info("Contig tags to be processed: $contigtaglist");
-$logger->warning("Contig tags to be processed: $contigtaglist");
-
-    my $ignoretaglist = $options{ingoretaglist};
-
-    my $edittags = $options{edittags} || 'EDIT';
-
-#----------------------------------------------------------------------
-# allocate basic objects and object counters
-#----------------------------------------------------------------------
-
-    my ($read, $mapping, $contig);
-
-    my (%contigs, %reads, %mappings);
-
-# control switches
-
-    my $lineCount = 0;
-    my $listCount = 0;
-    my $truncated = 0;
-    my $isUnpadded = 1; # default require unpadded data
-    $isUnpadded = 0 if $usePadded; # allow padded, set pad status to unknown (0) 
-    my $fileSize;
-    if ($progress) {
-# get number of lines in the file
-        my $counts = `wc $caffile`;
-        $counts =~ s/^\s+|\s+$//g;
-        my @counts = split /\s+/,$counts;
-        $progress = int ($counts[0]/20);
-        $fileSize = $counts[0];
-    }
-
-# persistent variables
-
-    my $objectType = 0;
-    my $objectName = '';
-
-    my $DNASequence = '';
-    my $BaseQuality = '';
-
-    $logger->info("Parsing CAF file $caffile");
-
-    $logger->info("Read a maximum of $lineLimit lines") if $lineLimit;
-
-    $logger->info("Contig (or alias) name filter $contignamefilter") if $contignamefilter;
-
-    while (defined(my $record = <$CAF>)) {
-
-#-------------------------------------------------------------------------
-# line count processing: report progress and/or test line limit
-#-------------------------------------------------------------------------
-
-        $lineCount++;
-#        if ($progress && !($lineCount%$progress)) {
-        if ($progress && ($lineCount >= $listCount)) {
-            my $fraction = sprintf ("%5.2f", $lineCount/$fileSize);         
-            $logger->error("$fraction completed .....",bs=>1);
-            $listCount += $progress;
-	}
-
-# deal with (possible) line limit
-
-        if ($lineLimit && ($lineCount > $lineLimit)) {
-            $logger->warning("Scanning terminated because of line limit $lineLimit");
-            $truncated = 1;
-            $lineCount--;
-            last;
-        }
-
-# skip empty records
-
-        chomp $record;
-        next if ($record !~ /\S/);
-
-# extend the record if it ends in a continuation mark
-
-        my $extend;
-        while ($record =~ /\\n\\\s*$/) {
-            if (defined($extend = <$CAF>)) {
-                chomp $extend;
-                $record .= $extend;
-                $lineCount++;
-            }
-            else {
-                $record .= '"' if ($record =~ /\"/); # closing quote
-            }
-        }
-
-#--------------------------------------------------------------------------
-# checking padded/unpadded status and its consistence
-#--------------------------------------------------------------------------
-
-        if ($record =~ /([un]?)padded/i) {
-# test consistence of character
-            my $unpadded = $1 || 0;
-            if ($isUnpadded <= 1) {
-                $isUnpadded = ($unpadded ? 2 : 0); # on first entry
-                if (!$isUnpadded && !$usePadded) {
-                    $logger->severe("Padded assembly is not accepted");
-                    last; # fatal
-                }
-            }
-            elsif (!$isUnpadded && $unpadded || $isUnpadded && !$unpadded) {
-                $logger->severe("Inconsistent padding specification at line "
-                               ."$lineCount\n$record");
-                last; # fatal
-            }
-            next;
-        }
-
-#---------------------------------------------------------------------------
-# the main dish : detect the begin of a new object with definition of a name
-# objectType = 0 : no object is being scanned currently
-#            = 1 : a read    is being parsed currently
-#            = 2 : a contig  is being parsed currently
-#---------------------------------------------------------------------------
-
-        if ($record =~ /^\s*(DNA|BaseQuality)\s*\:?\s*(\S+)/) {
-# a new data block is detected
-            my $newObjectType = $1;
-            my $newObjectName = $2;
-# close the previous object, if there is one
-            if ($objectType == 2) {
-                $logger->fine("END scanning Contig $objectName");
-                if ($readlimit && scalar(keys %reads) >= $readlimit) {
-                    $truncated = 1;
-                    last;
-                }
-            }
-            $objectType = 0; # preset
-            my $objectInstance;
-            if ($newObjectName =~ /(\s|^)Contig/i) {
-# it's a contig; decide if the new object has to be built
-                next unless $consensus;
-                next if $blockobject->{$newObjectName};
-                unless ($objectInstance = $contigs{$newObjectName}) {
-                    $objectInstance = new Contig($newObjectName);
-                    $contigs{$newObjectName} = $objectInstance;
-		}
-            }
-	    else {
-# the new data relate to a read
-                next if $blockobject->{$newObjectName};
-                unless ($objectInstance = $reads{$newObjectName}) {
-                    $objectInstance = new Read($newObjectName);
-                    $reads{$newObjectName} = $objectInstance;
-		}
-	    }
-# now read the file to the next blank line and accumulate the sequence or quality 
-
-            my ($status,$line);
-            if ($newObjectType eq 'DNA') {
-  	       ($status,$line) = &parseDNA($CAF,$objectInstance,$lineCount,noverify=>1);
-	    }
-            elsif ($newObjectType eq 'BaseQuality') {
-  	       ($status,$line) = &parseBaseQuality($CAF,$objectInstance,$lineCount,noverify=>1);
-	    }
-            $lineCount = $line if $status;
-            $objectType = 0;
-            next;
-	}
-
-        if ($record =~ /^\s*Sequence\s*\:?\s*(\S+)/) {
-# a new object is detected
-            my $objectName = $1;
-# close the previous object, if there is one
-#          closeContig($objectName);
-            if ($objectType == 2) {
-                $logger->fine("END scanning Contig $objectName");
-            }
-            $objectType = 0; # preset
-
-            if ($objectName =~ /Contig/) {
-# it's a contig; decide if the new object has to be built
-                if ($blockobject->{$objectName}) {
-                    $objectType = -2; # forced discarding read objects
-                    if ($readlimit && scalar(keys %reads) >= $readlimit) {
-                        $truncated = 1;
-                        last;
-                    }
-                    next;
-                }
-                unless ($contig = $contigs{$objectName}) {
-                    $contig = new Contig($objectName);
-                    $contigs{$objectName} = $contig;
-		}
-                $objectType = 2; # activate processing contig data 
-
-		my $readhashref = \%reads;
-                my $contig = $contigs{$objectName};
-$logger->error("parseContig");
-                my ($status,$line) = &parseContig($CAF,$contig,$lineCount,
-                                                  readhashref=>$readhashref,
-                                                  noverify=>1);
-                $lineCount = $line if $status;
-		$objectType = 0;
-                next;
-            }
-	    else {
-# the new data relate to a read
-                next if $blockobject->{$objectName};
-                unless ($read = $reads{$objectName}) {
-                    $read = new Read($objectName);
-                    $reads{$objectName} = $read;
-		}
-                $objectType = 1; # activate processing read data
-
-                my ($status,$line) = &parseRead($CAF,$read,$lineCount,noverify=>1);
-                $lineCount = $line if $status;
-		$objectType = 0;
-                next;
-	    }
-	}
-
-# REMOVE from HERE ?
-    my $IGNORETHIS = 1; unless ($IGNORETHIS) {
-        if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:?\s*(\S+)/) {
-#print STDERR "IGNORETHIS block used  ... \n";
-# a new object is detected
-            my $newObjectType = $1;
-            my $newObjectName = $2;
-# process the existing object, if there is one
-            if ($objectType == 2) {
-                $logger->fine("END scanning Contig $objectName");
-            }
-# objectType 1 needs no further action here
-            elsif ($objectType == 3) {
-# DNA data. Get the object, given the object name
-                $DNASequence =~ s/\s//g; # clear all blank space
-                if ($read = $reads{$objectName}) {
-                    $read->setSequence($DNASequence);
-                }
-                elsif ($contig = $contigs{$objectName}) {
-                    $contig->setSequence($DNASequence);
-                }
-                elsif ($objectName =~ /contig/i) {
-                    $contig = new Contig($objectName);
-                    $contigs{$objectName} = $contig;
-                    $contig->setSequence($DNASequence);
-                }
-                else {
-                    $read = new Read($objectName);
-                    $reads{$objectName} = $read;
-                    $read->setSequence($DNASequence);
-                }     
-            }
-            elsif ($objectType == 4) {
-# base quality data. Get the object, given the object name
-                $BaseQuality =~ s/\s+/ /g; # clear redundent blank space
-                $BaseQuality =~ s/^\s|\s$//g; # remove leading/trailing
-                my @BaseQuality = split /\s/,$BaseQuality;
-                if ($read = $reads{$objectName}) {
-                    $read->setBaseQuality ([@BaseQuality]);
-                }
-                elsif ($contig = $contigs{$objectName}) {
-                    $contig->setBaseQuality ([@BaseQuality]);
-                }
-                elsif ($objectName =~ /contig/i) {
-                    $contig = new Contig($objectName);
-                    $contigs{$objectName} = $contig;
-                    $contig->setBaseQuality ([@BaseQuality]);
-                }
-                else {
-                    $read = new Read($objectName);
-                    $reads{$objectName} = $read;
-                    $read->setBaseQuality ([@BaseQuality]);
-                }
-            }
-# prepare for the new object
-            $DNASequence = '';
-            $BaseQuality = '';
-            $objectName = $newObjectName;
-# determine object type, first from existing inventories
-            $objectType = 0;
-# initialisation of contig and read done below (Is_contig, Is_read); there 0 suffices
-            $objectType = 3 if ($newObjectType eq 'DNA');
-            $objectType = 4 if ($newObjectType eq 'BaseQuality');
-# now test if we really want the sequence data
-            if ($objectType) {
-# for contig, we need consensus option on
-                if ($contigs{$objectName} || $objectName =~ /contig/i) {
-                    $objectType = 0 if !$consensus;
-#                    $objectType = 0 if $cnBlocker->{$objectName};
-                }
-# for read we reject if it is already known that there are no edits
-                elsif ($read = $reads{$objectName}) {
-# we consider an existing read only if the number of SCF-alignments is NOT 1
-	            my $align = $read->getAlignToTrace();
-                    if ($isUnpadded && $align && scalar(@$align) == 1) {
-#                        $objectType = 0;
-		    }
-#	         my $aligntotracemapping = $read->getAlignToTraceMapping();
-#                $objectType = 0 if ($isUnpadded && $aligntotracemapping
-#                                && ($aligntotracemapping->hasSegments() == 1));
-                }
-# for DNA and Quality 
-                elsif ($blockobject->{$objectName}) {
-                    $objectType = 0;
-	        }
-            }
-            next;
-        }
-    } # end IGNORETHIS
-#remove up to HERE
-
-       
-# the next block handles a special case where 'Is_contig' is defined after 'assembled'
-
-        if ($objectName =~ /contig/i && $record =~ /assemble/i 
-                                     && abs($objectType) != 2) {
-# decide if this contig is to be included
-            my $include = 1;
-            $include = 0 if ($contignamefilter && $objectName =~ /$contignamefilter/);
-            $include = 0 if ($blockobject && $blockobject->{$objectName});
-            if ($include) {
-#        if ($contignamefilter !~ /\S/ || $objectName =~ /$contignamefilter/) {
-                $logger->fine("NEW contig $objectName: ($lineCount) $record");
-                if (!($contig = $contigs{$objectName})) {
-# create a new Contig instance and add it to the Contigs inventory
-                    $contig = new Contig($objectName);
-                    $contigs{$objectName} = $contig;
-                }
-                $objectType = 2;
-            }
-            else {
-                $logger->fine("Contig $objectName SKIPPED");
-                $objectType = -2;
-            }
-            next;
-        }
-
-# the next block handles the standard contig initiation
-
-        if ($record =~ /Is_contig/ && $objectType == 0) {
-# decide  if this contig is to be included
-            if ($contignamefilter !~ /\S/ || $objectName =~ /$contignamefilter/) {
-                $logger->fine("NEW contig $objectName: ($lineCount)");
-                if (!($contig = $contigs{$objectName})) {
-# create a new Contig instance and add it to the Contigs inventory
-                    $contig = new Contig($objectName);
-                    $contigs{$objectName} = $contig;
-                }
-                $objectType = 2;
-            }
-            else {
-                $logger->fine("Contig $objectName SKIPPED");
-                $objectType = -2;
-            }
-        }
-
-# standard read initiation
-
-        elsif ($record =~ /Is_read/) {
-# decide if this read is to be included
-            if ($blockobject->{$objectName}) {
-# no, don't want it; does the read already exist?
-                $read = $reads{$objectName};
-                if ($read && $lowMemory) {
-                    delete $reads{$objectName};
-                } 
-                $objectType = 0;
-            }
-            else {
-                $logger->finest("NEW Read $objectName: ($lineCount) $record");
-# get/create a Mapping instance for this read
-                $mapping = $mappings{$objectName};
-                if (!defined($mapping)) {
-                    $mapping = new Mapping($objectName);
-                    $mappings{$objectName} = $mapping;
-                }
-# get/create a Read instance for this read if needed (for TAGS)
-                $read = $reads{$objectName};
-                if (!defined($read)) {
-                    $read = new Read($objectName);
-                    $reads{$objectName} = $read;
-                }
-# undef the quality boundaries
-                $objectType = 1;
-            }           
-        }
-
-#------------------------------------------------------------------------------
-
-        elsif ($objectType == 1) {
-# parsing a read, the Mapping object is defined here; Read may be defined
-            $read = $reads{$objectName};
-            $logger->error("scan $objectName ($objectType) SHOULD NOT occur $lineCount");
-# TO BE DEPRECATED
-            my ($status,$line) = &parseRead($CAF,$read,$lineCount,noverify=>1);
-            $lineCount = $line if $status;
-            $objectType = 0;
-            next;
-	 
-# UNTIL HERE
-        }
-
-        elsif ($objectType == 2) {
-# parsing a contig, get constituent reads and mapping
-            $logger->error("scan $objectName ($objectType) SHOULD NOT occur $lineCount");
-# TO BE DEPRECATED
-            my $contig = $contigs{$objectName};
-$logger->error("parseContig");
-            my ($status,$line) = &parseContig($CAF,$contig,$lineCount,noverify=>1);
-            $lineCount = $line if $status;
-	    $objectType = 0;
-            next;
-# UNTIL HERE
-        }
-
-        elsif ($objectType == -2) {
-# processing a contig which has to be ignored: inhibit its reads to save memory
-            if ($record =~ /Ass\w+from\s(\S+)\s(.*)$/) {
-                $blockobject->{$1}++; # add read in this contig to the block list
-                $logger->finest("read $1 blocked") unless (keys %$blockobject)%100;
-# remove existing Read instance
-                $read = $reads{$1};
-                if ($read && $lowMemory) {
-                    delete $reads{$1};
-                }
-            }
-        }
-
-        elsif ($objectType == 3) {
-# accumulate DNA data
-            $DNASequence .= $record;
-        }
-
-        elsif ($objectType == 4) {
-# accumulate BaseQuality data
-            $BaseQuality .= ' '.$record;
-        }
-
-        elsif ($objectType > 0) {
-            if ($record !~ /sequence/i) {
-        	$logger->info("ignored: ($lineCount) $record (t=$objectType)");
-            } 
-        }
-# go to next record
-    }
-
-    $CAF->close();
-
-# here the file is parsed and Contig, Read, Mapping and Tag objects are built
-    
-    $logger->warning("Scanning of CAF file $caffile was truncated") if $truncated;
-    $logger->info("$lineCount lines processed of CAF file $caffile");
-$logger->warning("$lineCount lines processed of CAF file $caffile");
-
-    my $nc = scalar (keys %contigs);
-    my $nm = scalar (keys %mappings);
-    my $nr = scalar (keys %reads);
-
-    $logger->info("$nc Contigs, $nm Mappings, $nr Reads built");
-
-# return array references for contigs and reads 
-
-    return \%contigs,\%reads,$truncated if $options{oldcontigloader};
-
-# bundle all objects in one array
-$logger->warning("bundling ....");
-
-    my $er = 0;
-    my $objects = [];
-    foreach my $key (keys %contigs) {
-        my $contig = $contigs{$key};
-        push @$objects, $contig;
-        my $creads = $contig->getReads();
-# remove the reads in this contig from the overall read list
-        foreach my $read (@$creads) {
-            delete $reads{$read->getReadName()};
-            $er++ if $read->isEdited();
-        }
-    }
-
-    $logger->info("$er Edited Reads found");
-
-#add any remaining reads, if any, to output object list
-
-    my $reads = [];
-    foreach my $key (keys %reads) {
-        push @$objects, $reads{$key};
-    }
-
-    $nr = scalar @$reads;
-
-    my $no = scalar @$objects;
-
-    $logger->info("$no Objects; $nr Reads (unassembled)");
-$logger->warning("$no Objects; $nr Reads (unassembled)");
-
-    return $objects,$truncated;
-}
 
 sub parseDNA {
 # read DNA block from the file handle; the file must be positioned at the right
@@ -1757,6 +1320,9 @@ sub parseBaseQuality {
     return 1,$line;
 }
 
+my $USECANONICAL = 1;
+sub useNonCanonical { $USECANONICAL = 0;} # temporary option to use non canonical mappings
+
 sub parseContig {
 # read Read data block from the file handle; the file must be positioned at 
 # the correct position before invoking this method: either before the line
@@ -1776,6 +1342,7 @@ sub parseContig {
 
     my $contigtags = $options{contigtaglist} || '\w{3,4}'; # default any tag
     my $ignoretags = $options{ignoretaglist} || '';
+    my $addreads   = $options{addreads};
 
     my $usepadded = $options{usepadded} || 0;
 
@@ -1814,8 +1381,6 @@ sub parseContig {
     $contigname = $contig->getContigName() unless $contigname;
 
 # parse the file until the next blank record
-
-    my $readobjecthash = $options{readhashref};
 
     my $isUnpadded = 1;
     my $readnamehash = {};
@@ -1878,23 +1443,32 @@ sub parseContig {
             unless (defined($readdata)) {
 # on first encounter create the Mapping and Read for this readname
                 $readdata = []; # array (length 2)
-# if an external Read object list is provided, look there first
-                $readdata->[0] = $readobjecthash->{$readname} if $readobjecthash;
-                unless ($readdata->[0]) {
-                    $readdata->[0] = new Read($readname);
-                    $readobjecthash->{$readname} = $readdata->[0] if $readobjecthash;
-		}
-                $readdata->[1] = new Mapping($readname);
                 $readnamehash->{$readname} = $readdata;
-                $contig->addMapping($readdata->[1]);
-                $contig->addRead($readdata->[0]);
+                $readdata->[0] = []; # for alignment records
+		$readdata->[1] = new Read($readname) if $addreads;
 	    }            
 # add the alignment to the Mapping
-            my $mapping = $readdata->[1];
+            my $segment_arrayref = $readdata->[0];
             my @positions = split /\s+/,$2;
             if (scalar @positions == 4) {
-# an asssembled from record; $entry returns number of alignments
-                my $entry = $mapping->addAssembledFrom(@positions); 
+# an assembled from record; test alignment data
+                my $diagnosis = '';
+                foreach my $position (@positions) {
+                    next if ($position && $position > 0); # test invalid position
+                    $diagnosis = "non-positive position ";
+                    next;
+                }
+                unless (abs($positions[1]-$positions[0]) == abs($positions[3]-$positions[2])) {
+                    $diagnosis .= "segment size error";
+		}
+                if ($diagnosis) {
+                    $logger->severe("l:$line Invalid alignment ignored : @positions ($diagnosis)");
+                    next;
+		}
+# add the segment to the cache
+                push @$segment_arrayref, [@positions];
+                               
+                my $entry = scalar(@$segment_arrayref);
 # test number of alignments: a padded contig allows only one record per read
                 if (!$isUnpadded && $entry > 1) {
                     $logger->severe("l:$line Multiple 'assembled_from' records in "
@@ -1902,6 +1476,9 @@ sub parseContig {
                     next;
                 }
             }
+	    else {
+                $logger->severe("l:$line Invalid alignment ignored @positions");
+	    }
         }
 
 # process contig tags
@@ -1939,6 +1516,43 @@ sub parseContig {
             $logger->info("($line) Ignored: $record");
         }
     }
+
+# now go through the cached read info data and build the mappings
+
+    $logger->info("Building RegularMappings");
+    foreach my $readname (keys %$readnamehash) {
+        my $readdata = $readnamehash->{$readname};
+        delete $readnamehash->{$readname};
+ 
+        my $mapping;
+#        my $mapping = new RegularMapping($readdata->[0]); # constructor builds mapping
+        $mapping = new RegularMapping($readdata->[0]) if $USECANONICAL; # fail empty mapping
+        $mapping = new Mapping() unless $USECANONICAL;
+
+        unless ($mapping) { # build of mapping failed
+            $logger->error("FAILED to build read-to-contig mapping $readname");
+            next if $options{ignorefailedmapping}; # also do not add read
+            $logger->error("skipped mapping $readname");
+	}
+# complete mapping
+        $mapping->setMappingName($readname);
+# add read (if any) and mapping to contig
+        $contig->addRead($readdata->[1]) if $readdata->[1];
+        $contig->addMapping($mapping);
+
+        next if $USECANONICAL;
+# add segments (old Mapping class)
+        foreach my $segment_arrayref (@{$readdata->[0]}) {
+            $mapping->addAssembledFrom(@$segment_arrayref);
+        }
+    }
+
+    return 0,$fline unless $contig->hasMappings();
+
+    $logger->warning("number of Regular   Mappings: " .$contig->hasMappings());
+    $logger->warning("number of Canonical Mappings: " .CanonicalMapping->cache());
+#    $logger->info("number of Regular   Mappings: " .$contig->hasMappings());
+#    $logger->info("number of Canonical Mappings: " .CanonicalMapping->cache());
 
     return 1,$fline;
 }
