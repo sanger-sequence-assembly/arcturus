@@ -16,7 +16,19 @@ public class ReadManager extends AbstractManager {
 	private ArcturusDatabase adb;
 	private HashMap<Integer, Read> hashByID;
 	private HashMap<String, Read> hashByName;
-	private PreparedStatement pstmtByID, pstmtByName, pstmtByTemplate;
+	private PreparedStatement pstmtByID, pstmtByName, pstmtByTemplate, pstmtInsertNewRead;
+	
+	private static final String GET_READ_BY_ID =
+		"select readname,template_id,asped,strand,primer,chemistry from READINFO where read_id = ?";
+	
+	private static final String GET_READ_BY_NAME =
+		"select read_id,template_id,asped,strand,primer,chemistry from READINFO where readname = ?";
+	
+	private static final String GET_READS_BY_TEMPLATE_ID =
+		"select read_id,readname,asped,strand,primer,chemistry from READINFO where template_id = ?";
+	
+	private static final String PUT_READ =
+		"insert into READINFO (readname,template_id,asped,strand,primer,chemistry) VALUES (?,?,?,?,?,?)";
 
 	/**
 	 * Creates a new ReadManager to provide read management services to an
@@ -37,14 +49,13 @@ public class ReadManager extends AbstractManager {
 	}
 	
 	protected void prepareConnection() throws SQLException {
-		String query = "select readname,template_id,asped,strand,primer,chemistry from READINFO where read_id = ?";
-		pstmtByID = conn.prepareStatement(query);
+		pstmtByID = conn.prepareStatement(GET_READ_BY_ID);
 
-		query = "select read_id,template_id,asped,strand,primer,chemistry from READINFO where readname = ?";
-		pstmtByName = conn.prepareStatement(query);
+		pstmtByName = conn.prepareStatement(GET_READ_BY_NAME);
 
-		query = "select read_id,readname,asped,strand,primer,chemistry from READINFO where template_id = ?";
-		pstmtByTemplate = conn.prepareStatement(query);
+		pstmtByTemplate = conn.prepareStatement(GET_READS_BY_TEMPLATE_ID);
+		
+		pstmtInsertNewRead = conn.prepareStatement(PUT_READ, Statement.RETURN_GENERATED_KEYS);
 	}
 
 	public void clearCache() {
@@ -244,22 +255,47 @@ public class ReadManager extends AbstractManager {
 		}
 	}
 
-	public Read findOrCreateRead(int id, String name, Template template,
-			java.util.Date asped, String strand, String primer, String chemistry) {
-		Read read = (Read) hashByID.get(new Integer(id));
+	public Read findOrCreateRead(String name, Template template,
+			java.util.Date asped, String strand, String primer, String chemistry)
+		throws ArcturusDatabaseException {
+		Read read = getReadByName(name);
+		
+		if (read != null)
+			return read;
 
-		if (read == null) {
+		try {
+			int template_id = (template == null) ? 0 : template.getID();
+			
 			int iStrand = parseStrand(strand);
 			int iPrimer = parsePrimer(primer);
 			int iChemistry = parseChemistry(chemistry);
+			
+			java.sql.Date dAsped = new java.sql.Date(asped.getTime());
 
-			read = new Read(name, id, template, asped, iStrand, iPrimer,
-					iChemistry, adb);
-
-			registerNewRead(read);
+			pstmtInsertNewRead.setString(1, name);
+			pstmtInsertNewRead.setInt(2, template_id);
+			pstmtInsertNewRead.setDate(3, dAsped);
+			pstmtInsertNewRead.setInt(4, iStrand);
+			pstmtInsertNewRead.setInt(5, iPrimer);
+			pstmtInsertNewRead.setInt(6, iChemistry);
+			
+			int rc = pstmtInsertNewRead.executeUpdate();
+			
+			if (rc == 1) {
+				ResultSet rs = pstmtInsertNewRead.getGeneratedKeys();
+				
+				int read_id = rs.next() ? rs.getInt(1) : -1;
+				
+				if (read_id > 0)
+					return createAndRegisterNewRead(name, read_id, template_id,
+							asped, iStrand, iPrimer, iChemistry);
+			}
 		}
-
-		return read;
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to find or create read by name=\"" + name + "\"", conn, this);
+		}
+		
+		return null;
 	}
 
 	public int[] getUnassembledReadIDList() throws ArcturusDatabaseException {

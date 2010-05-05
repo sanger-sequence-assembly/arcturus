@@ -15,7 +15,13 @@ public class CloneManager extends AbstractManager {
 	private ArcturusDatabase adb;
 	private HashMap<Integer, Clone> hashByID;
 	private HashMap<String, Clone> hashByName;
-	private PreparedStatement pstmtByID, pstmtByName;
+	private PreparedStatement pstmtByID, pstmtByName, pstmtInsertNewClone;
+	
+	private static final String GET_CLONE_BY_ID = "select name from CLONE where clone_id = ?";
+	
+	private static final String GET_CLONE_BY_NAME = "select clone_id from CLONE where name = ?";
+	
+	private static final String PUT_CLONE = "insert into CLONE (name) values (?)";
 
 	/**
 	 * Creates a new CloneManager to provide clone management services to an
@@ -37,11 +43,11 @@ public class CloneManager extends AbstractManager {
 	}
 	
 	protected void prepareConnection() throws SQLException {
-		String query = "select name from CLONE where clone_id = ?";
-		pstmtByID = conn.prepareStatement(query);
+		pstmtByID = conn.prepareStatement(GET_CLONE_BY_ID);
 
-		query = "select clone_id from CLONE where name = ?";
-		pstmtByName = conn.prepareStatement(query);
+		pstmtByName = conn.prepareStatement(GET_CLONE_BY_NAME);
+		
+		pstmtInsertNewClone = conn.prepareStatement(PUT_CLONE, Statement.RETURN_GENERATED_KEYS);
 	}
 
 	public void clearCache() {
@@ -73,6 +79,35 @@ public class CloneManager extends AbstractManager {
 		}
 		
 		return clone;
+	}
+	
+	public Clone findOrCreateClone(String name) throws ArcturusDatabaseException {
+		try {
+			Clone clone = getCloneByName(name);
+		
+			if (clone != null)
+				return clone;
+		
+			pstmtInsertNewClone.setString(1, name);
+			
+			int rc = pstmtInsertNewClone.executeUpdate();
+			
+			if (rc == 1) {
+				ResultSet rs = pstmtInsertNewClone.getGeneratedKeys();
+				
+				int id = rs.next() ? rs.getInt(1) : -1;
+				
+				rs.close();
+				
+				if (id > 0)
+					return registerNewClone(name, id);
+			}
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to find or create clone by name=" + name, conn, this);
+		}
+		
+		return null;
 	}
 
 	private Clone loadCloneByName(String name) throws SQLException {

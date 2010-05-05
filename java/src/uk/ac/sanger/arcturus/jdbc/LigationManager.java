@@ -16,7 +16,16 @@ public class LigationManager extends AbstractManager {
 	private ArcturusDatabase adb;
 	private HashMap<Integer, Ligation> hashByID;
 	private HashMap<String, Ligation> hashByName;
-	private PreparedStatement pstmtByID, pstmtByName;
+	private PreparedStatement pstmtByID, pstmtByName, pstmtInsertNewLigation;
+	
+	private static final String GET_LIGATION_BY_ID =
+		"select name,clone_id,silow,sihigh from LIGATION where ligation_id = ?";
+	
+	private static final String GET_LIGATION_BY_NAME =
+		"select ligation_id,clone_id,silow,sihigh from LIGATION where name = ?";
+	
+	private static final String PUT_LIGATION =
+		"insert into LIGATION(name,clone_id,silow,sihigh) VALUES (?,?,?,?)";
 
 	/**
 	 * Creates a new LigationManager to provide ligation management services to
@@ -37,11 +46,11 @@ public class LigationManager extends AbstractManager {
 	}
 	
 	protected void prepareConnection() throws SQLException {
-		String query = "select name,clone_id,silow,sihigh from LIGATION where ligation_id = ?";
-		pstmtByID = conn.prepareStatement(query);
+		pstmtByID = conn.prepareStatement(GET_LIGATION_BY_ID);
 
-		query = "select ligation_id,clone_id,silow,sihigh from LIGATION where name = ?";
-		pstmtByName = conn.prepareStatement(query);
+		pstmtByName = conn.prepareStatement(GET_LIGATION_BY_NAME);
+		
+		pstmtInsertNewLigation = conn.prepareStatement(PUT_LIGATION, Statement.RETURN_GENERATED_KEYS);
 	}
 
 	public void clearCache() {
@@ -59,6 +68,40 @@ public class LigationManager extends AbstractManager {
 		Object obj = hashByID.get(new Integer(id));
 
 		return (obj == null) ? loadLigationByID(id) : (Ligation) obj;
+	}
+	
+	public Ligation findOrCreateLigation(String name, Clone clone, int silow, int sihigh)
+		throws ArcturusDatabaseException {
+		try {
+			Ligation ligation = getLigationByName(name);
+			
+			if (ligation != null)
+				return ligation;
+			
+			int clone_id = clone == null ? 0 : clone.getID();
+			
+			pstmtInsertNewLigation.setString(1, name);
+			pstmtInsertNewLigation.setInt(2, clone_id);
+			pstmtInsertNewLigation.setInt(3, silow);
+			pstmtInsertNewLigation.setInt(4, sihigh);
+			
+			int rc = pstmtInsertNewLigation.executeUpdate();
+			
+			if (rc == 1) {
+				ResultSet rs = pstmtInsertNewLigation.getGeneratedKeys();
+				
+				int ligation_id = rs.next() ? rs.getInt(1) : -1;
+				
+				if (ligation_id > 0)
+					return registerNewLigation(name, ligation_id, clone_id, silow,
+							sihigh);
+			}
+		}
+		catch (SQLException e) {
+			
+		}
+		
+		return null;
 	}
 
 	private Ligation loadLigationByName(String name) throws ArcturusDatabaseException {

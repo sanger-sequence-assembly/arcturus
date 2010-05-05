@@ -16,7 +16,16 @@ public class TemplateManager extends AbstractManager {
 	private ArcturusDatabase adb;
 	private HashMap<Integer, Template> hashByID;
 	private HashMap<String, Template> hashByName;
-	private PreparedStatement pstmtByID, pstmtByName;
+	private PreparedStatement pstmtByID, pstmtByName, pstmtInsertNewTemplate;
+	
+	private static final String GET_TEMPLATE_BY_ID =
+		"select name,ligation_id from TEMPLATE where template_id = ?";
+	
+	private static final String GET_TEMPLATE_BY_NAME =
+		"select template_id,ligation_id from TEMPLATE where name = ?";
+	
+	private static final String PUT_TEMPLATE =
+		"insert into TEMPLATE (name,ligation_id) VALUES (?,?)";
 
 	/**
 	 * Creates a new TemplateManager to provide template management services to
@@ -40,11 +49,11 @@ public class TemplateManager extends AbstractManager {
 	}
 	
 	protected void prepareConnection() throws SQLException {
-		String query = "select name,ligation_id from TEMPLATE where template_id = ?";
-		pstmtByID = conn.prepareStatement(query);
+		pstmtByID = conn.prepareStatement(GET_TEMPLATE_BY_ID);
 
-		query = "select template_id,ligation_id from TEMPLATE where name = ?";
-		pstmtByName = conn.prepareStatement(query);
+		pstmtByName = conn.prepareStatement(GET_TEMPLATE_BY_NAME);
+		
+		pstmtInsertNewTemplate = conn.prepareStatement(PUT_TEMPLATE, Statement.RETURN_GENERATED_KEYS);
 	}
 
 	public void clearCache() {
@@ -174,7 +183,7 @@ public class TemplateManager extends AbstractManager {
 		return template;
 	}
 
-	private Template createAndRegisterNewTemplate(String name, int id,
+	protected Template createAndRegisterNewTemplate(String name, int id,
 			int ligation_id) throws ArcturusDatabaseException {
 		Ligation ligation = adb.getLigationByID(ligation_id);
 
@@ -222,10 +231,9 @@ public class TemplateManager extends AbstractManager {
 	/**
 	 * If the template with the specified identifer already exists in the cache,
 	 * it is returned. Otherwise, a new template is created from the information
-	 * supplied and added to the cache, and this object is returned.
+	 * supplied, stored in the database and added to the cache, and this object
+	 * is returned.
 	 * 
-	 * @param id
-	 *            the identifier of the template.
 	 * @param name
 	 *            the name of the template.
 	 * @param ligation
@@ -233,18 +241,39 @@ public class TemplateManager extends AbstractManager {
 	 * 
 	 * @return the template with the specified identifer. This template is
 	 *         returned from the cache if it exists, otherwise a new template is
-	 *         created from the information supplied and added to the cache.
+	 *         created from the information supplied, stored in the database,
+	 *         and added to the cache.
 	 */
 
-	public Template findOrCreateTemplate(int id, String name, Ligation ligation) {
-		Template template = (Template) hashByID.get(new Integer(id));
+	public Template findOrCreateTemplate(String name, Ligation ligation)
+	 	throws ArcturusDatabaseException {
+		Template template = getTemplateByName(name);
+		
+		if (template != null)
+			return template;
 
-		if (template == null) {
-			template = new Template(name, id, ligation, adb);
-
-			registerNewTemplate(template);
+		try {
+			int ligation_id = (ligation == null) ? 0 : ligation.getID();
+			
+			pstmtInsertNewTemplate.setString(1, template.getName());
+			pstmtInsertNewTemplate.setInt(2, ligation_id);
+			
+			int rc = pstmtInsertNewTemplate.executeUpdate();
+			
+			if (rc == 0) {
+				ResultSet rs = pstmtInsertNewTemplate.getGeneratedKeys();
+				
+				int template_id = rs.next() ? rs.getInt(1) : -1;
+				
+				rs.close();
+				
+				return createAndRegisterNewTemplate(name, template_id, ligation_id);
+			}
 		}
-
-		return template;
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to store new template", conn, this);
+		}
+		
+		return null;
 	}
 }

@@ -525,11 +525,18 @@ public class ContigManager extends AbstractManager {
 
 				Ligation ligation = adb.getLigationByID(ligation_id);
 
-				Template template = adb.findOrCreateTemplate(template_id,
-						templatename, ligation);
+				Template template = new Template(templatename, template_id,
+						 ligation, adb);
+				
+				((ArcturusDatabaseImpl)adb).registerNewTemplate(template);
 
-				Read read = adb.findOrCreateRead(read_id, readname, template,
-						asped, strand, primer, chemistry);
+				Read read = new Read(readname, read_id, template, asped,
+						ReadManager.parseStrand(strand),
+						ReadManager.parsePrimer(primer),
+						ReadManager.parseChemistry(chemistry),
+						adb);
+				
+				((ArcturusDatabaseImpl)adb).registerNewRead(read);
 
 				Mapping mapping = (Mapping) mapmap.get(new Integer(seq_id));
 				Sequence sequence = mapping.getSequence();

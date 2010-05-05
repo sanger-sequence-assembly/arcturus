@@ -166,10 +166,15 @@ public interface ArcturusDatabase {
 	public Clone getCloneByName(String name) throws ArcturusDatabaseException;
 
 	public Clone getCloneByID(int id) throws ArcturusDatabaseException;
+	
+	public Clone findOrCreateClone(String name) throws ArcturusDatabaseException;
 
 	public Ligation getLigationByName(String name) throws ArcturusDatabaseException;
 
 	public Ligation getLigationByID(int id) throws ArcturusDatabaseException;
+	
+	public Ligation findOrCreateLigation(String name, Clone clone, int silow, int sihigh)
+			throws ArcturusDatabaseException;
 
 	public Template getTemplateByName(String name) throws ArcturusDatabaseException;
 
@@ -181,8 +186,8 @@ public interface ArcturusDatabase {
 	public Template getTemplateByID(int id, boolean autoload)
 			throws ArcturusDatabaseException;
 
-	public Template findOrCreateTemplate(int id, String name,
-			Ligation ligation);
+	public Template findOrCreateTemplate(String name,
+			Ligation ligation) throws ArcturusDatabaseException;
 
 	public Read getReadByName(String name) throws ArcturusDatabaseException;
 
@@ -197,9 +202,9 @@ public interface ArcturusDatabase {
 	public int loadReadsByTemplate(int template_id)
 			throws ArcturusDatabaseException;
 
-	public Read findOrCreateRead(int id, String name,
+	public Read findOrCreateRead(String name,
 			Template template, java.util.Date asped, String strand,
-			String primer, String chemistry);
+			String primer, String chemistry) throws ArcturusDatabaseException;
 
 	public int[] getUnassembledReadIDList() throws ArcturusDatabaseException;
 

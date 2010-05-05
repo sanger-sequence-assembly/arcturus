@@ -364,6 +364,10 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 		return cloneManager.getCloneByID(id);
 	}
+	
+	public synchronized Clone findOrCreateClone(String name) throws ArcturusDatabaseException {
+		return cloneManager.findOrCreateClone(name);
+	}
 
 	public synchronized Ligation getLigationByName(String name)
 			throws ArcturusDatabaseException {
@@ -378,6 +382,11 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 			logger.info("getLigationByID(" + id + ")");
 
 		return ligationManager.getLigationByID(id);
+	}
+	
+	public Ligation findOrCreateLigation(String name, Clone clone, int silow, int sihigh)
+		throws ArcturusDatabaseException {
+		return ligationManager.findOrCreateLigation(name, clone, silow, sihigh);
 	}
 
 	public synchronized Template getTemplateByName(String name)
@@ -415,9 +424,9 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		templateManager.registerNewTemplate(template);
 	}
 
-	public synchronized Template findOrCreateTemplate(int id, String name,
-			Ligation ligation) {
-		return templateManager.findOrCreateTemplate(id, name, ligation);
+	public synchronized Template findOrCreateTemplate(String name,
+			Ligation ligation) throws ArcturusDatabaseException {
+		return templateManager.findOrCreateTemplate(name, ligation);
 	}
 
 	public synchronized Read getReadByName(String name) throws ArcturusDatabaseException {
@@ -462,10 +471,10 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		readManager.registerNewRead(read);
 	}
 
-	public synchronized Read findOrCreateRead(int id, String name,
+	public synchronized Read findOrCreateRead(String name,
 			Template template, java.util.Date asped, String strand,
-			String primer, String chemistry) {
-		return readManager.findOrCreateRead(id, name, template, asped, strand,
+			String primer, String chemistry) throws ArcturusDatabaseException {
+		return readManager.findOrCreateRead(name, template, asped, strand,
 				primer, chemistry);
 	}
 
