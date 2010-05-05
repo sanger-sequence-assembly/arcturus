@@ -271,7 +271,7 @@ public class TemplateManager extends AbstractManager {
 			}
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to store new template", conn, this);
+			adb.handleSQLException(e, "Failed to find or create template by name=" + name + "\"", conn, this);
 		}
 		
 		return null;

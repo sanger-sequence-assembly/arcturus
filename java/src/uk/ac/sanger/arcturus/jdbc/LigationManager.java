@@ -98,7 +98,7 @@ public class LigationManager extends AbstractManager {
 			}
 		}
 		catch (SQLException e) {
-			
+			adb.handleSQLException(e, "Failed to find or create ligation by name=\"" + name + "\"", conn, this);
 		}
 		
 		return null;
