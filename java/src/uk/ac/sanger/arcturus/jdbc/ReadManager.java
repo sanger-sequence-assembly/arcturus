@@ -270,11 +270,16 @@ public class ReadManager extends AbstractManager {
 			int iPrimer = parsePrimer(primer);
 			int iChemistry = parseChemistry(chemistry);
 			
-			java.sql.Date dAsped = new java.sql.Date(asped.getTime());
+			java.sql.Date dAsped = asped == null ? null : new java.sql.Date(asped.getTime());
 
 			pstmtInsertNewRead.setString(1, name);
 			pstmtInsertNewRead.setInt(2, template_id);
-			pstmtInsertNewRead.setDate(3, dAsped);
+			
+			if (dAsped == null)
+				pstmtInsertNewRead.setNull(3, Types.DATE);
+			else
+				pstmtInsertNewRead.setDate(3, dAsped);
+			
 			pstmtInsertNewRead.setInt(4, iStrand);
 			pstmtInsertNewRead.setInt(5, iPrimer);
 			pstmtInsertNewRead.setInt(6, iChemistry);
