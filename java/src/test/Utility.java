@@ -1,4 +1,4 @@
-package test.core;
+package test;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -10,9 +10,9 @@ import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
-public class TestBase {
-	public ArcturusDatabase getTestDatabase() throws ArcturusDatabaseException {
-		InputStream is = TestBase.class
+public class Utility {
+	public static ArcturusDatabase getTestDatabase() throws ArcturusDatabaseException {
+		InputStream is = Utility.class
 				.getResourceAsStream("test.props");
 
 		Properties props = new Properties();
@@ -48,16 +48,16 @@ public class TestBase {
 		return instance.findArcturusDatabase(databaseName);
 	}
 	
-	public static void main(String[] args) {
-		TestBase tb = new TestBase();
-		
+	public static void main(String[] args) {		
 		try {
-			ArcturusDatabase adb = tb.getTestDatabase();
+			ArcturusDatabase adb = Utility.getTestDatabase();
 			
 			adb.closeConnectionPool();
 		} catch (ArcturusDatabaseException e) {
 			e.printStackTrace();
 		}
+		
+		System.out.println("If you are reading this message, everything worked.");
 		
 		System.exit(0);
 	}
