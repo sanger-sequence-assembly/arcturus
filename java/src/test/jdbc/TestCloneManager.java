@@ -17,11 +17,15 @@ public class TestCloneManager {
 	@BeforeClass
 	public static void setUpBeforeClass() throws Exception {
 		adb = Utility.getTestDatabase();
+		
+		if (adb == null)
+			throw new Exception("The ArcturusDatabase object was null");
 	}
 
 	@AfterClass
 	public static void tearDownAfterClass() throws Exception {
-		adb.closeConnectionPool();
+		if (adb != null)
+			adb.closeConnectionPool();
 	}
 	
 	@Test
