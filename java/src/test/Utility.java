@@ -50,11 +50,32 @@ public class Utility {
 
 		ArcturusDatabase adb = instance.findArcturusDatabase(databaseName);
 		
-		clearDatabase(adb);
-		
-		return adb;
+		if (verifyThatThisIsATestDatabase(adb)) {
+			clearDatabase(adb);
+			return adb;
+		} else {
+			adb.closeConnectionPool();
+			return null;
+		}
 	}
 	
+	private final static String VERIFY_COMMAND = "select count(*) from THIS_IS_A_TEST_DATABASE";
+	
+	private static boolean verifyThatThisIsATestDatabase(ArcturusDatabase adb)
+		throws ArcturusDatabaseException {
+		Connection conn = adb.getDefaultConnection();
+		
+		try {
+			Statement stmt = conn.createStatement();
+			stmt.execute(VERIFY_COMMAND);
+			stmt.close();
+			return true;
+		}
+		catch (SQLException e) {
+			return false;
+		}
+	}
+
 	private final static String[] COMMANDS = {
 		"delete from SEQUENCE",
 		"delete from READINFO",
@@ -84,19 +105,29 @@ public class Utility {
 						"An error occurred whilst clearing the database.  The command being executed was: \"" + command + "\"");
 			}
 		}
+		
+		try {
+			stmt.close();
+		} catch (SQLException e) {
+			throw new ArcturusDatabaseException(e, "An error occurred whilst closing the statement");
+		}
 	}
 	
 	public static void main(String[] args) {		
 		try {
 			ArcturusDatabase adb = Utility.getTestDatabase();
 			
-			adb.closeConnectionPool();
+			if (adb != null) {
+				adb.closeConnectionPool();
+				System.out.println("If you are reading this message, everything worked.");
+			} else {
+				System.out.println("If you are reading this message, the ArcturusDatabase object was null.");
+			}
 		} catch (ArcturusDatabaseException e) {
 			e.printStackTrace();
+			System.out.println("If you are reading this message, something unexpected happened.");			
+		} finally {
+			System.exit(0);
 		}
-		
-		System.out.println("If you are reading this message, everything worked.");
-		
-		System.exit(0);
 	}
 }
