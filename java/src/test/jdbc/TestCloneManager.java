@@ -33,4 +33,12 @@ public class TestCloneManager {
 		assertNull(clone);
 	}
 
+	@Test
+	public void findOrCreateClone() throws ArcturusDatabaseException {
+		String cloneName = "MyClone";
+		
+		Clone clone = adb.findOrCreateClone(cloneName);
+		
+		assertNotNull(clone);
+	}
 }
