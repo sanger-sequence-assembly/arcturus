@@ -2,6 +2,9 @@ package test;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.sql.Connection;
+import java.sql.Statement;
+import java.sql.SQLException;
 import java.util.Properties;
 
 import javax.naming.NamingException;
@@ -45,7 +48,42 @@ public class Utility {
 							+ " in instance " + instanceName);
 		}
 
-		return instance.findArcturusDatabase(databaseName);
+		ArcturusDatabase adb = instance.findArcturusDatabase(databaseName);
+		
+		clearDatabase(adb);
+		
+		return adb;
+	}
+	
+	private final static String[] COMMANDS = {
+		"delete from SEQUENCE",
+		"delete from READINFO",
+		"delete from TEMPLATE",
+		"delete from LIGATION",
+		"delete from CLONE"
+	};
+	
+	private static void clearDatabase(ArcturusDatabase adb) throws ArcturusDatabaseException {
+		Connection conn = adb.getDefaultConnection();
+		
+		Statement stmt = null;
+		
+		try {
+			stmt = conn.createStatement();
+		}
+		catch (SQLException e) {
+			throw new ArcturusDatabaseException(e, "An error occurred whilst creating a statement");
+		}
+		
+		for (String command : COMMANDS) {
+			try {
+				stmt.execute(command);
+			}
+			catch (SQLException e) {
+				throw new ArcturusDatabaseException(e,
+						"An error occurred whilst clearing the database.  The command being executed was: \"" + command + "\"");
+			}
+		}
 	}
 	
 	public static void main(String[] args) {		
