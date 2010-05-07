@@ -16,7 +16,12 @@ public class ReadManager extends AbstractManager {
 	private ArcturusDatabase adb;
 	private HashMap<Integer, Read> hashByID;
 	private HashMap<String, Read> hashByName;
+	private HashMap<String, Integer> hashStatusNameToID;
+	private HashMap<String, Integer> hashBasecallerNameToID;
+	
 	private PreparedStatement pstmtByID, pstmtByName, pstmtByTemplate, pstmtInsertNewRead;
+	private PreparedStatement pstmtStatusByName, pstmtInsertStatus;
+	private PreparedStatement pstmtBasecallerByName, pstmtInsertBasecaller;
 	
 	private static final String GET_READ_BY_ID =
 		"select readname,template_id,asped,strand,primer,chemistry from READINFO where read_id = ?";
@@ -28,7 +33,19 @@ public class ReadManager extends AbstractManager {
 		"select read_id,readname,asped,strand,primer,chemistry from READINFO where template_id = ?";
 	
 	private static final String PUT_READ =
-		"insert into READINFO (readname,template_id,asped,strand,primer,chemistry) VALUES (?,?,?,?,?,?)";
+		"insert into READINFO (readname,template_id,asped,strand,primer,chemistry,basecaller,status) VALUES (?,?,?,?,?,?,?,?)";
+	
+	private static final String GET_BASECALLER_BY_NAME =
+		"select basecaller_id from BASECALLER where name = ?";
+	
+	private static final String PUT_BASECALLER =
+		"insert into BASECALLER (name) VALUES (?)";
+	
+	private static final String GET_STATUS_BY_NAME =
+		"select status_id from STATUS where name = ?";
+	
+	private static final String PUT_STATUS =
+		"insert into STATUS (name) VALUES (?)";
 
 	/**
 	 * Creates a new ReadManager to provide read management services to an
@@ -40,7 +57,9 @@ public class ReadManager extends AbstractManager {
 
 		hashByID = new HashMap<Integer, Read>();
 		hashByName = new HashMap<String, Read>();
-		
+		hashStatusNameToID = new HashMap<String, Integer>();
+		hashBasecallerNameToID = new HashMap<String, Integer>();
+	
 		try {
 			setConnection(adb.getDefaultConnection());
 		} catch (SQLException e) {
@@ -56,6 +75,14 @@ public class ReadManager extends AbstractManager {
 		pstmtByTemplate = conn.prepareStatement(GET_READS_BY_TEMPLATE_ID);
 		
 		pstmtInsertNewRead = conn.prepareStatement(PUT_READ, Statement.RETURN_GENERATED_KEYS);
+		
+		pstmtStatusByName = conn.prepareStatement(GET_STATUS_BY_NAME);
+		
+		pstmtInsertStatus = conn.prepareStatement(PUT_STATUS, Statement.RETURN_GENERATED_KEYS);
+		
+		pstmtBasecallerByName = conn.prepareStatement(GET_BASECALLER_BY_NAME);
+		
+		pstmtInsertBasecaller = conn.prepareStatement(PUT_BASECALLER, Statement.RETURN_GENERATED_KEYS);
 	}
 
 	public void clearCache() {
@@ -254,9 +281,63 @@ public class ReadManager extends AbstractManager {
 			adb.handleSQLException(e, "Failed to preload reads", conn, this);
 		}
 	}
+	
+	private int findOrCreateDictionaryEntry(String name, Map<String, Integer> dictionary, PreparedStatement pstmtFind, PreparedStatement pstmtPut)
+		throws ArcturusDatabaseException {
+		Integer iValue = dictionary.get(name);
+		
+		if (iValue!= null)
+			return iValue.intValue();
+		
+		int value = -1;
+		
+		try {
+			pstmtFind.setString(1, name);
+			
+			ResultSet rs = pstmtFind.executeQuery();
+			
+			if (rs.next()) {
+				value = rs.getInt(1);
+				dictionary.put(name, value);
+			}
+			
+			rs.close();
+			
+			if (value >= 0)
+				return value;
+			
+			pstmtPut.setString(1, name);
+			
+			int rc = pstmtPut.executeUpdate();
+			
+			if (rc == 1) {
+				rs = pstmtPut.getGeneratedKeys();
+				
+				if (rs.next()) {
+					value = rs.getInt(1);
+					dictionary.put(name, value);
+				}
+				
+				rs.close();
+			}
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to find or create dictionary value by name=\"" + name + "\"", conn, this);
+		}
+		
+		return value;
+	}
+	
+	private int findOrCreateStatus(String name) throws ArcturusDatabaseException {
+		return findOrCreateDictionaryEntry(name, hashStatusNameToID, pstmtStatusByName, pstmtInsertStatus);
+	}
+	
+	private int findOrCreateBasecaller(String name) throws ArcturusDatabaseException {
+		return findOrCreateDictionaryEntry(name, hashBasecallerNameToID, pstmtBasecallerByName, pstmtInsertBasecaller);
+	}
 
 	public Read findOrCreateRead(String name, Template template,
-			java.util.Date asped, String strand, String primer, String chemistry)
+			java.util.Date asped, String strand, String primer, String chemistry, String basecaller, String status)
 		throws ArcturusDatabaseException {
 		Read read = getReadByName(name);
 		
@@ -271,6 +352,9 @@ public class ReadManager extends AbstractManager {
 			int iChemistry = parseChemistry(chemistry);
 			
 			java.sql.Date dAsped = asped == null ? null : new java.sql.Date(asped.getTime());
+			
+			int status_id = findOrCreateStatus(status);
+			int basecaller_id = findOrCreateBasecaller(basecaller);
 
 			pstmtInsertNewRead.setString(1, name);
 			pstmtInsertNewRead.setInt(2, template_id);
@@ -283,6 +367,9 @@ public class ReadManager extends AbstractManager {
 			pstmtInsertNewRead.setInt(4, iStrand);
 			pstmtInsertNewRead.setInt(5, iPrimer);
 			pstmtInsertNewRead.setInt(6, iChemistry);
+			
+			pstmtInsertNewRead.setInt(7, basecaller_id);
+			pstmtInsertNewRead.setInt(8, status_id);
 			
 			int rc = pstmtInsertNewRead.executeUpdate();
 			

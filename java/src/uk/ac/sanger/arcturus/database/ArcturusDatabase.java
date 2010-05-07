@@ -204,7 +204,7 @@ public interface ArcturusDatabase {
 
 	public Read findOrCreateRead(String name,
 			Template template, java.util.Date asped, String strand,
-			String primer, String chemistry) throws ArcturusDatabaseException;
+			String primer, String chemistry, String basecaller, String status) throws ArcturusDatabaseException;
 
 	public int[] getUnassembledReadIDList() throws ArcturusDatabaseException;
 
