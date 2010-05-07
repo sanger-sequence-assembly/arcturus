@@ -1,32 +1,21 @@
 package uk.ac.sanger.arcturus.data;
 
-public class AlignToSCF {
-	protected int startInSequence;
-	protected int startInSCF;
-	protected int length;
+public class AlignToSCF extends Segment {
 
 	public AlignToSCF(int startInSequence, int startInSCF, int length) {
-		this.startInSequence = startInSequence;
-		this.startInSCF = startInSCF;
-		this.length = length;
+		super(startInSequence,startInSCF,length);
 	}
 
 	public int getStartInSequence() {
-		return startInSequence;
+		return getReferenceStart();
 	}
 
 	public int getStartInSCF() {
-		return startInSCF;
-	}
-
-	public int length() {
-		return length;
+		return getSubjectStart();
 	}
 
 	public String toCAFString() {
-		int endInSCF = startInSCF + length - 1;
-		int endInSequence = startInSequence + length - 1;
-		return "Align_to_SCF " + startInSCF + " " + endInSCF + " "
-				+ startInSequence + " " + endInSequence;
+		return "Align_to_SCF " + getStartInSCF() + " " + getSubjectFinish() + " "
+				+ getStartInSequence() + " " + getReferenceFinish();
 	}
 }
