@@ -28,7 +28,7 @@ public class Range {
 			
 		return Direction.UNKNOWN;
 	}
-	
+
 	public int getLength() {
 		return (start < end) ? 1 + end - start : 1 + start - end; 
 	}
@@ -38,5 +38,27 @@ public class Range {
 			return start <= pos && pos <= end;
 		else
 			return start >= pos && pos >= end;
+	}
+
+    public Range reverse() {
+        return new Range(end,start);
+    }
+
+	public Range copy() {
+		return new Range(start,end);
+	}
+	
+	public void offset(int shift) {
+		start += shift;
+		end += shift;
+	}
+	
+	public void mirror(int shift) {
+		start = shift - start;
+		end = shift - end;
+	}
+	
+	public String toString() {
+		return start + " " + end;
 	}
 }
