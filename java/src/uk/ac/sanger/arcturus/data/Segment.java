@@ -98,9 +98,9 @@ public class Segment implements Comparable<Segment>,Traversable {
 	public Placement getPlacementOfPosition(int rpos) { // forward direction only
 		rpos -= referenceStart;
 		if (rpos < 0)
-			return Placement.ATLEFT;
+			return Placement.AT_LEFT;
 		else if (rpos >= length)
-			return Placement.ATRIGHT;
+			return Placement.AT_RIGHT;
 		else
 			return Placement.INSIDE;
 	}

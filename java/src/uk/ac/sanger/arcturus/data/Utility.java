@@ -76,14 +76,14 @@ public class Utility {
 		    Placement placement = alignmentsegments[element].getPlacementOfPosition(rpos);
 		    if (placement == Placement.INSIDE)
 		    	return element;
-		    else if (placement == Placement.ATLEFT) {
+		    else if (placement == Placement.AT_LEFT) {
 		    	if (element == 0)
 		    		return -1;
 		    	if (increment > 0) 
 		    		increment = -increment/2;
 			    element += increment;			    
 		    }
-		    else if (placement == Placement.ATRIGHT) {
+		    else if (placement == Placement.AT_RIGHT) {
 		    	if (element == last)
 		    		return -1;
 		    	if (increment < 0)

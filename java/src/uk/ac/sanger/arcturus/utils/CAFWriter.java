@@ -152,7 +152,7 @@ public class CAFWriter {
 
 	class SegmentComparatorByReadPosition implements Comparator<Segment> {
 		public int compare(Segment segment1, Segment segment2) {
-			int diff = segment1.getReadStart() - segment2.getReadStart();
+			int diff = segment1.getSubjectStart() - segment2.getSubjectStart();
 
 			return diff;
 		}
