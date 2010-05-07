@@ -39,7 +39,11 @@ public class TestReadManager extends TestBase {
 		String primer = "Universal_primer";
 		String chemistry = "Dye_primer";
 		
-		Read read = adb.findOrCreateRead(readName, template, asped, strand, primer, chemistry);
+		String basecaller = "UnitTesting";
+		
+		String status = "PASS";
+		
+		Read read = adb.findOrCreateRead(readName, template, asped, strand, primer, chemistry, basecaller, status);
 		
 		assertNotNull(read);
 	}
