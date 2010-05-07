@@ -208,8 +208,8 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 		if (segments != null) {
 			Arrays.sort(segments);
 			
-			this.cstart = segments[0].getContigStart();
-			this.cfinish = segments[segments.length - 1].getContigFinish();
+			this.cstart = segments[0].getReferenceStart();
+			this.cfinish = segments[segments.length - 1].getReferenceFinish();
 		}
 	}
 
@@ -336,7 +336,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 
 		for (int i = 0; i < segments.length; i++) {
 			if (segments[i] != null) {
-				rpos = segments[i].getReadOffset(cpos, direction == Direction.FORWARD);
+				rpos = segments[i].getOffset(cpos, direction == Direction.FORWARD);
 				if (rpos >= 0)
 					return rpos;
 			}
@@ -367,18 +367,18 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 
 		for (int i = 1; i < segments.length; i++) {
 			if (segments[i - 1] != null && segments[i] != null) {
-				int cleft = segments[i - 1].getContigFinish();
+				int cleft = segments[i - 1].getReferenceFinish();
 
 				if (cpos <= cleft)
 					return -1;
 
-				int cright = segments[i].getContigStart();
+				int cright = segments[i].getReferenceStart();
 
 				int rleft = -1, rright = -1, qleft = -1, qright = -1, q = -1;
 
 				if (cpos > cleft && cpos < cright) {
-					rleft = segments[i - 1].getReadFinish(direction == Direction.FORWARD);
-					rright = segments[i].getReadStart();
+					rleft = segments[i - 1].getSubjectFinish(direction == Direction.FORWARD);
+					rright = segments[i].getSubjectStart();
 					qleft = (int) quality[rleft - 1];
 					qright = (int) quality[rright - 1];
 					q = qleft + ((qright - qleft) * (cpos - cleft))
@@ -441,7 +441,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 		boolean forward = direction == Direction.FORWARD;
 		
 		for (int i = 0; i < segments.length; i++)
-			afdata[i] = new AssembledFrom(segments[i].getContigRange(forward), segments[i].getReadRange(forward));
+			afdata[i] = new AssembledFrom(segments[i].getReferenceRange(forward), segments[i].getSubjectRange(forward));
 		
 		Arrays.sort(afdata);
 		
