@@ -1,50 +1,22 @@
 package uk.ac.sanger.arcturus.data;
 
-public class CanonicalSegment implements Comparable<CanonicalSegment> {
-	protected int cstart;
-	protected int rstart;
-	protected int length;
+import uk.ac.sanger.arcturus.data.ReadToContigMapping.Direction;
+
+public class CanonicalSegment extends Segment {
 	
 	public CanonicalSegment(int cstart, int rstart, int length) {
-		this.cstart = cstart;
-		this.rstart = rstart;
-		this.length = length;
+		super(cstart,rstart,length);
 	}
 	
-	public int getReadStart() {
-		return rstart;
-	}
+/**
+  *the remaining methods may be redundant; this functionality -> Alignment class
 	
-	public int getReadFinish() {
-		return rstart + length - 1;
-	}
-	
-	public Range getReadRange() {
-		return new Range(rstart, rstart + length - 1);
-	}
-	
-	public int getContigStart() {
-		return cstart;
-	}
-	
-	public int getContigFinish() {
-		return cstart + length - 1;
-	}
-	
-	public boolean containsContigPosition(int cpos) {
-		return cstart <= cpos && cpos < cstart + length;
-	}
+	*public boolean containsContigPosition(int cpos) {
+	*	return cstart <= cpos && cpos < cstart + length;
+	*}
 	
 	public boolean isLeftOfContigPosition(int cpos) {
 		return cstart <= cpos;
-	}
-	
-	public Range getContigRange() {
-		return new Range(cstart, cstart + length - 1);
-	}
-	
-	public int getLength() {
-		return length;
 	}
 	
 	public int getReadOffset(int cpos) {
@@ -53,12 +25,6 @@ public class CanonicalSegment implements Comparable<CanonicalSegment> {
 		else
 			return rstart + (cpos - cstart);
 	}
+*/
 	
-	public int compareTo(CanonicalSegment that) {
-		return this.rstart - that.rstart;
-	}
-	
-	public String toString() {
-		return "CSeg[cstart=" + cstart + ", rstart=" + rstart + ", length=" + length + "]";
-	}
 }
