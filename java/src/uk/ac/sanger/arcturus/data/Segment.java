@@ -1,166 +1,115 @@
 package uk.ac.sanger.arcturus.data;
 
+import uk.ac.sanger.arcturus.data.ReadToContigMapping.Direction;
+
 /**
- * An object which represents a single contiguous segment of a mapping between a
- * read and a contig.
+ * An object which represents a single contiguous segment of a co-aligned 
+ * mapping between a reference sequence and a subject sequence
  * 
- * It has a start position on the read, a start position on the contig and a
- * length. The direction is a property of the parent Mapping.
+ * It has a start position on the reference sequence, a start position on
+ * the subject sequence and a length. 
  */
 
-public class Segment implements Comparable<Segment> {
-	protected int cstart;
-	protected int rstart;
+public class Segment implements Comparable<Segment>,Traversable {
+	protected int referenceStart;
+	protected int subjectStart;
 	protected int length;
-
-	protected int cfinish;
 
 	/**
 	 * Constructs a segment object with the given start positions and length.
 	 * 
-	 * @param cstart
-	 *            the start position on the contig.
-	 * @param rstart
-	 *            the start position on the read.
+	 * @param referenceStart
+	 *            the start position on the reference sequence, e.g. contig.
+	 * @param subjectStart
+	 *            the start position on the subject sequence, e.g. read
 	 * @param length
 	 *            the length of this segment.
 	 */
 
-	public Segment(int cstart, int rstart, int length) {
-		this.cstart = cstart;
-		this.rstart = rstart;
+	public Segment(int referenceStart, int subjectStart, int length) {
+		this.referenceStart = referenceStart;
+		this.subjectStart = subjectStart;
+		if (length < 1) length = 1;
 		this.length = length;
-
-		this.cfinish = cstart + length - 1;
 	}
 
-	/**
-	 * Returns the start position on the contig.
-	 * 
-	 * @return the start position on the contig.
-	 */
-
-	public int getContigStart() {
-		return cstart;
+	public int getReferenceStart() {
+		return referenceStart;
 	}
 
-	/**
-	 * Returns the end position on the contig.
-	 * 
-	 * @return the end position on the contig.
-	 */
-
-	public int getContigFinish() {
-		return cfinish;
+	public int getReferenceFinish() {
+		return referenceStart + length - 1;
 	}
 
-	/**
-	 * Returns the start position on the read.
-	 * 
-	 * @return the start position on the read.
-	 */
-
-	public int getReadStart() {
-		return rstart;
+	public int getSubjectStart() {
+		return subjectStart;
 	}
 
-	/**
-	 * Returns the end position on the read, given the orientation.
-	 * 
-	 * @param forward
-	 *            true if the parent mapping represents a read that is
-	 *            co-aligned to the contig, false if the read is counter-aligned
-	 *            to the contig.
-	 * 
-	 * @return the end position on the read.
-	 */
-
-	public int getReadFinish(boolean forward) {
-		return forward ? rstart + (length - 1) : rstart - (length - 1);
+	public int getSubjectFinish() {
+		return subjectStart + length - 1;
 	}
 	
-	/**
-	 * Returns the read range corresponding to this segment, given the orientation.
-	 * 
-	 * @param forward
-	 *            true if the parent mapping represents a read that is
-	 *            co-aligned to the contig, false if the read is counter-aligned
-	 *            to the contig.
-	 * 
-	 * @return the read range.
-	 */
-	
-	public Range getReadRange(boolean forward) {
-		return forward ? new Range(rstart, rstart + length - 1) : new Range(rstart - length + 1, rstart);
+	public Range getReferenceRange() {
+		return new Range(referenceStart, referenceStart + length - 1);
 	}
 	
-	/**
-	 * Returns the contig range corresponding to this segment, given the orientation.
-	 * 
-	 * @param forward
-	 *            true if the parent mapping represents a read that is
-	 *            co-aligned to the contig, false if the read is counter-aligned
-	 *            to the contig.
-	 * 
-	 * @return the contig range.
-	 */
-	
-	public Range getContigRange(boolean forward) {
-		return forward ? new Range(cstart, cstart + length - 1) : new Range(cstart + length - 1, cstart);
+	public Range getSubjectRange() {
+		return new Range(subjectStart, subjectStart + length - 1);
 	}
-
-	/**
-	 * Returns the length of this segment.
-	 * 
-	 * @return the length of this segment.
-	 */
+	
+	public Alignment getAlignment() {
+		Alignment alignment = new Alignment(getReferenceRange(),getSubjectRange());
+		return alignment;
+	}
 
 	public int getLength() {
 		return length;
 	}
+	
+	public int getSubjectPositionForReferencePosition(int rpos) {
+		return getSubjectPositionForReferencePosition(rpos, Direction.FORWARD);
+	}
 
-	/**
-	 * Returns the read offset corresponding to the specified contig offset and
-	 * orientation.
-	 * 
-	 * @param cpos
-	 *            the contig offset position.
-	 * @param forward
-	 *            true if the parent mapping represents a read that is
-	 *            co-aligned to the contig, false if the read is counter-aligned
-	 *            to the contig.
-	 * 
-	 * @return the read offset position, or -1 if the contig offset position
-	 *         falls outside the range of this segment.
-	 */
-
-	public int getReadOffset(int cpos, boolean forward) {
-		if (cpos < cstart || cpos > cfinish)
+	public int getSubjectPositionForReferencePosition(int rpos, Direction direction) {
+		rpos -= referenceStart;
+		if (direction == Direction.REVERSE)
+			rpos = -rpos;
+		
+		if (rpos < 0 || rpos >= length)
 			return -1;
 		else
-			return forward ? rstart + (cpos - cstart) : rstart
-					- (cpos - cstart);
+			return subjectStart + rpos;
+	}
+	
+	public int getReferencePositionForSubjectPosition(int spos) {
+		return getReferencePositionForSubjectPosition(spos, Direction.FORWARD);
 	}
 
-	/**
-	 * Returns a string representation of this object.
-	 * 
-	 * @return a string representation of this object.
-	 */
-
-	public String toString() {
-		return "Segment[cstart=" + cstart + ", rstart=" + rstart + ", length="
-				+ length + "]";
+	public int getReferencePositionForSubjectPosition(int spos, Direction direction) {
+		spos -= subjectStart;
+		if (spos < 0 || spos >= length)
+			return -1;
+		else if (direction == Direction.REVERSE)
+			spos = -spos;
+		
+		return referenceStart + spos;
 	}
-
-	/**
-	 * Compares this segment with the specified segment for order.
-	 * 
-	 * @return a negative integer, zero, or a positive integer as this object is
-	 *         less than, equal to, or greater than the specified object.
-	 */
+	
+	public Placement getPlacementOfPosition(int rpos) { // forward direction only
+		rpos -= referenceStart;
+		if (rpos < 0)
+			return Placement.ATLEFT;
+		else if (rpos >= length)
+			return Placement.ATRIGHT;
+		else
+			return Placement.INSIDE;
+	}
 
 	public int compareTo(Segment that) {
-		return this.cstart - that.cstart;
+		return this.subjectStart - that.subjectStart;
 	}
+	
+	public String toString() {
+		return "Segment[refstart=" + referenceStart + ", substart=" + subjectStart + ", length=" + length + "]";
+	}	
 }
