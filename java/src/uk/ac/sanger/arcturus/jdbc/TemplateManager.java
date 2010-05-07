@@ -255,12 +255,12 @@ public class TemplateManager extends AbstractManager {
 		try {
 			int ligation_id = (ligation == null) ? 0 : ligation.getID();
 			
-			pstmtInsertNewTemplate.setString(1, template.getName());
+			pstmtInsertNewTemplate.setString(1, name);
 			pstmtInsertNewTemplate.setInt(2, ligation_id);
 			
 			int rc = pstmtInsertNewTemplate.executeUpdate();
 			
-			if (rc == 0) {
+			if (rc == 1) {
 				ResultSet rs = pstmtInsertNewTemplate.getGeneratedKeys();
 				
 				int template_id = rs.next() ? rs.getInt(1) : -1;
