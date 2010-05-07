@@ -12,6 +12,7 @@ public interface ReadToContigMapping {
 	public boolean isForward();
 	
 	public int getContigStartPosition();
+
 	public int getContigEndPosition();
 	
 	public BaseWithQuality getBaseAndQualityByReadPosition(int rpos);
