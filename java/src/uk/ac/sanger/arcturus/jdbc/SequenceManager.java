@@ -29,16 +29,51 @@ public class SequenceManager extends AbstractManager {
 	private ArcturusDatabase adb;
 	private HashMap<Integer, Sequence> hashByReadID;
 	private HashMap<Integer, Sequence> hashBySequenceID;
-	private PreparedStatement pstmtByReadID;
-	private PreparedStatement pstmtFullByReadID;
-	private PreparedStatement pstmtBySequenceID;
-	private PreparedStatement pstmtFullBySequenceID;
-	private PreparedStatement pstmtDNAAndQualityBySequenceID;
-	private PreparedStatement pstmtQualityClipping;
-	private PreparedStatement pstmtSequenceVectorClipping;
-	private PreparedStatement pstmtCloningVectorClipping;
-	private PreparedStatement pstmtTags;
+	
+	private static final String GET_BASIC_SEQUENCE_DATA_BY_READ_ID=
+		"select SEQ2READ.seq_id,version,seqlen from SEQ2READ left join SEQUENCE using(seq_id)"
+		+ "where read_id = ? order by version desc limit 1";
+	
+	private static final String GET_FULL_SEQUENCE_DATA_BY_READ_ID =
+		"select SEQ2READ.seq_id,version,seqlen,sequence,quality from SEQ2READ left join SEQUENCE using(seq_id)"
+		+ " where read_id = ? order by version desc limit 1";
+	
+	private static final String GET_BASIC_SEQUENCE_DATA_BY_SEQUENCE_ID =
+		"select read_id,version,seqlen from SEQ2READ left join SEQUENCE using(seq_id) where seq_id = ?";
+	
+	private static final String GET_FULL_SEQUENCE_DATA_BY_SEQUENCE_ID =
+		"select read_id,version,seqlen,sequence,quality from SEQ2READ left join SEQUENCE using(seq_id)"
+		+ " where SEQ2READ.seq_id = ?";
+	
+	private static final String GET_DNA_AND_QUALITY_BY_SEQUENCE_ID =
+		"select seqlen,sequence,quality from SEQUENCE where seq_id = ?";
+	
+	private static final String GET_QUALITY_CLIPPING =
+		"select qleft,qright from QUALITYCLIP where seq_id = ?";
+	
+	private static final String GET_SEQUENCE_VECTOR_CLIPPING =
+		"select svleft,svright from SEQVEC where seq_id = ?";
+	
+	private static final String GET_CLONING_VECTOR_CLIPPING =
+		"select cvleft,cvright from CLONEVEC where seq_id = ?";
+	
+	private static final String GET_TAGS =
+		"select tagtype,pstart,pfinal,comment from READTAG where seq_id = ? and deprecated='N'";
+	
+	private PreparedStatement pstmtGetBasicSequenceDataByReadID;
+	private PreparedStatement pstmtGetFullSequenceDataByReadID;
+	
+	private PreparedStatement pstmtGetBasicSequenceDataBySequenceID;
+	private PreparedStatement pstmtGetFullSequenceDataBySequenceID;
+	
+	private PreparedStatement pstmtGetDNAAndQualityBySequenceID;
+	private PreparedStatement pstmtGetQualityClipping;
+	private PreparedStatement pstmtGetSequenceVectorClipping;
+	private PreparedStatement pstmtGetCloningVectorClipping;
+	private PreparedStatement pstmtGetTags;
+	
 	private Inflater decompresser = new Inflater();
+	private Deflater compresser = new Deflater();
 
 	/**
 	 * Creates a new SequenceManager to provide sequence management services to
@@ -59,35 +94,19 @@ public class SequenceManager extends AbstractManager {
 	}
 	
 	protected void prepareConnection() throws SQLException {
-		String query = "select SEQ2READ.seq_id,version,seqlen from SEQ2READ left join SEQUENCE using(seq_id)"
-				+ "where read_id = ? order by version desc limit 1";
-		pstmtByReadID = conn.prepareStatement(query);
+		pstmtGetBasicSequenceDataByReadID = prepareStatement(GET_BASIC_SEQUENCE_DATA_BY_READ_ID);
+		pstmtGetFullSequenceDataByReadID = prepareStatement(GET_FULL_SEQUENCE_DATA_BY_READ_ID);
 
-		query = "select SEQ2READ.seq_id,version,seqlen,sequence,quality from SEQ2READ left join SEQUENCE using(seq_id)"
-				+ " where read_id = ? order by version desc limit 1";
-		pstmtFullByReadID = conn.prepareStatement(query);
+		pstmtGetBasicSequenceDataBySequenceID = prepareStatement(GET_BASIC_SEQUENCE_DATA_BY_SEQUENCE_ID);
+		pstmtGetFullSequenceDataBySequenceID = prepareStatement(GET_FULL_SEQUENCE_DATA_BY_SEQUENCE_ID);
 
-		query = "select read_id,version,seqlen from SEQ2READ left join SEQUENCE using(seq_id) where seq_id = ?";
-		pstmtBySequenceID = conn.prepareStatement(query);
+		pstmtGetDNAAndQualityBySequenceID = prepareStatement(GET_DNA_AND_QUALITY_BY_SEQUENCE_ID);
 
-		query = "select read_id,version,seqlen,sequence,quality from SEQ2READ left join SEQUENCE using(seq_id)"
-				+ " where SEQ2READ.seq_id = ?";
-		pstmtFullBySequenceID = conn.prepareStatement(query);
-
-		query = "select seqlen,sequence,quality from SEQUENCE where seq_id = ?";
-		pstmtDNAAndQualityBySequenceID = conn.prepareStatement(query);
-
-		query = "select qleft,qright from QUALITYCLIP where seq_id = ?";
-		pstmtQualityClipping = conn.prepareStatement(query);
-
-		query = "select svleft,svright from SEQVEC where seq_id = ?";
-		pstmtSequenceVectorClipping = conn.prepareStatement(query);
-
-		query = "select cvleft,cvright from CLONEVEC where seq_id = ?";
-		pstmtCloningVectorClipping = conn.prepareStatement(query);
+		pstmtGetQualityClipping = prepareStatement(GET_QUALITY_CLIPPING);
+		pstmtGetSequenceVectorClipping = prepareStatement(GET_SEQUENCE_VECTOR_CLIPPING);
+		pstmtGetCloningVectorClipping = prepareStatement(GET_CLONING_VECTOR_CLIPPING);
 		
-		query = "select tagtype,pstart,pfinal,comment from READTAG where seq_id = ? and deprecated='N'";
-		pstmtTags = conn.prepareStatement(query);
+		pstmtGetTags = prepareStatement(GET_TAGS);
 	}
 
 	public void clearCache() {
@@ -130,8 +149,8 @@ public class SequenceManager extends AbstractManager {
 		Sequence sequence = null;
 
 		try {
-			pstmtByReadID.setInt(1, readid);
-			ResultSet rs = pstmtByReadID.executeQuery();
+			pstmtGetBasicSequenceDataByReadID.setInt(1, readid);
+			ResultSet rs = pstmtGetBasicSequenceDataByReadID.executeQuery();
 
 			if (rs.next()) {
 				Read read = adb.getReadByID(readid);
@@ -186,8 +205,8 @@ public class SequenceManager extends AbstractManager {
 		int readid = read.getID();
 		
 		try {
-			pstmtByReadID.setInt(1, readid);
-			ResultSet rs = pstmtByReadID.executeQuery();
+			pstmtGetBasicSequenceDataByReadID.setInt(1, readid);
+			ResultSet rs = pstmtGetBasicSequenceDataByReadID.executeQuery();
 
 			if (rs.next()) {
 				int seqid = rs.getInt(1);
@@ -246,8 +265,8 @@ public class SequenceManager extends AbstractManager {
 		Sequence sequence = null;
 
 		try {
-			pstmtFullByReadID.setInt(1, readid);
-			ResultSet rs = pstmtFullByReadID.executeQuery();
+			pstmtGetFullSequenceDataByReadID.setInt(1, readid);
+			ResultSet rs = pstmtGetFullSequenceDataByReadID.executeQuery();
 
 			if (rs.next()) {
 				Read read = adb.getReadByID(readid);
@@ -300,8 +319,8 @@ public class SequenceManager extends AbstractManager {
 		Sequence sequence = null;
 
 		try {
-			pstmtBySequenceID.setInt(1, seqid);
-			ResultSet rs = pstmtBySequenceID.executeQuery();
+			pstmtGetBasicSequenceDataBySequenceID.setInt(1, seqid);
+			ResultSet rs = pstmtGetBasicSequenceDataBySequenceID.executeQuery();
 
 			if (rs.next()) {
 				int readid = rs.getInt(1);
@@ -357,8 +376,8 @@ public class SequenceManager extends AbstractManager {
 		Sequence sequence = null;
 
 		try {
-			pstmtFullBySequenceID.setInt(1, seqid);
-			ResultSet rs = pstmtFullBySequenceID.executeQuery();
+			pstmtGetFullSequenceDataBySequenceID.setInt(1, seqid);
+			ResultSet rs = pstmtGetFullSequenceDataBySequenceID.executeQuery();
 
 			if (rs.next()) {
 				int readid = rs.getInt(1);
@@ -399,8 +418,8 @@ public class SequenceManager extends AbstractManager {
 		int seqid = sequence.getID();
 		
 		try {
-			pstmtDNAAndQualityBySequenceID.setInt(1, seqid);
-			ResultSet rs = pstmtDNAAndQualityBySequenceID.executeQuery();
+			pstmtGetDNAAndQualityBySequenceID.setInt(1, seqid);
+			ResultSet rs = pstmtGetDNAAndQualityBySequenceID.executeQuery();
 
 			if (rs.next()) {
 				int seqlen = rs.getInt(1);
@@ -497,9 +516,9 @@ public class SequenceManager extends AbstractManager {
 		int seqid = sequence.getID();
 
 		try {
-			pstmtQualityClipping.setInt(1, seqid);
+			pstmtGetQualityClipping.setInt(1, seqid);
 
-			ResultSet rs = pstmtQualityClipping.executeQuery();
+			ResultSet rs = pstmtGetQualityClipping.executeQuery();
 
 			if (rs.next()) {
 				int qleft = rs.getInt(1);
@@ -510,9 +529,9 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 
-			pstmtCloningVectorClipping.setInt(1, seqid);
+			pstmtGetCloningVectorClipping.setInt(1, seqid);
 
-			rs = pstmtCloningVectorClipping.executeQuery();
+			rs = pstmtGetCloningVectorClipping.executeQuery();
 
 			if (rs.next()) {
 				int cvleft = rs.getInt(1);
@@ -523,9 +542,9 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 
-			pstmtSequenceVectorClipping.setInt(1, seqid);
+			pstmtGetSequenceVectorClipping.setInt(1, seqid);
 
-			rs = pstmtSequenceVectorClipping.executeQuery();
+			rs = pstmtGetSequenceVectorClipping.executeQuery();
 
 			while (rs.next()) {
 				int svleft = rs.getInt(1);
@@ -568,8 +587,8 @@ public class SequenceManager extends AbstractManager {
 			tags.clear();
 
 		try {
-			pstmtTags.setInt(1, seqid);
-			ResultSet rs = pstmtTags.executeQuery();
+			pstmtGetTags.setInt(1, seqid);
+			ResultSet rs = pstmtGetTags.executeQuery();
 
 			while (rs.next()) {
 				String type = rs.getString(1);
