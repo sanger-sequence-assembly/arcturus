@@ -68,21 +68,21 @@ public class ReadManager extends AbstractManager {
 	}
 	
 	protected void prepareConnection() throws SQLException {
-		pstmtByID = conn.prepareStatement(GET_READ_BY_ID);
+		pstmtByID = prepareStatement(GET_READ_BY_ID);
 
-		pstmtByName = conn.prepareStatement(GET_READ_BY_NAME);
+		pstmtByName = prepareStatement(GET_READ_BY_NAME);
 
-		pstmtByTemplate = conn.prepareStatement(GET_READS_BY_TEMPLATE_ID);
+		pstmtByTemplate = prepareStatement(GET_READS_BY_TEMPLATE_ID);
 		
-		pstmtInsertNewRead = conn.prepareStatement(PUT_READ, Statement.RETURN_GENERATED_KEYS);
+		pstmtInsertNewRead = prepareStatement(PUT_READ, Statement.RETURN_GENERATED_KEYS);
 		
-		pstmtStatusByName = conn.prepareStatement(GET_STATUS_BY_NAME);
+		pstmtStatusByName = prepareStatement(GET_STATUS_BY_NAME);
 		
-		pstmtInsertStatus = conn.prepareStatement(PUT_STATUS, Statement.RETURN_GENERATED_KEYS);
+		pstmtInsertStatus = prepareStatement(PUT_STATUS, Statement.RETURN_GENERATED_KEYS);
 		
-		pstmtBasecallerByName = conn.prepareStatement(GET_BASECALLER_BY_NAME);
+		pstmtBasecallerByName = prepareStatement(GET_BASECALLER_BY_NAME);
 		
-		pstmtInsertBasecaller = conn.prepareStatement(PUT_BASECALLER, Statement.RETURN_GENERATED_KEYS);
+		pstmtInsertBasecaller = prepareStatement(PUT_BASECALLER, Statement.RETURN_GENERATED_KEYS);
 	}
 
 	public void clearCache() {

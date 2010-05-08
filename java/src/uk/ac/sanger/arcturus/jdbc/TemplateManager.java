@@ -49,11 +49,11 @@ public class TemplateManager extends AbstractManager {
 	}
 	
 	protected void prepareConnection() throws SQLException {
-		pstmtByID = conn.prepareStatement(GET_TEMPLATE_BY_ID);
+		pstmtByID = prepareStatement(GET_TEMPLATE_BY_ID);
 
-		pstmtByName = conn.prepareStatement(GET_TEMPLATE_BY_NAME);
+		pstmtByName = prepareStatement(GET_TEMPLATE_BY_NAME);
 		
-		pstmtInsertNewTemplate = conn.prepareStatement(PUT_TEMPLATE, Statement.RETURN_GENERATED_KEYS);
+		pstmtInsertNewTemplate = prepareStatement(PUT_TEMPLATE, Statement.RETURN_GENERATED_KEYS);
 	}
 
 	public void clearCache() {

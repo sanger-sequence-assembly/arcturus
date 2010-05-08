@@ -43,11 +43,11 @@ public class CloneManager extends AbstractManager {
 	}
 	
 	protected void prepareConnection() throws SQLException {
-		pstmtByID = conn.prepareStatement(GET_CLONE_BY_ID);
+		pstmtByID = prepareStatement(GET_CLONE_BY_ID);
 
-		pstmtByName = conn.prepareStatement(GET_CLONE_BY_NAME);
+		pstmtByName = prepareStatement(GET_CLONE_BY_NAME);
 		
-		pstmtInsertNewClone = conn.prepareStatement(PUT_CLONE, Statement.RETURN_GENERATED_KEYS);
+		pstmtInsertNewClone = prepareStatement(PUT_CLONE, Statement.RETURN_GENERATED_KEYS);
 	}
 
 	public void clearCache() {

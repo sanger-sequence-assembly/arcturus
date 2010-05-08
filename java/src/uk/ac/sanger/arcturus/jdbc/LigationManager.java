@@ -46,11 +46,11 @@ public class LigationManager extends AbstractManager {
 	}
 	
 	protected void prepareConnection() throws SQLException {
-		pstmtByID = conn.prepareStatement(GET_LIGATION_BY_ID);
+		pstmtByID = prepareStatement(GET_LIGATION_BY_ID);
 
-		pstmtByName = conn.prepareStatement(GET_LIGATION_BY_NAME);
+		pstmtByName = prepareStatement(GET_LIGATION_BY_NAME);
 		
-		pstmtInsertNewLigation = conn.prepareStatement(PUT_LIGATION, Statement.RETURN_GENERATED_KEYS);
+		pstmtInsertNewLigation = prepareStatement(PUT_LIGATION, Statement.RETURN_GENERATED_KEYS);
 	}
 
 	public void clearCache() {
