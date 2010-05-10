@@ -60,6 +60,22 @@ public class SequenceManager extends AbstractManager {
 	private static final String GET_TAGS =
 		"select tagtype,pstart,pfinal,comment from READTAG where seq_id = ? and deprecated='N'";
 	
+	private static final String GET_SEQUENCE_ID_BY_READ_ID_AND_HASH =
+		"select S.seq_id from SEQ2READ SR left join SEQUENCE S using (seq_id) where SR.read_id = ?" +
+		" and S.seq_hash = ? and S.qual_hash = ?";
+	
+	private static final String PUT_SEQUENCE =
+		"insert into SEQUENCE (seqlen,seq_hash,qual_hash,sequence,quality) VALUES (?,?,?,?,?)";
+	
+	private static final String PUT_QUALITY_CLIPPING =
+		"insert into QUALITYCLIP (seq_id,qleft,qright) VALUES (?,?,?)";
+	
+	private static final String PUT_SEQUENCE_VECTOR_CLIPPING =
+		"insert into SEQVEC (seq_id,svector_id,svleft,svright) VALUES (?,?,?,?)";
+		
+	private static final String PUT_CLONING_VECTOR_CLIPPING =
+		"insert into CLONEVEC (seq_id,cvector_id,cvleft,cvright) VALUES (?,?,?,?)";
+	
 	private PreparedStatement pstmtGetBasicSequenceDataByReadID;
 	private PreparedStatement pstmtGetFullSequenceDataByReadID;
 	
