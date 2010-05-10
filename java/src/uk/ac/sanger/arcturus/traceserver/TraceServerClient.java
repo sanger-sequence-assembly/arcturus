@@ -4,13 +4,21 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Vector;
 
 import uk.ac.sanger.arcturus.Arcturus;
+import uk.ac.sanger.arcturus.data.Clone;
+import uk.ac.sanger.arcturus.data.Ligation;
+import uk.ac.sanger.arcturus.data.Read;
+import uk.ac.sanger.arcturus.data.Sequence;
+import uk.ac.sanger.arcturus.data.Template;
 
 public class TraceServerClient {
 	protected final String traceServerURL;
@@ -59,48 +67,35 @@ public class TraceServerClient {
 		BufferedReader br = new BufferedReader(new InputStreamReader(is, "US-ASCII"));
 		
 		String line;
-		List<String> avLines = new Vector<String>();;
-		List<String> sqLines = null;
+		StringBuilder sb = new StringBuilder();
+		String sqData = null;
+		
+		Map<String, String> map = new HashMap<String, String>();
 		
 		while ((line = br.readLine()) != null) {
 			String[] words = line.split("\\s+", 2);
 			
-			if (words[0].equalsIgnoreCase("AV"))
-				avLines.add(words[1]);
-			else {
-				System.out.println("Record type: " + words[0]);
-			
-				if (words.length > 1)
-					System.out.println("Record value: \"" + words[1] + "\"");
+			if (words[0].equalsIgnoreCase("AV")) {
+				if (sb.length() > 0)
+					sb.append(' ');
+				
+				sb.append(words[1]);
+			} else if (words[0].equalsIgnoreCase("SQ")) {
+				sqData = parseSequence(br);
+			} else {
+				map.put(words[0], words[1]);
 			}
-			
-			if (words[0].equalsIgnoreCase("SQ"))
-				sqLines = parseSequence(br);		
 		}
 		
-		if (sqLines != null && !sqLines.isEmpty()) {
-			System.out.println("Read " + sqLines.size() + " lines of SQ data:\n");
+		map.put("SQ", sqData);
 			
-			for (String l : sqLines) {
-				System.out.println("\"" + l + "\"");
-			}
-			
-			System.out.println();
-		}
+		map.put("AV", sb.toString());
 		
-		if (!avLines.isEmpty()) {
-			System.out.println("read " + avLines.size() + " lines of AV data:\n");
-			
-			for (String l : avLines) {
-				System.out.println("\"" + l + "\"");
-			}
-			
-			System.out.println();
-		}
+		createRead(map);
 	}
 	
-	private List<String> parseSequence(BufferedReader br) throws IOException {
-		List<String> lines = new Vector<String>();
+	private String parseSequence(BufferedReader br) throws IOException {
+		StringBuilder sb = new StringBuilder();
 		
 		String line;
 		
@@ -108,10 +103,90 @@ public class TraceServerClient {
 			if (line.startsWith("//"))
 				break;
 			else
-				lines.add(line);
+				sb.append(line);
 		}		
 		
-		return lines;
+		return sb.toString().replaceAll("\\s+", "").replaceAll("\\-", "N");
+	}
+	
+	private void createRead(Map<String, String> map) {
+		String readName = map.get(ExperimentFile.KEY_READ_NAME);
+		
+		System.err.println("PROCESSING " + readName);
+		
+		String cloneName = map.get(ExperimentFile.KEY_CLONE_NAME);
+		
+		Clone clone = (cloneName != null) ? new Clone(cloneName) : null;
+		
+		if (clone != null)
+			System.err.println("Got clone " + clone);
+		
+		String ligationName = map.get(ExperimentFile.KEY_LIGATION_NAME);
+		
+		Ligation ligation = (ligationName != null) ? new Ligation(ligationName) : null;
+		
+		if (ligation != null && clone != null)
+			ligation.setClone(clone);
+		
+		if (ligation != null)
+			System.err.println("Got ligation " + ligation);
+		
+		String insertSizeRange = map.get(ExperimentFile.KEY_INSERT_SIZE_RANGE);
+		
+		if (ligation != null && insertSizeRange != null) {
+			String[] words = insertSizeRange.split("\\.\\.");
+			
+			int silow = Integer.parseInt(words[0]);
+			int sihigh = Integer.parseInt(words[1]);
+			
+			ligation.setInsertSizeRange(silow, sihigh);
+		}
+		
+		String templateName = map.get(ExperimentFile.KEY_TEMPLATE_NAME);
+		
+		Template template = (templateName != null) ? new Template(templateName) : null;
+		
+		if (template != null && ligation != null)
+			template.setLigation(ligation);
+		
+		if (template != null)
+			System.err.println("Got template " + template);
+		
+		Read read = new Read(readName);
+		
+		byte[] dna = parseDNA(map.get(ExperimentFile.KEY_SEQUENCE));
+		
+		byte[] quality = parseQuality(map.get(ExperimentFile.KEY_ACCURACY_VALUES));
+		
+		Sequence sequence = new Sequence(0, read, dna, quality, 0);
+		
+		
+	}
+	
+	private byte[] parseDNA(String value) {
+		if (value == null)
+			return null;
+		
+		try {
+			return value.getBytes("US-ASCII");
+		} catch (UnsupportedEncodingException e) {
+			Arcturus.logSevere("Failed to convert DNA string to byte array", e);
+			return null;
+		}
+	}
+	
+	private byte[] parseQuality(String value) {
+		if (value == null)
+			return null;
+
+		String[] words = value.split("\\s+");
+		
+		byte[] quality = new byte[words.length];
+		
+		for (int i = 0; i < words.length; i++)
+			quality[i] = (byte) Integer.parseInt(words[i]);
+		
+		return quality;
 	}
 	
 	public static void main(String[] args) {
