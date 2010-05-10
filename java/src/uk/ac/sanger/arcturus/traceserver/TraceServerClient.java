@@ -4,16 +4,15 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Date;
 import java.util.List;
 import java.util.Vector;
 
+import uk.ac.sanger.arcturus.Arcturus;
+
 public class TraceServerClient {
-	protected final static String DEFAULT_BASE_URL = "http://trace3slb.internal.sanger.ac.uk:8888/get_exp";
-	
 	protected final String traceServerURL;
 	
 	public TraceServerClient(String traceServerURL) {
@@ -116,7 +115,12 @@ public class TraceServerClient {
 	}
 	
 	public static void main(String[] args) {
-		String baseURL = args.length > 0 ? args[0] : DEFAULT_BASE_URL;
+		String baseURL = args.length > 0 ? args[0] : Arcturus.getProperty("traceserver.baseURL");
+		
+		if (baseURL == null) {
+			System.err.println("Unable to determine the trace server's base URL");
+			System.exit(1);
+		}
 		
 		TraceServerClient client = new TraceServerClient(baseURL);
 		
@@ -137,5 +141,7 @@ public class TraceServerClient {
 				ioe.printStackTrace();
 			}
 		}
+		
+		System.exit(0);
 	}
 }
