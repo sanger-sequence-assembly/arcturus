@@ -1,6 +1,10 @@
 package uk.ac.sanger.arcturus.data;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Vector;
+
+import uk.ac.sanger.arcturus.Arcturus;
 
 /**
  * An object which represents a read sequence, consisting of a DNA sequence
@@ -8,9 +12,21 @@ import java.util.Vector;
  */
 
 public class Sequence extends Core {
+	private static MessageDigest md5sum = null;
+	
+	static {
+		try {
+			md5sum = MessageDigest.getInstance("MD5");
+		} catch (NoSuchAlgorithmException e) {
+			Arcturus.logSevere("Failed to obtain an MD5 message digest object", e);
+		}
+	}
+	
 	protected Read read = null;
 	protected byte[] dna = null;
 	protected byte[] quality = null;
+	protected byte[] dnaHash = null;
+	protected byte[] qualityHash = null;
 	protected int length = -1;
 	protected int version;
 	protected Clipping qualityClip = null;
@@ -138,6 +154,21 @@ public class Sequence extends Core {
 
 	public void setDNA(byte[] dna) {
 		this.dna = dna;
+		
+		synchronized (md5sum) {
+			md5sum.reset();
+			dnaHash = md5sum.digest(dna);
+		}
+	}
+	
+	/**
+	 * Returns the MD5 hash of the DNA sequence string.
+	 * 
+	 * @return the MD5 hash of the DNA sequence string.
+	 */
+	
+	public byte[] getDNAHash() {
+		return dnaHash;
 	}
 
 	/**
@@ -159,6 +190,21 @@ public class Sequence extends Core {
 
 	public void setQuality(byte[] quality) {
 		this.quality = quality;
+		
+		synchronized (md5sum) {
+			md5sum.reset();
+			qualityHash = md5sum.digest(quality);
+		}
+	}
+	
+	/**
+	 * Returns the MD5 hash of the base quality array.
+	 * 
+	 * @return the MD5 hash of the base quality array.
+	 */
+	
+	public byte[] getQualityHash() {
+		return qualityHash;
 	}
 
 	/**
@@ -361,7 +407,7 @@ public class Sequence extends Core {
 	 * Returns the vector of tags which belong to this sequence, or null
 	 * if there are no tags.
 	 * 
-	 * @returnthe vector of tags which belong to this sequence, or null
+	 * @return the vector of tags which belong to this sequence, or null
 	 * if there are no tags.
 	 */
 	
