@@ -12,7 +12,7 @@ public class AssembledFrom extends Alignment {
 		if (contigRange == null)
 			throw new IllegalArgumentException("contig  range cannot be null");
 		
-		if (readRange.getDirection() == GenericMapping.Direction.REVERSE)
+		if (readRange.getDirection() == Direction.REVERSE)
 			throw new IllegalArgumentException("read range cannot be reversed");
 	}
 	
