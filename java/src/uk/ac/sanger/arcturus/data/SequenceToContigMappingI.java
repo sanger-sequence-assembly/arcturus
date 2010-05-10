@@ -1,13 +1,11 @@
 package uk.ac.sanger.arcturus.data;
 
-public interface ReadToContigMapping {
-	public enum Direction { FORWARD , REVERSE, UNKNOWN };
-	
+public interface SequenceToContigMappingI {
 	public Contig getContig();
 	
 	public Sequence getSequence();
 	
-	public Direction getDirection();
+	public GenericMapping.Direction getDirection();
 	
 	public boolean isForward();
 	

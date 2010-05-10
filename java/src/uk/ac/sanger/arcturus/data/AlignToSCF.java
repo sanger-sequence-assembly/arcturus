@@ -1,6 +1,6 @@
 package uk.ac.sanger.arcturus.data;
 
-public class AlignToSCF extends Segment {
+public class AlignToSCF extends BasicSegment {
 
 	public AlignToSCF(int startInSequence, int startInSCF, int length) {
 		super(startInSequence,startInSCF,length);

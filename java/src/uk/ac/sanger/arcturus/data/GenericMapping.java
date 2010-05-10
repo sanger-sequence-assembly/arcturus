@@ -2,21 +2,23 @@ package uk.ac.sanger.arcturus.data;
 
 import java.util.*;
 
-import uk.ac.sanger.arcturus.data.ReadToContigMapping.Direction;
 
 public class GenericMapping<S,R> implements Comparable<GenericMapping> {
+	public static enum Direction { FORWARD , REVERSE, UNKNOWN }
+
+
 	private final S subject;
 	private final R reference;
 	
 	protected int referenceOffset;
 	protected int subjectOffset;
-	protected Direction direction;
+	protected GenericMapping.Direction direction;
 	protected CanonicalMapping cm;
 	protected Alignment[] alignments;
 	protected Range referenceRange;
 	protected Range subjectRange;
 	
-	public GenericMapping (S subject, R reference, CanonicalMapping cm, int referenceOffset, int subjectOffset, Direction direction) {
+	public GenericMapping (S subject, R reference, CanonicalMapping cm, int referenceOffset, int subjectOffset, GenericMapping.Direction direction) {
 		// Constructor to be used building mapping from database
 		this.subject = subject;
 		this.reference = reference;
@@ -39,12 +41,12 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 		
 		referenceOffset = alignments[0].getReferenceRange().getStart();
 		
-		if (direction == Direction.FORWARD)
+		if (direction == GenericMapping.Direction.FORWARD)
 			referenceOffset -= 1;
 		else
 			referenceOffset += 1;
 		
-		Segment[] segments = new Segment[alignments.length];
+		BasicSegment[] segments = new BasicSegment[alignments.length];
 		
 		for (int i = 0; i < alignments.length; i++) {
 			
@@ -55,10 +57,10 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 			sstart -= subjectOffset;
 			rstart -= referenceOffset;
 			
-			if (direction == Direction.REVERSE)
+			if (direction == GenericMapping.Direction.REVERSE)
 				rstart = -rstart;
 			
-			segments[i] = new Segment(rstart, sstart, length);
+			segments[i] = new BasicSegment(rstart, sstart, length);
 		}
 
 		cm = new CanonicalMapping(segments);
@@ -70,7 +72,7 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
         this(subject,reference,gm.getAlignments());
 	}
 
-	public GenericMapping (CanonicalMapping cm, int referenceOffset, int subjectOffset, Direction direction) {
+	public GenericMapping (CanonicalMapping cm, int referenceOffset, int subjectOffset, GenericMapping.Direction direction) {
 		this(null,null,cm,referenceOffset,subjectOffset,direction);
 	}
 
@@ -106,12 +108,12 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 		return subjectOffset;
 	}
 	
-	public Direction getDirection() {
+	public GenericMapping.Direction getDirection() {
 		return direction;
 	}
 	
 	public boolean isForward() {
-		return (direction != Direction.REVERSE);
+		return (direction != GenericMapping.Direction.REVERSE);
 	}
 	
 	public Alignment[] getAlignments() {
@@ -162,10 +164,10 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 		if (cm == null) 
 			return;
 		referenceOffset = mirrorPosition - referenceOffset;
-		if (direction == Direction.FORWARD)
-			direction = Direction.REVERSE;
-		else if (direction == Direction.REVERSE)
-			direction = Direction.FORWARD;
+		if (direction == GenericMapping.Direction.FORWARD)
+			direction = GenericMapping.Direction.REVERSE;
+		else if (direction == GenericMapping.Direction.REVERSE)
+			direction = GenericMapping.Direction.FORWARD;
 		alignments = null; // forces rebuild from canonical mapping
 	}
 	
@@ -174,12 +176,12 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
         subjectOffset = alignments[0].getSubjectRange().getStart() - 1;
 	    referenceOffset = alignments[0].getReferenceRange().getStart();
 	
-  	    if (direction == Direction.FORWARD)
+  	    if (direction == GenericMapping.Direction.FORWARD)
 		    referenceOffset -= 1;
 	    else
 		    referenceOffset += 1;
 	
-  	    Segment[] segments = new Segment[alignments.length];
+  	    BasicSegment[] segments = new BasicSegment[alignments.length];
 	
 	    for (int i = 0; i < alignments.length; i++) {
 		     alignments[i].applyOffsetsAndDirection(-referenceOffset,-subjectOffset,direction);

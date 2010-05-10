@@ -372,7 +372,7 @@ public class ContigManager extends AbstractManager {
 		int contig_id = contig.getID();
 
 		if ((options & ArcturusDatabase.CONTIG_MAPPING_RELATED_DATA) != 0) {
-			Mapping mappings[] = contig.getMappings();
+			BasicSequenceToContigMapping mappings[] = contig.getMappings();
 
 			if (mappings == null) {
 				int nMappings = getMappingCount(contig_id);
@@ -381,7 +381,7 @@ public class ContigManager extends AbstractManager {
 				 * Create an empty array of Mapping objects.
 				 */
 
-				mappings = new Mapping[nMappings];
+				mappings = new BasicSequenceToContigMapping[nMappings];
 
 				getMappings(contig, mappings);
 
@@ -440,7 +440,7 @@ public class ContigManager extends AbstractManager {
 		return count;
 	}
 
-	private void getMappings(Contig contig, Mapping[] mappings)
+	private void getMappings(Contig contig, BasicSequenceToContigMapping[] mappings)
 			throws ArcturusDatabaseException {
 		int nMappings = mappings.length;
 
@@ -469,7 +469,7 @@ public class ContigManager extends AbstractManager {
 
 				Sequence sequence = adb.findOrCreateSequence(seq_id, length);
 
-				mappings[kMapping++] = new Mapping(contig, sequence, cstart, cfinish,
+				mappings[kMapping++] = new BasicSequenceToContigMapping(contig, sequence, cstart, cfinish,
 						forward);
 
 				if ((kMapping % 10) == 0) {
@@ -538,7 +538,7 @@ public class ContigManager extends AbstractManager {
 				
 				((ArcturusDatabaseImpl)adb).registerNewRead(read);
 
-				Mapping mapping = (Mapping) mapmap.get(new Integer(seq_id));
+				BasicSequenceToContigMapping mapping = (BasicSequenceToContigMapping) mapmap.get(new Integer(seq_id));
 				Sequence sequence = mapping.getSequence();
 
 				sequence.setRead(read);
@@ -590,7 +590,7 @@ public class ContigManager extends AbstractManager {
 
 		int nMappings = mapmap.size();
 
-		Vector<Segment> segv = new Vector<Segment>(1000, 1000);
+		Vector<BasicSegment> segv = new Vector<BasicSegment>(1000, 1000);
 		SortableSegment segments[] = null;
 
 		try {
@@ -657,16 +657,16 @@ public class ContigManager extends AbstractManager {
 			int length = segments[kSegment].length;
 
 			if ((next_seq_id != current_seq_id) && (current_seq_id > 0)) {
-				Segment segs[] = new Segment[segv.size()];
+				BasicSegment segs[] = new BasicSegment[segv.size()];
 				segv.toArray(segs);
 				Arrays.sort(segs, segmentComparator);
-				Mapping mapping = (Mapping) mapmap.get(new Integer(
+				BasicSequenceToContigMapping mapping = (BasicSequenceToContigMapping) mapmap.get(new Integer(
 						current_seq_id));
 				mapping.setSegments(segs);
 				segv.clear();
 			}
 
-			segv.add(new Segment(cstart, rstart, length));
+			segv.add(new BasicSegment(cstart, rstart, length));
 
 			current_seq_id = next_seq_id;
 
@@ -676,13 +676,13 @@ public class ContigManager extends AbstractManager {
 			}
 		}
 
-		Segment segs[] = new Segment[segv.size()];
+		BasicSegment segs[] = new BasicSegment[segv.size()];
 
 		segv.toArray(segs);
 
 		Arrays.sort(segs, segmentComparator);
 
-		Mapping mapping = (Mapping) mapmap.get(new Integer(current_seq_id));
+		BasicSequenceToContigMapping mapping = (BasicSequenceToContigMapping) mapmap.get(new Integer(current_seq_id));
 		mapping.setSegments(segs);
 
 		event.end();
@@ -712,7 +712,7 @@ public class ContigManager extends AbstractManager {
 			while (rs.next()) {
 				int seq_id = rs.getInt(1);
 
-				Mapping mapping = (Mapping) mapmap.get(new Integer(seq_id));
+				BasicSequenceToContigMapping mapping = (BasicSequenceToContigMapping) mapmap.get(new Integer(seq_id));
 				Sequence sequence = mapping.getSequence();
 
 				int seqlen = rs.getInt(2);
@@ -765,11 +765,11 @@ public class ContigManager extends AbstractManager {
 		return data;
 	}
 
-	private Map createMappingsMap(Mapping[] mappings) {
-		Map<Integer, Mapping> hash = new HashMap<Integer, Mapping>(mappings.length);
+	private Map createMappingsMap(BasicSequenceToContigMapping[] mappings) {
+		Map<Integer, BasicSequenceToContigMapping> hash = new HashMap<Integer, BasicSequenceToContigMapping>(mappings.length);
 
 		for (int i = 0; i < mappings.length; i++) {
-			Mapping value = mappings[i];
+			BasicSequenceToContigMapping value = mappings[i];
 			int sequence_id = value.getSequence().getID();
 			Integer key = new Integer(sequence_id);
 			hash.put(key, value);
@@ -794,7 +794,7 @@ public class ContigManager extends AbstractManager {
 				int svleft = rs.getInt(3);
 				int svright = rs.getInt(4);
 
-				Mapping mapping = (Mapping) mapmap.get(new Integer(seq_id));
+				BasicSequenceToContigMapping mapping = (BasicSequenceToContigMapping) mapmap.get(new Integer(seq_id));
 
 				Sequence sequence = mapping.getSequence();
 
@@ -838,7 +838,7 @@ public class ContigManager extends AbstractManager {
 				int cvleft = rs.getInt(3);
 				int cvright = rs.getInt(4);
 
-				Mapping mapping = (Mapping) mapmap.get(new Integer(seq_id));
+				BasicSequenceToContigMapping mapping = (BasicSequenceToContigMapping) mapmap.get(new Integer(seq_id));
 
 				Sequence sequence = mapping.getSequence();
 
@@ -877,7 +877,7 @@ public class ContigManager extends AbstractManager {
 				int qleft = rs.getInt(2);
 				int qright = rs.getInt(3);
 
-				Mapping mapping = (Mapping) mapmap.get(new Integer(seq_id));
+				BasicSequenceToContigMapping mapping = (BasicSequenceToContigMapping) mapmap.get(new Integer(seq_id));
 
 				Sequence sequence = mapping.getSequence();
 
@@ -948,7 +948,7 @@ public class ContigManager extends AbstractManager {
 				AlignToSCF a2scf[] = new AlignToSCF[alignments.size()];
 				alignments.toArray(a2scf);
 				Arrays.sort(a2scf, alignToSCFComparator);
-				Mapping mapping = (Mapping) mapmap.get(new Integer(
+				BasicSequenceToContigMapping mapping = (BasicSequenceToContigMapping) mapmap.get(new Integer(
 						current_seq_id));
 				mapping.getSequence().setAlignToSCF(a2scf);
 				alignments.clear();
@@ -968,7 +968,7 @@ public class ContigManager extends AbstractManager {
 			AlignToSCF a2scf[] = new AlignToSCF[alignments.size()];
 			alignments.toArray(a2scf);
 			Arrays.sort(a2scf, alignToSCFComparator);
-			Mapping mapping = (Mapping) mapmap.get(new Integer(current_seq_id));
+			BasicSequenceToContigMapping mapping = (BasicSequenceToContigMapping) mapmap.get(new Integer(current_seq_id));
 			mapping.getSequence().setAlignToSCF(a2scf);
 		}
 
@@ -1453,8 +1453,8 @@ public class ContigManager extends AbstractManager {
 		}
 	}
 
-	class SegmentComparatorByContigPosition implements Comparator<Segment> {
-		public int compare(Segment s1, Segment s2) {
+	class SegmentComparatorByContigPosition implements Comparator<BasicSegment> {
+		public int compare(BasicSegment s1, BasicSegment s2) {
 			int diff = s1.getReferenceStart() - s2.getReferenceStart();
 
 			return diff;

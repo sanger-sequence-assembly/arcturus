@@ -3,26 +3,26 @@ package uk.ac.sanger.arcturus.data;
 import java.util.Arrays;
 
 //import uk.ac.sanger.arcturus.*;
-import uk.ac.sanger.arcturus.data.ReadToContigMapping.Direction;
+import uk.ac.sanger.arcturus.data.GenericMapping.Direction;
 import uk.ac.sanger.arcturus.data.Utility;
 
 public class CanonicalMapping {
     protected int ID;
     protected int referenceSpan;
     protected int subjectSpan;
-    protected Segment[] segments;
+    protected BasicSegment[] segments;
     protected byte[] checksum;
     
     protected boolean isValid = false;
     
     // constructor using info from database
     
-    public CanonicalMapping(int ID, Segment[] segments) {
+    public CanonicalMapping(int ID, BasicSegment[] segments) {
         setMappingID(ID);
         setSegments(segments);
     }
  
-    public CanonicalMapping(Segment[] segments) {
+    public CanonicalMapping(BasicSegment[] segments) {
     	this(0,segments);
     }
    
@@ -36,25 +36,25 @@ public class CanonicalMapping {
         this.ID = ID;
     }
     
-    public void setSegments(Segment[] segments) {
+    public void setSegments(BasicSegment[] segments) {
         this.segments = segments;
         if (this.segments == null) return;
         
         Arrays.sort(this.segments);
         // test first segment // test on valid segments to be done by invoking class ? 
         isValid = true;
-        Segment firstSegment = segments[0];
+        BasicSegment firstSegment = segments[0];
         if (firstSegment.getReferenceStart() != 1 || firstSegment.getSubjectStart() != 1) {
             isValid = false;            
         }
         
-        Segment lastSegment = segments[segments.length - 1];
+        BasicSegment lastSegment = segments[segments.length - 1];
             
         setSubjectSpan(lastSegment.getSubjectFinish());
         setReferenceSpan(lastSegment.getReferenceFinish());
     }
     
-    public Segment[] getSegments() {
+    public BasicSegment[] getSegments() {
         return segments;
     }
     
@@ -74,7 +74,7 @@ public class CanonicalMapping {
         return referenceSpan;
     }
     
-    public Alignment[] getAlignments (int referenceOffset, int subjectOffset, Direction direction) {
+    public Alignment[] getAlignments (int referenceOffset, int subjectOffset, GenericMapping.Direction direction) {
         if (this.segments == null) return null;
         int numberOfSegments = segments.length;
         Alignment[] alignments = new Alignment[numberOfSegments];
@@ -140,7 +140,7 @@ public class CanonicalMapping {
         return checksum;
     }
     
-    private byte[] buildCheckSum(Segment[] segments) {
+    private byte[] buildCheckSum(BasicSegment[] segments) {
         if (segments == null) return null;
         StringBuilder sb = new StringBuilder();
         for (int i = 0 ; i < segments.length ; i++) {

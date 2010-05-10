@@ -1,8 +1,8 @@
 package uk.ac.sanger.arcturus.data;
 
-import uk.ac.sanger.arcturus.data.ReadToContigMapping.Direction;
+import uk.ac.sanger.arcturus.data.GenericMapping.Direction;
 
-public class CanonicalSegment extends Segment {
+public class CanonicalSegment extends BasicSegment {
 	
 	public CanonicalSegment(int cstart, int rstart, int length) {
 		super(cstart,rstart,length);

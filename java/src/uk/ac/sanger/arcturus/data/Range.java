@@ -1,6 +1,6 @@
 package uk.ac.sanger.arcturus.data;
 
-import uk.ac.sanger.arcturus.data.ReadToContigMapping.Direction;
+import uk.ac.sanger.arcturus.data.GenericMapping.Direction;
 
 public class Range {
 	protected int start;
@@ -19,14 +19,14 @@ public class Range {
 		return end;
 	}
 	
-	public Direction getDirection() {
+	public GenericMapping.Direction getDirection() {
 		if (start < end)
-			return Direction.FORWARD;
+			return GenericMapping.Direction.FORWARD;
 		
 		if (start > end)
-			return Direction.REVERSE;
+			return GenericMapping.Direction.REVERSE;
 			
-		return Direction.UNKNOWN;
+		return GenericMapping.Direction.UNKNOWN;
 	}
 
 	public int getLength() {

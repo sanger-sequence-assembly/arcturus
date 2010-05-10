@@ -12,13 +12,13 @@ import java.util.Arrays;
  * greater detail.
  */
 
-public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
+public class BasicSequenceToContigMapping implements Comparable<BasicSequenceToContigMapping>, SequenceToContigMappingI {
 	protected Contig contig;
 	protected Sequence sequence;
 	protected int cstart;
 	protected int cfinish;
-	protected Direction direction;
-	protected Segment[] segments;
+	protected GenericMapping.Direction direction;
+	protected BasicSegment[] segments;
 
 	/**
 	 * Constructs a mapping from the specified sequence, contig start and end
@@ -39,10 +39,10 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 	 *            the array of Segment objects for this alignment.
 	 */
 
-	public Mapping(Contig contig, Sequence sequence, boolean forward, Segment[] segments) {
+	public BasicSequenceToContigMapping(Contig contig, Sequence sequence, boolean forward, BasicSegment[] segments) {
 		this.contig = contig;
 		this.sequence = sequence;
-		this.direction = forward ? Direction.FORWARD : Direction.REVERSE;
+		this.direction = forward ? GenericMapping.Direction.FORWARD : GenericMapping.Direction.REVERSE;
 		setSegments(segments);
 	}
 
@@ -63,12 +63,12 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 	 *            read is counter-aligned to the contig.
 	 */
 
-	public Mapping(Contig contig, Sequence sequence, int cstart, int cfinish, boolean forward) {
+	public BasicSequenceToContigMapping(Contig contig, Sequence sequence, int cstart, int cfinish, boolean forward) {
 		this.contig = contig;
 		this.sequence = sequence;
 		this.cstart = cstart;
 		this.cfinish = cfinish;
-		this.direction = forward ? Direction.FORWARD : Direction.REVERSE;
+		this.direction = forward ? GenericMapping.Direction.FORWARD : GenericMapping.Direction.REVERSE;
 	}
 	
 	
@@ -84,7 +84,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 	 *            the assembled-from segments which define the read-to-contig mapping.
 	 */
 	
-	public Mapping(Contig contig, Sequence sequence, AssembledFrom[] afdata) {
+	public BasicSequenceToContigMapping(Contig contig, Sequence sequence, AssembledFrom[] afdata) {
 		this.contig = contig;
 		this.sequence = sequence;
 		
@@ -96,7 +96,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 		
 		direction = AssembledFrom.getDirection(afdata);
 		
-		boolean forward = direction == Direction.FORWARD;
+		boolean forward = direction == GenericMapping.Direction.FORWARD;
 		
 		Range firstContigRange = afdata[0].getContigRange();
 		Range lastContigRange = afdata[afdata.length - 1].getContigRange();
@@ -109,7 +109,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 			this.cfinish = firstContigRange.getStart();
 		}
 		
-		Segment[] segments = new Segment[afdata.length];
+		BasicSegment[] segments = new BasicSegment[afdata.length];
 		
 		for (int i = 0; i < afdata.length; i++) {
 			Range readRange = afdata[i].getReadRange();
@@ -119,7 +119,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 			int cstart = forward ? contigRange.getStart() : contigRange.getEnd();
 			int length = readRange.getLength();
 			
-			segments[i] = new Segment(cstart, rstart, length);
+			segments[i] = new BasicSegment(cstart, rstart, length);
 		}	
 		
 		setSegments(segments);
@@ -172,7 +172,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 	 */
 
 	public boolean isForward() {
-		return direction == Direction.FORWARD;
+		return direction == GenericMapping.Direction.FORWARD;
 	}
 
 	/**
@@ -181,7 +181,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 	 * @return the direction of the alignment on the contig.
 	 */
 
-	public Direction getDirection() {
+	public GenericMapping.Direction getDirection() {
 		return direction;
 	}
 
@@ -191,7 +191,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 	 * @return the array of Segment objects for this alignment.
 	 */
 
-	public Segment[] getSegments() {
+	public BasicSegment[] getSegments() {
 		return segments;
 	}
 
@@ -202,7 +202,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 	 *            the array of Segment objects for this alignment.
 	 */
 
-	public void setSegments(Segment[] segments) {
+	public void setSegments(BasicSegment[] segments) {
 		this.segments = segments;
 
 		if (segments != null) {
@@ -260,7 +260,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 		else
 			base = '?';
 
-		if (direction == Direction.REVERSE) {
+		if (direction == GenericMapping.Direction.REVERSE) {
 			switch (base) {
 				case 'a':
 					base = 't';
@@ -336,7 +336,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 
 		for (int i = 0; i < segments.length; i++) {
 			if (segments[i] != null) {
-				rpos = segments[i].getOffset(cpos, direction == Direction.FORWARD);
+				rpos = segments[i].getOffset(cpos, direction == GenericMapping.Direction.FORWARD);
 				if (rpos >= 0)
 					return rpos;
 			}
@@ -377,7 +377,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 				int rleft = -1, rright = -1, qleft = -1, qright = -1, q = -1;
 
 				if (cpos > cleft && cpos < cright) {
-					rleft = segments[i - 1].getSubjectFinish(direction == Direction.FORWARD);
+					rleft = segments[i - 1].getSubjectFinish(direction == GenericMapping.Direction.FORWARD);
 					rright = segments[i].getSubjectStart();
 					qleft = (int) quality[rleft - 1];
 					qright = (int) quality[rright - 1];
@@ -400,7 +400,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 	public String toString() {
 		String text = "Mapping[sequence=" + sequence.getID() + ", cstart="
 				+ cstart + ", cfinish=" + cfinish + ", direction="
-				+ (direction == Direction.FORWARD ? "Forward" : "Reverse");
+				+ (direction == GenericMapping.Direction.FORWARD ? "Forward" : "Reverse");
 
 		if (segments != null) {
 			text += "\nsegments={\n";
@@ -438,7 +438,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 		
 		AssembledFrom[] afdata = new AssembledFrom[segments.length];
 		
-		boolean forward = direction == Direction.FORWARD;
+		boolean forward = direction == GenericMapping.Direction.FORWARD;
 		
 		for (int i = 0; i < segments.length; i++)
 			afdata[i] = new AssembledFrom(segments[i].getReferenceRange(forward), segments[i].getSubjectRange(forward));
@@ -448,7 +448,7 @@ public class Mapping implements Comparable<Mapping>, ReadToContigMapping {
 		return afdata;
 	}
 
-	public int compareTo(Mapping that) {
+	public int compareTo(BasicSequenceToContigMapping that) {
 		return this.cstart - that.cstart;
 	}
 }

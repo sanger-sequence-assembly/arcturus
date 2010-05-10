@@ -328,14 +328,14 @@ public class CalculateConsensus {
 		if (contig == null || contig.getMappings() == null)
 			return false;
 
-		Mapping[] mappings = contig.getMappings();
+		BasicSequenceToContigMapping[] mappings = contig.getMappings();
 		int cpos, rdleft, rdright, oldrdleft, oldrdright;
 
 		int cstart = mappings[0].getContigStartPosition();
 		int cfinal = mappings[0].getContigEndPosition();
 
-		Vector<Mapping> normalReads = new Vector<Mapping>();
-		Vector<Mapping> longReads = new Vector<Mapping>();
+		Vector<BasicSequenceToContigMapping> normalReads = new Vector<BasicSequenceToContigMapping>();
+		Vector<BasicSequenceToContigMapping> longReads = new Vector<BasicSequenceToContigMapping>();
 
 		for (int i = 0; i < mappings.length; i++) {
 			if (mappings[i].getSequence() == null
@@ -367,7 +367,7 @@ public class CalculateConsensus {
 			System.err.println("\nNormal reads: " + normalReads.size() + ", long read: "
 					+ longReads.size());
 
-		mappings = normalReads.toArray(new Mapping[0]);
+		mappings = normalReads.toArray(new BasicSequenceToContigMapping[0]);
 
 		int truecontiglength = 1 + cfinal - cstart;
 
@@ -415,7 +415,7 @@ public class CalculateConsensus {
 				processMapping(mappings[rdid], cpos);
 
 			// Process the oversize (consensus) reads
-			for (Mapping mapping : longReads)
+			for (BasicSequenceToContigMapping mapping : longReads)
 				processMapping(mapping, cpos);
 
 			try {
@@ -449,7 +449,7 @@ public class CalculateConsensus {
 		return true;
 	}
 
-	private void processMapping(Mapping mapping, int cpos) {
+	private void processMapping(BasicSequenceToContigMapping mapping, int cpos) {
 		int rpos = -1;
 		int qual = -1;
 		

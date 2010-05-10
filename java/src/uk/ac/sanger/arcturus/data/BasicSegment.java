@@ -1,6 +1,6 @@
 package uk.ac.sanger.arcturus.data;
 
-import uk.ac.sanger.arcturus.data.ReadToContigMapping.Direction;
+import uk.ac.sanger.arcturus.data.GenericMapping.Direction;
 
 /**
  * An object which represents a single contiguous segment of a co-aligned 
@@ -10,7 +10,7 @@ import uk.ac.sanger.arcturus.data.ReadToContigMapping.Direction;
  * the subject sequence and a length. 
  */
 
-public class Segment implements Comparable<Segment>,Traversable {
+public class BasicSegment implements Comparable<BasicSegment>,Traversable {
 	protected int referenceStart;
 	protected int subjectStart;
 	protected int length;
@@ -26,7 +26,7 @@ public class Segment implements Comparable<Segment>,Traversable {
 	 *            the length of this segment.
 	 */
 
-	public Segment(int referenceStart, int subjectStart, int length) {
+	public BasicSegment(int referenceStart, int subjectStart, int length) {
 		this.referenceStart = referenceStart;
 		this.subjectStart = subjectStart;
 		if (length < 1) length = 1;
@@ -67,12 +67,12 @@ public class Segment implements Comparable<Segment>,Traversable {
 	}
 	
 	public int getSubjectPositionForReferencePosition(int rpos) {
-		return getSubjectPositionForReferencePosition(rpos, Direction.FORWARD);
+		return getSubjectPositionForReferencePosition(rpos, GenericMapping.Direction.FORWARD);
 	}
 
-	public int getSubjectPositionForReferencePosition(int rpos, Direction direction) {
+	public int getSubjectPositionForReferencePosition(int rpos, GenericMapping.Direction direction) {
 		rpos -= referenceStart;
-		if (direction == Direction.REVERSE)
+		if (direction == GenericMapping.Direction.REVERSE)
 			rpos = -rpos;
 		
 		if (rpos < 0 || rpos >= length)
@@ -82,14 +82,14 @@ public class Segment implements Comparable<Segment>,Traversable {
 	}
 	
 	public int getReferencePositionForSubjectPosition(int spos) {
-		return getReferencePositionForSubjectPosition(spos, Direction.FORWARD);
+		return getReferencePositionForSubjectPosition(spos, GenericMapping.Direction.FORWARD);
 	}
 
-	public int getReferencePositionForSubjectPosition(int spos, Direction direction) {
+	public int getReferencePositionForSubjectPosition(int spos, GenericMapping.Direction direction) {
 		spos -= subjectStart;
 		if (spos < 0 || spos >= length)
 			return -1;
-		else if (direction == Direction.REVERSE)
+		else if (direction == GenericMapping.Direction.REVERSE)
 			spos = -spos;
 		
 		return referenceStart + spos;
@@ -105,7 +105,7 @@ public class Segment implements Comparable<Segment>,Traversable {
 			return Placement.INSIDE;
 	}
 
-	public int compareTo(Segment that) {
+	public int compareTo(BasicSegment that) {
 		return this.subjectStart - that.subjectStart;
 	}
 	

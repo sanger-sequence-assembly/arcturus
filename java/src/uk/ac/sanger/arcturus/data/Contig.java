@@ -14,7 +14,7 @@ public class Contig extends Core {
 	protected int nreads;
 	protected Date updated = null;
 	protected Date created = null;
-	protected Mapping[] mappings = null;
+	protected BasicSequenceToContigMapping[] mappings = null;
 	protected byte[] dna = null;
 	protected byte[] quality = null;
 	protected Project project = null;
@@ -115,7 +115,7 @@ public class Contig extends Core {
 	 */
 
 	public Contig(String name, int ID, int length, Date created, Date updated,
-			Project project, Mapping[] mappings, ArcturusDatabase adb) {
+			Project project, BasicSequenceToContigMapping[] mappings, ArcturusDatabase adb) {
 		this(name, ID, length, 0, created, updated, project, adb);
 
 		this.nreads = (mappings == null) ? nreads : mappings.length;
@@ -151,11 +151,11 @@ public class Contig extends Core {
 		this.project = project;
 	}
 
-	public Mapping[] getMappings() {
+	public BasicSequenceToContigMapping[] getMappings() {
 		return mappings;
 	}
 
-	public void setMappings(Mapping[] mappings) {
+	public void setMappings(BasicSequenceToContigMapping[] mappings) {
 		this.mappings = mappings;
 
 		if (mappings != null)

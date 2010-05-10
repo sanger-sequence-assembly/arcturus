@@ -3,9 +3,10 @@ package uk.ac.sanger.arcturus.data;
 import java.util.Arrays;
 
 import uk.ac.sanger.arcturus.data.Utility;
+import uk.ac.sanger.arcturus.data.GenericMapping.Direction;
 
 
-public class CanonicalReadToContigMapping {
+public class CanonicalSequenceToContigMapping extends GenericMapping<Sequence, Contig> implements SequenceToContigMappingI {
 	protected Contig contig;
 	protected Sequence sequence;
 	protected int contigOffset;
@@ -14,7 +15,7 @@ public class CanonicalReadToContigMapping {
 	protected CanonicalMapping mapping;
 	protected Range contigRange;
 
-	public CanonicalReadToContigMapping(Mapping mapping) {
+	public CanonicalSequenceToContigMapping(Mapping mapping) {
 		this.contig = mapping.getContig();
 		this.sequence = mapping.getSequence();
 		this.direction = mapping.getDirection();

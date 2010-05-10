@@ -1,6 +1,6 @@
 package uk.ac.sanger.arcturus.data;
 
-import uk.ac.sanger.arcturus.data.ReadToContigMapping.Direction;
+import uk.ac.sanger.arcturus.data.GenericMapping.Direction;
 
 public class AssembledFrom extends Alignment {
 	
@@ -12,7 +12,7 @@ public class AssembledFrom extends Alignment {
 		if (contigRange == null)
 			throw new IllegalArgumentException("contig  range cannot be null");
 		
-		if (readRange.getDirection() == Direction.REVERSE)
+		if (readRange.getDirection() == GenericMapping.Direction.REVERSE)
 			throw new IllegalArgumentException("read range cannot be reversed");
 	}
 	

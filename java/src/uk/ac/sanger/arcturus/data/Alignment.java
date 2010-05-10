@@ -1,6 +1,6 @@
 package uk.ac.sanger.arcturus.data;
 
-import uk.ac.sanger.arcturus.data.ReadToContigMapping.Direction;
+import uk.ac.sanger.arcturus.data.GenericMapping.Direction;
 
 public class Alignment implements Comparable<Alignment>,Traversable {
 	private Range subjectRange;
@@ -8,7 +8,7 @@ public class Alignment implements Comparable<Alignment>,Traversable {
 	
 	public Alignment(Range referenceRange, Range subjectRange) {
 // constructor uses copy or reverse to ensure immutable alignment with forward subjectRange
-		if (subjectRange.getDirection() == Direction.REVERSE) {
+		if (subjectRange.getDirection() == GenericMapping.Direction.REVERSE) {
  			this.subjectRange   = subjectRange.reverse();
 		    this.referenceRange = referenceRange.reverse();
 		}
@@ -26,7 +26,7 @@ public class Alignment implements Comparable<Alignment>,Traversable {
 		return referenceRange.copy();
 	}
 
-    public Direction getDirection() {
+    public GenericMapping.Direction getDirection() {
 		return getAlignmentDirection(referenceRange,subjectRange);
 	}
   	
@@ -42,15 +42,15 @@ public class Alignment implements Comparable<Alignment>,Traversable {
         return new Alignment(subjectRange,referenceRange);
     }
     
-    public Segment getSegment() {
-        return new Segment(referenceRange.getStart(),subjectRange.getStart(),subjectRange.getLength());
+    public BasicSegment getSegment() {
+        return new BasicSegment(referenceRange.getStart(),subjectRange.getStart(),subjectRange.getLength());
     }
     
 // this method changes the Range constituents
     
-    public Alignment applyOffsetsAndDirection(int referenceOffset, int subjectOffset, Direction direction) {
+    public Alignment applyOffsetsAndDirection(int referenceOffset, int subjectOffset, GenericMapping.Direction direction) {
     	subjectRange.offset(subjectOffset);
-    	if (direction == Direction.REVERSE)
+    	if (direction == GenericMapping.Direction.REVERSE)
     		referenceRange.mirror(referenceOffset);
     	else 
      	    referenceRange.offset(referenceOffset);
@@ -60,7 +60,7 @@ public class Alignment implements Comparable<Alignment>,Traversable {
     public int getReferencePositionForSubjectPosition(int spos) {
     	if (subjectRange.contains(spos)) {
     		spos -= subjectRange.getStart();
-     	    if (referenceRange.getDirection() == Direction.REVERSE)
+     	    if (referenceRange.getDirection() == GenericMapping.Direction.REVERSE)
     		    spos = -spos;
     	    return referenceRange.getStart() + spos;
     	}
@@ -71,7 +71,7 @@ public class Alignment implements Comparable<Alignment>,Traversable {
     public int getSubjectPositionForReferencePosition(int rpos) {
     	if (referenceRange.contains(rpos)) {
     		rpos -= referenceRange.getStart();
-    		if (referenceRange.getDirection() == Direction.REVERSE)
+    		if (referenceRange.getDirection() == GenericMapping.Direction.REVERSE)
     			rpos = -rpos;
     		return subjectRange.getStart() + rpos;
     	}
@@ -89,7 +89,7 @@ public class Alignment implements Comparable<Alignment>,Traversable {
     
     public Placement getPlacementOfPosition(int rpos) {
 		rpos -= referenceRange.getStart();
-        if (referenceRange.getDirection() == Direction.REVERSE)
+        if (referenceRange.getDirection() == GenericMapping.Direction.REVERSE)
     		rpos = -rpos;
     	
 		if (rpos < 0)
@@ -102,17 +102,17 @@ public class Alignment implements Comparable<Alignment>,Traversable {
     
 // class method acting on an array of Alignment
     
-    public static Direction getDirection(Alignment[] alignments) {
+    public static GenericMapping.Direction getDirection(Alignment[] alignments) {
 		// If no segments, we can't infer a direction.
         if (alignments == null || alignments.length == 0)
-            return Direction.UNKNOWN;
+            return GenericMapping.Direction.UNKNOWN;
 		
 		// Try to infer direction from one of the segments.
 		
         for (int i = 0; i < alignments.length; i++) {
             if (alignments[i] != null) {
-                Direction dir = alignments[i].getDirection();
-                if (dir != Direction.UNKNOWN)
+                GenericMapping.Direction dir = alignments[i].getDirection();
+                if (dir != GenericMapping.Direction.UNKNOWN)
                     return dir;
             }
         }
@@ -138,13 +138,13 @@ public class Alignment implements Comparable<Alignment>,Traversable {
             }
         }
 		// We failed to find two non-null segments.
-        return Direction.UNKNOWN;
+        return GenericMapping.Direction.UNKNOWN;
     }
 	
-	private static Direction getAlignmentDirection(Range rRange,Range sRange) {
-		if (rRange.getDirection() == Direction.UNKNOWN || sRange.getDirection() == Direction.UNKNOWN )
-			return Direction.UNKNOWN;
-		return (rRange.getDirection() == sRange.getDirection()) ? Direction.FORWARD : Direction.REVERSE;
+	private static GenericMapping.Direction getAlignmentDirection(Range rRange,Range sRange) {
+		if (rRange.getDirection() == GenericMapping.Direction.UNKNOWN || sRange.getDirection() == GenericMapping.Direction.UNKNOWN )
+			return GenericMapping.Direction.UNKNOWN;
+		return (rRange.getDirection() == sRange.getDirection()) ? GenericMapping.Direction.FORWARD : GenericMapping.Direction.REVERSE;
 	}
 	
 	private static void collate (Alignment[] alignments) {

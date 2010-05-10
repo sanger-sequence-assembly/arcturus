@@ -32,7 +32,7 @@ public class CAFWriter {
 
 		ps.println();
 
-		Mapping[] mappings = contig.getMappings();
+		BasicSequenceToContigMapping[] mappings = contig.getMappings();
 
 		for (int i = 0; i < mappings.length; i++)
 			writeRead(mappings[i].getSequence());
@@ -43,7 +43,7 @@ public class CAFWriter {
 		ps.println("Is_contig");
 		ps.println("Unpadded");
 
-		Mapping[] mappings = contig.getMappings();
+		BasicSequenceToContigMapping[] mappings = contig.getMappings();
 
 		for (int i = 0; i < mappings.length; i++)
 			writeAssembledFrom(mappings[i]);
@@ -62,7 +62,7 @@ public class CAFWriter {
 		}
 	}
 
-	private void writeAssembledFrom(Mapping mapping) {
+	private void writeAssembledFrom(BasicSequenceToContigMapping mapping) {
 		Sequence sequence = mapping.getSequence();
 		Read read = sequence.getRead();
 		String readname = read.getName();
@@ -150,8 +150,8 @@ public class CAFWriter {
 		ps.print(buffer.toString());
 	}
 
-	class SegmentComparatorByReadPosition implements Comparator<Segment> {
-		public int compare(Segment segment1, Segment segment2) {
+	class SegmentComparatorByReadPosition implements Comparator<BasicSegment> {
+		public int compare(BasicSegment segment1, BasicSegment segment2) {
 			int diff = segment1.getSubjectStart() - segment2.getSubjectStart();
 
 			return diff;
