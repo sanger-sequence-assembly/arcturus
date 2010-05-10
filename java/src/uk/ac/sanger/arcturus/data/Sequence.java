@@ -56,8 +56,8 @@ public class Sequence extends Core {
 	public Sequence(int id, Read read, byte[] dna, byte[] quality, int version) {
 		this.ID = id;
 		this.read = read;
-		this.dna = dna;
-		this.quality = quality;
+		setDNA(dna);
+		setQuality(quality);
 		this.version = version;
 	}
 
