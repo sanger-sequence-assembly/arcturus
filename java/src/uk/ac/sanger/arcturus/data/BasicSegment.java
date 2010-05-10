@@ -67,12 +67,12 @@ public class BasicSegment implements Comparable<BasicSegment>,Traversable {
 	}
 	
 	public int getSubjectPositionForReferencePosition(int rpos) {
-		return getSubjectPositionForReferencePosition(rpos, GenericMapping.Direction.FORWARD);
+		return getSubjectPositionForReferencePosition(rpos, Direction.FORWARD);
 	}
 
-	public int getSubjectPositionForReferencePosition(int rpos, GenericMapping.Direction direction) {
+	public int getSubjectPositionForReferencePosition(int rpos, Direction direction) {
 		rpos -= referenceStart;
-		if (direction == GenericMapping.Direction.REVERSE)
+		if (direction == Direction.REVERSE)
 			rpos = -rpos;
 		
 		if (rpos < 0 || rpos >= length)
@@ -82,14 +82,14 @@ public class BasicSegment implements Comparable<BasicSegment>,Traversable {
 	}
 	
 	public int getReferencePositionForSubjectPosition(int spos) {
-		return getReferencePositionForSubjectPosition(spos, GenericMapping.Direction.FORWARD);
+		return getReferencePositionForSubjectPosition(spos, Direction.FORWARD);
 	}
 
-	public int getReferencePositionForSubjectPosition(int spos, GenericMapping.Direction direction) {
+	public int getReferencePositionForSubjectPosition(int spos, Direction direction) {
 		spos -= subjectStart;
 		if (spos < 0 || spos >= length)
 			return -1;
-		else if (direction == GenericMapping.Direction.REVERSE)
+		else if (direction == Direction.REVERSE)
 			spos = -spos;
 		
 		return referenceStart + spos;

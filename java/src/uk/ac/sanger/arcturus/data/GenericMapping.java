@@ -2,23 +2,21 @@ package uk.ac.sanger.arcturus.data;
 
 import java.util.*;
 
-
 public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 	public static enum Direction { FORWARD , REVERSE, UNKNOWN }
-
 
 	private final S subject;
 	private final R reference;
 	
 	protected int referenceOffset;
 	protected int subjectOffset;
-	protected GenericMapping.Direction direction;
+	protected Direction direction;
 	protected CanonicalMapping cm;
 	protected Alignment[] alignments;
 	protected Range referenceRange;
 	protected Range subjectRange;
 	
-	public GenericMapping (S subject, R reference, CanonicalMapping cm, int referenceOffset, int subjectOffset, GenericMapping.Direction direction) {
+	public GenericMapping(S subject, R reference, CanonicalMapping cm, int referenceOffset, int subjectOffset, Direction direction) {
 		// Constructor to be used building mapping from database
 		this.subject = subject;
 		this.reference = reference;
@@ -29,7 +27,7 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 		putRanges();
 	}
 	
-	public GenericMapping (S subject, R reference, Alignment[] alignments) {
+	public GenericMapping(S subject, R reference, Alignment[] alignments) {
 		// Constructor to be used building Mapping from a list of alignments
 		this.subject = subject;
 		this.reference = reference;
@@ -41,7 +39,7 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 		
 		referenceOffset = alignments[0].getReferenceRange().getStart();
 		
-		if (direction == GenericMapping.Direction.FORWARD)
+		if (direction == Direction.FORWARD)
 			referenceOffset -= 1;
 		else
 			referenceOffset += 1;
@@ -57,7 +55,7 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 			sstart -= subjectOffset;
 			rstart -= referenceOffset;
 			
-			if (direction == GenericMapping.Direction.REVERSE)
+			if (direction == Direction.REVERSE)
 				rstart = -rstart;
 			
 			segments[i] = new BasicSegment(rstart, sstart, length);
@@ -68,15 +66,15 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 		putRanges();
 	}
 	
-	public GenericMapping (S subject, R reference, GenericMapping gm) { // ?needed?
+	public GenericMapping(S subject, R reference, GenericMapping gm) { // ?needed?
         this(subject,reference,gm.getAlignments());
 	}
 
-	public GenericMapping (CanonicalMapping cm, int referenceOffset, int subjectOffset, GenericMapping.Direction direction) {
+	public GenericMapping(CanonicalMapping cm, int referenceOffset, int subjectOffset, Direction direction) {
 		this(null,null,cm,referenceOffset,subjectOffset,direction);
 	}
 
-	public GenericMapping (Alignment[] alignments) {
+	public GenericMapping(Alignment[] alignments) {
 	    this(null,null,alignments);
 	}
 	
@@ -108,12 +106,12 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 		return subjectOffset;
 	}
 	
-	public GenericMapping.Direction getDirection() {
+	public Direction getDirection() {
 		return direction;
 	}
 	
 	public boolean isForward() {
-		return (direction != GenericMapping.Direction.REVERSE);
+		return (direction != Direction.REVERSE);
 	}
 	
 	public Alignment[] getAlignments() {
@@ -164,10 +162,10 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 		if (cm == null) 
 			return;
 		referenceOffset = mirrorPosition - referenceOffset;
-		if (direction == GenericMapping.Direction.FORWARD)
-			direction = GenericMapping.Direction.REVERSE;
-		else if (direction == GenericMapping.Direction.REVERSE)
-			direction = GenericMapping.Direction.FORWARD;
+		if (direction == Direction.FORWARD)
+			direction = Direction.REVERSE;
+		else if (direction == Direction.REVERSE)
+			direction = Direction.FORWARD;
 		alignments = null; // forces rebuild from canonical mapping
 	}
 	
@@ -176,7 +174,7 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
         subjectOffset = alignments[0].getSubjectRange().getStart() - 1;
 	    referenceOffset = alignments[0].getReferenceRange().getStart();
 	
-  	    if (direction == GenericMapping.Direction.FORWARD)
+  	    if (direction == Direction.FORWARD)
 		    referenceOffset -= 1;
 	    else
 		    referenceOffset += 1;

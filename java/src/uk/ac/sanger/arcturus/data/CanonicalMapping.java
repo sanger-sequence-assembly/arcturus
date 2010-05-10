@@ -74,7 +74,7 @@ public class CanonicalMapping {
         return referenceSpan;
     }
     
-    public Alignment[] getAlignments (int referenceOffset, int subjectOffset, GenericMapping.Direction direction) {
+    public Alignment[] getAlignments (int referenceOffset, int subjectOffset, Direction direction) {
         if (this.segments == null) return null;
         int numberOfSegments = segments.length;
         Alignment[] alignments = new Alignment[numberOfSegments];
