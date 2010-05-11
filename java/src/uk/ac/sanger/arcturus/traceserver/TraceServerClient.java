@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Vector;
 
 import uk.ac.sanger.arcturus.Arcturus;
+import uk.ac.sanger.arcturus.data.Clipping;
 import uk.ac.sanger.arcturus.data.Clone;
 import uk.ac.sanger.arcturus.data.Ligation;
 import uk.ac.sanger.arcturus.data.Read;
@@ -27,7 +28,7 @@ public class TraceServerClient {
 		this.traceServerURL = traceServerURL;
 	}
 
-	public void fetchRead(String readname) {
+	public Sequence fetchRead(String readname) {
 		try {
 			String urlstring = traceServerURL + "?name=" + readname;
 			
@@ -54,16 +55,20 @@ public class TraceServerClient {
 
 				InputStream is = conn.getInputStream();
 				
-				parseRead(is);
+				Sequence sequence = parseRead(is);
 
 				is.close();
+				
+				return sequence;
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		
+		return null;
 	}
 	
-	private void parseRead(InputStream is) throws IOException {
+	private Sequence parseRead(InputStream is) throws IOException {
 		BufferedReader br = new BufferedReader(new InputStreamReader(is, "US-ASCII"));
 		
 		String line;
@@ -91,7 +96,7 @@ public class TraceServerClient {
 			
 		map.put("AV", sb.toString());
 		
-		createRead(map);
+		return createSequence(map);
 	}
 	
 	private String parseSequence(BufferedReader br) throws IOException {
@@ -109,7 +114,7 @@ public class TraceServerClient {
 		return sb.toString().replaceAll("\\s+", "").replaceAll("\\-", "N");
 	}
 	
-	private void createRead(Map<String, String> map) {
+	private Sequence createSequence(Map<String, String> map) {
 		String readName = map.get(ExperimentFile.KEY_READ_NAME);
 		
 		System.err.println("PROCESSING " + readName);
@@ -160,7 +165,43 @@ public class TraceServerClient {
 		
 		Sequence sequence = new Sequence(0, read, dna, quality, 0);
 		
+		int seqlen = dna.length;
 		
+		String qls = map.get(ExperimentFile.KEY_QUALITY_CLIP_LEFT);
+		String qrs = map.get(ExperimentFile.KEY_QUALITY_CLIP_RIGHT);
+		
+		if (qls != null && qrs != null) {
+			int ql = Integer.parseInt(qls);
+			int qr = Integer.parseInt(qrs);
+			
+			Clipping qclip = new Clipping(Clipping.QUAL, null, ql, qr);
+			
+			sequence.setQualityClipping(qclip);
+		}
+		
+		String svname = map.get(ExperimentFile.KEY_SEQUENCING_VECTOR_NAME);
+		
+		String svls = map.get(ExperimentFile.KEY_SEQUENCING_VECTOR_LEFT);
+		
+		if (svls != null) {
+			int svl = Integer.parseInt(svls);
+			
+			Clipping svlclip = new Clipping(Clipping.SVEC, svname, 1, svl);
+			
+			sequence.setSequenceVectorClippingLeft(svlclip);
+		}
+		
+		String svrs = map.get(ExperimentFile.KEY_SEQUENCING_VECTOR_RIGHT);
+		
+		if (svrs != null) {
+			int svr = Integer.parseInt(svrs);
+			
+			Clipping svrclip = new Clipping(Clipping.SVEC, svname, svr, seqlen);
+			
+			sequence.setSequenceVectorClippingRight(svrclip);
+		}
+		
+		return sequence;
 	}
 	
 	private byte[] parseDNA(String value) {
@@ -199,21 +240,23 @@ public class TraceServerClient {
 		
 		TraceServerClient client = new TraceServerClient(baseURL);
 		
-		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-
-		while (true) {
-			try {
-				System.out.print("> ");
-				
-				String line = br.readLine();
+		String[] readnames = { "wibble", "1027_emuFOS1_1a01.p1kpIBF", "1016Tviv_FOS41g09.q1kpIBR",
+				"Tviv1035d12.p1k", "Tviv1066e07.p1k"
+		};
+		
+		for (String readname : readnames) {
+			System.err.println("FETCHING " + readname + "\n");
 			
-				if (line == null || line.length() == 0 || line.equalsIgnoreCase("quit"))
-					break;
-				
-				client.fetchRead(line);
-			}
-			catch (IOException ioe) {
-				ioe.printStackTrace();
+			Sequence sequence = client.fetchRead(readname);
+			
+			if (sequence == null) {
+				System.err.println(" --- NOT FOUND ---");
+			} else {
+				Read read = sequence.getRead();
+			
+				System.err.println(read.toCAFString());
+			
+				System.err.println(sequence.toCAFString());
 			}
 		}
 		
