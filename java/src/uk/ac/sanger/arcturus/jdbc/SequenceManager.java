@@ -27,8 +27,12 @@ import java.util.zip.*;
 
 public class SequenceManager extends AbstractManager {
 	private ArcturusDatabase adb;
+	
 	private HashMap<Integer, Sequence> hashByReadID;
 	private HashMap<Integer, Sequence> hashBySequenceID;
+	
+	private DictionaryTableManager dictSequenceVector;
+	private DictionaryTableManager dictCloningVector;
 	
 	private static final String GET_BASIC_SEQUENCE_DATA_BY_READ_ID=
 		"select SEQ2READ.seq_id,version,seqlen from SEQ2READ left join SEQUENCE using(seq_id)"
@@ -101,6 +105,10 @@ public class SequenceManager extends AbstractManager {
 
 		hashByReadID = new HashMap<Integer, Sequence>();
 		hashBySequenceID = new HashMap<Integer, Sequence>();
+		
+		dictSequenceVector = new DictionaryTableManager(adb, "SEQUENCEVECTOR", "svector_id", "name");
+		
+		dictCloningVector = new DictionaryTableManager(adb, "CLONINGVECTOR", "cvector_id", "name");
 		
 		try {
 			setConnection(adb.getDefaultConnection());

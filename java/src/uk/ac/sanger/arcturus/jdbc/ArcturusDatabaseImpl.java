@@ -314,37 +314,41 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	protected ContigTransferRequestManager contigTransferRequestManager;
 	
 	protected Set<AbstractManager> managers = new HashSet<AbstractManager>();
+	
+	protected void addManager(AbstractManager manager) {
+		managers.add(manager);
+	}
 
 	private void createManagers() throws ArcturusDatabaseException {
 		cloneManager = new CloneManager(this);
-		managers.add(cloneManager);
+		addManager(cloneManager);
 		
 		ligationManager = new LigationManager(this);
-		managers.add(ligationManager);
+		addManager(ligationManager);
 		
 		templateManager = new TemplateManager(this);
-		managers.add(templateManager);
+		addManager(templateManager);
 		
 		readManager = new ReadManager(this);
-		managers.add(readManager);
+		addManager(readManager);
 		
 		sequenceManager = new SequenceManager(this);
-		managers.add(sequenceManager);
+		addManager(sequenceManager);
 		
 		contigManager = new ContigManager(this);
-		managers.add(contigManager);
+		addManager(contigManager);
 		
 		projectManager = new ProjectManager(this);
-		managers.add(projectManager);
+		addManager(projectManager);
 		
 		assemblyManager = new AssemblyManager(this);
-		managers.add(assemblyManager);
+		addManager(assemblyManager);
 		
 		userManager = new UserManager(this);
-		managers.add(userManager);
+		addManager(userManager);
 		
 		contigTransferRequestManager = new ContigTransferRequestManager(this);
-		managers.add(contigTransferRequestManager);
+		addManager(contigTransferRequestManager);
 	}
 
 	public synchronized CloneManager getCloneManager() {
