@@ -81,7 +81,11 @@ public class Utility {
 		"delete from READINFO",
 		"delete from TEMPLATE",
 		"delete from LIGATION",
-		"delete from CLONE"
+		"delete from CLONE",
+		"delete from STATUS",
+		"delete from BASECALLER",
+		"delete from SEQUENCEVECTOR",
+		"delete from CLONINGVECTOR"
 	};
 	
 	private static void clearDatabase(ArcturusDatabase adb) throws ArcturusDatabaseException {
