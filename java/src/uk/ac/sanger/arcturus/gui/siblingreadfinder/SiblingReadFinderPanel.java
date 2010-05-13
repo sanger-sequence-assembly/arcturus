@@ -144,8 +144,9 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 		return BorderFactory.createTitledBorder(etched, title);
 	}
 
-	public void refresh() {
-		// Does nothing
+	public void refresh() throws ArcturusDatabaseException {
+		if (plm != null)
+			plm.refresh();
 	}
 
 	public void closeResources() {
@@ -304,7 +305,7 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 	}
 
 	protected boolean isRefreshable() {
-		return false;
+		return true;
 	}
 
 	protected void doPrint() {
