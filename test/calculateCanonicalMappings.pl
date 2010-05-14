@@ -12,13 +12,13 @@ my $instance;
 my $organism;
 
 my $seqid;
-my $limit;
+my $verbose;
 
 while (my $nextword = shift @ARGV) {
     $instance      = shift @ARGV if ($nextword eq '-instance');
     $organism      = shift @ARGV if ($nextword eq '-organism');
 
-    $limit         = shift @ARGV if ($nextword eq '-limit');
+    $verbose       = shift @ARGV if ($nextword eq '-verbose');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -46,8 +46,6 @@ my $query = "select M.contig_id,M.seq_id,M.mapping_id,M.direction" .
     " from MAPPING M left join SEQ2CONTIG SC" .
     " on (M.contig_id = SC.contig_id and M.seq_id = SC.seq_id)" .
     " where SC.mapping_id is null";
-
-$query .= " limit $limit" if defined($limit);
 
 my $sth_get_mappings = $dbh->prepare($query);
 &db_die("prepare($query) failed");
@@ -142,7 +140,8 @@ while (my ($contigid,$seqid,$mappingid,$direction) = $sth_get_mappings->fetchrow
 
     my $sighash_hex = md5_hex($signature);
 
-    printf "%8d %8d %8d %8d %1s %32s %s\n",$contigid,$seqid,$coffset,$roffset,$dirn,$sighash_hex,$signature;
+    printf "%8d %8d %8d %8d %1s %32s %s\n",$contigid,$seqid,$coffset,$roffset,$dirn,$sighash_hex,$signature
+	if $verbose;
 
     my $sighash = md5($signature);
 
@@ -202,5 +201,5 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-limit\t\tShow only the first N contigs\n";
+    print STDERR "-verbose\tDisplay the hash values for all of the entries\n";
 }
