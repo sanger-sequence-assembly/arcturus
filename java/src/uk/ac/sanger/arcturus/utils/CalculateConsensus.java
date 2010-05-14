@@ -468,7 +468,7 @@ public class CalculateConsensus {
 							+ sequence.getID()
 							+ ", length "
 							+ sequence.getLength()
-							+ "bp)\n*** at contig position " + cpos);
+							+ "bp)\n*** at contig position " + cpos + "\n");
 			return;
 		}
 
