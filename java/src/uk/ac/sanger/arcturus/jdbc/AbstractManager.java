@@ -10,6 +10,7 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 public abstract class AbstractManager {
 	protected boolean cacheing = true;
 	protected Connection conn;
+	protected boolean savedAutoCommit;
 
 	public void setCacheing(boolean cacheing) {
 		this.cacheing = cacheing;
@@ -48,5 +49,20 @@ public abstract class AbstractManager {
 	
 	protected Connection getConnection() {
 		return conn;
+	}
+	
+	protected void beginTransaction() throws SQLException {
+		savedAutoCommit = conn.getAutoCommit();
+		conn.setAutoCommit(false);
+	}
+	
+	protected void commitTransaction() throws SQLException {
+		conn.commit();
+		conn.setAutoCommit(savedAutoCommit);
+	}
+	
+	protected void rollbackTransaction() throws SQLException {
+		conn.rollback();
+		conn.setAutoCommit(savedAutoCommit);
 	}
 }
