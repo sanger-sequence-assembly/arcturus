@@ -459,8 +459,15 @@ public class CalculateConsensus {
 			qual = (rpos >= 0) ? mapping.getQuality(rpos) : mapping
 					.getPadQuality(cpos);
 		} catch (ArrayIndexOutOfBoundsException e) {
-			e.printStackTrace();
-			System.err.println("Mapping " + mapping +", cpos " + cpos);
+			Sequence sequence = mapping.getSequence();
+			String readname = sequence.getRead().getName();
+			System.err.println("\n*** An inconsistent read-to-contig mapping was encountered when processing the mapping to read "
+							+ readname
+							+ " (sequence ID "
+							+ sequence.getID()
+							+ ", length "
+							+ sequence.getLength()
+							+ "bp) at contig position " + cpos);
 			return;
 		}
 
