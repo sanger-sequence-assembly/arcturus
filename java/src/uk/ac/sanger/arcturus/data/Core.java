@@ -13,6 +13,8 @@ public class Core {
 	 */
 
 	public final static short UNKNOWN = 0;
+	
+	public final static String UNKNOWN_STRING = "Unknown";
 
 	protected int ID;
 	protected String name;

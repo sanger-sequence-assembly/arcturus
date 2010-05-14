@@ -12,36 +12,48 @@ public class Read extends Core {
 	 */
 
 	public final static int FORWARD = 1;
+	
+	public final static String FORWARD_STRING = "Forward";
 
 	/**
 	 * A constant representing the reverse strand of a sub-clone.
 	 */
 
 	public final static int REVERSE = 2;
+	
+	public final static String REVERSE_STRING = "Reverse";
 
 	/**
 	 * A constant representing dye primer chemistry.
 	 */
 
 	public final static int DYE_PRIMER = 1;
+	
+	public final static String DYE_PRIMER_STRING = "Dye_primer";
 
 	/**
 	 * A constant representing dye terminator chemistry.
 	 */
 
 	public final static int DYE_TERMINATOR = 2;
+	
+	public final static String DYE_TERMINATOR_STRING = "Dye_terminator";
 
 	/**
 	 * A constant representing a universal primer.
 	 */
 
 	public final static int UNIVERSAL_PRIMER = 1;
+	
+	public final static String UNIVERSAL_PRIMER_STRING = "Universal_primer";
 
 	/**
 	 * A constant representing a custom primer.
 	 */
 
 	public final static int CUSTOM_PRIMER = 2;
+	
+	public final static String CUSTOM_PRIMER_STRING = "Custom";
 
 	private final static java.text.DateFormat dateformat = new java.text.SimpleDateFormat(
 			"yyyy-MM-dd");
