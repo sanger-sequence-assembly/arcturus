@@ -22,6 +22,16 @@ public class Sequence extends Core {
 		}
 	}
 	
+	public static byte[] digest(byte[] data) {
+		if (data == null || md5sum == null)
+			return null;
+		
+		synchronized (md5sum) {
+			md5sum.reset();
+			return md5sum.digest(data);
+		}
+	}
+	
 	protected Read read = null;
 	protected byte[] dna = null;
 	protected byte[] quality = null;
@@ -155,10 +165,7 @@ public class Sequence extends Core {
 	public void setDNA(byte[] dna) {
 		this.dna = dna;
 		
-		synchronized (md5sum) {
-			md5sum.reset();
-			dnaHash = md5sum.digest(dna);
-		}
+		dnaHash = digest(dna);
 	}
 	
 	/**
@@ -191,10 +198,7 @@ public class Sequence extends Core {
 	public void setQuality(byte[] quality) {
 		this.quality = quality;
 		
-		synchronized (md5sum) {
-			md5sum.reset();
-			qualityHash = md5sum.digest(quality);
-		}
+		qualityHash = digest(quality);
 	}
 	
 	/**
