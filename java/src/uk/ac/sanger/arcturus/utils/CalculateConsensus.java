@@ -461,13 +461,14 @@ public class CalculateConsensus {
 		} catch (ArrayIndexOutOfBoundsException e) {
 			Sequence sequence = mapping.getSequence();
 			String readname = sequence.getRead().getName();
-			System.err.println("\n*** An inconsistent read-to-contig mapping was encountered when processing the mapping to read "
+			System.err.println("\n*** An inconsistent read-to-contig mapping was encountered when processing\n" 
+							+ "*** the mapping to read "
 							+ readname
 							+ " (sequence ID "
 							+ sequence.getID()
 							+ ", length "
 							+ sequence.getLength()
-							+ "bp) at contig position " + cpos);
+							+ "bp)\n*** at contig position " + cpos);
 			return;
 		}
 
