@@ -37,9 +37,13 @@ public class TestSequenceManager extends TestBase {
 		
 		sequence.setQualityClipping(clip);
 		
-		clip = new Clipping(Clipping.SVEC, "SEC1234", 1, 20);
+		clip = new Clipping(Clipping.SVEC, "SVEC1234", 1, 20);
 		
 		sequence.setSequenceVectorClippingLeft(clip);
+		
+		clip = new Clipping(Clipping.CVEC, "CVEC9876", 1, 30);
+		
+		sequence.setCloningVectorClipping(clip);
 
 		ArcturusDatabase adb = getArcturusDatabase();		
 	
