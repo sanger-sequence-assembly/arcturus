@@ -461,7 +461,7 @@ public class CalculateConsensus {
 		} catch (ArrayIndexOutOfBoundsException e) {
 			e.printStackTrace();
 			System.err.println("Mapping " + mapping +", cpos " + cpos);
-			System.exit(1);
+			return;
 		}
 
 		if (qual <= 0)
