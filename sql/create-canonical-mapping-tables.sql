@@ -1,12 +1,6 @@
 -- DDL for new canonical sequence-to-contig mappings
 
-drop table if exists CANONICALSEGMENT;
-
-drop table if exists SEQ2CONTIG;
-
-drop table if exists CANONICALMAPPING;
-
-create table CANONICALMAPPING (
+create table if not exists CANONICALMAPPING (
   mapping_id mediumint unsigned not null auto_increment primary key,
   cspan int not null,
   rspan int not null,
@@ -15,7 +9,7 @@ create table CANONICALMAPPING (
   unique key(checksum(8))
 ) engine=InnoDB;
 
-create table SEQ2CONTIG (
+create table if not exists SEQ2CONTIG (
   contig_id mediumint unsigned not null,
   seq_id mediumint unsigned not null,
   mapping_id mediumint unsigned not null,
@@ -35,7 +29,7 @@ create table SEQ2CONTIG (
     on delete restrict
 ) engine =InnoDB;
 
-create table CANONICALSEGMENT (
+create table if not exists CANONICALSEGMENT (
   mapping_id mediumint unsigned not null,
   cstart int not null,
   rstart int not null,
