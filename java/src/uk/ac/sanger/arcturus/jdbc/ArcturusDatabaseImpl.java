@@ -576,6 +576,10 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		return sequenceManager.findOrCreateSequence(seq_id, length);
 	}
 
+	public int putSequence(Sequence sequence) throws ArcturusDatabaseException {
+		return sequenceManager.putSequence(sequence);
+	}
+
 	public synchronized Contig getContigByID(int id, int options)
 			throws ArcturusDatabaseException {
 		return contigManager.getContigByID(id, options);

@@ -92,8 +92,15 @@ public class SequenceManager extends AbstractManager {
 	private PreparedStatement pstmtGetCloningVectorClipping;
 	private PreparedStatement pstmtGetTags;
 	
+	private PreparedStatement pstmtGetSequenceIDByReadIDAndHash;
+	
+	private PreparedStatement pstmtPutSequence;
+	private PreparedStatement pstmtPutQualityClipping;
+	private PreparedStatement pstmtPutSequenceVectorClipping;
+	private PreparedStatement pstmtPutCloningVectorClipping;
+	
 	private Inflater decompresser = new Inflater();
-	private Deflater compresser = new Deflater();
+	private Deflater compresser = new Deflater(Deflater.BEST_COMPRESSION);
 
 	/**
 	 * Creates a new SequenceManager to provide sequence management services to
@@ -131,6 +138,14 @@ public class SequenceManager extends AbstractManager {
 		pstmtGetCloningVectorClipping = prepareStatement(GET_CLONING_VECTOR_CLIPPING);
 		
 		pstmtGetTags = prepareStatement(GET_TAGS);
+		
+		pstmtGetSequenceIDByReadIDAndHash = prepareStatement(GET_SEQUENCE_ID_BY_READ_ID_AND_HASH);
+		
+		pstmtPutSequence = prepareStatement(PUT_SEQUENCE, Statement.RETURN_GENERATED_KEYS);
+		
+		pstmtPutQualityClipping = prepareStatement(PUT_QUALITY_CLIPPING);
+		pstmtPutSequenceVectorClipping = prepareStatement(PUT_SEQUENCE_VECTOR_CLIPPING);
+		pstmtPutCloningVectorClipping = prepareStatement(PUT_CLONING_VECTOR_CLIPPING);
 	}
 
 	public void clearCache() {
@@ -630,5 +645,157 @@ public class SequenceManager extends AbstractManager {
 			adb.handleSQLException(e, "Failed to set load tags for sequence ID=" + seqid,
 					conn, this);
 		}
+	}
+	
+	public int getSequenceIDByReadIDAndHash(int read_id, byte[] sequenceHash, byte[] qualityHash)
+		throws ArcturusDatabaseException {
+		try {
+			pstmtGetSequenceIDByReadIDAndHash.setInt(1, read_id);
+			pstmtGetSequenceIDByReadIDAndHash.setBytes(2, sequenceHash);
+			pstmtGetSequenceIDByReadIDAndHash.setBytes(3, qualityHash);
+			
+			ResultSet rs = pstmtGetSequenceIDByReadIDAndHash.executeQuery();
+			
+			int seq_id = rs.next() ? rs.getInt(1) : -1;
+			
+			rs.close();
+			
+			return seq_id;
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to find sequence ID for ID=" + read_id + " and hashes",
+					conn, this);
+		}
+		
+		return -1;
+	}
+	
+	private byte[] compressData(byte[] data) {
+		byte[] buffer = new byte[12 + (5 * data.length) / 4];
+		
+		compresser.reset();
+		compresser.setInput(data);
+		compresser.finish();
+		
+		int compressedDataLength = compresser.deflate(buffer);
+		
+		byte[] compressedData = new byte[compressedDataLength];
+		
+		for (int i = 0; i < compressedDataLength; i++)
+			compressedData[i] = buffer[i];
+		
+		return compressedData;
+	}
+	
+	public int putSequence(Sequence sequence) throws ArcturusDatabaseException {
+		if (sequence == null)
+			throw new IllegalArgumentException("Cannot store a null sequence");
+		
+		int seq_id = -1;
+		
+		byte[] dna = sequence.getDNA();
+			
+		if (dna != null)
+			dna = compressData(dna);
+			
+		byte[] quality = sequence.getQuality();
+			
+		if (quality != null)
+			quality = compressData(quality);
+			
+		byte[] dnaHash = sequence.getDNAHash();
+		byte[] qualityHash = sequence.getQualityHash();
+			
+		int seqlen = sequence.getLength();
+			
+		try {
+			beginTransaction();
+			
+			pstmtPutSequence.setInt(1, seqlen);
+			pstmtPutSequence.setBytes(2, dnaHash);
+			pstmtPutSequence.setBytes(3, qualityHash);
+			pstmtPutSequence.setBytes(4, dna);
+			pstmtPutSequence.setBytes(5, quality);
+			
+			int rc = pstmtPutSequence.executeUpdate();
+			
+			if (rc != 1) {
+				rollbackTransaction();
+				return -1;
+			}
+			
+			ResultSet rs = pstmtPutSequence.getGeneratedKeys();
+			
+			seq_id = rs.next() ? rs.getInt(1) : -1;
+			
+			rs.close();
+			
+			if (seq_id < 0) {
+				rollbackTransaction();
+				return -1;
+			}
+			
+			Clipping clip = sequence.getQualityClipping();
+			
+			if (clip != null) {
+				pstmtPutQualityClipping.setInt(1, seq_id);
+				pstmtPutQualityClipping.setInt(2, clip.getLeft());
+				pstmtPutQualityClipping.setInt(3, clip.getRight());
+				
+				pstmtPutQualityClipping.executeUpdate();
+			}
+			
+			clip = sequence.getSequenceVectorClippingLeft();
+			
+			if (clip != null) {
+				int svector_id = dictSequenceVector.getValue(clip.getName());
+				
+				pstmtPutSequenceVectorClipping.setInt(1, seq_id);
+				pstmtPutSequenceVectorClipping.setInt(2, svector_id);
+				pstmtPutSequenceVectorClipping.setInt(3, clip.getLeft());
+				pstmtPutSequenceVectorClipping.setInt(4, clip.getRight());
+				
+				pstmtPutSequenceVectorClipping.executeUpdate();
+			}		
+			
+			clip = sequence.getSequenceVectorClippingRight();
+			
+			if (clip != null) {
+				int svector_id = dictSequenceVector.getValue(clip.getName());
+				
+				pstmtPutSequenceVectorClipping.setInt(1, seq_id);
+				pstmtPutSequenceVectorClipping.setInt(2, svector_id);
+				pstmtPutSequenceVectorClipping.setInt(3, clip.getLeft());
+				pstmtPutSequenceVectorClipping.setInt(4, clip.getRight());
+				
+				pstmtPutSequenceVectorClipping.executeUpdate();
+			}
+			
+			clip = sequence.getCloningVectorClipping();
+			
+			if (clip != null) {
+				int cvector_id = dictCloningVector.getValue(clip.getName());
+				
+				pstmtPutCloningVectorClipping.setInt(1, seq_id);
+				pstmtPutCloningVectorClipping.setInt(2, cvector_id);
+				pstmtPutCloningVectorClipping.setInt(3, clip.getLeft());
+				pstmtPutCloningVectorClipping.setInt(4, clip.getRight());
+				
+				pstmtPutCloningVectorClipping.executeUpdate();
+			}
+			
+			commitTransaction();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to store a sequence",
+					conn, this);
+			
+			try {
+				rollbackTransaction();
+			} catch (SQLException e1) {
+				adb.handleSQLException(e, "Failed to roll back a transaction when storing a sequence",
+						conn, this);
+			}
+		}
+		
+		return seq_id;
 	}
 }
