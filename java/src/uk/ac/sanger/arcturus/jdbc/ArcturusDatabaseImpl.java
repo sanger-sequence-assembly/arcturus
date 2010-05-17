@@ -433,13 +433,16 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		return templateManager.getTemplateByID(id, autoload);
 	}
 
-	void registerNewTemplate(Template template) {
-		templateManager.registerNewTemplate(template);
+	void registerNewTemplate(Template template, int template_id) {
+		templateManager.registerNewTemplate(template, template_id);
 	}
 
-	public synchronized Template findOrCreateTemplate(String name,
-			Ligation ligation) throws ArcturusDatabaseException {
-		return templateManager.findOrCreateTemplate(name, ligation);
+	public synchronized Template findOrCreateTemplate(Template template) throws ArcturusDatabaseException {
+		return templateManager.findOrCreateTemplate(template);
+	}
+
+	public synchronized Template putTemplate(Template template) throws ArcturusDatabaseException {
+		return templateManager.putTemplate(template);
 	}
 
 	public synchronized Read getReadByName(String name) throws ArcturusDatabaseException {

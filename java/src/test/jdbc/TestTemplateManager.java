@@ -32,9 +32,13 @@ public class TestTemplateManager extends TestBase {
 		
 		String templateName = "MyTemplate";
 		
-		Template template = adb.findOrCreateTemplate(templateName, ligation);
+		Template template = new Template(templateName, Template.UNKNOWN, ligation, null);
 		
-		assertNotNull(template);
+		Template newTemplate = adb.findOrCreateTemplate(template);
+		
+		assertNotNull("findOrCreateTemplate returned null", newTemplate);
+		
+		assertEquals("findOrCreateTemplate yielded unequal templates", template, newTemplate);
 	}
 
 }

@@ -191,8 +191,9 @@ public interface ArcturusDatabase {
 	public Template getTemplateByID(int id, boolean autoload)
 			throws ArcturusDatabaseException;
 
-	public Template findOrCreateTemplate(String name,
-			Ligation ligation) throws ArcturusDatabaseException;
+	public Template findOrCreateTemplate(Template template) throws ArcturusDatabaseException;
+
+	public Template putTemplate(Template template) throws ArcturusDatabaseException;
 
 	public Read getReadByName(String name) throws ArcturusDatabaseException;
 

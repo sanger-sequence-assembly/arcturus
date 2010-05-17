@@ -528,7 +528,7 @@ public class ContigManager extends AbstractManager {
 				Template template = new Template(templatename, template_id,
 						 ligation, adb);
 				
-				((ArcturusDatabaseImpl)adb).registerNewTemplate(template);
+				((ArcturusDatabaseImpl)adb).registerNewTemplate(template, template_id);
 
 				Read read = new Read(readname, read_id, template, asped,
 						ReadManager.parseStrand(strand),

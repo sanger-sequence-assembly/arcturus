@@ -189,16 +189,21 @@ public class TemplateManager extends AbstractManager {
 
 		Template template = new Template(name, id, ligation, adb);
 
-		registerNewTemplate(template);
+		registerNewTemplate(template, id);
 
 		return template;
 	}
 
-	void registerNewTemplate(Template template) {
+	Template registerNewTemplate(Template template, int id) {
+		template.setID(id);
+		template.setArcturusDatabase(adb);
+		
 	    if (cacheing) {
-		hashByName.put(template.getName(), template);
-		hashByID.put(new Integer(template.getID()), template);
+	    	hashByName.put(template.getName(), template);
+	    	hashByID.put(new Integer(template.getID()), template);
 	    }
+	    
+	    return template;
 	}
 
 	/**
@@ -245,17 +250,42 @@ public class TemplateManager extends AbstractManager {
 	 *         and added to the cache.
 	 */
 
-	public Template findOrCreateTemplate(String name, Ligation ligation)
+	public Template findOrCreateTemplate(Template template)
 	 	throws ArcturusDatabaseException {
-		Template template = getTemplateByName(name);
+		if (template == null)
+			throw new ArcturusDatabaseException("Cannot find/create a null template");
 		
-		if (template != null)
-			return template;
+		if (template.getName() == null)
+			throw new ArcturusDatabaseException("Cannot find/create a template with no name");
+	
+		String templateName = template.getName();
+
+		Template cachedTemplate = getTemplateByName(templateName);
+		
+		if (cachedTemplate != null)
+			return cachedTemplate;
+		
+		return putTemplate(template);
+	}
+	
+	public Template putTemplate(Template template) throws ArcturusDatabaseException {
+		if (template == null)
+			throw new ArcturusDatabaseException("Cannot put a null template");
+		
+		if (template.getName() == null)
+			throw new ArcturusDatabaseException("Cannot put a template with no name");
+	
+		String templateName = template.getName();
 
 		try {
+			Ligation ligation = template.getLigation();
+			
+			if (ligation != null)
+				ligation = adb.findOrCreateLigation(ligation);
+			
 			int ligation_id = (ligation == null) ? 0 : ligation.getID();
 			
-			pstmtInsertNewTemplate.setString(1, name);
+			pstmtInsertNewTemplate.setString(1, templateName);
 			pstmtInsertNewTemplate.setInt(2, ligation_id);
 			
 			int rc = pstmtInsertNewTemplate.executeUpdate();
@@ -267,13 +297,14 @@ public class TemplateManager extends AbstractManager {
 				
 				rs.close();
 				
-				return createAndRegisterNewTemplate(name, template_id, ligation_id);
+				return registerNewTemplate(template, template_id);
 			}
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to find or create template by name=" + name + "\"", conn, this);
+			adb.handleSQLException(e, "Failed to find or create template by name=" + templateName +
+					"\"", conn, this);
 		}
-		
+
 		return null;
 	}
 }
