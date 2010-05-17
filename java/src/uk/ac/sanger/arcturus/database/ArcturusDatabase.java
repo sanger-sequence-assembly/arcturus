@@ -175,7 +175,10 @@ public interface ArcturusDatabase {
 
 	public Ligation getLigationByID(int id) throws ArcturusDatabaseException;
 	
-	public Ligation findOrCreateLigation(String name, Clone clone, int silow, int sihigh)
+	public Ligation findOrCreateLigation(Ligation ligation)
+			throws ArcturusDatabaseException;
+	
+	public Ligation putLigation(Ligation ligation)
 			throws ArcturusDatabaseException;
 
 	public Template getTemplateByName(String name) throws ArcturusDatabaseException;

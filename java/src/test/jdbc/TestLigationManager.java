@@ -33,9 +33,13 @@ public class TestLigationManager extends TestBase {
 		int silow = 1000;
 		int sihigh = 4000;
 		
-		Ligation ligation = adb.findOrCreateLigation(ligationName, clone, silow, sihigh);
+		Ligation ligation = new Ligation(ligationName, Ligation.UNKNOWN, clone, silow, sihigh, null);
 		
-		assertNotNull(ligation);
+		Ligation newLigation = adb.findOrCreateLigation(ligation);
+		
+		assertNotNull("findOrCreateLigation returned null", newLigation);
+		
+		assertEquals("findOrCreateLigation yielded unequal ligations", ligation, newLigation);
 	}
 
 }

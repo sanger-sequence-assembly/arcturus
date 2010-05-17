@@ -70,20 +70,45 @@ public class LigationManager extends AbstractManager {
 		return (obj == null) ? loadLigationByID(id) : (Ligation) obj;
 	}
 	
-	public Ligation findOrCreateLigation(String name, Clone clone, int silow, int sihigh)
+	public Ligation findOrCreateLigation(Ligation ligation)
 		throws ArcturusDatabaseException {
-		try {
-			Ligation ligation = getLigationByName(name);
+		if (ligation == null)
+			throw new ArcturusDatabaseException("Cannot find/create a null ligation");
+		
+		if (ligation.getName() == null)
+			throw new ArcturusDatabaseException("Cannot find/create a clone with no name");
+		
+		String ligationName = ligation.getName();
+		
+		Ligation cachedLigation = getLigationByName(ligationName);
 			
-			if (ligation != null)
-				return ligation;
+		if (cachedLigation != null)
+			return cachedLigation;
+			
+		return putLigation(ligation);
+	}
+	
+	public Ligation putLigation(Ligation ligation) throws ArcturusDatabaseException {
+		if (ligation == null)
+			throw new ArcturusDatabaseException("Cannot put a null ligation");
+		
+		if (ligation.getName() == null)
+			throw new ArcturusDatabaseException("Cannot put a clone with no name");
+		
+		String ligationName = ligation.getName();
+		
+		try {			
+			Clone clone = ligation.getClone();
+			
+			if (clone != null)
+				clone = adb.findOrCreateClone(clone);
 			
 			int clone_id = clone == null ? 0 : clone.getID();
 			
-			pstmtInsertNewLigation.setString(1, name);
+			pstmtInsertNewLigation.setString(1, ligationName);
 			pstmtInsertNewLigation.setInt(2, clone_id);
-			pstmtInsertNewLigation.setInt(3, silow);
-			pstmtInsertNewLigation.setInt(4, sihigh);
+			pstmtInsertNewLigation.setInt(3, ligation.getInsertSizeLow());
+			pstmtInsertNewLigation.setInt(4, ligation.getInsertSizeHigh());
 			
 			int rc = pstmtInsertNewLigation.executeUpdate();
 			
@@ -93,12 +118,12 @@ public class LigationManager extends AbstractManager {
 				int ligation_id = rs.next() ? rs.getInt(1) : -1;
 				
 				if (ligation_id > 0)
-					return registerNewLigation(name, ligation_id, clone_id, silow,
-							sihigh);
+					return registerNewLigation(ligation, ligation_id);
 			}
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to find or create ligation by name=\"" + name + "\"", conn, this);
+			adb.handleSQLException(e, "Failed to find or create ligation by name=\"" + ligationName +
+					"\"", conn, this);
 		}
 		
 		return null;
@@ -155,6 +180,18 @@ public class LigationManager extends AbstractManager {
 
 		Ligation ligation = new Ligation(name, id, clone, silow, sihigh, adb);
 
+		hashByName.put(name, ligation);
+		hashByID.put(new Integer(id), ligation);
+
+		return ligation;
+	}
+
+	private Ligation registerNewLigation(Ligation ligation, int id) {
+		ligation.setID(id);
+		ligation.setArcturusDatabase(adb);
+		
+		String name = ligation.getName();
+		
 		hashByName.put(name, ligation);
 		hashByID.put(new Integer(id), ligation);
 

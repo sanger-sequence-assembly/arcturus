@@ -392,9 +392,14 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		return ligationManager.getLigationByID(id);
 	}
 	
-	public Ligation findOrCreateLigation(String name, Clone clone, int silow, int sihigh)
+	public Ligation findOrCreateLigation(Ligation ligation)
 		throws ArcturusDatabaseException {
-		return ligationManager.findOrCreateLigation(name, clone, silow, sihigh);
+		return ligationManager.findOrCreateLigation(ligation);
+	}
+	
+	public Ligation putLigation(Ligation ligation)
+		throws ArcturusDatabaseException {
+		return ligationManager.putLigation(ligation);
 	}
 
 	public synchronized Template getTemplateByName(String name)

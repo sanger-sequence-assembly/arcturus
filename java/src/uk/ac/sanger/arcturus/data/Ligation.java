@@ -106,4 +106,19 @@ public class Ligation extends Core {
 	public int getInsertSizeHigh() {
 		return sihigh;
 	}
+	
+	/**
+	 * Tests whether another ligation is equal to this one.
+	 * 
+	 * Two ligation are equal if, and only if, they have the same name, the same ID and
+	 * the same ArcturusDatabase object as their owner, and their insert size ranges
+	 * are the same.
+	 * 
+	 * @param that the ligation with which to compare
+	 * @return true if the two ligations are identical; false otherwise.
+	 */
+	
+	public boolean equals(Ligation that) {
+		return super.equals(that) && this.silow == that.silow && this.sihigh == that.sihigh;
+	}
 }
