@@ -71,6 +71,12 @@ public class SequenceManager extends AbstractManager {
 	private static final String PUT_SEQUENCE =
 		"insert into SEQUENCE (seqlen,seq_hash,qual_hash,sequence,quality) VALUES (?,?,?,?,?)";
 	
+	private static final String GET_MAXIMUM_VERSION =
+		"select max(version) from SEQ2READ where seq_id = ? and read_id = ?";
+	
+	private static final String PUT_SEQUENCE_TO_READ =
+		"insert into SEQ2READ (seq_id, read_id, version) VALUES (?,?,?)";
+	
 	private static final String PUT_QUALITY_CLIPPING =
 		"insert into QUALITYCLIP (seq_id,qleft,qright) VALUES (?,?,?)";
 	
@@ -95,6 +101,10 @@ public class SequenceManager extends AbstractManager {
 	private PreparedStatement pstmtGetSequenceIDByReadIDAndHash;
 	
 	private PreparedStatement pstmtPutSequence;
+	
+	private PreparedStatement pstmtGetMaximumVersion;
+	private PreparedStatement pstmtPutSequenceToRead;
+	
 	private PreparedStatement pstmtPutQualityClipping;
 	private PreparedStatement pstmtPutSequenceVectorClipping;
 	private PreparedStatement pstmtPutCloningVectorClipping;
@@ -142,6 +152,9 @@ public class SequenceManager extends AbstractManager {
 		pstmtGetSequenceIDByReadIDAndHash = prepareStatement(GET_SEQUENCE_ID_BY_READ_ID_AND_HASH);
 		
 		pstmtPutSequence = prepareStatement(PUT_SEQUENCE, Statement.RETURN_GENERATED_KEYS);
+		
+		pstmtGetMaximumVersion = prepareStatement(GET_MAXIMUM_VERSION);
+		pstmtPutSequenceToRead = prepareStatement(PUT_SEQUENCE_TO_READ);
 		
 		pstmtPutQualityClipping = prepareStatement(PUT_QUALITY_CLIPPING);
 		pstmtPutSequenceVectorClipping = prepareStatement(PUT_SEQUENCE_VECTOR_CLIPPING);
@@ -690,6 +703,15 @@ public class SequenceManager extends AbstractManager {
 		if (sequence == null)
 			throw new IllegalArgumentException("Cannot store a null sequence");
 		
+		Read read = sequence.getRead();
+		
+		if (read == null)
+			throw new ArcturusDatabaseException("The sequence has no associated read");
+		
+		if (read.getID() == 0) {
+			
+		}
+		
 		int seq_id = -1;
 		
 		byte[] dna = sequence.getDNA();
@@ -747,7 +769,7 @@ public class SequenceManager extends AbstractManager {
 			clip = sequence.getSequenceVectorClippingLeft();
 			
 			if (clip != null) {
-				int svector_id = dictSequenceVector.getValue(clip.getName());
+				int svector_id = dictSequenceVector.getID(clip.getName());
 				
 				pstmtPutSequenceVectorClipping.setInt(1, seq_id);
 				pstmtPutSequenceVectorClipping.setInt(2, svector_id);
@@ -760,7 +782,7 @@ public class SequenceManager extends AbstractManager {
 			clip = sequence.getSequenceVectorClippingRight();
 			
 			if (clip != null) {
-				int svector_id = dictSequenceVector.getValue(clip.getName());
+				int svector_id = dictSequenceVector.getID(clip.getName());
 				
 				pstmtPutSequenceVectorClipping.setInt(1, seq_id);
 				pstmtPutSequenceVectorClipping.setInt(2, svector_id);
@@ -773,7 +795,7 @@ public class SequenceManager extends AbstractManager {
 			clip = sequence.getCloningVectorClipping();
 			
 			if (clip != null) {
-				int cvector_id = dictCloningVector.getValue(clip.getName());
+				int cvector_id = dictCloningVector.getID(clip.getName());
 				
 				pstmtPutCloningVectorClipping.setInt(1, seq_id);
 				pstmtPutCloningVectorClipping.setInt(2, cvector_id);

@@ -18,7 +18,8 @@ public class DictionaryTableManager extends AbstractManager {
 	private String primaryKeyName;
 	private String valueName;
 	
-	private Map<String, Integer> cache = new HashMap<String, Integer>();
+	private Map<String, Integer> cacheByName = new HashMap<String, Integer>();
+	private Map<Integer, String> cacheByID = new HashMap<Integer, String>();
 	
 	private PreparedStatement pstmtFetchAllEntries, pstmtFetchByName, pstmtStoreNewValue;
 	
@@ -41,7 +42,13 @@ public class DictionaryTableManager extends AbstractManager {
 	}
 
 	public void clearCache() {
-		cache.clear();
+		cacheByName.clear();
+		cacheByID.clear();
+	}
+	
+	private void cacheKeyAndValue(int primary_key, String value) {
+		cacheByName.put(value, primary_key);
+		cacheByID.put(primary_key, value);
 	}
 
 	public void preload() throws ArcturusDatabaseException {
@@ -54,7 +61,7 @@ public class DictionaryTableManager extends AbstractManager {
 				int primary_key = rs.getInt(1);
 				String value = rs.getString(2);
 				
-				cache.put(value, primary_key);
+				cacheKeyAndValue(primary_key, value);
 			}
 		}
 		catch (SQLException e) {
@@ -76,9 +83,9 @@ public class DictionaryTableManager extends AbstractManager {
 		pstmtStoreNewValue = prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
 	}
 	
-	public int getValue(String name) throws ArcturusDatabaseException {
-		if (cache.containsKey(name))
-			return cache.get(name);
+	public int getID(String name) throws ArcturusDatabaseException {
+		if (cacheByName.containsKey(name))
+			return cacheByName.get(name);
 		
 		try {
 			pstmtFetchByName.setString(1, name);
@@ -88,7 +95,7 @@ public class DictionaryTableManager extends AbstractManager {
 			int primaryKey = rs.next() ? rs.getInt(1) : 0;
 				
 			if (primaryKey > 0)
-				cache.put(name, primaryKey);
+				cacheKeyAndValue(primaryKey, name);
 				
 			rs.close();
 				
@@ -110,7 +117,7 @@ public class DictionaryTableManager extends AbstractManager {
 				int primaryKey = rs.next() ? rs.getInt(1) : 0;
 				
 				if (primaryKey > 0)
-					cache.put(name, primaryKey);
+					cacheKeyAndValue(primaryKey, name);
 					
 				rs.close();
 					
@@ -122,5 +129,9 @@ public class DictionaryTableManager extends AbstractManager {
 		}
 		
 		return 0;
+	}
+	
+	public String getValue(int id) {
+		return cacheByID.get(id);
 	}
 }
