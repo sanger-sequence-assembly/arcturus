@@ -213,6 +213,10 @@ public interface ArcturusDatabase {
 			String primer, String chemistry, String basecaller, String status) throws ArcturusDatabaseException;
 
 	public int[] getUnassembledReadIDList() throws ArcturusDatabaseException;
+	
+	public String getBaseCallerByID(int basecaller_id);
+	
+	public String getReadStatusByID(int status_id);
 
 	public Sequence getSequenceByReadID(int readid)
 			throws ArcturusDatabaseException;

@@ -5,12 +5,21 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 
+import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 public abstract class AbstractManager {
+	protected ArcturusDatabase adb;
 	protected boolean cacheing = true;
 	protected Connection conn;
 	protected boolean savedAutoCommit;
+	
+	protected AbstractManager(ArcturusDatabase adb) {
+		this.adb = adb;
+		
+		if (adb instanceof ArcturusDatabaseImpl)
+			((ArcturusDatabaseImpl)adb).addManager(this);
+	}
 
 	public void setCacheing(boolean cacheing) {
 		this.cacheing = cacheing;

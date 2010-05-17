@@ -13,7 +13,6 @@ import java.util.*;
  */
 
 public class TemplateManager extends AbstractManager {
-	private ArcturusDatabase adb;
 	private HashMap<Integer, Template> hashByID;
 	private HashMap<String, Template> hashByName;
 	private PreparedStatement pstmtByID, pstmtByName, pstmtInsertNewTemplate;
@@ -36,7 +35,7 @@ public class TemplateManager extends AbstractManager {
 	 */
 
 	public TemplateManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
-		this.adb = adb;
+		super(adb);
 
 		hashByID = new HashMap<Integer, Template>();
 		hashByName = new HashMap<String, Template>();

@@ -12,7 +12,6 @@ import java.util.*;
  */
 
 public class CloneManager extends AbstractManager {
-	private ArcturusDatabase adb;
 	private HashMap<Integer, Clone> hashByID;
 	private HashMap<String, Clone> hashByName;
 	private PreparedStatement pstmtByID, pstmtByName, pstmtInsertNewClone;
@@ -30,7 +29,7 @@ public class CloneManager extends AbstractManager {
 	 */
 
 	public CloneManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
-		this.adb = adb;
+		super(adb);
 
 		hashByID = new HashMap<Integer, Clone>();
 		hashByName = new HashMap<String, Clone>();

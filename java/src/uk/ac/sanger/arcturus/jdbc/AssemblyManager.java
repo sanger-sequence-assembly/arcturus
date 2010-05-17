@@ -12,7 +12,6 @@ import java.util.*;
  */
 
 public class AssemblyManager extends AbstractManager {
-	private ArcturusDatabase adb;
 	private HashMap<Integer, Assembly> hashByID = new HashMap<Integer, Assembly>();
 	private PreparedStatement pstmtByID;
 	private PreparedStatement pstmtByName;
@@ -24,7 +23,7 @@ public class AssemblyManager extends AbstractManager {
 	 */
 
 	public AssemblyManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
-		this.adb = adb;
+		super(adb);
 
 		try {
 			setConnection(adb.getDefaultConnection());

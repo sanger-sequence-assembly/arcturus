@@ -321,34 +321,24 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	private void createManagers() throws ArcturusDatabaseException {
 		cloneManager = new CloneManager(this);
-		addManager(cloneManager);
 		
 		ligationManager = new LigationManager(this);
-		addManager(ligationManager);
 		
 		templateManager = new TemplateManager(this);
-		addManager(templateManager);
 		
 		readManager = new ReadManager(this);
-		addManager(readManager);
 		
 		sequenceManager = new SequenceManager(this);
-		addManager(sequenceManager);
 		
 		contigManager = new ContigManager(this);
-		addManager(contigManager);
 		
 		projectManager = new ProjectManager(this);
-		addManager(projectManager);
 		
 		assemblyManager = new AssemblyManager(this);
-		addManager(assemblyManager);
 		
 		userManager = new UserManager(this);
-		addManager(userManager);
 		
 		contigTransferRequestManager = new ContigTransferRequestManager(this);
-		addManager(contigTransferRequestManager);
 	}
 
 	public synchronized CloneManager getCloneManager() {
@@ -496,6 +486,14 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 	public synchronized int[] getUnassembledReadIDList() throws ArcturusDatabaseException {
 		return readManager.getUnassembledReadIDList();
+	}
+	
+	public String getBaseCallerByID(int basecaller_id) {
+		return readManager.getBaseCallerByID(basecaller_id);
+	}
+	
+	public String getReadStatusByID(int status_id) {
+		return readManager.getReadStatusByID(status_id);
 	}
 
 	public synchronized Sequence getSequenceByReadID(int readid)

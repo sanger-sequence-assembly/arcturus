@@ -12,8 +12,6 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 public class DictionaryTableManager extends AbstractManager {
-	private ArcturusDatabase adb;
-	
 	private String tableName;
 	private String primaryKeyName;
 	private String valueName;
@@ -25,13 +23,11 @@ public class DictionaryTableManager extends AbstractManager {
 	
 	public DictionaryTableManager(ArcturusDatabase adb, String tableName, String primaryKeyName,
 			String valueName) throws ArcturusDatabaseException {
-		this.adb = adb;
+		super(adb);
+		
 		this.tableName = tableName;
 		this.primaryKeyName = primaryKeyName;
 		this.valueName = valueName;
-		
-		if (adb instanceof ArcturusDatabaseImpl)
-			((ArcturusDatabaseImpl)adb).addManager(this);
 
 		try {
 			setConnection(adb.getDefaultConnection());

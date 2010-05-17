@@ -13,23 +13,27 @@ import java.util.*;
  */
 
 public class ReadManager extends AbstractManager {
-	private ArcturusDatabase adb;
 	private HashMap<Integer, Read> hashByID;
 	private HashMap<String, Read> hashByName;
 	
 	private DictionaryTableManager dictStatus;
 	private DictionaryTableManager dictBasecaller;
 	
-	private PreparedStatement pstmtByID, pstmtByName, pstmtByTemplate, pstmtInsertNewRead;
+	private PreparedStatement pstmtPreloadReads, pstmtByID, pstmtByName, pstmtByTemplate, pstmtInsertNewRead;
+	
+	private static final String READ_COLUMNS = "read_id,readname,asped,strand,primer,chemistry,basecaller,status";
+	
+	private static final String PRELOAD_READS =
+		"select " + READ_COLUMNS + " from READINFO";
 	
 	private static final String GET_READ_BY_ID =
-		"select readname,template_id,asped,strand,primer,chemistry from READINFO where read_id = ?";
+		"select " + READ_COLUMNS + " from READINFO where read_id = ?";
 	
 	private static final String GET_READ_BY_NAME =
-		"select read_id,template_id,asped,strand,primer,chemistry from READINFO where readname = ?";
+		"select " + READ_COLUMNS + " from READINFO where readname = ?";
 	
 	private static final String GET_READS_BY_TEMPLATE_ID =
-		"select read_id,readname,asped,strand,primer,chemistry from READINFO where template_id = ?";
+		"select " + READ_COLUMNS + " from READINFO where template_id = ?";
 	
 	private static final String PUT_READ =
 		"insert into READINFO (readname,template_id,asped,strand,primer,chemistry,basecaller,status) VALUES (?,?,?,?,?,?,?,?)";
@@ -40,7 +44,7 @@ public class ReadManager extends AbstractManager {
 	 */
 
 	public ReadManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
-		this.adb = adb;
+		super(adb);
 
 		hashByID = new HashMap<Integer, Read>();
 		hashByName = new HashMap<String, Read>();
@@ -64,6 +68,8 @@ public class ReadManager extends AbstractManager {
 		pstmtByTemplate = prepareStatement(GET_READS_BY_TEMPLATE_ID);
 		
 		pstmtInsertNewRead = prepareStatement(PUT_READ, Statement.RETURN_GENERATED_KEYS);
+		
+		pstmtPreloadReads = prepareStatement(PRELOAD_READS);
 	}
 
 	public void clearCache() {
@@ -91,6 +97,27 @@ public class ReadManager extends AbstractManager {
 
 		return (obj == null && autoload) ? loadReadByID(id) : (Read) obj;
 	}
+	
+	private Read createReadFromResultSet(ResultSet rs) throws SQLException, ArcturusDatabaseException {
+		int index = 1;
+		
+		int read_id = rs.getInt(index++);
+		String name = rs.getString(index++);
+		int template_id = rs.getInt(index++);
+		java.util.Date asped = rs.getTimestamp(index++);
+		int strand = parseStrand(rs.getString(index++));
+		int primer = parsePrimer(rs.getString(index++));
+		int chemistry = parseChemistry(rs.getString(index++));
+		
+		int basecaller_id = rs.getInt(index++);
+		int status_id = rs.getInt(index++);
+		
+		String basecaller = dictBasecaller.getValue(basecaller_id);
+		String status = dictStatus.getValue(status_id);
+		
+		return createAndRegisterNewRead(name, read_id, template_id, asped,
+				strand, primer, chemistry, basecaller, status);
+	}
 
 	private Read loadReadByName(String name) throws ArcturusDatabaseException {
 		Read read = null;
@@ -99,16 +126,8 @@ public class ReadManager extends AbstractManager {
 			pstmtByName.setString(1, name);
 			ResultSet rs = pstmtByName.executeQuery();
 
-			if (rs.next()) {
-				int id = rs.getInt(1);
-				int template_id = rs.getInt(2);
-				java.util.Date asped = rs.getTimestamp(3);
-				int strand = parseStrand(rs.getString(4));
-				int primer = parsePrimer(rs.getString(5));
-				int chemistry = parseChemistry(rs.getString(6));
-				read = createAndRegisterNewRead(name, id, template_id, asped,
-						strand, primer, chemistry);
-			}
+			if (rs.next())
+				read = createReadFromResultSet(rs);
 
 			rs.close();
 		} catch (SQLException e) {
@@ -125,16 +144,8 @@ public class ReadManager extends AbstractManager {
 			pstmtByID.setInt(1, id);
 			ResultSet rs = pstmtByID.executeQuery();
 
-			if (rs.next()) {
-				String name = rs.getString(1);
-				int template_id = rs.getInt(2);
-				java.util.Date asped = rs.getTimestamp(3);
-				int strand = parseStrand(rs.getString(4));
-				int primer = parsePrimer(rs.getString(5));
-				int chemistry = parseChemistry(rs.getString(6));
-				read = createAndRegisterNewRead(name, id, template_id, asped,
-						strand, primer, chemistry);
-			}
+			if (rs.next())
+				read = createReadFromResultSet(rs);
 
 			rs.close();
 		} catch (SQLException e) {
@@ -157,14 +168,7 @@ public class ReadManager extends AbstractManager {
 				if (hashByID.containsKey(new Integer(read_id)))
 					continue;
 
-				String name = rs.getString(2);
-				java.util.Date asped = rs.getTimestamp(3);
-				int strand = parseStrand(rs.getString(4));
-				int primer = parsePrimer(rs.getString(5));
-				int chemistry = parseChemistry(rs.getString(6));
-
-				createAndRegisterNewRead(name, read_id, template_id, asped,
-						strand, primer, chemistry);
+				createReadFromResultSet(rs);
 
 				newreads++;
 			}
@@ -181,48 +185,87 @@ public class ReadManager extends AbstractManager {
 		if (text == null)
 			return Read.UNKNOWN;
 		
-		if (text.equals("Forward"))
+		if (text.equals(Read.FORWARD_STRING))
 			return Read.FORWARD;
 
-		if (text.equals("Reverse"))
+		if (text.equals(Read.REVERSE_STRING))
 			return Read.REVERSE;
 
 		return Read.UNKNOWN;
+	}
+	
+	public static String strandToString(int value) {
+		switch (value) {
+			case Read.FORWARD:
+				return Read.FORWARD_STRING;
+				
+			case Read.REVERSE:
+				return Read.REVERSE_STRING;
+				
+			default:
+				return Read.UNKNOWN_STRING;
+		}
 	}
 
 	public static int parsePrimer(String text) {
 		if (text == null)
 			return Read.UNKNOWN;
 		
-		if (text.equals("Universal_primer"))
+		if (text.equals(Read.UNIVERSAL_PRIMER_STRING))
 			return Read.UNIVERSAL_PRIMER;
 
-		if (text.equals("Custom"))
+		if (text.equals(Read.CUSTOM_PRIMER_STRING))
 			return Read.CUSTOM_PRIMER;
 
 		return Read.UNKNOWN;
+	}
+	
+	public static String primerToString(int value) {
+		switch (value) {
+			case Read.UNIVERSAL_PRIMER:
+				return Read.UNIVERSAL_PRIMER_STRING;
+				
+			case Read.CUSTOM_PRIMER:
+				return Read.CUSTOM_PRIMER_STRING;
+				
+			default:
+				return Read.UNKNOWN_STRING;
+		}
 	}
 
 	public static int parseChemistry(String text) {
 		if (text == null)
 			return Read.UNKNOWN;
 		
-		if (text.equals("Dye_terminator"))
+		if (text.equals(Read.DYE_TERMINATOR_STRING))
 			return Read.DYE_TERMINATOR;
 
-		if (text.equals("Dye_primer"))
+		if (text.equals(Read.DYE_PRIMER_STRING))
 			return Read.DYE_PRIMER;
 
 		return Read.UNKNOWN;
 	}
+	
+	public static String chemistryToString(int value) {
+		switch (value) {
+			case Read.DYE_PRIMER:
+				return Read.DYE_PRIMER_STRING;
+				
+			case Read.DYE_TERMINATOR:
+				return Read.DYE_TERMINATOR_STRING;
+				
+			default:
+				return Read.UNKNOWN_STRING;
+		}
+	}
 
 	private Read createAndRegisterNewRead(String name, int id, int template_id,
-			java.util.Date asped, int strand, int primer, int chemistry)
+			java.util.Date asped, int strand, int primer, int chemistry, String basecaller, String status)
 			throws ArcturusDatabaseException {
 		Template template = adb.getTemplateByID(template_id);
 
 		Read read = new Read(name, id, template, asped, strand, primer,
-				chemistry, adb);
+				chemistry, basecaller, status, adb);
 
 		registerNewRead(read);
 
@@ -237,78 +280,27 @@ public class ReadManager extends AbstractManager {
 	}
 
 	public void preload() throws ArcturusDatabaseException {
-		String query = "select read_id,readname,template_id,asped,strand,primer,chemistry from READINFO";
 
 		try {
-			Statement stmt = conn.createStatement();
+			ResultSet rs = pstmtPreloadReads.executeQuery();
 
-			ResultSet rs = stmt.executeQuery(query);
-
-			while (rs.next()) {
-				int id = rs.getInt(1);
-				String name = rs.getString(2);
-				int template_id = rs.getInt(3);
-				java.util.Date asped = rs.getTimestamp(4);
-				int strand = parseStrand(rs.getString(5));
-				int primer = parsePrimer(rs.getString(6));
-				int chemistry = parseChemistry(rs.getString(7));
-				createAndRegisterNewRead(name, id, template_id, asped, strand,
-						primer, chemistry);
-			}
+			while (rs.next())
+				createReadFromResultSet(rs);
 
 			rs.close();
-			stmt.close();
 		} catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to preload reads", conn, this);
 		}
 	}
 	
-	private int findOrCreateDictionaryEntry(String name, Map<String, Integer> dictionary, PreparedStatement pstmtFind, PreparedStatement pstmtPut)
-		throws ArcturusDatabaseException {
-		Integer iValue = dictionary.get(name);
-		
-		if (iValue!= null)
-			return iValue.intValue();
-		
-		int value = -1;
-		
-		try {
-			pstmtFind.setString(1, name);
-			
-			ResultSet rs = pstmtFind.executeQuery();
-			
-			if (rs.next()) {
-				value = rs.getInt(1);
-				dictionary.put(name, value);
-			}
-			
-			rs.close();
-			
-			if (value >= 0)
-				return value;
-			
-			pstmtPut.setString(1, name);
-			
-			int rc = pstmtPut.executeUpdate();
-			
-			if (rc == 1) {
-				rs = pstmtPut.getGeneratedKeys();
-				
-				if (rs.next()) {
-					value = rs.getInt(1);
-					dictionary.put(name, value);
-				}
-				
-				rs.close();
-			}
-		}
-		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to find or create dictionary value by name=\"" + name + "\"", conn, this);
-		}
-		
-		return value;
+	public String getBaseCallerByID(int basecaller_id) {
+		return dictBasecaller.getValue(basecaller_id);
 	}
-
+	
+	public String getReadStatusByID(int status_id) {
+		return dictStatus.getValue(status_id);
+	}
+	
 	public Read findOrCreateRead(String name, Template template,
 			java.util.Date asped, String strand, String primer, String chemistry, String basecaller, String status)
 		throws ArcturusDatabaseException {
@@ -326,8 +318,8 @@ public class ReadManager extends AbstractManager {
 			
 			java.sql.Date dAsped = asped == null ? null : new java.sql.Date(asped.getTime());
 			
-			int status_id = dictStatus.getValue(status);
-			int basecaller_id = dictBasecaller.getValue(basecaller);
+			int status_id = dictStatus.getID(status);
+			int basecaller_id = dictBasecaller.getID(basecaller);
 
 			pstmtInsertNewRead.setString(1, name);
 			pstmtInsertNewRead.setInt(2, template_id);
@@ -353,13 +345,17 @@ public class ReadManager extends AbstractManager {
 				
 				if (read_id > 0)
 					return createAndRegisterNewRead(name, read_id, template_id,
-							asped, iStrand, iPrimer, iChemistry);
+							asped, iStrand, iPrimer, iChemistry, basecaller, status);
 			}
 		}
 		catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to find or create read by name=\"" + name + "\"", conn, this);
 		}
 		
+		return null;
+	}
+	
+	public Read findOrCreateRead(Read read) throws ArcturusDatabaseException {
 		return null;
 	}
 

@@ -13,7 +13,6 @@ import java.util.*;
  */
 
 public class LigationManager extends AbstractManager {
-	private ArcturusDatabase adb;
 	private HashMap<Integer, Ligation> hashByID;
 	private HashMap<String, Ligation> hashByName;
 	private PreparedStatement pstmtByID, pstmtByName, pstmtInsertNewLigation;
@@ -33,7 +32,7 @@ public class LigationManager extends AbstractManager {
 	 */
 
 	public LigationManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
-		this.adb = adb;
+		super(adb);
 
 		hashByID = new HashMap<Integer, Ligation>();
 		hashByName = new HashMap<String, Ligation>();

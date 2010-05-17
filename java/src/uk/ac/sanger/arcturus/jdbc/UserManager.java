@@ -9,7 +9,6 @@ import uk.ac.sanger.arcturus.people.*;
 import uk.ac.sanger.arcturus.people.role.*;
 
 public class UserManager extends AbstractManager {
-	private ArcturusDatabase adb;
 	private PreparedStatement pstmtRoleByName;
 	private Map<String, Role> roleMap = new HashMap<String, Role>();
 	private Map<String, Person> personMap = new HashMap<String, Person>();
@@ -23,7 +22,7 @@ public class UserManager extends AbstractManager {
 	 */
 
 	public UserManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
-		this.adb = adb;
+		super(adb);
 
 		try {
 			setConnection(adb.getDefaultConnection());

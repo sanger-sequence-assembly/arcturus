@@ -19,7 +19,6 @@ import java.util.*;
  */
 
 public class ProjectManager extends AbstractManager {
-	private ArcturusDatabase adb;
 	private HashMap<Integer, Project> hashByID = new HashMap<Integer, Project>();
 	private PreparedStatement pstmtByID;
 	private PreparedStatement pstmtByName;
@@ -42,7 +41,7 @@ public class ProjectManager extends AbstractManager {
 	 */
 
 	public ProjectManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
-		this.adb = adb;
+		super(adb);
 	
 		try {
 			setConnection(adb.getDefaultConnection());

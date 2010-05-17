@@ -13,8 +13,6 @@ import java.sql.*;
 import java.util.*;
 
 public class ContigTransferRequestManager extends AbstractManager {
-	protected ArcturusDatabase adb;
-
 	protected HashMap<Integer, ContigTransferRequest> cache = new HashMap<Integer, ContigTransferRequest>();
 
 	protected PreparedStatement pstmtByRequester = null;
@@ -55,7 +53,7 @@ public class ContigTransferRequestManager extends AbstractManager {
 
 	public ContigTransferRequestManager(ArcturusDatabase adb)
 			throws ArcturusDatabaseException {
-		this.adb = adb;
+		super(adb);
 
 		try {
 			setConnection(adb.getDefaultConnection());

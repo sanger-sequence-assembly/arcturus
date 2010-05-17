@@ -26,8 +26,6 @@ import java.util.zip.*;
  */
 
 public class SequenceManager extends AbstractManager {
-	private ArcturusDatabase adb;
-	
 	private HashMap<Integer, Sequence> hashByReadID;
 	private HashMap<Integer, Sequence> hashBySequenceID;
 	
@@ -118,7 +116,7 @@ public class SequenceManager extends AbstractManager {
 	 */
 
 	public SequenceManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
-		this.adb = adb;
+		super(adb);
 
 		hashByReadID = new HashMap<Integer, Sequence>();
 		hashBySequenceID = new HashMap<Integer, Sequence>();

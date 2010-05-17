@@ -15,7 +15,6 @@ import java.util.zip.DataFormatException;
  */
 
 public class ContigManager extends AbstractManager {
-	private ArcturusDatabase adb;
 	private HashMap<Integer, Contig> hashByID;
 
 	private Inflater decompresser = new Inflater();
@@ -60,7 +59,7 @@ public class ContigManager extends AbstractManager {
 	 */
 
 	public ContigManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
-		this.adb = adb;
+		super(adb);
 
 		event = new ManagerEvent(this);
 
@@ -121,6 +120,7 @@ public class ContigManager extends AbstractManager {
 		pstmtSequenceData = conn.prepareStatement(query);
 
 		query = "select MAPPING.seq_id,READINFO.read_id,readname,strand,chemistry,primer,asped,"
+				+ " basecaller,status,"
 				+ " TEMPLATE.template_id,TEMPLATE.name,ligation_id"
 				+ " from (MAPPING left join (SEQ2READ left join" 
 				+ " (READINFO left join TEMPLATE using (template_id))"
@@ -519,6 +519,8 @@ public class ContigManager extends AbstractManager {
 				String chemistry = rs.getString(index++);
 				String primer = rs.getString(index++);
 				java.util.Date asped = rs.getTimestamp(index++);
+				int basecaller_id = rs.getInt(index++);
+				int status_id = rs.getInt(index++);
 				int template_id = rs.getInt(index++);
 				String templatename = rs.getString(index++);
 				int ligation_id = rs.getInt(index++);
@@ -529,11 +531,16 @@ public class ContigManager extends AbstractManager {
 						 ligation, adb);
 				
 				((ArcturusDatabaseImpl)adb).registerNewTemplate(template, template_id);
+				
+				String basecaller = adb.getBaseCallerByID(basecaller_id);
+				String status = adb.getReadStatusByID(status_id);
 
 				Read read = new Read(readname, read_id, template, asped,
 						ReadManager.parseStrand(strand),
 						ReadManager.parsePrimer(primer),
 						ReadManager.parseChemistry(chemistry),
+						basecaller,
+						status,
 						adb);
 				
 				((ArcturusDatabaseImpl)adb).registerNewRead(read);
