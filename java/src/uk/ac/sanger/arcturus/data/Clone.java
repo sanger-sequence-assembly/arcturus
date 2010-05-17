@@ -35,20 +35,4 @@ public class Clone extends Core {
 	public Clone(String name, int ID, ArcturusDatabase adb) {
 		super(name, ID, adb);
 	}
-	
-	/**
-	 * Tests whether another clone is equal to this one.
-	 * 
-	 * Two clones are equal if, and only if, they have the same name, the same ID and
-	 * the same ArcturusDatabase object as their owner.
-	 * 
-	 * @param that the clone with which to compare
-	 * @return true if the two clones are identical; false otherwise.
-	 */
-	
-	public boolean equals(Clone that) {
-		return that != null && this.name != null && that.name != null &&
-			this.name.equals(that.name) && this.ID == that.ID &&
-			this.adb == that.adb;
-	}
 }

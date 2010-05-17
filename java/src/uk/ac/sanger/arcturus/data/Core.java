@@ -140,4 +140,21 @@ public class Core {
 		return getClass().getName() + "[name=" + name
 				+ ((ID != UNKNOWN) ? ", ID=" + ID + "]" : "]");
 	}
+	
+	/**
+	 * Tests whether another Core is equal to this one.
+	 * 
+	 * Two Cores are equal if, and only if, they have the same name, the same ID and
+	 * the same ArcturusDatabase object as their owner.
+	 * 
+	 * @param that the obkect with which to compare
+	 * @return true if the two objects are identical; false otherwise.
+	 */
+	
+	public boolean equals(Core that) {
+		return that != null && this.name != null && that.name != null &&
+			this.name.equals(that.name) && this.ID == that.ID &&
+			this.adb == that.adb;
+	}
+	
 }
