@@ -26,8 +26,27 @@ public class TestCloneManager extends TestBase {
 		
 		String cloneName = "MyClone";
 		
-		Clone clone = adb.findOrCreateClone(cloneName);
+		Clone clone = new Clone(cloneName);
 		
-		assertNotNull(clone);
+		Clone newClone = adb.findOrCreateClone(clone);
+		
+		assertNotNull("findOrCreateClone returned null", newClone);
+		
+		assertEquals("findOrCreateClone yielded unequal clones", clone, newClone);
+	}
+	
+	@Test
+	public void putClone() throws ArcturusDatabaseException {
+		ArcturusDatabase adb = getArcturusDatabase();
+		
+		String cloneName = "MyClone";
+		
+		Clone clone = new Clone(cloneName);
+		
+		Clone newClone = adb.putClone(clone);
+		
+		assertNotNull("putClone returned null", newClone);	
+		
+		assertEquals("putClone yielded unequal clones", clone, newClone);
 	}
 }

@@ -167,7 +167,9 @@ public interface ArcturusDatabase {
 
 	public Clone getCloneByID(int id) throws ArcturusDatabaseException;
 	
-	public Clone findOrCreateClone(String name) throws ArcturusDatabaseException;
+	public Clone findOrCreateClone(Clone clone) throws ArcturusDatabaseException;
+	
+	public Clone putClone(Clone clone) throws ArcturusDatabaseException;
 
 	public Ligation getLigationByName(String name) throws ArcturusDatabaseException;
 

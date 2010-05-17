@@ -369,8 +369,12 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		return cloneManager.getCloneByID(id);
 	}
 	
-	public synchronized Clone findOrCreateClone(String name) throws ArcturusDatabaseException {
-		return cloneManager.findOrCreateClone(name);
+	public synchronized Clone findOrCreateClone(Clone clone) throws ArcturusDatabaseException {
+		return cloneManager.findOrCreateClone(clone);
+	}
+	
+	public synchronized Clone putClone(Clone clone) throws ArcturusDatabaseException {
+		return cloneManager.putClone(clone);
 	}
 
 	public synchronized Ligation getLigationByName(String name)

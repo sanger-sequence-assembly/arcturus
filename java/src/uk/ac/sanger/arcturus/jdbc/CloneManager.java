@@ -81,14 +81,34 @@ public class CloneManager extends AbstractManager {
 		return clone;
 	}
 	
-	public Clone findOrCreateClone(String name) throws ArcturusDatabaseException {
-		try {
-			Clone clone = getCloneByName(name);
+	public Clone findOrCreateClone(Clone clone) throws ArcturusDatabaseException {
+		if (clone == null)
+			throw new ArcturusDatabaseException("Cannot store a null clone");
 		
-			if (clone != null)
-				return clone;
+		if (clone.getName() == null)
+			throw new ArcturusDatabaseException("Cannot store a clone with no name");
 		
-			pstmtInsertNewClone.setString(1, name);
+		String cloneName = clone.getName();
+				
+		Clone cachedClone = getCloneByName(cloneName);
+		
+		if (cachedClone != null)
+			return cachedClone;
+		
+		return putClone(clone);
+	}
+	
+	public Clone putClone(Clone clone) throws ArcturusDatabaseException {
+		if (clone == null)
+			throw new ArcturusDatabaseException("Cannot store a null clone");
+		
+		if (clone.getName() == null)
+			throw new ArcturusDatabaseException("Cannot store a clone with no name");
+		
+		String cloneName = clone.getName();
+		
+		try {		
+			pstmtInsertNewClone.setString(1, cloneName);
 			
 			int rc = pstmtInsertNewClone.executeUpdate();
 			
@@ -100,14 +120,14 @@ public class CloneManager extends AbstractManager {
 				rs.close();
 				
 				if (id > 0)
-					return registerNewClone(name, id);
+					return registerNewClone(clone, id);
 			}
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to find or create clone by name=" + name, conn, this);
+			adb.handleSQLException(e, "Failed to put clone " + clone, conn, this);
 		}
 		
-		return null;
+		return null;	
 	}
 
 	private Clone loadCloneByName(String name) throws SQLException {
@@ -120,6 +140,8 @@ public class CloneManager extends AbstractManager {
 			int id = rs.getInt(1);
 			clone = registerNewClone(name, id);
 		}
+		
+		rs.close();
 
 		return clone;
 	}
@@ -134,6 +156,8 @@ public class CloneManager extends AbstractManager {
 			String name = rs.getString(1);
 			clone = registerNewClone(name, id);
 		}
+		
+		rs.close();
 
 		return clone;
 	}
@@ -142,6 +166,18 @@ public class CloneManager extends AbstractManager {
 		Clone clone = new Clone(name, id, adb);
 
 		hashByName.put(name, clone);
+		hashByID.put(new Integer(id), clone);
+
+		return clone;
+	}
+
+	private Clone registerNewClone(Clone clone, int id) {
+		clone.setID(id);
+		clone.setArcturusDatabase(adb);
+		
+		String cloneName = clone.getName();
+
+		hashByName.put(cloneName, clone);
 		hashByID.put(new Integer(id), clone);
 
 		return clone;
