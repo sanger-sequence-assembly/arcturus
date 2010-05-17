@@ -1,5 +1,7 @@
 package test;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.sql.Connection;
@@ -15,17 +17,24 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 public class Utility {
 	public static ArcturusDatabase getTestDatabase() throws ArcturusDatabaseException {
-		InputStream is = Utility.class
-				.getResourceAsStream("test.props");
-
+		String homeDirName = System.getProperty("user.home");
+		
+		File home = new File(homeDirName);
+		
+		File arcturus = new File(home, ".arcturus");
+		
+		File testprops = new File(arcturus, "testdb.props");
+		
 		Properties props = new Properties();
 
 		try {
+			InputStream is = new FileInputStream(testprops);
+
 			props.load(is);
 
 			is.close();
 		} catch (IOException e) {
-			throw new ArcturusDatabaseException(e, "Failed to load properties");
+			throw new ArcturusDatabaseException(e, "Failed to load properties from file " + testprops);
 		}
 
 		String instanceName = props.getProperty("instance");
