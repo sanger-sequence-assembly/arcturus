@@ -10,8 +10,8 @@ import java.util.*;
 
 public class Template extends Core {
 	private Ligation ligation;
-	private HashSet forwardReads;
-	private HashSet reverseReads;
+	private HashSet<Read> forwardReads;
+	private HashSet<Read> reverseReads;
 
 	/**
 	 * Constructs a Template which does not yet have an ID. This constructor
@@ -46,8 +46,8 @@ public class Template extends Core {
 
 		this.ligation = ligation;
 
-		forwardReads = new HashSet();
-		reverseReads = new HashSet();
+		forwardReads = new HashSet<Read>();
+		reverseReads = new HashSet<Read>();
 	}
 
 	/**
