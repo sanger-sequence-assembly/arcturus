@@ -6,7 +6,7 @@ import org.junit.BeforeClass;
 import test.Utility;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
-public abstract class TestBase {
+public abstract class Base {
 	private static ArcturusDatabase adb;
 	
 	@BeforeClass

@@ -9,7 +9,7 @@ import uk.ac.sanger.arcturus.data.Ligation;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
-public class TestLigationManager extends TestBase {
+public class TestLigationManager extends Base {
 	@Test
 	public void lookupLigationByName() throws ArcturusDatabaseException {
 		ArcturusDatabase adb = getArcturusDatabase();

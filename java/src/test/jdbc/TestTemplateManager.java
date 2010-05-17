@@ -10,7 +10,7 @@ import uk.ac.sanger.arcturus.data.Template;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
-public class TestTemplateManager extends TestBase {
+public class TestTemplateManager extends Base {
 	@Test
 	public void lookupTemplateByName() throws ArcturusDatabaseException {
 		ArcturusDatabase adb = getArcturusDatabase();

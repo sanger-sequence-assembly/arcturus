@@ -11,7 +11,7 @@ import uk.ac.sanger.arcturus.data.Template;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
-public class TestReadManager extends TestBase {
+public class TestReadManager extends Base {
 	@Test
 	public void lookupReadByName() throws ArcturusDatabaseException {
 		ArcturusDatabase adb = getArcturusDatabase();

@@ -8,7 +8,7 @@ import uk.ac.sanger.arcturus.data.Clone;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
-public class TestCloneManager extends TestBase {
+public class TestCloneManager extends Base {
 	@Test
 	public void lookupCloneByName() throws ArcturusDatabaseException {
 		ArcturusDatabase adb = getArcturusDatabase();

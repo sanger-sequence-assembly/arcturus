@@ -13,7 +13,7 @@ import uk.ac.sanger.arcturus.data.Sequence;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
-public class TestSequenceManager extends TestBase {
+public class TestSequenceManager extends Base {
 	@Test
 	public void storeSequence() throws ArcturusDatabaseException, UnsupportedEncodingException {
 		Sequence sequence = new Sequence(0, null);
@@ -48,5 +48,7 @@ public class TestSequenceManager extends TestBase {
 		ArcturusDatabase adb = getArcturusDatabase();		
 	
 		int seq_id = adb.putSequence(sequence);
+		
+		assertTrue(seq_id > 0);
 	}
 }
