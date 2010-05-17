@@ -336,7 +336,7 @@ public class BasicSequenceToContigMapping implements Comparable<BasicSequenceToC
 
 		for (int i = 0; i < segments.length; i++) {
 			if (segments[i] != null) {
-				rpos = segments[i].getOffset(cpos, direction == GenericMapping.Direction.FORWARD);
+				rpos = segments[i].getSubjectPositionForReferencePosition(cpos, direction);
 				if (rpos >= 0)
 					return rpos;
 			}
@@ -377,7 +377,7 @@ public class BasicSequenceToContigMapping implements Comparable<BasicSequenceToC
 				int rleft = -1, rright = -1, qleft = -1, qright = -1, q = -1;
 
 				if (cpos > cleft && cpos < cright) {
-					rleft = segments[i - 1].getSubjectFinish(direction == GenericMapping.Direction.FORWARD);
+					rleft = segments[i - 1].getSubjectFinish();
 					rright = segments[i].getSubjectStart();
 					qleft = (int) quality[rleft - 1];
 					qright = (int) quality[rright - 1];
@@ -438,10 +438,8 @@ public class BasicSequenceToContigMapping implements Comparable<BasicSequenceToC
 		
 		AssembledFrom[] afdata = new AssembledFrom[segments.length];
 		
-		boolean forward = direction == GenericMapping.Direction.FORWARD;
-		
 		for (int i = 0; i < segments.length; i++)
-			afdata[i] = new AssembledFrom(segments[i].getReferenceRange(forward), segments[i].getSubjectRange(forward));
+			afdata[i] = new AssembledFrom(segments[i].getReferenceRange(), segments[i].getSubjectRange());
 		
 		Arrays.sort(afdata);
 		
