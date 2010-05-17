@@ -301,37 +301,66 @@ public class ReadManager extends AbstractManager {
 		return dictStatus.getValue(status_id);
 	}
 	
-	public Read findOrCreateRead(String name, Template template,
-			java.util.Date asped, String strand, String primer, String chemistry, String basecaller, String status)
+	public Read findOrCreateRead(Read read)
 		throws ArcturusDatabaseException {
-		Read read = getReadByName(name);
+		if (read == null)
+			throw new ArcturusDatabaseException("Cannot find/create a null read");
+		
+		if (read.getName() == null)
+			throw new ArcturusDatabaseException("Cannot find/create a read with no name");
+	
+		String readName = read.getName();
+		
+		Read cachedRead = hashByName.get(readName);
+		
+		if (cachedRead != null)
+			return cachedRead;
 		
 		if (read != null)
 			return read;
+		
+		return putRead(read);
+	}
+	
+	public Read putRead(Read read) throws ArcturusDatabaseException {
+		if (read == null)
+			throw new ArcturusDatabaseException("Cannot put a null read");
+		
+		if (read.getName() == null)
+			throw new ArcturusDatabaseException("Cannot put a read with no name");
+		
+		String readName = read.getName();	
 
 		try {
+			Template template = read.getTemplate();
+			
+			if (template != null)
+				template = adb.findOrCreateTemplate(template);
+			
 			int template_id = (template == null) ? 0 : template.getID();
 			
-			int iStrand = parseStrand(strand);
-			int iPrimer = parsePrimer(primer);
-			int iChemistry = parseChemistry(chemistry);
+			String strand = strandToString(read.getStrand());
+			String primer = primerToString(read.getPrimer());
+			String chemistry = chemistryToString(read.getChemistry());
+						
+			java.util.Date asped = read.getAsped();
 			
-			java.sql.Date dAsped = asped == null ? null : new java.sql.Date(asped.getTime());
+			java.sql.Date asped2 = asped == null ? null : new java.sql.Date(asped.getTime());
 			
-			int status_id = dictStatus.getID(status);
-			int basecaller_id = dictBasecaller.getID(basecaller);
+			int status_id = dictStatus.getID(read.getStatus());
+			int basecaller_id = dictBasecaller.getID(read.getBasecaller());
 
-			pstmtInsertNewRead.setString(1, name);
+			pstmtInsertNewRead.setString(1, readName);
 			pstmtInsertNewRead.setInt(2, template_id);
 			
-			if (dAsped == null)
+			if (asped2 == null)
 				pstmtInsertNewRead.setNull(3, Types.DATE);
 			else
-				pstmtInsertNewRead.setDate(3, dAsped);
+				pstmtInsertNewRead.setDate(3, asped2);
 			
-			pstmtInsertNewRead.setInt(4, iStrand);
-			pstmtInsertNewRead.setInt(5, iPrimer);
-			pstmtInsertNewRead.setInt(6, iChemistry);
+			pstmtInsertNewRead.setString(4, strand);
+			pstmtInsertNewRead.setString(5, primer);
+			pstmtInsertNewRead.setString(6, chemistry);
 			
 			pstmtInsertNewRead.setInt(7, basecaller_id);
 			pstmtInsertNewRead.setInt(8, status_id);
@@ -344,19 +373,26 @@ public class ReadManager extends AbstractManager {
 				int read_id = rs.next() ? rs.getInt(1) : -1;
 				
 				if (read_id > 0)
-					return createAndRegisterNewRead(name, read_id, template_id,
-							asped, iStrand, iPrimer, iChemistry, basecaller, status);
+					return registerNewRead(read, read_id);
 			}
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to find or create read by name=\"" + name + "\"", conn, this);
+			adb.handleSQLException(e, "Failed to find or create read by name=\"" + readName + "\"", conn, this);
 		}
 		
 		return null;
 	}
 	
-	public Read findOrCreateRead(Read read) throws ArcturusDatabaseException {
-		return null;
+	private Read registerNewRead(Read read, int read_id) {
+		read.setID(read_id);
+		read.setArcturusDatabase(adb);
+		
+		if (cacheing) {
+			hashByID.put(read_id, read);
+			hashByName.put(read.getName(), read);
+		}
+		
+		return read;
 	}
 
 	public int[] getUnassembledReadIDList() throws ArcturusDatabaseException {

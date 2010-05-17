@@ -35,16 +35,18 @@ public class TestReadManager extends TestBase {
 		
 		Date asped = new Date();
 		
-		String strand = "Forward";
-		String primer = "Universal_primer";
-		String chemistry = "Dye_primer";
-		
 		String basecaller = "UnitTesting";
 		
 		String status = "PASS";
 		
-		Read read = adb.findOrCreateRead(readName, template, asped, strand, primer, chemistry, basecaller, status);
+		Read read = new Read(readName, 0, template, asped,
+				Read.FORWARD, Read.UNIVERSAL_PRIMER, Read.DYE_TERMINATOR,
+				basecaller, status, null);
 		
-		assertNotNull(read);
+		Read newRead = adb.findOrCreateRead(read);
+		
+		assertNotNull("findOrCreateRead returned null", newRead);
+		
+		assertEquals("findOrCreateRead yielded unequal reads", read, newRead);
 	}
 }

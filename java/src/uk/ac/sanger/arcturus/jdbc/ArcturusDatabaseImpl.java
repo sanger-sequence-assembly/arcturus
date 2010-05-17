@@ -477,11 +477,12 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		readManager.registerNewRead(read);
 	}
 
-	public synchronized Read findOrCreateRead(String name,
-			Template template, java.util.Date asped, String strand,
-			String primer, String chemistry, String basecaller, String status) throws ArcturusDatabaseException {
-		return readManager.findOrCreateRead(name, template, asped, strand,
-				primer, chemistry, basecaller, status);
+	public synchronized Read findOrCreateRead(Read read) throws ArcturusDatabaseException {
+		return readManager.findOrCreateRead(read);
+	}
+
+	public synchronized Read putRead(Read read) throws ArcturusDatabaseException {
+		return readManager.findOrCreateRead(read);
 	}
 
 	public synchronized int[] getUnassembledReadIDList() throws ArcturusDatabaseException {

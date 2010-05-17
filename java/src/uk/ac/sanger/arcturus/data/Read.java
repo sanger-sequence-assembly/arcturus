@@ -63,6 +63,8 @@ public class Read extends Core {
 	private int strand;
 	private int chemistry;
 	private int primer;
+	private String basecaller;
+	private String status;
 
 	/**
 	 * Constructs a Read which does not yet have an ID. This constructor will
@@ -116,7 +118,7 @@ public class Read extends Core {
 	 */
 
 	public Read(String name, int ID, Template template, java.util.Date asped,
-			int strand, int primer, int chemistry, ArcturusDatabase adb) {
+			int strand, int primer, int chemistry, String basecaller, String status, ArcturusDatabase adb) {
 		super(name, ID, adb);
 
 		setTemplate(template);
@@ -125,6 +127,9 @@ public class Read extends Core {
 		this.strand = strand;
 		this.primer = primer;
 		this.chemistry = chemistry;
+		
+		this.basecaller = basecaller;
+		this.status = status;
 	}
 
 	/**
@@ -239,6 +244,47 @@ public class Read extends Core {
 
 	public int getChemistry() {
 		return chemistry;
+	}
+	
+	/**
+	 * Sets the basecaller of this read.
+	 * 
+	 * @param basecaller the name of the basecaller of this read.
+	 */
+	
+	public void setBasecaller(String basecaller) {
+		this.basecaller = basecaller;
+	}
+	
+	/**
+	 * Returns the basecaller of this read.
+	 * 
+	 * @return the basecaller of this read.
+	 */
+	
+	public String getBasecaller() {
+		return basecaller;
+	}
+	
+	/**
+	 * Sets the status of this read.
+	 * 
+	 * @param status the status of this read.
+	 * 
+	 */
+	
+	public void setStatus(String status) {
+		this.status = status;
+	}
+	
+	/**
+	 * Returns the status of this read.
+	 * 
+	 * @return the status of this read.
+	 */
+	
+	public String getStatus() {
+		return status;
 	}
 
 	/**

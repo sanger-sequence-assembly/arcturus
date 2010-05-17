@@ -208,9 +208,9 @@ public interface ArcturusDatabase {
 	public int loadReadsByTemplate(int template_id)
 			throws ArcturusDatabaseException;
 
-	public Read findOrCreateRead(String name,
-			Template template, java.util.Date asped, String strand,
-			String primer, String chemistry, String basecaller, String status) throws ArcturusDatabaseException;
+	public Read findOrCreateRead(Read read) throws ArcturusDatabaseException;
+
+	public Read putRead(Read read) throws ArcturusDatabaseException;
 
 	public int[] getUnassembledReadIDList() throws ArcturusDatabaseException;
 	
