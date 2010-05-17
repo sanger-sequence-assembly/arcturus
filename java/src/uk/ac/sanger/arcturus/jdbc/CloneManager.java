@@ -83,10 +83,10 @@ public class CloneManager extends AbstractManager {
 	
 	public Clone findOrCreateClone(Clone clone) throws ArcturusDatabaseException {
 		if (clone == null)
-			throw new ArcturusDatabaseException("Cannot store a null clone");
+			throw new ArcturusDatabaseException("Cannot find/create a null clone");
 		
 		if (clone.getName() == null)
-			throw new ArcturusDatabaseException("Cannot store a clone with no name");
+			throw new ArcturusDatabaseException("Cannot find/create a clone with no name");
 		
 		String cloneName = clone.getName();
 				
