@@ -32,6 +32,10 @@ public class ArcturusDatabaseException extends Exception {
 		this(cause, null, null, null);
 	}
 	
+	public ArcturusDatabaseException(String message) {
+		this(null, message, null, null);
+	}
+	
 	public Connection getConnection() {
 		return connection;
 	}
