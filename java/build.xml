@@ -20,15 +20,6 @@
 		</fileset>
 	</path>
 
-	<path id="test.classpath">
-	  <pathelement location="./lib/junit.jar" />
-	  <pathelement location="./lib/mockito-all-1.8.4.jar" />
-	  <pathelement location="./build/classes" />
-	</path>
-
-	<!-- The directory containing the test classes -->
-	<property name="testsrc.dir" value="test"/>
-
 	<!-- Temporary build directories -->
 	<property name="build.dir" value="build"/>
 	<property name="build.classes" value="${build.dir}/classes"/>
@@ -160,6 +151,18 @@
 	     package="no"
              packagenames="${package.prefix}.${project.name}.*,${package.prefix}.${project.name}.*.*"/>
 	</target>
+
+	<!-- Definitions and tasks related to automated testing with JUnit -->
+	
+	<path id="test.classpath">
+	  <pathelement location="./lib/junit.jar" />
+	  <pathelement location="./lib/mockito-all-1.8.4.jar" />
+	  <pathelement location="./build/classes" />
+	</path>
+
+	<!-- The directory containing the test classes -->
+	<property name="testsrc.dir" value="${src.dir}/test"/>
+	
 	<target name="test" depends="compile">
 	  <javac srcdir="test" destdir="${build.classes}" debug="true" deprecation="true">
 		   <classpath refid="test.classpath" />
@@ -167,15 +170,16 @@
 		<mkdir dir="tmp"/>
 
 	  <junit>
-	    <formatter type="xml"  />
-	    <batchtest todir="tmp">
-                <fileset dir="${build.classes}">
-                   <include name="test/*Test.class"/>
-                </fileset>
-            </batchtest>
+	     <formatter type="xml"  />
 
-	    <classpath refid="build.classpath" />
-	    <classpath refid="test.classpath" />
+	     <batchtest todir="tmp">
+                <fileset dir="${build.classes}">
+                   <include name="test/**/Test*.class"/>
+                </fileset>
+         </batchtest>
+
+	     <classpath refid="build.classpath" />
+	     <classpath refid="test.classpath" />
 	  </junit>
 	</target>
 </project>

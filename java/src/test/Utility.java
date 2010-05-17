@@ -16,14 +16,14 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 public class Utility {
+	private static final String PROPS_FILENAME = ".arcturus/testdb.props";
+	
 	public static ArcturusDatabase getTestDatabase() throws ArcturusDatabaseException {
-		String homeDirName = System.getProperty("user.home");
-		
-		File home = new File(homeDirName);
-		
-		File arcturus = new File(home, ".arcturus");
-		
-		File testprops = new File(arcturus, "testdb.props");
+		String propsFilename = System.getProperty("testdb.props");
+
+		File testprops = propsFilename == null ?
+			new File(System.getProperty("user.home"), PROPS_FILENAME) :
+			new File(propsFilename);
 		
 		Properties props = new Properties();
 
