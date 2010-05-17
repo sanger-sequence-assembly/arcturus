@@ -76,7 +76,7 @@ public class LigationManager extends AbstractManager {
 			throw new ArcturusDatabaseException("Cannot find/create a null ligation");
 		
 		if (ligation.getName() == null)
-			throw new ArcturusDatabaseException("Cannot find/create a clone with no name");
+			throw new ArcturusDatabaseException("Cannot find/create a ligation with no name");
 		
 		String ligationName = ligation.getName();
 		
@@ -93,7 +93,7 @@ public class LigationManager extends AbstractManager {
 			throw new ArcturusDatabaseException("Cannot put a null ligation");
 		
 		if (ligation.getName() == null)
-			throw new ArcturusDatabaseException("Cannot put a clone with no name");
+			throw new ArcturusDatabaseException("Cannot put a ligation with no name");
 		
 		String ligationName = ligation.getName();
 		
