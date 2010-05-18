@@ -351,7 +351,13 @@ public class Read extends Core {
 				break;
 		}
 
-		buffer.append("ProcessStatus PASS\n");
+		if (status != null)
+			buffer.append("ProcessStatus " + status + "\n");
+		else
+			buffer.append("ProcessStatus PASS\n");
+		
+		if (basecaller != null)
+			buffer.append("BaseCaller " + basecaller + "\n");
 
 		return buffer.toString();
 	}
