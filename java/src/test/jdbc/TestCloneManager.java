@@ -24,7 +24,7 @@ public class TestCloneManager extends Base {
 	public void findOrCreateClone() throws ArcturusDatabaseException {
 		ArcturusDatabase adb = getArcturusDatabase();
 		
-		String cloneName = "MyClone";
+		String cloneName = "MyClone1";
 		
 		Clone clone = new Clone(cloneName);
 		
@@ -39,7 +39,7 @@ public class TestCloneManager extends Base {
 	public void putClone() throws ArcturusDatabaseException {
 		ArcturusDatabase adb = getArcturusDatabase();
 		
-		String cloneName = "MyClone";
+		String cloneName = "MyClone2";
 		
 		Clone clone = new Clone(cloneName);
 		
