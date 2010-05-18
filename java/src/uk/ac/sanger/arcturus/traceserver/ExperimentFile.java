@@ -46,4 +46,6 @@ public interface ExperimentFile {
 	public static final String KEY_ACCURACY_VALUES = "AV";
 	
 	public static final String KEY_PROCESSING_STATUS = "PS";
+
+	public static final Object KEY_BASECALLER = "BC";
 }

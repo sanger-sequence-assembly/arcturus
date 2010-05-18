@@ -162,6 +162,10 @@ public class TraceServerClient {
 		
 		read.setStrand(strand);
 		
+		read.setStatus(map.get(ExperimentFile.KEY_PROCESSING_STATUS));
+		
+		read.setBasecaller(map.get(ExperimentFile.KEY_BASECALLER));
+		
 		byte[] dna = parseDNA(map.get(ExperimentFile.KEY_SEQUENCE));
 		
 		byte[] quality = parseQuality(map.get(ExperimentFile.KEY_ACCURACY_VALUES));
