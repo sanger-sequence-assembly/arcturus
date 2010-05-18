@@ -23,6 +23,10 @@ public class Alignment implements Comparable<Alignment>,Traversable {
 		    this.referenceRange = referenceRange.copy();
 		}
 	}
+		
+	public Alignment(int rStart, int rEnd, int sStart, int sEnd) throws IllegalArgumentException {
+		this(new Range(rStart,rEnd), new Range(sStart,sEnd));
+	}
 
 	public Range getSubjectRange() {
 		return subjectRange.copy(); // copy to ensure isolation	
@@ -35,11 +39,7 @@ public class Alignment implements Comparable<Alignment>,Traversable {
     public Direction getDirection() {
 		return getAlignmentDirection(referenceRange,subjectRange);
 	}
-  	
-/* add static method to find quickly an alignment in a (sorted) list, e.g. isToLeftOf ..
-   and methods to translate getCforR, getRforC in this alignment
-*/	
-	
+ 	
     public int compareTo(Alignment that) {
 	    return this.subjectRange.getStart() - that.subjectRange.getStart();
     }
@@ -57,10 +57,10 @@ public class Alignment implements Comparable<Alignment>,Traversable {
         return new BasicSegment(referenceRange.getStart(),subjectRange.getStart(),subjectRange.getLength());
     }
     
-    public Alignment applyOffsetsAndDirection(int referenceOffset, int subjectOffset, boolean forward) {
+    public Alignment applyOffsetsAndDirection(int referenceOffset, int subjectOffset, Direction direction) {
     	// this method changes the Range constituents
      	subjectRange.offset(subjectOffset);
-    	if (forward)
+    	if (direction != Direction.FORWARD)
     		referenceRange.mirror(referenceOffset);
     	else 
      	    referenceRange.offset(referenceOffset);
@@ -98,13 +98,11 @@ public class Alignment implements Comparable<Alignment>,Traversable {
      */
     
     public Placement getPlacementOfPosition(int rpos) {
-//Utility.report("ref:" + referenceRange.toString() + "  pos:"+rpos);
+
     	if (referenceRange.getDirection() == Direction.FORWARD)
        		rpos -= referenceRange.getStart();
         else
    		    rpos -= referenceRange.getEnd();
- 
-Utility.report("rpos " + rpos);
    	
 		if (rpos < 0)
 			return Placement.AT_LEFT;
@@ -115,7 +113,7 @@ Utility.report("rpos " + rpos);
 	}
 
 	public String toString() {
-	    return referenceRange.toString() + " " + subjectRange.toString();
+		return "Alignment["+referenceRange.toString()+ "," + subjectRange.toString()+"]";
 	}
    
 // class method acting on an array of Alignment
@@ -164,7 +162,7 @@ Utility.report("rpos " + rpos);
     		return null;
     	AssembledFrom[] af = new AssembledFrom[alignments.length];
     	for (int i = 0 ; i < alignments.length ; i++) {
-    		af[i] = new AssembledFrom(alignments[i]);
+    		af[i] = new AssembledFrom(alignments[i].getReferenceRange(),alignments[i].getSubjectRange());
     	}
       	return af;
     }
