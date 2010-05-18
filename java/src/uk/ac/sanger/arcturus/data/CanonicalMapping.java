@@ -15,9 +15,7 @@ public class CanonicalMapping {
     
     protected boolean isValid = false;
     
-    // constructor using info from database
-    
-    public CanonicalMapping(int ID, BasicSegment[] segments) {
+   public CanonicalMapping(int ID, BasicSegment[] segments) {
         setMappingID(ID);
         setSegments(segments);
     }
@@ -26,14 +24,21 @@ public class CanonicalMapping {
     	this(0,segments);
     }
    
-    // constructor using ID from database and e.g. delayed loading segments
-
-    public CanonicalMapping(int ID) {
-        setMappingID(ID);        
+    public CanonicalMapping(int ID,int rs, int ss, byte[] checksum) {
+    	// constructor using ID from database and e.g. delayed loading segments
+        setMappingID(ID);
+        setReferenceSpan(rs);
+        setSubjectSpan(ss);
+        setCheckSum(checksum);
     }
+
     
     public void setMappingID(int ID) {
         this.ID = ID;
+    }
+    
+    public int getMappingID() {
+    	return ID;
     }
     
     public void setSegments(BasicSegment[] segments) {
@@ -57,7 +62,7 @@ public class CanonicalMapping {
     public BasicSegment[] getSegments() {
         return segments;
     }
-    
+   
     public void setSubjectSpan(int subjectSpan) {
         this.subjectSpan = subjectSpan;
     }
@@ -73,20 +78,30 @@ public class CanonicalMapping {
     public int getReferenceSpan() {
         return referenceSpan;
     }
-    
-    public Alignment[] getAlignments (int referenceOffset, int subjectOffset, Direction direction) {
+
+    public Alignment[] getAlignments (int referenceOffset, int subjectOffset, boolean forward) {
         if (this.segments == null) return null;
         int numberOfSegments = segments.length;
         Alignment[] alignments = new Alignment[numberOfSegments];
         for (int i = 0 ; i < numberOfSegments ; i++) {
             alignments[i] = segments[i].getAlignment();
-            alignments[i].applyOffsetsAndDirection(referenceOffset, subjectOffset, direction);
+            alignments[i].applyOffsetsAndDirection(referenceOffset, subjectOffset, forward);
         }
         return alignments;
     }
-/*    
- *  public int getSubjectPositionForReferencePosition(int pos) {
-*   public int getReferencePositionForSubjectPosition(int pos) {
+    
+    public int getSubjectPositionFromReferencePosition(int rpos) {
+//        report("CanonicalMapping.getReadPositionFromContigPosition(" + rpos + ")");
+     	int element = Utility.locateElement(segments,rpos);
+    	if (element >= 0) 
+    		return segments[element].getSubjectPositionForReferencePosition(rpos);
+    	else 
+    		return -1;
+    }
+     
+/*  public int getReferencePositionForSubjectPosition(int spos) {
+	return -1;
+    }
 
     public int getReadPositionFromContigPosition(int cpos) {
         if (segments == null)
@@ -105,16 +120,12 @@ public class CanonicalMapping {
         
         return -1;
     }
-    
-    private void report(String message) {
-        //System.err.println(message);
-    }
-
-    public float getPadPositionFromContigPosition(int deltaC) {
+ */
+    public float getPadPositionFromReferencePosition(int deltaC) {
         return 0;
     }
-*/
-    // two canonical mapping are equal if their checksums are identical
+    
+    // two canonical mappings are equal if their checksums are identical
     
     public boolean equals(CanonicalMapping that) {
     	if (that == null) 

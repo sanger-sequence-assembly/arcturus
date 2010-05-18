@@ -6,12 +6,18 @@ public class Alignment implements Comparable<Alignment>,Traversable {
 	private Range subjectRange;
 	private Range referenceRange;
 	
-	public Alignment(Range referenceRange, Range subjectRange) {
+	public Alignment(Range referenceRange, Range subjectRange) throws IllegalArgumentException {
 // constructor uses copy or reverse to ensure immutable alignment with forward subjectRange
-		if (subjectRange.getDirection() == Direction.REVERSE) {
- 			this.subjectRange   = subjectRange.reverse();
-		    this.referenceRange = referenceRange.reverse();
+		if (referenceRange == null || subjectRange == null) {
+			throw new IllegalArgumentException("reference range and subject range cannot be null");
 		}
+		else if (referenceRange.getLength() != subjectRange.getLength()) {
+		    throw new IllegalArgumentException("reference and subject ranges must be of equal size");	
+		}
+		else if (subjectRange.getDirection() == Direction.REVERSE) {
+    		this.subjectRange   = subjectRange.reverse();
+            this.referenceRange = referenceRange.reverse();
+	    }
 		else {
 		    this.subjectRange   = subjectRange.copy();
 		    this.referenceRange = referenceRange.copy();
@@ -19,7 +25,7 @@ public class Alignment implements Comparable<Alignment>,Traversable {
 	}
 
 	public Range getSubjectRange() {
-		return subjectRange.copy(); // copy to ensure encapsulation
+		return subjectRange.copy(); // copy to ensure isolation	
 	}
 	
 	public Range getReferenceRange() {
@@ -38,6 +44,11 @@ public class Alignment implements Comparable<Alignment>,Traversable {
 	    return this.subjectRange.getStart() - that.subjectRange.getStart();
     }
     
+    public boolean equals(Alignment that) {
+   	    return (referenceRange.equals(that.getReferenceRange())
+    	    &&  subjectRange.equals(that.getSubjectRange()));
+    }
+    
     public Alignment getInverse() { // interchange subject and reference ranges
         return new Alignment(subjectRange,referenceRange);
     }
@@ -46,11 +57,10 @@ public class Alignment implements Comparable<Alignment>,Traversable {
         return new BasicSegment(referenceRange.getStart(),subjectRange.getStart(),subjectRange.getLength());
     }
     
-// this method changes the Range constituents
-    
-    public Alignment applyOffsetsAndDirection(int referenceOffset, int subjectOffset, Direction direction) {
-    	subjectRange.offset(subjectOffset);
-    	if (direction == Direction.REVERSE)
+    public Alignment applyOffsetsAndDirection(int referenceOffset, int subjectOffset, boolean forward) {
+    	// this method changes the Range constituents
+     	subjectRange.offset(subjectOffset);
+    	if (forward)
     		referenceRange.mirror(referenceOffset);
     	else 
      	    referenceRange.offset(referenceOffset);
@@ -88,10 +98,14 @@ public class Alignment implements Comparable<Alignment>,Traversable {
      */
     
     public Placement getPlacementOfPosition(int rpos) {
-		rpos -= referenceRange.getStart();
-        if (referenceRange.getDirection() == Direction.REVERSE)
-    		rpos = -rpos;
-    	
+//Utility.report("ref:" + referenceRange.toString() + "  pos:"+rpos);
+    	if (referenceRange.getDirection() == Direction.FORWARD)
+       		rpos -= referenceRange.getStart();
+        else
+   		    rpos -= referenceRange.getEnd();
+ 
+Utility.report("rpos " + rpos);
+   	
 		if (rpos < 0)
 			return Placement.AT_LEFT;
 		else if (rpos >= referenceRange.getLength())
@@ -99,7 +113,11 @@ public class Alignment implements Comparable<Alignment>,Traversable {
 		else
 			return Placement.INSIDE;
 	}
-    
+
+	public String toString() {
+	    return referenceRange.toString() + " " + subjectRange.toString();
+	}
+   
 // class method acting on an array of Alignment
     
     public static Direction getDirection(Alignment[] alignments) {
@@ -140,6 +158,16 @@ public class Alignment implements Comparable<Alignment>,Traversable {
 		// We failed to find two non-null segments.
         return Direction.UNKNOWN;
     }
+    
+    public static AssembledFrom[] getAssembledFrom(Alignment[] alignments) {
+    	if (alignments == null)
+    		return null;
+    	AssembledFrom[] af = new AssembledFrom[alignments.length];
+    	for (int i = 0 ; i < alignments.length ; i++) {
+    		af[i] = new AssembledFrom(alignments[i]);
+    	}
+      	return af;
+    }
 	
 	private static Direction getAlignmentDirection(Range rRange,Range sRange) {
 		if (rRange.getDirection() == Direction.UNKNOWN || sRange.getDirection() == Direction.UNKNOWN )
@@ -147,7 +175,8 @@ public class Alignment implements Comparable<Alignment>,Traversable {
 		return (rRange.getDirection() == sRange.getDirection()) ? Direction.FORWARD : Direction.REVERSE;
 	}
 	
-	private static void collate (Alignment[] alignments) {
+	private static void coalesce (Alignment[] alignments) {
+		// see perl code  collate TO BE COMPLETED
 		
 	}
 }

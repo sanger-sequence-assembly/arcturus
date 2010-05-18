@@ -52,9 +52,22 @@ public class BasicSegment implements Comparable<BasicSegment>,Traversable {
 	public Range getReferenceRange() {
 		return new Range(referenceStart, referenceStart + length - 1);
 	}
+
+	public Range getReferenceRange(int referenceOffset, GenericMapping.Direction direction) {
+		// this functionality is also in Alignment:applyOffsetsAndDirection
+		if (direction == GenericMapping.Direction.REVERSE)
+			return getReferenceRange().mirror(referenceOffset);
+		else 
+			return getReferenceRange().offset(referenceOffset);	
+		}
 	
 	public Range getSubjectRange() {
 		return new Range(subjectStart, subjectStart + length - 1);
+	}
+	
+	public Range getSubjectRange(int subjectOffset) {
+		// this functionality is also in Alignment:applyOffsetsAndDirection
+	    return getSubjectRange().offset(subjectOffset);
 	}
 	
 	public Alignment getAlignment() {
@@ -95,7 +108,7 @@ public class BasicSegment implements Comparable<BasicSegment>,Traversable {
 		return referenceStart + spos;
 	}
 	
-	public Placement getPlacementOfPosition(int rpos) { // forward direction only
+	public Placement getPlacementOfPosition(int rpos) {
 		rpos -= referenceStart;
 		if (rpos < 0)
 			return Placement.AT_LEFT;

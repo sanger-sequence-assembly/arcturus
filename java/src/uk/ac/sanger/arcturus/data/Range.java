@@ -19,14 +19,14 @@ public class Range {
 		return end;
 	}
 	
-	public GenericMapping.Direction getDirection() {
+	public Direction getDirection() {
 		if (start < end)
-			return GenericMapping.Direction.FORWARD;
+			return Direction.FORWARD;
 		
 		if (start > end)
-			return GenericMapping.Direction.REVERSE;
+			return Direction.REVERSE;
 			
-		return GenericMapping.Direction.UNKNOWN;
+		return Direction.UNKNOWN;
 	}
 
 	public int getLength() {
@@ -48,14 +48,20 @@ public class Range {
 		return new Range(start,end);
 	}
 	
-	public void offset(int shift) {
+	public Range offset(int shift) {
 		start += shift;
 		end += shift;
+		return this;
 	}
 	
-	public void mirror(int shift) {
+	public Range mirror(int shift) {
 		start = shift - start;
 		end = shift - end;
+		return this;
+	}
+	
+	public boolean equals(Range that) {
+		return (this.start == that.start && this.end == that.end);
 	}
 	
 	public String toString() {

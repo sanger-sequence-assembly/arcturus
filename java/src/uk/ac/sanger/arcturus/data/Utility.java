@@ -66,7 +66,12 @@ public class Utility {
     }
     
     // TO BE TESTED: quick location of array element for position
-	private static int locateElement(Traversable[] alignmentsegments, int rpos) {
+
+    public static int locateElement(Traversable[] alignmentsegments, int rpos) {
+	    return locateElement(alignmentsegments, rpos, true);
+	}
+	
+	public static int locateElement(Traversable[] alignmentsegments, int rpos, boolean forward) {
 		int element = 0;
 		int increment = 2 * alignmentsegments.length;
 		int last = alignmentsegments.length - 1;
@@ -74,16 +79,19 @@ public class Utility {
 	    	if (element < 0) element = 0;
 	    	if (element > last) element = last;
 		    Placement placement = alignmentsegments[element].getPlacementOfPosition(rpos);
+		    	
 		    if (placement == Placement.INSIDE)
 		    	return element;
-		    else if (placement == Placement.AT_LEFT) {
+		    else if (forward && placement == Placement.AT_LEFT ||
+		    		!forward && placement == Placement.AT_RIGHT) {
 		    	if (element == 0)
 		    		return -1;
 		    	if (increment > 0) 
 		    		increment = -increment/2;
 			    element += increment;			    
 		    }
-		    else if (placement == Placement.AT_RIGHT) {
+		    else if (forward && placement == Placement.AT_RIGHT ||
+		    		!forward && placement == Placement.AT_LEFT) {
 		    	if (element == last)
 		    		return -1;
 		    	if (increment < 0)
@@ -91,6 +99,11 @@ public class Utility {
 			    element += increment;
 		    }
 		}
-		return (element > 0) ? -element : element;
+		return -1;
+//		return (element > 0) ? -element : element;
+	}
+	
+	public static void report(String report) {
+		System.err.println(report);
 	}
 }

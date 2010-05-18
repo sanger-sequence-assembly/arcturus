@@ -124,6 +124,10 @@ public class Sequence extends Core {
 		this.length = length;
 	}
 
+	public Sequence(int id) {
+		this(id, null, null, null, UNKNOWN);
+	}
+
 	/**
 	 * Returns the Read object to which this sequence belongs.
 	 * 

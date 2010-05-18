@@ -1463,7 +1463,6 @@ public class ContigManager extends AbstractManager {
 	class SegmentComparatorByContigPosition implements Comparator<BasicSegment> {
 		public int compare(BasicSegment s1, BasicSegment s2) {
 			int diff = s1.getReferenceStart() - s2.getReferenceStart();
-
 			return diff;
 		}
 
