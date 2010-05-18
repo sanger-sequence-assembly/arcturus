@@ -123,18 +123,12 @@ public class TraceServerClient {
 		
 		Clone clone = (cloneName != null) ? new Clone(cloneName) : null;
 		
-		if (clone != null)
-			System.err.println("Got clone " + clone);
-		
 		String ligationName = map.get(ExperimentFile.KEY_LIGATION_NAME);
 		
 		Ligation ligation = (ligationName != null) ? new Ligation(ligationName) : null;
 		
 		if (ligation != null && clone != null)
 			ligation.setClone(clone);
-		
-		if (ligation != null)
-			System.err.println("Got ligation " + ligation);
 		
 		String insertSizeRange = map.get(ExperimentFile.KEY_INSERT_SIZE_RANGE);
 		
@@ -154,10 +148,19 @@ public class TraceServerClient {
 		if (template != null && ligation != null)
 			template.setLigation(ligation);
 		
-		if (template != null)
-			System.err.println("Got template " + template);
-		
 		Read read = new Read(readName);
+		
+		int primerType = parsePrimerType(map.get(ExperimentFile.KEY_PRIMER));
+		
+		read.setPrimer(primerType);
+		
+		int chemistryType = parseChemistryType(map.get(ExperimentFile.KEY_CHEMISTRY));
+		
+		read.setChemistry(chemistryType);
+		
+		int strand = parseStrand(map.get(ExperimentFile.KEY_DIRECTION));
+		
+		read.setStrand(strand);
 		
 		byte[] dna = parseDNA(map.get(ExperimentFile.KEY_SEQUENCE));
 		
@@ -202,6 +205,47 @@ public class TraceServerClient {
 		}
 		
 		return sequence;
+	}
+	
+	private int parsePrimerType(String primer) {
+		if (primer == null)
+			return Read.UNKNOWN;
+		
+		int iPrimer = Integer.parseInt(primer);
+		
+		switch (iPrimer) {
+			case 1:
+			case 2:
+				return Read.UNIVERSAL_PRIMER;
+				
+			case 3:
+			case 4:
+				return Read.CUSTOM_PRIMER;
+				
+			default:
+				return Read.UNKNOWN;
+		}
+	}
+	
+	private int parseChemistryType(String chemistry) {
+		if (chemistry == null)
+			return Read.UNKNOWN;
+		
+		int iChemistry = Integer.parseInt(chemistry) % 2;
+		
+		return iChemistry == 0 ? Read.DYE_PRIMER : Read.DYE_TERMINATOR;
+	}
+	
+	private int parseStrand(String strand) {
+		if (strand == null)
+			return Read.UNKNOWN;
+		
+		if (strand.equals("+"))
+			return Read.FORWARD;
+		else if (strand.equals("-"))
+			return Read.REVERSE;
+		else
+			return Read.UNKNOWN;
 	}
 	
 	private byte[] parseDNA(String value) {
