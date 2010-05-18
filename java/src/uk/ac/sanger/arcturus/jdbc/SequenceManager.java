@@ -70,7 +70,7 @@ public class SequenceManager extends AbstractManager {
 		"insert into SEQUENCE (seqlen,seq_hash,qual_hash,sequence,quality) VALUES (?,?,?,?,?)";
 	
 	private static final String GET_MAXIMUM_VERSION =
-		"select max(version) from SEQ2READ where seq_id = ? and read_id = ?";
+		"select max(version) from SEQ2READ where read_id = ?";
 	
 	private static final String PUT_SEQUENCE_TO_READ =
 		"insert into SEQ2READ (seq_id, read_id, version) VALUES (?,?,?)";
@@ -706,9 +706,10 @@ public class SequenceManager extends AbstractManager {
 		if (read == null)
 			throw new ArcturusDatabaseException("The sequence has no associated read");
 		
-		if (read.getID() == 0) {
-			
-		}
+		if (read.getID() == 0)
+			read = adb.findOrCreateRead(read);
+		
+		int read_id = read.getID();
 		
 		int seq_id = -1;
 		
@@ -802,6 +803,27 @@ public class SequenceManager extends AbstractManager {
 				
 				pstmtPutCloningVectorClipping.executeUpdate();
 			}
+			
+			pstmtGetMaximumVersion.setInt(1, read_id);
+			
+			rs = pstmtGetMaximumVersion.executeQuery();
+			
+			int version = 0;
+			
+			if (rs.next()) {
+				version = rs.getInt(1) + 1;
+				
+				if (rs.wasNull())
+					version = 0;
+			}
+			
+			rs.close();
+			
+			pstmtPutSequenceToRead.setInt(1, seq_id);
+			pstmtPutSequenceToRead.setInt(2, read_id);
+			pstmtPutSequenceToRead.setInt(3, version);
+			
+			pstmtPutSequenceToRead.executeUpdate();
 			
 			commitTransaction();
 		} catch (SQLException e) {
