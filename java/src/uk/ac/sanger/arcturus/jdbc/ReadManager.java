@@ -316,9 +316,6 @@ public class ReadManager extends AbstractManager {
 		if (cachedRead != null)
 			return cachedRead;
 		
-		if (read != null)
-			return read;
-		
 		return putRead(read);
 	}
 	
@@ -329,7 +326,7 @@ public class ReadManager extends AbstractManager {
 		if (read.getName() == null)
 			throw new ArcturusDatabaseException("Cannot put a read with no name");
 		
-		String readName = read.getName();	
+		String readName = read.getName();
 
 		try {
 			Template template = read.getTemplate();
@@ -371,6 +368,8 @@ public class ReadManager extends AbstractManager {
 				ResultSet rs = pstmtInsertNewRead.getGeneratedKeys();
 				
 				int read_id = rs.next() ? rs.getInt(1) : -1;
+				
+				rs.close();
 				
 				if (read_id > 0)
 					return registerNewRead(read, read_id);
