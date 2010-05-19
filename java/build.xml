@@ -173,7 +173,13 @@
                 </fileset>
              </batchtest>
 
-	     <classpath refid="build.classpath" />
+	     <classpath>
+		    <fileset dir="${lib.dir}">
+			<include name="*.jar" />
+		    </fileset>
+		    <pathelement location="${build.classes}" />
+		    <pathelement path="${java.class.path}"/>
+             </classpath >
 	  </junit>
 	</target>
 </project>
