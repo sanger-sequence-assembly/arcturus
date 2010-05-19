@@ -79,13 +79,13 @@ public class CanonicalMapping {
         return referenceSpan;
     }
 
-    public Alignment[] getAlignments (int referenceOffset, int subjectOffset, boolean forward) {
+    public Alignment[] getAlignments (int referenceOffset, int subjectOffset, Direction direction) {
         if (this.segments == null) return null;
         int numberOfSegments = segments.length;
         Alignment[] alignments = new Alignment[numberOfSegments];
         for (int i = 0 ; i < numberOfSegments ; i++) {
             alignments[i] = segments[i].getAlignment();
-            alignments[i].applyOffsetsAndDirection(referenceOffset, subjectOffset, forward);
+            alignments[i].applyOffsetsAndDirection(referenceOffset, subjectOffset, direction);
         }
         return alignments;
     }

@@ -118,7 +118,7 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 	    if (alignments != null)
 	    	return alignments;
 	    if (cm != null)
-	    	alignments = cm.getAlignments(referenceOffset,subjectOffset,isForward());
+	    	alignments = cm.getAlignments(referenceOffset, subjectOffset, direction);
 	    return alignments;
 	}
 	
@@ -186,7 +186,7 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
   	    BasicSegment[] segments = new BasicSegment[alignments.length];
 	
 	    for (int i = 0; i < alignments.length; i++) {
-		     alignments[i].applyOffsetsAndDirection(-referenceOffset,-subjectOffset,isForward());
+		     alignments[i].applyOffsetsAndDirection(-referenceOffset, -subjectOffset, direction);
              segments[i] = alignments[i].getSegment();
 	    }
 	    
