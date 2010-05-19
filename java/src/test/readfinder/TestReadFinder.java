@@ -1,4 +1,4 @@
-package test;
+package test.readfinder;
 
 import org.junit.*;
 import junit.framework.JUnit4TestAdapter;
@@ -11,7 +11,7 @@ import static org.mockito.Mockito.*;
 import org.mockito.*;
 
 
-public class ReadFinderTest {
+public class TestReadFinder {
 
     public class ReaderFinderAccess extends ReadFinder {
         public ReaderFinderAccess(ArcturusDatabaseImpl adb) throws java.sql.SQLException {
@@ -35,7 +35,7 @@ public class ReadFinderTest {
     private ReaderFinderAccess readFinder;
     
     public static junit.framework.Test suite() {
-        return new JUnit4TestAdapter(ReadFinderTest.class);
+        return new JUnit4TestAdapter(TestReadFinder.class);
     }
     
     

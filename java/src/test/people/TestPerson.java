@@ -1,4 +1,4 @@
-package test;
+package test.people;
 
 import junit.framework.JUnit4TestAdapter;
 import static org.junit.Assert.*;
@@ -6,9 +6,9 @@ import org.junit.Test;
 import uk.ac.sanger.arcturus.people.Person;
 
 
-public class PersonTest {
+public class TestPerson {
     public static junit.framework.Test suite() {
-        return new JUnit4TestAdapter(PersonTest.class);
+        return new JUnit4TestAdapter(TestPerson.class);
     }
 
     @Test
