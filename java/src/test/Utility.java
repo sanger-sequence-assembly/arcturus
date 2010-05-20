@@ -19,39 +19,38 @@ public class Utility {
 	private static final String PROPS_FILENAME = ".arcturus/testdb.props";
 	
 	public static ArcturusDatabase getTestDatabase() throws ArcturusDatabaseException {
-		String propsFilename = System.getProperty("testdb.props");
-
-		File testprops = propsFilename == null ?
-			new File(System.getProperty("user.home"), PROPS_FILENAME) :
-			new File(propsFilename);
+		String instanceName = System.getProperty("testdb.instance");
+		String databaseName = System.getProperty("testdb.organism");
 		
-		Properties props = new Properties();
+		if (instanceName == null || databaseName == null) {
+			String propsFilename = System.getProperty("testdb.props");
 
-		if (testprops.exists() && testprops.canRead()) {
-		try {
-				InputStream is = new FileInputStream(testprops);
+			File testprops = propsFilename == null ? new File(System
+					.getProperty("user.home"), PROPS_FILENAME) : new File(
+					propsFilename);
 
-				props.load(is);
+			Properties props = new Properties();
 
-				is.close();
-			} catch (IOException e) {
-				throw new ArcturusDatabaseException(e,
-						"Failed to load properties from file " + testprops);
+			if (testprops.exists() && testprops.canRead()) {
+				try {
+					InputStream is = new FileInputStream(testprops);
+
+					props.load(is);
+
+					is.close();
+				} catch (IOException e) {
+					throw new ArcturusDatabaseException(e,
+							"Failed to load properties from file " + testprops);
+				}
 			}
-		}
 
-		String instanceName = props.getProperty("instance");
-		
-		if (instanceName == null)
-			instanceName = System.getProperty("testdb.instance");
+			instanceName = props.getProperty("instance");
+
+			databaseName = props.getProperty("organism");
+		}
 		
 		if (instanceName == null)
 			throw new ArcturusDatabaseException(null, "Test instance name is not defined");
-		
-		String databaseName = props.getProperty("organism");
-		
-		if (databaseName == null)
-			databaseName = System.getProperty("testdb.organism");
 		
 		if (databaseName == null)
 			throw new ArcturusDatabaseException(null, "Test organism name is not defined");
