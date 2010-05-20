@@ -1,6 +1,8 @@
 package uk.ac.sanger.arcturus.logging;
 
 import uk.ac.sanger.arcturus.Arcturus;
+
+import java.sql.SQLException;
 import java.util.logging.*;
 
 public class LogTester {
@@ -98,5 +100,8 @@ class MidLevelException extends Exception {
 	}
 }
 
-class LowLevelException extends Exception {
+class LowLevelException extends SQLException {
+	public LowLevelException() {
+		super("This is a low level SQL exception", "XYZ0001", 31415);
+	}
 }

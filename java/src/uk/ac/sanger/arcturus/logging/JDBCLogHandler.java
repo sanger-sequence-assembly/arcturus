@@ -66,8 +66,8 @@ public class JDBCLogHandler extends Handler {
 		setWaitTimeout(5*24*3600);
 		
 		String query =
-			"INSERT INTO LOGRECORD(time,sequence,logger,level,class,method,thread,message,user,host,connid,revision,parent,exceptionclass,exceptionmessage)" +
-			" VALUES(?,?,?,?,?,?,?,?,?,substring_index(user(),'@',-1),connection_id(),?,?,?,?)";
+			"INSERT INTO LOGRECORD(time,sequence,logger,level,class,method,thread,message,user,host,connid,revision,parent,exceptionclass,exceptionmessage,errorcode,errorstate)" +
+			" VALUES(?,?,?,?,?,?,?,?,?,substring_index(user(),'@',-1),connection_id(),?,?,?,?,?,?)";
 		
 		pstmtInsertRecord = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
 				
@@ -141,9 +141,24 @@ public class JDBCLogHandler extends Handler {
 				emessage = "[NULL]";
 			
 			pstmtInsertRecord.setString(13, emessage);
+			
+			if (thrown instanceof SQLException) {
+				SQLException sqle = (SQLException)thrown;
+				
+				int errorcode = sqle.getErrorCode();
+				String sqlstate = sqle.getSQLState();
+				
+				pstmtInsertRecord.setInt(14, errorcode);
+				pstmtInsertRecord.setString(15, sqlstate);
+			} else {
+				pstmtInsertRecord.setNull(14, Types.INTEGER);
+				pstmtInsertRecord.setNull(15, Types.CHAR);				
+			}
 		} else {
 			pstmtInsertRecord.setNull(12, Types.CHAR);
 			pstmtInsertRecord.setNull(13, Types.CHAR);
+			pstmtInsertRecord.setNull(14, Types.INTEGER);
+			pstmtInsertRecord.setNull(15, Types.CHAR);
 		}
 
 		int rc = pstmtInsertRecord.executeUpdate();
