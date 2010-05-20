@@ -27,22 +27,31 @@ public class Utility {
 		
 		Properties props = new Properties();
 
+		if (testprops.exists() && testprops.canRead()) {
 		try {
-			InputStream is = new FileInputStream(testprops);
+				InputStream is = new FileInputStream(testprops);
 
-			props.load(is);
+				props.load(is);
 
-			is.close();
-		} catch (IOException e) {
-			throw new ArcturusDatabaseException(e, "Failed to load properties from file " + testprops);
+				is.close();
+			} catch (IOException e) {
+				throw new ArcturusDatabaseException(e,
+						"Failed to load properties from file " + testprops);
+			}
 		}
 
 		String instanceName = props.getProperty("instance");
 		
 		if (instanceName == null)
+			instanceName = System.getProperty("testdb.instance");
+		
+		if (instanceName == null)
 			throw new ArcturusDatabaseException(null, "Test instance name is not defined");
 		
 		String databaseName = props.getProperty("organism");
+		
+		if (databaseName == null)
+			databaseName = System.getProperty("testdb.organism");
 		
 		if (databaseName == null)
 			throw new ArcturusDatabaseException(null, "Test organism name is not defined");
