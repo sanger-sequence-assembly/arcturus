@@ -49,6 +49,8 @@ CONTIG_TO_CLONE_MAP=Contigs_To_Clones
 ###             Start of main script                                  ###
 #########################################################################
 
+createdb=1
+
 until [ -z "$1" ]
 do
   keyword=$1
@@ -75,6 +77,10 @@ do
 	  shift
 	  ;;
 
+      "-nocreatedb" )
+	  createdb=0;
+	  ;;
+
       "-help" | "--help" | "-h" )
 	  showHelp
 	  exit 0
@@ -99,31 +105,38 @@ then
     read instance
 fi
 
-if [ "x" == "x$node" ]
+if [ "$createdb" -ne "0" ]
 then
-    echo -n "Enter MySQL instance [arcp,hlmp,arct,...] > "
-    read node
+    if [ "x" == "x$node" ]
+	then
+	echo -n "Enter MySQL instance [arcp,hlmp,arct,...] > "
+	read node
+    fi
+
+    if [ "x" == "x$subdir" ]
+	then
+	subdir=Zebrafish/Pools
+    fi
+
+    reposdir=`pwd`
+
+    dbname=$poolname
+
+    description="Zebrafish pooled BAC assembly ${poolname}"
 fi
-
-if [ "x" == "x$subdir" ]
-then
-    subdir=Zebrafish/Pools
-fi
-
-reposdir=`pwd`
-
-dbname=$poolname
-
-description="Zebrafish pooled BAC assembly ${poolname}"
 
 echo "----- Summary of input -----------------------------------"
 echo "Arcturus instance     $instance"
 echo "Pool name             $poolname"
-echo "Repository location   $reposdir"
-echo "MySQL instance        $node"
-echo "MySQL database        $dbname"
-echo "LDAP sub-directory    $subdir"
-echo "Description           $description"
+
+if [ "$createdb" -ne "0" ]
+then
+    echo "Repository location   $reposdir"
+    echo "MySQL instance        $node"
+    echo "MySQL database        $dbname"
+    echo "LDAP sub-directory    $subdir"
+    echo "Description           $description"
+fi
 echo "----------------------------------------------------------"
 
 ###
@@ -239,27 +252,33 @@ projects=${CLONE_LIST_WITH_DIRS}
 ###
 
 echo ''
-echo STAGE 3 : CREATING THE ARCTURUS DATABASE
 
-${SCRIPT_HOME}/create-new-organism.pl \
-    -instance $instance \
-    -organism $poolname \
-    -node $node \
-    -db $dbname \
-    -ldapurl ${LDAP_URL} \
-    -rootdn ${LDAP_ROOT_DN} \
-    -ldapuser ${LDAP_USER} \
-    -subdir $subdir \
-    -description "$description" \
-    -repository $reposdir \
-    -projectsfile $projects
-
-RC=$?
-
-if [ $RC != 0 ]
+if [ "$createdb" -eq "0" ]
 then
-    echo Database creation script exited with return code $RC
-    exit $RC
+    echo '*** SKIPPING STAGE 3 BECAUSE YOU SPECIFIED -nocreatedb ***'
+else
+    echo STAGE 3 : CREATING THE ARCTURUS DATABASE
+
+    ${SCRIPT_HOME}/create-new-organism.pl \
+	-instance $instance \
+	-organism $poolname \
+	-node $node \
+	-db $dbname \
+	-ldapurl ${LDAP_URL} \
+	-rootdn ${LDAP_ROOT_DN} \
+	-ldapuser ${LDAP_USER} \
+	-subdir $subdir \
+	-description "$description" \
+	-repository $reposdir \
+	-projectsfile $projects
+
+    RC=$?
+
+    if [ $RC != 0 ]
+	then
+	echo Database creation script exited with return code $RC
+	exit $RC
+    fi
 fi
 
 ###
