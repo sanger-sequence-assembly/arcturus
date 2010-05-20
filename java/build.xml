@@ -165,7 +165,10 @@
 	  <mkdir dir="tmp"/>
 
 	  <junit>
-	     <formatter type="xml"  />
+             <sysproperty key="testdb.instance" value="testing"/>
+             <sysproperty key="testdb.organism" value="TESTDB_HUDSON"/>
+
+	     <formatter type="plain"  />
 
 	     <batchtest todir="tmp">
                 <fileset dir="${build.classes}">
