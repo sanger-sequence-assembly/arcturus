@@ -10,7 +10,6 @@ import uk.ac.sanger.arcturus.Arcturus;
 public class JDBCLogHandler extends Handler {
 	protected Connection conn;
 	protected PreparedStatement pstmtInsertRecord;
-	protected PreparedStatement pstmtUpdateThrowableInfo;
 	protected PreparedStatement pstmtInsertStackTrace;
 	protected String username = System.getProperty("user.name");
 	
@@ -67,15 +66,11 @@ public class JDBCLogHandler extends Handler {
 		setWaitTimeout(5*24*3600);
 		
 		String query =
-			"INSERT INTO LOGRECORD(time,sequence,logger,level,class,method,thread,message,user,host,connid,revision)" +
-			" VALUES(?,?,?,?,?,?,?,?,?,substring_index(user(),'@',-1),connection_id(),?)";
+			"INSERT INTO LOGRECORD(time,sequence,logger,level,class,method,thread,message,user,host,connid,revision,parent,exceptionclass,exceptionmessage)" +
+			" VALUES(?,?,?,?,?,?,?,?,?,substring_index(user(),'@',-1),connection_id(),?,?,?,?)";
 		
 		pstmtInsertRecord = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
-		
-		query = "UPDATE LOGRECORD set exceptionclass = ?, exceptionmessage = ? where id = ?";
-		
-		pstmtUpdateThrowableInfo = conn.prepareStatement(query);
-		
+				
 		query = "INSERT INTO STACKTRACE(id,sequence,class,method,line) VALUES(?,?,?,?,?)";
 		
 		pstmtInsertStackTrace = conn.prepareStatement(query);
@@ -100,62 +95,80 @@ public class JDBCLogHandler extends Handler {
 			return;
 		
 		try {
-			pstmtInsertRecord.setLong(1, record.getMillis());
-			pstmtInsertRecord.setLong(2, record.getSequenceNumber());
-			pstmtInsertRecord.setString(3, record.getLoggerName());
-			pstmtInsertRecord.setInt(4, record.getLevel().intValue());
-			pstmtInsertRecord.setString(5, record.getSourceClassName());
-			pstmtInsertRecord.setString(6, record.getSourceMethodName());
-			pstmtInsertRecord.setInt(7, record.getThreadID());
+			Throwable thrown = record.getThrown();
 			
-			String message = record.getMessage();
-			if (message == null)
-				message = "[NULL]";
-						
-			pstmtInsertRecord.setString(8, message);
+			int parent = storeException(record, thrown, 0);
 			
-			pstmtInsertRecord.setString(9, username);
-			
-			String revision = Arcturus.getProperty(Arcturus.BUILD_VERSION_KEY, "[NOT KNOWN]");
-			pstmtInsertRecord.setString(10, revision);
-			
-			int rc = pstmtInsertRecord.executeUpdate();
-			
-			if (rc == 1 && record.getThrown() != null) {
-				ResultSet rs = pstmtInsertRecord.getGeneratedKeys();
-				
-				rs.next();
-				
-				int id = rs.getInt(1);
-				
-				Throwable thrown = record.getThrown();
-				
-				pstmtUpdateThrowableInfo.setString(1, thrown.getClass().getName());
-				
-				String emessage = thrown.getMessage();
-				if (emessage == null)
-					emessage = "[NULL]";
-				
-				pstmtUpdateThrowableInfo.setString(2, emessage);
-				pstmtUpdateThrowableInfo.setInt(3, id);
-				
-				rc = pstmtUpdateThrowableInfo.executeUpdate();
-				
-				StackTraceElement ste[] = thrown.getStackTrace();
-				
-				for (int i = 0; i < ste.length; i++) {
-					pstmtInsertStackTrace.setInt(1, id);
-					pstmtInsertStackTrace.setInt(2, i);
-					pstmtInsertStackTrace.setString(3, ste[i].getClassName());
-					pstmtInsertStackTrace.setString(4, ste[i].getMethodName());
-					pstmtInsertStackTrace.setInt(5, ste[i].getLineNumber());
-					
-					pstmtInsertStackTrace.executeUpdate();
-				}
+			if (thrown != null) {
+				while ((thrown = thrown.getCause()) != null)
+					parent = storeException(record, thrown, parent);
 			}
 		}
 		catch (SQLException sqle) {
 			sqle.printStackTrace();
 		}
+	}
+	
+	private int storeException(LogRecord record, Throwable thrown, int parent) throws SQLException {
+		pstmtInsertRecord.setLong(1, record.getMillis());
+		pstmtInsertRecord.setLong(2, record.getSequenceNumber());
+		pstmtInsertRecord.setString(3, record.getLoggerName());
+		pstmtInsertRecord.setInt(4, record.getLevel().intValue());
+		pstmtInsertRecord.setString(5, record.getSourceClassName());
+		pstmtInsertRecord.setString(6, record.getSourceMethodName());
+		pstmtInsertRecord.setInt(7, record.getThreadID());
+
+		String message = record.getMessage();
+		if (message == null)
+			message = "[NULL]";
+
+		pstmtInsertRecord.setString(8, message);
+
+		pstmtInsertRecord.setString(9, username);
+
+		String revision = Arcturus.getProperty(Arcturus.BUILD_VERSION_KEY,
+				"[NOT KNOWN]");
+		pstmtInsertRecord.setString(10, revision);
+
+		pstmtInsertRecord.setInt(11, parent);
+		
+		if (thrown != null) {
+			pstmtInsertRecord.setString(12, thrown.getClass().getName());
+			
+			String emessage = thrown.getMessage();
+			
+			if (emessage == null)
+				emessage = "[NULL]";
+			
+			pstmtInsertRecord.setString(13, emessage);
+		} else {
+			pstmtInsertRecord.setNull(12, Types.CHAR);
+			pstmtInsertRecord.setNull(13, Types.CHAR);
+		}
+
+		int rc = pstmtInsertRecord.executeUpdate();
+
+		if (rc == 1 && record.getThrown() != null) {
+			ResultSet rs = pstmtInsertRecord.getGeneratedKeys();
+
+			rs.next();
+
+			int id = rs.getInt(1);
+
+			StackTraceElement ste[] = thrown.getStackTrace();
+
+			for (int i = 0; i < ste.length; i++) {
+				pstmtInsertStackTrace.setInt(1, id);
+				pstmtInsertStackTrace.setInt(2, i);
+				pstmtInsertStackTrace.setString(3, ste[i].getClassName());
+				pstmtInsertStackTrace.setString(4, ste[i].getMethodName());
+				pstmtInsertStackTrace.setInt(5, ste[i].getLineNumber());
+
+				pstmtInsertStackTrace.executeUpdate();
+			}
+			
+			return id;
+		} else
+			return 0;
 	}
 }
