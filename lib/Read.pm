@@ -938,7 +938,8 @@ sub writeCafSequence {
     print $FILE "Strand $data->{strand}\n"              if defined $data->{strand};
     print $FILE "Dye $data->{chemistry}\n"              if defined $data->{chemistry};
     print $FILE "Clone $data->{clone}\n"                if defined $data->{clone};
-    print $FILE "ProcessStatus PASS\n";
+    print $FILE "ProcessStatus $data->{pstatus}\n"      if defined $data->{pstatus};
+    print $FILE "ProcessStatus PASS\n"                  unless defined $data->{pstatus};
     print $FILE "Asped $data->{asped}\n"                if defined $data->{asped} ;
     print $FILE "Base_caller $data->{basecaller}\n"     if defined $data->{basecaller};
 
