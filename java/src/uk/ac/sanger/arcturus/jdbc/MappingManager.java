@@ -22,12 +22,12 @@ public class MappingManager extends AbstractManager {
 	protected PreparedStatement pstmtInsertInSequenceToContig = null;
 	protected PreparedStatement pstmtInsertInParentToContig = null;
 	protected PreparedStatement pstmtInsertInCanonicalMapping = null;
-	protected PreparedStatement pstmtInsertInCanonicalSegment = null;
+	protected PreparedStatement pstmtInsertInCanonicalSegment = null; // REDUNDENT
 	
 	protected PreparedStatement pstmtSelectCanonicalMappings = null;
 	protected PreparedStatement pstmtSelectCanonicalMappingByID = null;
 	protected PreparedStatement pstmtSelectCanonicalMappingByChecksum = null;
-	protected PreparedStatement pstmtSelectCanonicalSegment = null;
+	protected PreparedStatement pstmtSelectCanonicalSegment = null; // REDUNDENT
 	
 	protected PreparedStatement pstmtSelectSequenceToContigMappings = null;
 //	protected PreparedStatement pstmtSelect;
@@ -63,7 +63,7 @@ public class MappingManager extends AbstractManager {
 		pstmtInsertInCanonicalMapping = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
 		
 		query = "insert into CANONICALSEGMENT (mapping_id,cstart,rstart,length) values (?,?,?,?)";
-		pstmtInsertInCanonicalSegment = conn.prepareStatement(query);
+		pstmtInsertInCanonicalSegment = conn.prepareStatement(query); // REDUNDENT
 
 // set up prepared statements for retrieving Canonical Mappings from the database
 
@@ -77,7 +77,7 @@ public class MappingManager extends AbstractManager {
 		pstmtSelectCanonicalMappingByChecksum = conn.prepareStatement(query);
 			
 		query = "select cstart,rstart,length from CANONICALSEGMENT where mapping_id = ?";
-		pstmtSelectCanonicalSegment = conn.prepareStatement(query);
+		pstmtSelectCanonicalSegment = conn.prepareStatement(query); // NOT REDUNDENT only apply to regular
 
 // retrieval of Generic Mappings		
 		
@@ -86,6 +86,14 @@ public class MappingManager extends AbstractManager {
 			  + " where contig_id = ? order by SEQ2CONTIG.mapping_id";
 
 		pstmtSelectSequenceToContigMappings = conn.prepareStatement(query);
+		
+// retrieval of mappings old-style
+		
+		query = "select seq_id,mapping_id,cstart,cfinish,direction"
+			  + "  from MAPPING"
+			  + " where contig_id = ? order by mapping_id";
+		
+		query = "select cstart,rstart,length from SEGMENT where mapping_id=?";
 	}
 
 /**
@@ -116,6 +124,9 @@ public class MappingManager extends AbstractManager {
 	    catch (SQLException e) {
 	        adb.handleSQLException(e,"Failed to build the canonical mapping cache", conn, adb);
 	    }
+	    
+// TO DO preload segments for the most common mapping IDs; requires new methods addSegmentsForCanonicalMappings()
+	    // pass array of CMappings in cache; scan to screen against those with segments; add segments for remainder  
     }
     
 /**
@@ -256,7 +267,8 @@ public class MappingManager extends AbstractManager {
 * retrieval of sequence to contig mappings with Canonical Mappings in minimal form
 */
 	
-	public void getSequenceToContigMappingsForContig(Contig contig) throws ArcturusDatabaseException {
+	public void addSequenceToContigMappingsToContig(Contig contig) throws ArcturusDatabaseException {
+		SequenceToContigMapping[] mappings = null;
 		if (contig == null || contig.getID() <= 0) 
 		    throw new IllegalArgumentException("Missing contig or invalid contig ID");
 		
@@ -267,9 +279,7 @@ public class MappingManager extends AbstractManager {
  		    
  		    int size = rs.getFetchSize();
  		    
- 		    SequenceToContigMapping[] mappings = new SequenceToContigMapping[size]; 
- 		    
-// 		    contig.setMappings(mappings);
+ 		    mappings = new SequenceToContigMapping[size];
  		    
             int nextmapping = 0;
 
@@ -287,7 +297,7 @@ public class MappingManager extends AbstractManager {
  		    		cmapping = new CanonicalMapping(mapping_id,refSpan,subSpan,checksumbytes);
  				    cacheByChecksum.put(checksum,cmapping);
  		    	}
-   			// build a minimal Sequence instance and complete the sequence-to-contig mapping
+   			    // build a minimal Sequence instance and complete the sequence-to-contig mapping
     			Sequence sequence = new Sequence(rs.getInt(1));
     			Direction direction = (rs.getString(5) == "Forward") ? Direction.FORWARD 
     					                                             : Direction.REVERSE;
@@ -296,15 +306,20 @@ public class MappingManager extends AbstractManager {
                 mappings[nextmapping++] = new SequenceToContigMapping(sequence,contig,cmapping,
                 		                                           refOffset,subOffset,direction);
  		    }
+            rs.close();	
 		}
 		catch (SQLException e) {
 	        adb.handleSQLException(e,"Failed to retrieve Sequence-Contig Mappings", conn, adb);			
 		}
 		
+// TO DO here add segments to the mappings if so specified
+		
+//		contig.setMappings(mappings);  change BasicSequenceToContigMapping?
 	}
-//	pstmtSelectCanonicalSegment
 	
-	public void getCanonicalSegmentsForCanonicalMapping(CanonicalMapping mapping)  throws ArcturusDatabaseException {
+// REDUNDENT Canonical Mappings have cigar string as checksum	pstmtSelectCanonicalSegment 
+	
+	public void addCanonicalSegmentsToCanonicalMapping(CanonicalMapping mapping)  throws ArcturusDatabaseException {
 		if (mapping == null || mapping.getMappingID() <= 0) 
 		    throw new IllegalArgumentException("Missing canonical mapping or invalid mapping ID");
 		try {
@@ -328,6 +343,16 @@ public class MappingManager extends AbstractManager {
 		catch (SQLException e) {
 	        adb.handleSQLException(e,"Failed to retrieve CanonicalMapping segment(s)", conn, adb);			
 		}
+	}
+	
+	public void addMappingsToContig(Contig contig) {
+		// read mappings from MAPPING table (OLD REPRESENTATION)
+		// build SequenceToContigMappings from that (NEEDS a temporary mapping_id field?) + SEGMENTS
+		// but using the Canonical Representation internally.
+    }
+	
+	public void addSegmentsToMapping(GenericMapping mappings) { // SEE perl code
+	    // 
 	}
 	
 /**
