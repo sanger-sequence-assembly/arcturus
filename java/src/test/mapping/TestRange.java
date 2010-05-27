@@ -8,9 +8,9 @@ import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.data.GenericMapping.Direction;
 
 public class TestRange {
-	private GenericMapping.Direction forward = GenericMapping.Direction.FORWARD;
-	private GenericMapping.Direction reverse = GenericMapping.Direction.REVERSE;
-	private GenericMapping.Direction unknown = GenericMapping.Direction.UNKNOWN;
+	private Direction forward = Direction.FORWARD;
+	private Direction reverse = Direction.REVERSE;
+	private Direction unknown = Direction.UNKNOWN;
 	@Test
 	public void testConstructor() {
 		assertEquals(10,new Range(10,19).getStart());
@@ -96,5 +96,13 @@ public class TestRange {
 		range2.mirror(30);
 		assertTrue(range2.getDirection() == reverse);
 		assertTrue(range1.equals(range2.mirror(30)));
+	}
+	
+	@Test
+	public void list() {
+		Range range1 = new Range(10,20);
+		Range range2 = range1.reverse();
+		System.out.println(range1.toString());
+		System.out.println(range2.toString());
 	}
 }
