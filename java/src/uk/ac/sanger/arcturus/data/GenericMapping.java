@@ -31,18 +31,25 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 		// Constructor to be used building Mapping from a list of alignments
 		this.subject = subject;
 		this.reference = reference;
+		this.alignments = alignments;
+
 		Arrays.sort(alignments);		
 		direction = Alignment.getDirection(alignments);
-		//buildCanonicalMapping();
+		
+		boolean test = true;
+//		test = false;
+		if (test) {
+		    buildCanonicalMapping();
+		} else {
 		
 		subjectOffset = alignments[0].getSubjectRange().getStart() - 1;
 		
-		referenceOffset = alignments[0].getReferenceRange().getStart();
-		
+		referenceOffset = alignments[0].getReferenceRange().getStart();		
 		if (direction == Direction.FORWARD)
 			referenceOffset -= 1;
 		else
 			referenceOffset += 1;
+//System.out.println("rOffset "+referenceOffset + "  sOffset "+subjectOffset + " dir: "+direction);
 		
 		BasicSegment[] segments = new BasicSegment[alignments.length];
 		
@@ -59,10 +66,11 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 				rstart = -rstart;
 			
 			segments[i] = new BasicSegment(rstart, sstart, length);
+//System.out.println(segments[i].toString());
 		}
 
 		cm = new CanonicalMapping(segments);
-
+		}
 		putRanges();
 	}
 	
@@ -117,10 +125,17 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 	public Alignment[] getAlignments() {
 	    if (alignments != null)
 	    	return alignments;
-	    if (cm != null)
-	    	alignments = cm.getAlignments(referenceOffset, subjectOffset, direction);
-	    return alignments;
-	}
+	    if (cm == null || cm.getSegments() == null)
+	    	return null;
+	    BasicSegment segments[] = cm.getSegments();
+        int numberOfSegments = segments.length;
+        Alignment[] alignments = new Alignment[numberOfSegments];
+        for (int i = 0 ; i < numberOfSegments ; i++) {
+            alignments[i] = segments[i].getAlignment();
+            alignments[i].fromCanonicalAlignment(referenceOffset, subjectOffset, direction);
+       }
+        return alignments;
+    }
 	
 	public int getReferenceStart () {
 	    return referenceRange.getStart();
@@ -142,6 +157,15 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 	    return this.getReferenceStart() - that.getReferenceStart();
 	}
 	
+	public boolean equals(GenericMapping that) {
+		if (this.isCongruentWith(that)) {
+			if (this.referenceOffset == that.referenceOffset 
+		       && this.subjectOffset == that.subjectOffset)
+				return true;
+		}
+		return false;
+	}
+	
 	public boolean isCongruentWith(GenericMapping that) {
 		getCanonicalMapping();
 		if (cm == null) 
@@ -150,7 +174,7 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 	}
 
 	public void applyShiftToReferencePosition(int shift) {
-		getCanonicalMapping(); // will build from existing alignments if not yet done
+		getCanonicalMapping(); // will build CM from existing alignments if not yet done
 		if (cm == null) 
 			return;
 		referenceOffset += shift;
@@ -158,7 +182,7 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 	}
 
 	public void mirrorReferencePosition(int mirrorPosition) {
-		getCanonicalMapping(); // will build from existing alignments if not yet done
+		getCanonicalMapping(); // will build CM from existing alignments if not yet done
 		if (cm == null) 
 			return;
 		referenceOffset = mirrorPosition - referenceOffset;
@@ -176,8 +200,8 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 	private void buildCanonicalMapping() {
 // build the canonical mapping and offsets given the alignments	
         subjectOffset = alignments[0].getSubjectRange().getStart() - 1;
-	    referenceOffset = alignments[0].getReferenceRange().getStart();
-	
+        
+	    referenceOffset = alignments[0].getReferenceRange().getStart();	
   	    if (direction == Direction.FORWARD)
 		    referenceOffset -= 1;
 	    else
@@ -186,13 +210,13 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
   	    BasicSegment[] segments = new BasicSegment[alignments.length];
 	
 	    for (int i = 0; i < alignments.length; i++) {
-		     alignments[i].applyOffsetsAndDirection(-referenceOffset, -subjectOffset, direction);
-             segments[i] = alignments[i].getSegment();
+             Alignment alignment = alignments[i].copy(); // insulate original
+		     alignment.toCanonicalAlignment(referenceOffset,subjectOffset,direction);
+             segments[i] = alignment.getSegment();
 	    }
 	    
 		this.cm = new CanonicalMapping(segments);
 	}
-
 	
 	private void putRanges () {
 // determine ranges (both as forward ranges) from characteristics of the canonical mapping

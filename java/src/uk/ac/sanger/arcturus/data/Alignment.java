@@ -1,5 +1,7 @@
 package uk.ac.sanger.arcturus.data;
 
+import java.util.*;
+
 import uk.ac.sanger.arcturus.data.GenericMapping.Direction;
 
 public class Alignment implements Comparable<Alignment>,Traversable {
@@ -49,24 +51,48 @@ public class Alignment implements Comparable<Alignment>,Traversable {
     	    &&  subjectRange.equals(that.getSubjectRange()));
     }
     
+    public Alignment copy() {
+        return new Alignment(getReferenceRange(),getSubjectRange());
+    }
+    
     public Alignment getInverse() { // interchange subject and reference ranges
-        return new Alignment(subjectRange,referenceRange);
+        return new Alignment(getSubjectRange(),getReferenceRange());
     }
     
     public BasicSegment getSegment() {
         return new BasicSegment(referenceRange.getStart(),subjectRange.getStart(),subjectRange.getLength());
     }
-    
+
     public Alignment applyOffsetsAndDirection(int referenceOffset, int subjectOffset, Direction direction) {
+	    // this method changes the Range constituents
+ 	    subjectRange.offset(subjectOffset);
+	    if (direction == Direction.FORWARD)
+	        referenceRange.offset(referenceOffset);
+	    else 
+	   	    referenceRange.mirror(-referenceOffset);
+	    return this;
+    }
+   
+    public Alignment fromCanonicalAlignment(int referenceOffset, int subjectOffset, Direction direction) {
     	// this method changes the Range constituents
      	subjectRange.offset(subjectOffset);
-    	if (direction != Direction.FORWARD)
-    		referenceRange.mirror(referenceOffset);
+    	if (direction == Direction.FORWARD)
+    	    referenceRange.offset(referenceOffset);
     	else 
-     	    referenceRange.offset(referenceOffset);
+    		referenceRange.mirror(referenceOffset);
     	return this;
     }
-
+    
+    public Alignment toCanonicalAlignment(int referenceOffset, int subjectOffset, Direction direction) {
+    	// this method changes the Range constituents
+     	subjectRange.offset(-subjectOffset);
+    	if (direction == Direction.FORWARD)
+    	    referenceRange.offset(-referenceOffset);
+    	else 
+    		referenceRange.mirror(referenceOffset);
+     	return this;
+    }
+    	    
     public int getReferencePositionForSubjectPosition(int spos) {
     	if (subjectRange.contains(spos)) {
     		spos -= subjectRange.getStart();
@@ -167,14 +193,62 @@ public class Alignment implements Comparable<Alignment>,Traversable {
       	return af;
     }
 	
+	public static Alignment[] coalesce (Alignment[] alignments) {
+		return coalesce(alignments,0); // default max gap size 0 for exactly budding entries
+	}
+	
+	public static Alignment[] coalesce (Alignment[] alignments, int maxGapSize) {
+// replace budding entries by
+		Vector<Alignment> v = new Vector<Alignment>();
+		for (int i=0 ; i < alignments.length ; i++) {
+		     v.add(alignments[i]);
+		}
+		
+		Direction direction = getDirection(alignments);
+		
+		int j = 1;
+		while (j < v.size()) {
+			Alignment ai = v.get(j-1);
+			Alignment aj = v.get(j);
+			Range air = ai.getReferenceRange();
+			Range ais = ai.getSubjectRange();
+			Range ajr = aj.getReferenceRange();
+			Range ajs = aj.getSubjectRange();
+			int referenceGap = (direction == Direction.FORWARD) ? ajr.getStart() - air.getEnd()
+					                                            : ajr.getEnd() - air.getStart();
+			int subjectGap   = ajs.getStart() - ais.getEnd();
+
+            if (referenceGap == subjectGap && subjectGap-1 <= maxGapSize) {
+			// replace elements i and j by one merged segment
+            	if (direction == Direction.FORWARD)
+				    alignments[j-1] = new Alignment(air.getStart(), ajr.getEnd(),
+						                            ais.getStart(), ajs.getEnd());
+				else if (direction == Direction.REVERSE)
+					alignments[j-1] = new Alignment(ajr.getStart(), air.getEnd(),
+	                                                ais.getStart(), ajs.getEnd());
+				v.setElementAt(alignments[j-1],j-1);
+				v.removeElementAt(j);
+			}
+			else
+				j++;
+		}
+
+		if (j < alignments.length) // there were changes
+            alignments = v.toArray(new Alignment[0]);
+		return alignments;
+	}
+		
+	public static boolean verify(Alignment[] alignments) {
+// verifies an array of alignments for consistent direction and non-overlapping segments
+	    boolean verify = true;
+	 // TO BE COMPLETED   
+	    return verify;
+	}
+	
 	private static Direction getAlignmentDirection(Range rRange,Range sRange) {
 		if (rRange.getDirection() == Direction.UNKNOWN || sRange.getDirection() == Direction.UNKNOWN )
 			return Direction.UNKNOWN;
 		return (rRange.getDirection() == sRange.getDirection()) ? Direction.FORWARD : Direction.REVERSE;
 	}
 	
-	private static void coalesce (Alignment[] alignments) {
-		// see perl code  collate TO BE COMPLETED
-		
-	}
 }

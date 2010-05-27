@@ -65,6 +65,6 @@ public class Range {
 	}
 	
 	public String toString() {
-		return start + " " + end;
+		return "Range[" + start + ".." + end + "]";
 	}
 }

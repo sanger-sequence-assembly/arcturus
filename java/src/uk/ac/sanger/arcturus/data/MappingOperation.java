@@ -1,6 +1,6 @@
 package uk.ac.sanger.arcturus.data;
 
-//import java.util.*;
+import java.util.*;
 
 import uk.ac.sanger.arcturus.data.GenericMapping.Direction;
 
@@ -29,12 +29,12 @@ public class MappingOperation {
         int rs = 0;
         int ts = 0; // for the moment
         
-        Alignment[] ap = new Alignment[ar.length + at.length]; // the maximum
-
+        Vector<Alignment> av = new Vector<Alignment>();
+        
         int ns = 0;
         
         while (rs < ar.length && ts < at.length) {
-        	int nt = t.isForward() ? ts : at.length - ts;
+        	int nt = t.isForward() ? ts : at.length - ts - 1;
         	
         	Range rx = ar[rs].getReferenceRange();
         	Range ry = ar[rs].getSubjectRange();
@@ -45,20 +45,29 @@ public class MappingOperation {
         	    tx = tx.reverse();
         	    ty = ty.reverse();
         	}
+System.out.println("rs " + rs + " ts " + ts + " nt " + nt);
+System.out.println(ar[rs].toString());     	
+System.out.println(at[nt].toString());     	
         	
         	int mxs = at[nt].getSubjectPositionForReferencePosition(ry.getStart());
             int mxf = at[nt].getSubjectPositionForReferencePosition(ry.getEnd());
-       		int bxs = ar[rs].getReferencePositionForSubjectPosition(tx.getStart());
-      	
-       	    if (mxs > 0) {
+       	    int bxs = ar[rs].getReferencePositionForSubjectPosition(tx.getStart());
+   			int bxf = ar[rs].getReferencePositionForSubjectPosition(tx.getEnd());
+System.out.println("mxs, mxf, bxs, bxf : " + mxs + " " + mxf + " " + bxs + " " + bxf );
+    	
+            if (mxs > 0) {
         		if (mxf > 0) {
-         		    ap[ns++] = new Alignment(rx,new Range(mxs,mxf));
+System.out.println("case 1-1");
+        			av.add(new Alignment(rx,new Range(mxs,mxf)));	
         		    rs++;
         		}
         		else {
-        			int bxf = ar[rs].getReferencePositionForSubjectPosition(tx.getEnd());
+//        			int bxf = ar[rs].getReferencePositionForSubjectPosition(tx.getEnd());
         			if (bxf > 0) {
-        				ap[ns++] = new Alignment(new Range(rx.getStart(),bxf), new Range(mxs,ty.getEnd()));
+System.out.println("case 1-2");
+              			av.add(new Alignment(rx.getStart(),bxf,mxs,ty.getEnd()));
+System.out.println("mxs, mxf, bxs, bxf : " + mxs + " " + mxf + " " + bxs + " " + bxf );
+System.out.println(new Alignment(rx.getStart(),bxf,mxs,ty.getEnd()).toString());         			
         				ts++;
         			}
          		    else { // should not occur
@@ -68,9 +77,10 @@ public class MappingOperation {
         		}
         	}
         	else if (mxf > 0) {
-        		
+       		
          		if (bxs > 0) {
-         		    ap[ns++] = new Alignment(new Range(bxs,rx.getEnd()),new Range(ty.getStart(),mxf));
+        			System.out.println("case 2-1");
+         			av.add(new Alignment(bxs,rx.getEnd(),ty.getStart(),mxf));
          		    rs++;
         		}
         		else { // should not occur
@@ -79,9 +89,10 @@ public class MappingOperation {
                 }
         	}
         	else if (bxs > 0) {
-        		int bxf = ar[rs].getReferencePositionForSubjectPosition(tx.getEnd());
+//        		int bxf = ar[rs].getReferencePositionForSubjectPosition(tx.getEnd());
         		if (bxf > 0) {
-        			ap[ns++] = new Alignment(new Range(bxs,bxf),ty);
+        			System.out.println("case 3-1");
+        			av.add(new Alignment(new Range(bxs,bxf),ty));
         			ts++;
         		}
         		else { // should not occur
@@ -90,18 +101,15 @@ public class MappingOperation {
         		}
         	}
         	else {
+    			System.out.println("case 4");
         		if (ry.getEnd() >= tx.getEnd())
         			ts++;
         		if (ry.getEnd() <= tx.getEnd())
         			rs++;
         	}
         }
-// copy the output array to remove any trailing undefined elements
-        Alignment[] product = new Alignment[ns];
-        for (int i = 0 ; i < ns ; i++) {
-        	product[i] = ap[i];
-        }
-        
+ 
+        Alignment[] product = av.toArray(new Alignment[0]);
 		return product;
 	}
 
@@ -111,12 +119,12 @@ public class MappingOperation {
 		if (alignments == null)
 		    return null;
 		// create a new list of inverted alignments, keep existing ones
-		Alignment[] stnemngila = new Alignment[alignments.length];
+		Alignment[] alignmentsOfInverse = new Alignment[alignments.length];
 		
 		for (int i = 0 ; i < alignments.length ; i++) {
-			stnemngila[i] = alignments[i].getInverse();
+			alignmentsOfInverse[i] = alignments[i].getInverse();
 		}
 		
-		return new GenericMapping(stnemngila);
+		return new GenericMapping(alignmentsOfInverse);
 	}
 }

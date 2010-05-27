@@ -6,8 +6,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import uk.ac.sanger.arcturus.Arcturus;
 
-import uk.ac.sanger.arcturus.data.Traversable.Placement;
-
 public class Utility {
     private static MessageDigest digester;
 
@@ -64,45 +62,7 @@ public class Utility {
 				return base;
 		}
     }
-    
-    // TO BE TESTED: quick location of array element for position
-
-    public static int locateElement(Traversable[] alignmentsegments, int rpos) {
-	    return locateElement(alignmentsegments, rpos, true);
-	}
-	
-	public static int locateElement(Traversable[] alignmentsegments, int rpos, boolean forward) {
-		int element = 0;
-		int increment = 2 * alignmentsegments.length;
-		int last = alignmentsegments.length - 1;
-		while (increment != 0) {
-	    	if (element < 0) element = 0;
-	    	if (element > last) element = last;
-		    Placement placement = alignmentsegments[element].getPlacementOfPosition(rpos);
-		    	
-		    if (placement == Placement.INSIDE)
-		    	return element;
-		    else if (forward && placement == Placement.AT_LEFT ||
-		    		!forward && placement == Placement.AT_RIGHT) {
-		    	if (element == 0)
-		    		return -1;
-		    	if (increment > 0) 
-		    		increment = -increment/2;
-			    element += increment;			    
-		    }
-		    else if (forward && placement == Placement.AT_RIGHT ||
-		    		!forward && placement == Placement.AT_LEFT) {
-		    	if (element == last)
-		    		return -1;
-		    	if (increment < 0)
-		    		increment = -increment/2;
-			    element += increment;
-		    }
-		}
-		return -1;
-//		return (element > 0) ? -element : element;
-	}
-	
+    	
 	public static void report(String report) {
 		System.err.println(report);
 	}

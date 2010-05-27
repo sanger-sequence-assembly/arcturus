@@ -77,22 +77,11 @@ public class CanonicalMapping {
     
     public int getReferenceSpan() {
         return referenceSpan;
-    }
-
-    public Alignment[] getAlignments (int referenceOffset, int subjectOffset, Direction direction) {
-        if (this.segments == null) return null;
-        int numberOfSegments = segments.length;
-        Alignment[] alignments = new Alignment[numberOfSegments];
-        for (int i = 0 ; i < numberOfSegments ; i++) {
-            alignments[i] = segments[i].getAlignment();
-            alignments[i].applyOffsetsAndDirection(referenceOffset, subjectOffset, direction);
-        }
-        return alignments;
-    }
+    }  
     
     public int getSubjectPositionFromReferencePosition(int rpos) {
 //        report("CanonicalMapping.getReadPositionFromContigPosition(" + rpos + ")");
-     	int element = Utility.locateElement(segments,rpos);
+     	int element = Traverser.locateElement(segments,rpos);
     	if (element >= 0) 
     		return segments[element].getSubjectPositionForReferencePosition(rpos);
     	else 
@@ -102,25 +91,8 @@ public class CanonicalMapping {
 /*  public int getReferencePositionForSubjectPosition(int spos) {
 	return -1;
     }
-
-    public int getReadPositionFromContigPosition(int cpos) {
-        if (segments == null)
-            return -1;
-        
-        report("CanonicalMapping.getReadPositionFromContigPosition(" + cpos + ")");
-        
-        Segment segments = getSegments();
-        Utility.locateElement(cpos);
-        for (CanonicalSegment segment : segments) {
-            report("\tExamining " + segment);
-            if (segment.containsContigPosition(cpos)) {
-                return segment.getReadOffset(cpos);
-            }
-        }
-        
-        return -1;
-    }
- */
+*/
+    
     public float getPadPositionFromReferencePosition(int deltaC) {
         return 0;
     }
