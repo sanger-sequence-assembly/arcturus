@@ -38,8 +38,8 @@
 	<property name="build.props.file" value="${resources.dir}/build.props" />
 	
 	<target name="setBuildVersion">
-		<exec executable="svnversion" dir="${basedir}" outputproperty="build.version" error="/dev/tty" />
-		<exec executable="hostname" outputproperty="build.host" error="/dev/tty" />
+		<exec executable="svnversion" dir="${basedir}" outputproperty="build.version" />
+		<exec executable="hostname" outputproperty="build.host" />
 		<echo file="${build.props.file}">build.date=${build.time}${line.separator}</echo>
 		<echo file="${build.props.file}" append="true">build.version=${build.version}${line.separator}</echo>
 		<echo file="${build.props.file}" append="true">build.by=${user.name}${line.separator}</echo>
