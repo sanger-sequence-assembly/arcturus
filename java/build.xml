@@ -157,7 +157,7 @@
 	<!-- The directory containing the test classes -->
 	<property name="testsrc.dir" value="${src.dir}/test"/>
 	
-	<target name="test" depends="compile">
+	<target name="test" depends="clean,jar">
 	  <javac srcdir="${testsrc.dir}" destdir="${build.classes}" debug="true" deprecation="true">
 		   <classpath refid="build.classpath" />
 	  </javac>
@@ -168,17 +168,21 @@
              <sysproperty key="testdb.instance" value="testing"/>
              <sysproperty key="testdb.organism" value="TESTDB_HUDSON"/>
 
-	     <formatter type="plain"  />
+	     <formatter type="xml"  />
 
 	     <batchtest todir="tmp">
                 <fileset dir="${build.classes}">
-                   <include name="test/**/Test*.class"/>
+                   <include name="test/**/Test*.class" />
+		   <exclude name="test/**/Test*$*.class" />
                 </fileset>
              </batchtest>
 
 	     <classpath>
 		    <fileset dir="${lib.dir}">
 			<include name="*.jar" />
+		    </fileset>
+		    <fileset dir="." >
+			<include name="${jar.file}" />
 		    </fileset>
 		    <pathelement location="${build.classes}" />
 		    <pathelement path="${java.class.path}"/>
