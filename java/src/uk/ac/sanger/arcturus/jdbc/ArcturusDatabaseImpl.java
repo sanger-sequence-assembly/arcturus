@@ -480,6 +480,10 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	public synchronized Read findOrCreateRead(Read read) throws ArcturusDatabaseException {
 		return readManager.findOrCreateRead(read);
 	}
+	
+	public synchronized int putRead(String readname, int flags) throws ArcturusDatabaseException {
+		return readManager.putRead(readname, flags);
+	}
 
 	public synchronized Read putRead(Read read) throws ArcturusDatabaseException {
 		return readManager.findOrCreateRead(read);
@@ -583,8 +587,8 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		return sequenceManager.decodeCompressedData(compressed, length);
 	}
 
-	public synchronized Sequence findOrCreateSequence(int seq_id, int length) {
-		return sequenceManager.findOrCreateSequence(seq_id, length);
+	public synchronized Sequence findOrCreateSequence(Sequence sequence) throws ArcturusDatabaseException {
+		return sequenceManager.findOrCreateSequence(sequence);
 	}
 
 	public int putSequence(Sequence sequence) throws ArcturusDatabaseException {

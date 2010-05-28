@@ -95,7 +95,7 @@ public class Utility {
 
 	private final static String[] COMMANDS = {
 		"delete from SEQUENCE",
-		"delete from READINFO",
+		"delete from READNAME",
 		"delete from TEMPLATE",
 		"delete from LIGATION",
 		"delete from CLONE",

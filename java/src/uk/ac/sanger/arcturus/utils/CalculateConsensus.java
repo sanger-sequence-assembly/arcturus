@@ -482,9 +482,10 @@ public class CalculateConsensus {
 		// alignment direction, not the physical strand from which the
 		// read has
 		// been sequenced.
-		int strand = mapping.isForward() ? Read.FORWARD : Read.REVERSE;
+		int strand = mapping.isForward() ? CapillaryRead.FORWARD : CapillaryRead.REVERSE;
 
-		int chemistry = read == null ? Read.UNKNOWN : read.getChemistry();
+		int chemistry = (read == null || !(read instanceof CapillaryRead)) ?
+				CapillaryRead.UNKNOWN : ((CapillaryRead)read).getChemistry();
 
 		char base = (rpos >= 0) ? mapping.getBase(rpos) : '*';
 

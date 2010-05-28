@@ -95,7 +95,9 @@ public class CAFWriter {
 	private void writeRead(Sequence sequence) {
 		Read read = sequence.getRead();
 
-		ps.print(read.toCAFString());
+		if (read instanceof CapillaryRead)
+			ps.print(((CapillaryRead)read).toCAFString());
+		
 		ps.print(sequence.toCAFString());
 
 		ps.println();

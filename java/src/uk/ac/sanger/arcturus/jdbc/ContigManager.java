@@ -101,9 +101,8 @@ public class ContigManager extends AbstractManager {
 
 		pstmtCountSegments = conn.prepareStatement(query);
 
-		query = "select MAPPING.seq_id,cstart,cfinish,direction,seqlen"
-				+ " from MAPPING left join SEQUENCE using(seq_id)"
-				+ " where contig_id=?";
+		query = "select MAPPING.seq_id,cstart,cfinish,direction"
+				+ " from MAPPING where contig_id=?";
 
 		pstmtMappingData = conn.prepareStatement(query);
 
@@ -465,9 +464,8 @@ public class ContigManager extends AbstractManager {
 				int cstart = rs.getInt(2);
 				int cfinish = rs.getInt(3);
 				boolean forward = rs.getString(4).equalsIgnoreCase("Forward");
-				int length = rs.getInt(5);
 
-				Sequence sequence = adb.findOrCreateSequence(seq_id, length);
+				Sequence sequence = adb.getSequenceBySequenceID(seq_id, true);
 
 				mappings[kMapping++] = new BasicSequenceToContigMapping(contig, sequence, cstart, cfinish,
 						forward);
@@ -535,7 +533,7 @@ public class ContigManager extends AbstractManager {
 				String basecaller = adb.getBaseCallerByID(basecaller_id);
 				String status = adb.getReadStatusByID(status_id);
 
-				Read read = new Read(readname, read_id, template, asped,
+				CapillaryRead read = new CapillaryRead(readname, read_id, template, asped,
 						ReadManager.parseStrand(strand),
 						ReadManager.parsePrimer(primer),
 						ReadManager.parseChemistry(chemistry),

@@ -10,8 +10,8 @@ import java.util.*;
 
 public class Template extends Core {
 	private Ligation ligation;
-	private HashSet<Read> forwardReads = new HashSet<Read>();
-	private HashSet<Read> reverseReads = new HashSet<Read>();
+	private HashSet<CapillaryRead> forwardReads = new HashSet<CapillaryRead>();
+	private HashSet<CapillaryRead> reverseReads = new HashSet<CapillaryRead>();
 
 	/**
 	 * Constructs a Template which does not yet have an ID. This constructor
@@ -76,14 +76,14 @@ public class Template extends Core {
 	 *            the read which is to be added to this template's set.
 	 */
 
-	void addRead(Read read) throws IllegalArgumentException {
+	void addRead(CapillaryRead read) throws IllegalArgumentException {
 		Template tmpl = read.getTemplate();
 
 		if (tmpl == null || tmpl != this)
 			throw new IllegalArgumentException("Read[name=" + read.getName()
 					+ "] does not belong to Template[name=" + name + "]");
 
-		if (read.getStrand() == Read.FORWARD)
+		if (read.getStrand() == CapillaryRead.FORWARD)
 			forwardReads.add(read);
 		else
 			reverseReads.add(read);

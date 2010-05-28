@@ -6,6 +6,7 @@ import java.util.Date;
 
 import org.junit.Test;
 
+import uk.ac.sanger.arcturus.data.CapillaryRead;
 import uk.ac.sanger.arcturus.data.Read;
 import uk.ac.sanger.arcturus.data.Template;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
@@ -39,8 +40,8 @@ public class TestReadManager extends Base {
 		
 		String status = "PASS";
 		
-		Read read = new Read(readName, 0, template, asped,
-				Read.FORWARD, Read.UNIVERSAL_PRIMER, Read.DYE_TERMINATOR,
+		CapillaryRead read = new CapillaryRead(readName, 0, template, asped,
+				CapillaryRead.FORWARD, CapillaryRead.UNIVERSAL_PRIMER, CapillaryRead.DYE_TERMINATOR,
 				basecaller, status, null);
 		
 		Read newRead = adb.findOrCreateRead(read);
@@ -69,8 +70,8 @@ public class TestReadManager extends Base {
 		
 		String status = "PASS";
 		
-		Read read = new Read(readName, 0, template, asped,
-				Read.FORWARD, Read.UNIVERSAL_PRIMER, Read.DYE_TERMINATOR,
+		CapillaryRead read = new CapillaryRead(readName, 0, template, asped,
+				CapillaryRead.FORWARD, CapillaryRead.UNIVERSAL_PRIMER, CapillaryRead.DYE_TERMINATOR,
 				basecaller, status, null);
 		
 		Read newRead = adb.putRead(read);
@@ -81,5 +82,18 @@ public class TestReadManager extends Base {
 				newRead.getID() > 0);
 		
 		assertEquals("putRead yielded unequal reads", read, newRead);
+	}
+
+	
+	@Test
+	public void putReadByName() throws ArcturusDatabaseException {
+		ArcturusDatabase adb = getArcturusDatabase();
+
+		String readname = "MyRead3";
+		int flags = 65;
+		
+		int read_id = adb.putRead(readname, flags);
+		
+		assertTrue("putRead returned a non-positive read ID", read_id > 0);
 	}
 }

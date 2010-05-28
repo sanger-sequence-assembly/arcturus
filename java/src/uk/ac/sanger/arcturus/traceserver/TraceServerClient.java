@@ -15,6 +15,7 @@ import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Clipping;
 import uk.ac.sanger.arcturus.data.Clone;
 import uk.ac.sanger.arcturus.data.Ligation;
+import uk.ac.sanger.arcturus.data.CapillaryRead;
 import uk.ac.sanger.arcturus.data.Read;
 import uk.ac.sanger.arcturus.data.Sequence;
 import uk.ac.sanger.arcturus.data.Template;
@@ -146,7 +147,7 @@ public class TraceServerClient {
 		if (template != null && ligation != null)
 			template.setLigation(ligation);
 		
-		Read read = new Read(readName);
+		CapillaryRead read = new CapillaryRead(readName);
 		
 		int primerType = parsePrimerType(map.get(ExperimentFile.KEY_PRIMER));
 		
@@ -211,43 +212,43 @@ public class TraceServerClient {
 	
 	private int parsePrimerType(String primer) {
 		if (primer == null)
-			return Read.UNKNOWN;
+			return CapillaryRead.UNKNOWN;
 		
 		int iPrimer = Integer.parseInt(primer);
 		
 		switch (iPrimer) {
 			case 1:
 			case 2:
-				return Read.UNIVERSAL_PRIMER;
+				return CapillaryRead.UNIVERSAL_PRIMER;
 				
 			case 3:
 			case 4:
-				return Read.CUSTOM_PRIMER;
+				return CapillaryRead.CUSTOM_PRIMER;
 				
 			default:
-				return Read.UNKNOWN;
+				return CapillaryRead.UNKNOWN;
 		}
 	}
 	
 	private int parseChemistryType(String chemistry) {
 		if (chemistry == null)
-			return Read.UNKNOWN;
+			return CapillaryRead.UNKNOWN;
 		
 		int iChemistry = Integer.parseInt(chemistry) % 2;
 		
-		return iChemistry == 0 ? Read.DYE_PRIMER : Read.DYE_TERMINATOR;
+		return iChemistry == 0 ? CapillaryRead.DYE_PRIMER : CapillaryRead.DYE_TERMINATOR;
 	}
 	
 	private int parseStrand(String strand) {
 		if (strand == null)
-			return Read.UNKNOWN;
+			return CapillaryRead.UNKNOWN;
 		
 		if (strand.equals("+"))
-			return Read.FORWARD;
+			return CapillaryRead.FORWARD;
 		else if (strand.equals("-"))
-			return Read.REVERSE;
+			return CapillaryRead.REVERSE;
 		else
-			return Read.UNKNOWN;
+			return CapillaryRead.UNKNOWN;
 	}
 	
 	private byte[] parseDNA(String value) {
@@ -300,7 +301,10 @@ public class TraceServerClient {
 			} else {
 				Read read = sequence.getRead();
 			
-				System.err.println(read.toCAFString());
+				if (read instanceof CapillaryRead)
+					System.err.println(((CapillaryRead)read).toCAFString());
+				else
+					System.err.println("Readname: " + read.getName());
 			
 				System.err.println(sequence.toCAFString());
 			}

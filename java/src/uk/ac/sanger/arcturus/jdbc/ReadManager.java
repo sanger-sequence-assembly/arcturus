@@ -1,5 +1,6 @@
 package uk.ac.sanger.arcturus.jdbc;
 
+import uk.ac.sanger.arcturus.data.CapillaryRead;
 import uk.ac.sanger.arcturus.data.Read;
 import uk.ac.sanger.arcturus.data.Template;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
@@ -19,24 +20,32 @@ public class ReadManager extends AbstractManager {
 	private DictionaryTableManager dictStatus;
 	private DictionaryTableManager dictBasecaller;
 	
-	private PreparedStatement pstmtPreloadReads, pstmtByID, pstmtByName, pstmtByTemplate, pstmtInsertNewRead;
+	private PreparedStatement pstmtPreloadReads, pstmtByID, pstmtByName, pstmtByTemplate;
+	private PreparedStatement pstmtInsertNewReadName, pstmtInsertNewReadMetadata;
 	
-	private static final String READ_COLUMNS = "read_id,readname,asped,strand,primer,chemistry,basecaller,status";
+	private static final String READ_COLUMNS = "RN.read_id,readname,asped,strand,primer,chemistry,basecaller,status";
+	
+	private static final String READ_TABLES = "READNAME RN left join READINFO RI using(read_id)";
+	
+	private static final String READ_TABLES_REVERSED = "READINFO RI left join READNAME RN using(read_id)"; 
 	
 	private static final String PRELOAD_READS =
-		"select " + READ_COLUMNS + " from READINFO";
+		"select " + READ_COLUMNS + " from " + READ_TABLES;
 	
 	private static final String GET_READ_BY_ID =
-		"select " + READ_COLUMNS + " from READINFO where read_id = ?";
+		"select " + READ_COLUMNS + " from " + READ_TABLES + " where RN.read_id = ?";
 	
 	private static final String GET_READ_BY_NAME =
-		"select " + READ_COLUMNS + " from READINFO where readname = ?";
+		"select " + READ_COLUMNS + " from " + READ_TABLES + " where readname = ?";
 	
 	private static final String GET_READS_BY_TEMPLATE_ID =
-		"select " + READ_COLUMNS + " from READINFO where template_id = ?";
+		"select " + READ_COLUMNS + " from " + READ_TABLES_REVERSED + " where template_id = ?";
 	
-	private static final String PUT_READ =
-		"insert into READINFO (readname,template_id,asped,strand,primer,chemistry,basecaller,status) VALUES (?,?,?,?,?,?,?,?)";
+	private static final String PUT_READ_NAME =
+		"insert into READNAME (readname, flags) VALUES (?,?)";
+	
+	private static final String PUT_READ_METADATA =
+		"insert into READINFO (read_id,template_id,asped,strand,primer,chemistry,basecaller,status) VALUES (?,?,?,?,?,?,?,?)";
 
 	/**
 	 * Creates a new ReadManager to provide read management services to an
@@ -67,7 +76,9 @@ public class ReadManager extends AbstractManager {
 
 		pstmtByTemplate = prepareStatement(GET_READS_BY_TEMPLATE_ID);
 		
-		pstmtInsertNewRead = prepareStatement(PUT_READ, Statement.RETURN_GENERATED_KEYS);
+		pstmtInsertNewReadName = prepareStatement(PUT_READ_NAME, Statement.RETURN_GENERATED_KEYS);
+		
+		pstmtInsertNewReadMetadata = prepareStatement(PUT_READ_METADATA);
 		
 		pstmtPreloadReads = prepareStatement(PRELOAD_READS);
 	}
@@ -183,79 +194,79 @@ public class ReadManager extends AbstractManager {
 
 	public static int parseStrand(String text) {
 		if (text == null)
-			return Read.UNKNOWN;
+			return CapillaryRead.UNKNOWN;
 		
-		if (text.equals(Read.FORWARD_STRING))
-			return Read.FORWARD;
+		if (text.equals(CapillaryRead.FORWARD_STRING))
+			return CapillaryRead.FORWARD;
 
-		if (text.equals(Read.REVERSE_STRING))
-			return Read.REVERSE;
+		if (text.equals(CapillaryRead.REVERSE_STRING))
+			return CapillaryRead.REVERSE;
 
-		return Read.UNKNOWN;
+		return CapillaryRead.UNKNOWN;
 	}
 	
 	public static String strandToString(int value) {
 		switch (value) {
-			case Read.FORWARD:
-				return Read.FORWARD_STRING;
+			case CapillaryRead.FORWARD:
+				return CapillaryRead.FORWARD_STRING;
 				
-			case Read.REVERSE:
-				return Read.REVERSE_STRING;
+			case CapillaryRead.REVERSE:
+				return CapillaryRead.REVERSE_STRING;
 				
 			default:
-				return Read.UNKNOWN_STRING;
+				return CapillaryRead.UNKNOWN_STRING;
 		}
 	}
 
 	public static int parsePrimer(String text) {
 		if (text == null)
-			return Read.UNKNOWN;
+			return CapillaryRead.UNKNOWN;
 		
-		if (text.equals(Read.UNIVERSAL_PRIMER_STRING))
-			return Read.UNIVERSAL_PRIMER;
+		if (text.equals(CapillaryRead.UNIVERSAL_PRIMER_STRING))
+			return CapillaryRead.UNIVERSAL_PRIMER;
 
-		if (text.equals(Read.CUSTOM_PRIMER_STRING))
-			return Read.CUSTOM_PRIMER;
+		if (text.equals(CapillaryRead.CUSTOM_PRIMER_STRING))
+			return CapillaryRead.CUSTOM_PRIMER;
 
-		return Read.UNKNOWN;
+		return CapillaryRead.UNKNOWN;
 	}
 	
 	public static String primerToString(int value) {
 		switch (value) {
-			case Read.UNIVERSAL_PRIMER:
-				return Read.UNIVERSAL_PRIMER_STRING;
+			case CapillaryRead.UNIVERSAL_PRIMER:
+				return CapillaryRead.UNIVERSAL_PRIMER_STRING;
 				
-			case Read.CUSTOM_PRIMER:
-				return Read.CUSTOM_PRIMER_STRING;
+			case CapillaryRead.CUSTOM_PRIMER:
+				return CapillaryRead.CUSTOM_PRIMER_STRING;
 				
 			default:
-				return Read.UNKNOWN_STRING;
+				return CapillaryRead.UNKNOWN_STRING;
 		}
 	}
 
 	public static int parseChemistry(String text) {
 		if (text == null)
-			return Read.UNKNOWN;
+			return CapillaryRead.UNKNOWN;
 		
-		if (text.equals(Read.DYE_TERMINATOR_STRING))
-			return Read.DYE_TERMINATOR;
+		if (text.equals(CapillaryRead.DYE_TERMINATOR_STRING))
+			return CapillaryRead.DYE_TERMINATOR;
 
-		if (text.equals(Read.DYE_PRIMER_STRING))
-			return Read.DYE_PRIMER;
+		if (text.equals(CapillaryRead.DYE_PRIMER_STRING))
+			return CapillaryRead.DYE_PRIMER;
 
-		return Read.UNKNOWN;
+		return CapillaryRead.UNKNOWN;
 	}
 	
 	public static String chemistryToString(int value) {
 		switch (value) {
-			case Read.DYE_PRIMER:
-				return Read.DYE_PRIMER_STRING;
+			case CapillaryRead.DYE_PRIMER:
+				return CapillaryRead.DYE_PRIMER_STRING;
 				
-			case Read.DYE_TERMINATOR:
-				return Read.DYE_TERMINATOR_STRING;
+			case CapillaryRead.DYE_TERMINATOR:
+				return CapillaryRead.DYE_TERMINATOR_STRING;
 				
 			default:
-				return Read.UNKNOWN_STRING;
+				return CapillaryRead.UNKNOWN_STRING;
 		}
 	}
 
@@ -264,7 +275,7 @@ public class ReadManager extends AbstractManager {
 			throws ArcturusDatabaseException {
 		Template template = adb.getTemplateByID(template_id);
 
-		Read read = new Read(name, id, template, asped, strand, primer,
+		Read read = new CapillaryRead(name, id, template, asped, strand, primer,
 				chemistry, basecaller, status, adb);
 
 		registerNewRead(read);
@@ -319,6 +330,81 @@ public class ReadManager extends AbstractManager {
 		return putRead(read);
 	}
 	
+	public int putRead(String readname, int flags) throws ArcturusDatabaseException {
+		if (readname == null)
+			throw new ArcturusDatabaseException("Cannot put a read with no name");
+		
+		int read_id = -1;
+		
+		try {
+			pstmtInsertNewReadName.setString(1, readname);
+			pstmtInsertNewReadName.setInt(2, flags);
+
+			int rc = pstmtInsertNewReadName.executeUpdate();
+			
+			if (rc == 1) {
+				ResultSet rs = pstmtInsertNewReadName.getGeneratedKeys();
+				
+				if (rs.next())
+					read_id = rs.getInt(1);
+				
+				rs.close();
+			}
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to put read with name=\"" + readname + "\"", conn, this);
+		}
+		
+		return read_id;
+	}
+	
+	private boolean storeCapillaryData(CapillaryRead read) throws ArcturusDatabaseException {
+		Template template = read.getTemplate();
+		
+		if (template != null)
+			template = adb.findOrCreateTemplate(template);
+		
+		int template_id = (template == null) ? 0 : template.getID();
+		
+		String strand = strandToString(read.getStrand());
+		String primer = primerToString(read.getPrimer());
+		String chemistry = chemistryToString(read.getChemistry());
+					
+		java.util.Date asped = read.getAsped();
+		
+		java.sql.Date asped2 = asped == null ? null : new java.sql.Date(asped.getTime());
+		
+		int status_id = dictStatus.getID(read.getStatus());
+		int basecaller_id = dictBasecaller.getID(read.getBasecaller());
+		
+		try {
+			pstmtInsertNewReadMetadata.setInt(1, read.getID());
+
+			pstmtInsertNewReadMetadata.setInt(2, template_id);
+
+			if (asped2 == null)
+				pstmtInsertNewReadMetadata.setNull(3, Types.DATE);
+			else
+				pstmtInsertNewReadMetadata.setDate(3, asped2);
+
+			pstmtInsertNewReadMetadata.setString(4, strand);
+			pstmtInsertNewReadMetadata.setString(5, primer);
+			pstmtInsertNewReadMetadata.setString(6, chemistry);
+
+			pstmtInsertNewReadMetadata.setInt(7, basecaller_id);
+			pstmtInsertNewReadMetadata.setInt(8, status_id);
+
+			int rc = pstmtInsertNewReadMetadata.executeUpdate();
+			
+			return rc == 1;
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to put capillary read data for name=\"" + read.getName() + "\"", conn, this);
+		}
+		
+		return false;
+	}
+	
 	public Read putRead(Read read) throws ArcturusDatabaseException {
 		if (read == null)
 			throw new ArcturusDatabaseException("Cannot put a null read");
@@ -329,54 +415,31 @@ public class ReadManager extends AbstractManager {
 		String readName = read.getName();
 
 		try {
-			Template template = read.getTemplate();
+			beginTransaction();
 			
-			if (template != null)
-				template = adb.findOrCreateTemplate(template);
+			int read_id = putRead(readName, 0);
 			
-			int template_id = (template == null) ? 0 : template.getID();
+			boolean success = read_id > 0;
 			
-			String strand = strandToString(read.getStrand());
-			String primer = primerToString(read.getPrimer());
-			String chemistry = chemistryToString(read.getChemistry());
-						
-			java.util.Date asped = read.getAsped();
+			if (success && read instanceof CapillaryRead) {
+				read.setID(read_id);
+				success = storeCapillaryData((CapillaryRead)read);
+			}
 			
-			java.sql.Date asped2 = asped == null ? null : new java.sql.Date(asped.getTime());
-			
-			int status_id = dictStatus.getID(read.getStatus());
-			int basecaller_id = dictBasecaller.getID(read.getBasecaller());
-
-			pstmtInsertNewRead.setString(1, readName);
-			pstmtInsertNewRead.setInt(2, template_id);
-			
-			if (asped2 == null)
-				pstmtInsertNewRead.setNull(3, Types.DATE);
-			else
-				pstmtInsertNewRead.setDate(3, asped2);
-			
-			pstmtInsertNewRead.setString(4, strand);
-			pstmtInsertNewRead.setString(5, primer);
-			pstmtInsertNewRead.setString(6, chemistry);
-			
-			pstmtInsertNewRead.setInt(7, basecaller_id);
-			pstmtInsertNewRead.setInt(8, status_id);
-			
-			int rc = pstmtInsertNewRead.executeUpdate();
-			
-			if (rc == 1) {
-				ResultSet rs = pstmtInsertNewRead.getGeneratedKeys();
-				
-				int read_id = rs.next() ? rs.getInt(1) : -1;
-				
-				rs.close();
-				
-				if (read_id > 0)
-					return registerNewRead(read, read_id);
+			if (success) {
+				commitTransaction();
+				return registerNewRead(read, read_id);
 			}
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to find or create read by name=\"" + readName + "\"", conn, this);
+			adb.handleSQLException(e, "Failed to put read name=\"" + readName + "\"", conn, this);
+
+			try {
+				rollbackTransaction();
+			} catch (SQLException e1) {
+				adb.handleSQLException(e, "Failed to roll back a transaction when storing a sequence",
+						conn, this);
+			}
 		}
 		
 		return null;

@@ -615,16 +615,37 @@ public class SequenceManager extends AbstractManager {
 		}
 	}
 
-	public Sequence findOrCreateSequence(int seq_id, int length) {
-		Sequence sequence = (Sequence) hashBySequenceID
-				.get(new Integer(seq_id));
-
-		if (sequence == null) {
-			sequence = new Sequence(seq_id, null, length);
-
-			registerNewSequence(sequence);
-		}
-
+	public Sequence findOrCreateSequence(Sequence sequence) throws ArcturusDatabaseException {
+		if (sequence == null)
+			throw new ArcturusDatabaseException("Cannot find/create a null sequence");
+		
+		if (sequence.getRead() == null)
+			throw new ArcturusDatabaseException("Cannot find/create a sequence with a null read");
+		
+		int read_id = sequence.getRead().getID();
+		
+		if (read_id <= 0)
+			throw new ArcturusDatabaseException("Cannot find/create a sequence with a read whose ID is zero");
+		
+		Sequence cachedSequence = hashBySequenceID.get(sequence.getID());
+		
+		if (cachedSequence != null)
+			return cachedSequence;
+		
+		if (sequence.getDNA() == null)
+			throw new ArcturusDatabaseException("Cannot find/create a sequence with no DNA");
+		
+		if (sequence.getQuality() == null)
+			throw new ArcturusDatabaseException("Cannot find/create a sequence with no quality");
+		
+		int seq_id = getSequenceIDByReadIDAndHash(read_id, sequence.getDNAHash(), sequence.getQualityHash());
+		
+		if (seq_id <= 0)
+			seq_id = putSequence(sequence);
+		
+		sequence.setID(seq_id);
+		registerNewSequence(sequence);
+		
 		return sequence;
 	}
 

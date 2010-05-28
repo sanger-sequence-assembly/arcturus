@@ -209,6 +209,8 @@ public interface ArcturusDatabase {
 			throws ArcturusDatabaseException;
 
 	public Read findOrCreateRead(Read read) throws ArcturusDatabaseException;
+	
+	public int putRead(String readname, int flags) throws ArcturusDatabaseException;
 
 	public Read putRead(Read read) throws ArcturusDatabaseException;
 
@@ -245,7 +247,7 @@ public interface ArcturusDatabase {
 	public void getDNAAndQualityForSequence(Sequence sequence)
 			throws ArcturusDatabaseException;
 
-	public Sequence findOrCreateSequence(int seq_id, int length);
+	public Sequence findOrCreateSequence(Sequence sequence) throws ArcturusDatabaseException;
 
 	public int putSequence(Sequence sequence) throws ArcturusDatabaseException;
 
