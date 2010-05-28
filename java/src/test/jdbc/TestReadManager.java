@@ -83,7 +83,6 @@ public class TestReadManager extends Base {
 		
 		assertEquals("putRead yielded unequal reads", read, newRead);
 	}
-
 	
 	@Test
 	public void putReadByName() throws ArcturusDatabaseException {
@@ -92,8 +91,38 @@ public class TestReadManager extends Base {
 		String readname = "MyRead3";
 		int flags = 65;
 		
-		int read_id = adb.putRead(readname, flags);
+		Read read = new Read(readname, flags, null);
 		
-		assertTrue("putRead returned a non-positive read ID", read_id > 0);
+		Read newRead = adb.putRead(read);
+		
+		assertNotNull("putRead returned null", newRead);
+		
+		assertTrue("putRead returned a non-positive read ID", newRead.getID() > 0);
+	}
+	
+	@Test
+	public void putReadsWithSameName() throws ArcturusDatabaseException {
+		ArcturusDatabase adb = getArcturusDatabase();
+
+		String readname = "MyRead4";
+		int flags = 65;
+		
+		Read read = new Read(readname, flags, null);
+		
+		Read newRead = adb.putRead(read);
+		
+		assertNotNull("putRead returned null on first read", newRead);
+		
+		assertTrue("putRead returned a non-positive read ID on first read", newRead.getID() > 0);
+		
+		flags = 0;
+		
+		read = new Read(readname, flags, null);
+		
+		newRead = adb.putRead(read);
+		
+		assertNotNull("putRead returned null on second read", newRead);
+		
+		assertTrue("putRead returned a non-positive read ID on second read", newRead.getID() > 0);
 	}
 }
