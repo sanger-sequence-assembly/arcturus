@@ -6,7 +6,13 @@ public class Read extends Core {
 	private int flags = 0;
 	
 	public Read(String name) {
+		this(name, 0);
+	}
+	
+	public Read(String name, int flags) {
 		super(name);
+		
+		this.flags = flags;
 	}
 	
 	public Read(String name, int ID, ArcturusDatabase adb) {

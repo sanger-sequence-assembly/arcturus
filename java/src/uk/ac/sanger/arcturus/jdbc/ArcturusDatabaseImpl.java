@@ -480,10 +480,6 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	public synchronized Read findOrCreateRead(Read read) throws ArcturusDatabaseException {
 		return readManager.findOrCreateRead(read);
 	}
-	
-	public synchronized int putRead(String readname, int flags) throws ArcturusDatabaseException {
-		return readManager.putRead(readname, flags);
-	}
 
 	public synchronized Read putRead(Read read) throws ArcturusDatabaseException {
 		return readManager.findOrCreateRead(read);

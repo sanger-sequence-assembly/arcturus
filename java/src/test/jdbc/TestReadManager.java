@@ -91,7 +91,7 @@ public class TestReadManager extends Base {
 		String readname = "MyRead3";
 		int flags = 65;
 		
-		Read read = new Read(readname, flags, null);
+		Read read = new Read(readname, flags);
 		
 		Read newRead = adb.putRead(read);
 		
@@ -107,7 +107,7 @@ public class TestReadManager extends Base {
 		String readname = "MyRead4";
 		int flags = 65;
 		
-		Read read = new Read(readname, flags, null);
+		Read read = new Read(readname, flags);
 		
 		Read newRead = adb.putRead(read);
 		
@@ -117,7 +117,7 @@ public class TestReadManager extends Base {
 		
 		flags = 0;
 		
-		read = new Read(readname, flags, null);
+		read = new Read(readname, flags);
 		
 		newRead = adb.putRead(read);
 		

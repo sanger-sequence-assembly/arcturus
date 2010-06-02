@@ -330,34 +330,6 @@ public class ReadManager extends AbstractManager {
 		return putRead(read);
 	}
 	
-	public int putRead(String readname, int flags) throws ArcturusDatabaseException {
-		if (readname == null)
-			throw new ArcturusDatabaseException("Cannot put a read with no name");
-		
-		int read_id = -1;
-		
-		try {
-			pstmtInsertNewReadName.setString(1, readname);
-			pstmtInsertNewReadName.setInt(2, flags);
-
-			int rc = pstmtInsertNewReadName.executeUpdate();
-			
-			if (rc == 1) {
-				ResultSet rs = pstmtInsertNewReadName.getGeneratedKeys();
-				
-				if (rs.next())
-					read_id = rs.getInt(1);
-				
-				rs.close();
-			}
-		}
-		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to put read with name=\"" + readname + "\"", conn, this);
-		}
-		
-		return read_id;
-	}
-	
 	private boolean storeCapillaryData(CapillaryRead read) throws ArcturusDatabaseException {
 		Template template = read.getTemplate();
 		
@@ -417,7 +389,21 @@ public class ReadManager extends AbstractManager {
 		try {
 			beginTransaction();
 			
-			int read_id = putRead(readName, 0);
+			int read_id = -1;
+			
+			pstmtInsertNewReadName.setString(1, readName);
+			pstmtInsertNewReadName.setInt(2, read.getFlags());
+
+			int rc = pstmtInsertNewReadName.executeUpdate();
+			
+			if (rc == 1) {
+				ResultSet rs = pstmtInsertNewReadName.getGeneratedKeys();
+				
+				if (rs.next())
+					read_id = rs.getInt(1);
+				
+				rs.close();
+			}
 			
 			boolean success = read_id > 0;
 			

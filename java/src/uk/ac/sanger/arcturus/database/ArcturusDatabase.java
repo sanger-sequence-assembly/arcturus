@@ -209,8 +209,6 @@ public interface ArcturusDatabase {
 			throws ArcturusDatabaseException;
 
 	public Read findOrCreateRead(Read read) throws ArcturusDatabaseException;
-	
-	public int putRead(String readname, int flags) throws ArcturusDatabaseException;
 
 	public Read putRead(Read read) throws ArcturusDatabaseException;
 
