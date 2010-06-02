@@ -20,4 +20,8 @@ public class Read extends Core {
 	public int getFlags() {
 		return flags;
 	}
+	
+	public String getUniqueName() {
+		return flags == 0 ? name : name + "/" + flags;
+	}
 }

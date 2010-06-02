@@ -285,7 +285,7 @@ public class ReadManager extends AbstractManager {
 
 	void registerNewRead(Read read) {
 		if (cacheing) {
-			hashByName.put(read.getName(), read);
+			hashByName.put(read.getUniqueName(), read);
 			hashByID.put(new Integer(read.getID()), read);
 		}
 	}
@@ -320,7 +320,7 @@ public class ReadManager extends AbstractManager {
 		if (read.getName() == null)
 			throw new ArcturusDatabaseException("Cannot find/create a read with no name");
 	
-		String readName = read.getName();
+		String readName = read.getUniqueName();
 		
 		Read cachedRead = hashByName.get(readName);
 		
@@ -451,7 +451,7 @@ public class ReadManager extends AbstractManager {
 		
 		if (cacheing) {
 			hashByID.put(read_id, read);
-			hashByName.put(read.getName(), read);
+			hashByName.put(read.getUniqueName(), read);
 		}
 		
 		return read;
