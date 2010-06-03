@@ -18,6 +18,15 @@ public class TestBasicCapillaryReadNameFilter {
 	}
 	
 	@Test
+	public void nameIsEmptyString() {
+		String name = "";
+		
+		boolean accept = filter.accept(name);
+		
+		assertTrue("An empty string should not be accepted", !accept);
+	}
+	
+	@Test
 	public void nameEndsInDotP1K() {
 		String name = "readname.p1k";
 		
