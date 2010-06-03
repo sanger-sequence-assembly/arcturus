@@ -22,7 +22,7 @@ public class TestSequenceManager extends Base {
 	public void storeSequence() throws ArcturusDatabaseException, UnsupportedEncodingException {
 		ArcturusDatabase adb = getArcturusDatabase();		
 		
-		Read read = createRead("MyRead1", "MyTemplate1");
+		Read read = createCapillaryRead("MyRead1", "MyTemplate1");
 		
 		read = adb.findOrCreateRead(read);
 		
@@ -49,7 +49,7 @@ public class TestSequenceManager extends Base {
 	public void findOrCreateSequence() throws ArcturusDatabaseException, UnsupportedEncodingException {
 		ArcturusDatabase adb = getArcturusDatabase();
 		
-		Read read = createRead("MyRead2", null);
+		Read read = createCapillaryRead("MyRead2", null);
 		
 		read = adb.findOrCreateRead(read);
 		
@@ -67,10 +67,10 @@ public class TestSequenceManager extends Base {
 	}
 	
 	@Test
-	public void findOrCreateTwoSequences() throws ArcturusDatabaseException, UnsupportedEncodingException {
+	public void findOrCreateTwoCapillarySequences() throws ArcturusDatabaseException, UnsupportedEncodingException {
 		ArcturusDatabase adb = getArcturusDatabase();
 		
-		Read read = createRead("MyRead3", null);
+		Read read = createCapillaryRead("MyRead3", null);
 		
 		read = adb.findOrCreateRead(read);
 		
@@ -95,7 +95,71 @@ public class TestSequenceManager extends Base {
 		assertTrue("Second sequence had an invalid ID", sequence2.getID() > 0);		
 	}
 	
-	private Read createRead(String readName, String templateName) {
+	@Test
+	public void findOrCreateTwoIlluminaSequences() throws ArcturusDatabaseException, UnsupportedEncodingException {
+		ArcturusDatabase adb = getArcturusDatabase();
+		
+		Read read = new Read("MyRead4", 0);
+		
+		read = adb.findOrCreateRead(read);
+		
+		assumeNotNull(read);
+		
+		assumeTrue(read.getID() != 0);
+		
+		Sequence sequence = createSequence(read, "ACGTACGTACGT", 10, null, null, null);
+		
+		Sequence newSequence1 = adb.findOrCreateSequence(sequence);
+		
+		assertNotNull("Sequence was null", newSequence1);
+		
+		assertTrue("Sequence had an invalid ID", newSequence1.getID() > 0);
+		
+		Sequence sequence2 = createSequence(read, "GTGTATTACACAT", 20, null, null, null);
+		
+		Sequence newSequence2 = adb.findOrCreateSequence(sequence2);
+		
+		assertNotNull("Second sequence was null", newSequence2);
+		
+		assertTrue("Second sequence had an invalid ID", newSequence2.getID() > 0);		
+	}
+	
+	@Test
+	public void findOrCreateTwoIdenticalIlluminaSequences() throws ArcturusDatabaseException, UnsupportedEncodingException {
+		ArcturusDatabase adb = getArcturusDatabase();
+		
+		final String dna = "ATTACACATGAGATTACACAT";
+		final int qvalue = 10;
+		
+		Read read = new Read("MyRead5", 0);
+		
+		read = adb.findOrCreateRead(read);
+		
+		assumeNotNull(read);
+		
+		assumeTrue(read.getID() != 0);
+		
+		Sequence sequence = createSequence(read, dna, qvalue, null, null, null);
+		
+		Sequence newSequence1 = adb.findOrCreateSequence(sequence);
+		
+		assertNotNull("Sequence was null", newSequence1);
+		
+		assertTrue("Sequence had an invalid ID", newSequence1.getID() > 0);
+		
+		sequence = createSequence(read, dna, qvalue, null, null, null);
+		
+		Sequence newSequence2 = adb.findOrCreateSequence(sequence);
+		
+		assertNotNull("Second sequence was null", newSequence2);
+		
+		assertTrue("Second sequence had an invalid ID", newSequence2.getID() > 0);
+		
+		assertTrue("First and second sequences should have the same ID",
+				newSequence1.getID() == newSequence2.getID());
+	}
+
+	private Read createCapillaryRead(String readName, String templateName) {
 		Template template = templateName == null ? null : new Template(templateName);
 		
 		Date asped = new Date();
