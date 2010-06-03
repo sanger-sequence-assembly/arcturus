@@ -21,9 +21,10 @@ public class ReadManager extends AbstractManager {
 	private DictionaryTableManager dictBasecaller;
 	
 	private PreparedStatement pstmtPreloadReads, pstmtByID, pstmtByName, pstmtByTemplate;
+	private PreparedStatement pstmtByNameAndFlags;
 	private PreparedStatement pstmtInsertNewReadName, pstmtInsertNewReadMetadata;
 	
-	private static final String READ_COLUMNS = "RN.read_id,readname,asped,strand,primer,chemistry,basecaller,status";
+	private static final String READ_COLUMNS = "RN.read_id,readname,flags,RI.read_id,asped,strand,primer,chemistry,basecaller,status";
 	
 	private static final String READ_TABLES = "READNAME RN left join READINFO RI using(read_id)";
 	
@@ -37,6 +38,9 @@ public class ReadManager extends AbstractManager {
 	
 	private static final String GET_READ_BY_NAME =
 		"select " + READ_COLUMNS + " from " + READ_TABLES + " where readname = ?";
+	
+	private static final String GET_READ_BY_NAME_AND_FLAGS =
+		"select " + READ_COLUMNS + " from " + READ_TABLES + " where readname = ? and flags = ?";
 	
 	private static final String GET_READS_BY_TEMPLATE_ID =
 		"select " + READ_COLUMNS + " from " + READ_TABLES_REVERSED + " where template_id = ?";
@@ -74,6 +78,8 @@ public class ReadManager extends AbstractManager {
 
 		pstmtByName = prepareStatement(GET_READ_BY_NAME);
 
+		pstmtByNameAndFlags = prepareStatement(GET_READ_BY_NAME_AND_FLAGS);
+
 		pstmtByTemplate = prepareStatement(GET_READS_BY_TEMPLATE_ID);
 		
 		pstmtInsertNewReadName = prepareStatement(PUT_READ_NAME, Statement.RETURN_GENERATED_KEYS);
@@ -99,6 +105,16 @@ public class ReadManager extends AbstractManager {
 		return (obj == null && autoload) ? loadReadByName(name) : (Read) obj;
 	}
 
+	public Read getReadByNameAndFlags(String name, int flags) throws ArcturusDatabaseException {
+		return getReadByNameAndFlags(name, flags, true);
+	}
+
+	public Read getReadByNameAndFlags(String name, int flags, boolean autoload)
+			throws ArcturusDatabaseException {
+		Object obj = hashByName.get(name);
+
+		return (obj == null && autoload) ? loadReadByNameAndFlags(name, flags) : (Read) obj;
+	}
 	public Read getReadByID(int id) throws ArcturusDatabaseException {
 		return getReadByID(id, true);
 	}
@@ -114,20 +130,28 @@ public class ReadManager extends AbstractManager {
 		
 		int read_id = rs.getInt(index++);
 		String name = rs.getString(index++);
-		int template_id = rs.getInt(index++);
-		java.util.Date asped = rs.getTimestamp(index++);
-		int strand = parseStrand(rs.getString(index++));
-		int primer = parsePrimer(rs.getString(index++));
-		int chemistry = parseChemistry(rs.getString(index++));
+		int flags = rs.getInt(index++);
 		
-		int basecaller_id = rs.getInt(index++);
-		int status_id = rs.getInt(index++);
+		int capillary_read_id = rs.getInt(index++);
 		
-		String basecaller = dictBasecaller.getValue(basecaller_id);
-		String status = dictStatus.getValue(status_id);
-		
-		return createAndRegisterNewRead(name, read_id, template_id, asped,
-				strand, primer, chemistry, basecaller, status);
+		if (rs.wasNull()) {
+			return createAndRegisterNewRead(read_id, name, flags);
+		} else {
+			int template_id = rs.getInt(index++);
+			java.util.Date asped = rs.getTimestamp(index++);
+			int strand = parseStrand(rs.getString(index++));
+			int primer = parsePrimer(rs.getString(index++));
+			int chemistry = parseChemistry(rs.getString(index++));
+
+			int basecaller_id = rs.getInt(index++);
+			int status_id = rs.getInt(index++);
+
+			String basecaller = dictBasecaller.getValue(basecaller_id);
+			String status = dictStatus.getValue(status_id);
+
+			return createAndRegisterNewCapillaryRead(name, read_id, template_id, asped,
+					strand, primer, chemistry, basecaller, status);
+		}
 	}
 
 	private Read loadReadByName(String name) throws ArcturusDatabaseException {
@@ -143,6 +167,27 @@ public class ReadManager extends AbstractManager {
 			rs.close();
 		} catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to load read by name=\"" + name + "\"", conn, this);
+		}
+
+		return read;
+	}
+
+	private Read loadReadByNameAndFlags(String name, int flags) throws ArcturusDatabaseException {
+		Read read = null;
+
+		try {
+			pstmtByNameAndFlags.setString(1, name);
+			pstmtByNameAndFlags.setInt(2, flags);
+			
+			ResultSet rs = pstmtByNameAndFlags.executeQuery();
+
+			if (rs.next())
+				read = createReadFromResultSet(rs);
+
+			rs.close();
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to load read by name=\"" + name + "\" and flags=" + flags,
+					conn, this);
 		}
 
 		return read;
@@ -270,7 +315,7 @@ public class ReadManager extends AbstractManager {
 		}
 	}
 
-	private Read createAndRegisterNewRead(String name, int id, int template_id,
+	private Read createAndRegisterNewCapillaryRead(String name, int id, int template_id,
 			java.util.Date asped, int strand, int primer, int chemistry, String basecaller, String status)
 			throws ArcturusDatabaseException {
 		Template template = adb.getTemplateByID(template_id);
@@ -280,6 +325,14 @@ public class ReadManager extends AbstractManager {
 
 		registerNewRead(read);
 
+		return read;
+	}
+	
+	private Read createAndRegisterNewRead(int id, String name, int flags) {
+		Read read = new Read(id, name, flags);
+		
+		registerNewRead(read);
+		
 		return read;
 	}
 
@@ -326,6 +379,11 @@ public class ReadManager extends AbstractManager {
 		
 		if (cachedRead != null)
 			return cachedRead;
+		
+		Read storedRead = getReadByNameAndFlags(read.getName(), read.getFlags());
+		
+		if (storedRead != null)
+			return storedRead;
 		
 		return putRead(read);
 	}

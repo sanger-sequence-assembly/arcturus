@@ -12,11 +12,17 @@ public class Read extends Core {
 	public Read(String name, int flags) {
 		super(name);
 		
-		this.flags = flags;
+		setFlags(flags);
 	}
 	
 	public Read(String name, int ID, ArcturusDatabase adb) {
 		super(name, ID, adb);
+	}
+
+	public Read(int id, String name, int flags) {
+		super(name, id, null);
+		
+		setFlags(flags);
 	}
 
 	public void setFlags(int flags) {
