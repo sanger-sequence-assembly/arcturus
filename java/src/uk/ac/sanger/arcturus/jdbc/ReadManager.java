@@ -132,7 +132,7 @@ public class ReadManager extends AbstractManager {
 		String name = rs.getString(index++);
 		int flags = rs.getInt(index++);
 		
-		int capillary_read_id = rs.getInt(index++);
+		rs.getInt(index++);
 		
 		if (rs.wasNull()) {
 			return createAndRegisterNewRead(read_id, name, flags);
@@ -323,7 +323,7 @@ public class ReadManager extends AbstractManager {
 		Read read = new CapillaryRead(name, id, template, asped, strand, primer,
 				chemistry, basecaller, status, adb);
 
-		registerNewRead(read);
+		cacheNewRead(read);
 
 		return read;
 	}
@@ -331,12 +331,12 @@ public class ReadManager extends AbstractManager {
 	private Read createAndRegisterNewRead(int id, String name, int flags) {
 		Read read = new Read(id, name, flags);
 		
-		registerNewRead(read);
+		cacheNewRead(read);
 		
 		return read;
 	}
 
-	void registerNewRead(Read read) {
+	void cacheNewRead(Read read) {
 		if (cacheing) {
 			hashByName.put(read.getUniqueName(), read);
 			hashByID.put(new Integer(read.getID()), read);
@@ -445,8 +445,6 @@ public class ReadManager extends AbstractManager {
 		String readName = read.getName();
 
 		try {
-			beginTransaction();
-			
 			int read_id = -1;
 			
 			pstmtInsertNewReadName.setString(1, readName);
@@ -470,20 +468,11 @@ public class ReadManager extends AbstractManager {
 				success = storeCapillaryData((CapillaryRead)read);
 			}
 			
-			if (success) {
-				commitTransaction();
+			if (success)
 				return registerNewRead(read, read_id);
-			}
 		}
 		catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to put read name=\"" + readName + "\"", conn, this);
-
-			try {
-				rollbackTransaction();
-			} catch (SQLException e1) {
-				adb.handleSQLException(e, "Failed to roll back a transaction when storing a sequence",
-						conn, this);
-			}
 		}
 		
 		return null;
@@ -493,10 +482,7 @@ public class ReadManager extends AbstractManager {
 		read.setID(read_id);
 		read.setArcturusDatabase(adb);
 		
-		if (cacheing) {
-			hashByID.put(read_id, read);
-			hashByName.put(read.getUniqueName(), read);
-		}
+		cacheNewRead(read);
 		
 		return read;
 	}

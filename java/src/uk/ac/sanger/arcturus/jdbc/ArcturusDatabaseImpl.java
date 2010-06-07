@@ -474,7 +474,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	}
 
 	void registerNewRead(Read read) {
-		readManager.registerNewRead(read);
+		readManager.cacheNewRead(read);
 	}
 
 	public synchronized Read findOrCreateRead(Read read) throws ArcturusDatabaseException {
@@ -576,7 +576,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	}
 
 	void registerNewSequence(Sequence sequence) {
-		sequenceManager.registerNewSequence(sequence);
+		sequenceManager.cacheNewSequence(sequence);
 	}
 
 	byte[] decodeCompressedData(byte[] compressed, int length) throws DataFormatException {
@@ -587,7 +587,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		return sequenceManager.findOrCreateSequence(sequence);
 	}
 
-	public int putSequence(Sequence sequence) throws ArcturusDatabaseException {
+	public Sequence putSequence(Sequence sequence) throws ArcturusDatabaseException {
 		return sequenceManager.putSequence(sequence);
 	}
 

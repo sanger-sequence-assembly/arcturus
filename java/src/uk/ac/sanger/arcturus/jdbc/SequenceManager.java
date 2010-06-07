@@ -516,7 +516,7 @@ public class SequenceManager extends AbstractManager {
 	private Sequence createAndRegisterNewSequence(int seqid, Read read,
 			int version, byte[] dna, byte[] quality) {
 		Sequence sequence = new Sequence(seqid, read, dna, quality, version);
-		registerNewSequence(sequence);
+		cacheNewSequence(sequence);
 		return sequence;
 	}
 
@@ -536,7 +536,7 @@ public class SequenceManager extends AbstractManager {
 	private Sequence createAndRegisterNewSequence(int seqid, Read read,
 			int version, int length) {
 		Sequence sequence = new Sequence(seqid, read, length, version);
-		registerNewSequence(sequence);
+		cacheNewSequence(sequence);
 		return sequence;
 	}
 
@@ -545,7 +545,7 @@ public class SequenceManager extends AbstractManager {
 	 * are indexed by read ID and sequence ID.
 	 */
 
-	void registerNewSequence(Sequence sequence) {
+	void cacheNewSequence(Sequence sequence) {
 		if (cacheing) {
 			hashBySequenceID.put(new Integer(sequence.getID()), sequence);
 
@@ -640,11 +640,18 @@ public class SequenceManager extends AbstractManager {
 		
 		int seq_id = getSequenceIDByReadIDAndHash(read_id, sequence.getDNAHash(), sequence.getQualityHash());
 		
-		if (seq_id <= 0)
-			seq_id = putSequence(sequence);
-		
-		sequence.setID(seq_id);
-		registerNewSequence(sequence);
+		if (seq_id > 0) {
+			return registerNewSequence(sequence, seq_id);
+		} else
+			return putSequence(sequence);
+	}
+
+	private Sequence registerNewSequence(Sequence sequence, int seq_id) {
+		if (sequence != null) {
+			sequence.setID(seq_id);
+			sequence.setArcturusDatabase(adb);
+			cacheNewSequence(sequence);
+		}
 		
 		return sequence;
 	}
@@ -718,7 +725,7 @@ public class SequenceManager extends AbstractManager {
 		return compressedData;
 	}
 	
-	public int putSequence(Sequence sequence) throws ArcturusDatabaseException {
+	public Sequence putSequence(Sequence sequence) throws ArcturusDatabaseException {
 		if (sequence == null)
 			throw new IllegalArgumentException("Cannot store a null sequence");
 		
@@ -750,8 +757,6 @@ public class SequenceManager extends AbstractManager {
 		int seqlen = sequence.getLength();
 			
 		try {
-			beginTransaction();
-			
 			pstmtPutSequence.setInt(1, seqlen);
 			pstmtPutSequence.setBytes(2, dnaHash);
 			pstmtPutSequence.setBytes(3, qualityHash);
@@ -760,10 +765,8 @@ public class SequenceManager extends AbstractManager {
 			
 			int rc = pstmtPutSequence.executeUpdate();
 			
-			if (rc != 1) {
-				rollbackTransaction();
-				return -1;
-			}
+			if (rc != 1)
+				return null;
 			
 			ResultSet rs = pstmtPutSequence.getGeneratedKeys();
 			
@@ -771,10 +774,8 @@ public class SequenceManager extends AbstractManager {
 			
 			rs.close();
 			
-			if (seq_id < 0) {
-				rollbackTransaction();
-				return -1;
-			}
+			if (seq_id < 0)
+				return null;
 			
 			Clipping clip = sequence.getQualityClipping();
 			
@@ -846,19 +847,12 @@ public class SequenceManager extends AbstractManager {
 			
 			pstmtPutSequenceToRead.executeUpdate();
 			
-			commitTransaction();
+			return registerNewSequence(sequence, seq_id);
 		} catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to store a sequence",
 					conn, this);
-			
-			try {
-				rollbackTransaction();
-			} catch (SQLException e1) {
-				adb.handleSQLException(e, "Failed to roll back a transaction when storing a sequence",
-						conn, this);
-			}
 		}
 		
-		return seq_id;
+		return null;
 	}
 }

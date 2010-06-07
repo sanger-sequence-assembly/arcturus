@@ -40,9 +40,11 @@ public class TestSequenceManager extends Base {
 	
 		Sequence sequence = createSequence(read, dnastr, 10, clip1, clip2, clip3);
 		
-		int seq_id = adb.putSequence(sequence);
+		Sequence newSequence = adb.putSequence(sequence);
 		
-		assertTrue(seq_id > 0);
+		assertNotNull("Sequence was null", newSequence);
+		
+		assertTrue("Sequence had an invalid ID", sequence.getID() > 0);
 	}
 	
 	@Test

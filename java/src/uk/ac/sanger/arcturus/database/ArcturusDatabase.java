@@ -247,7 +247,7 @@ public interface ArcturusDatabase {
 
 	public Sequence findOrCreateSequence(Sequence sequence) throws ArcturusDatabaseException;
 
-	public int putSequence(Sequence sequence) throws ArcturusDatabaseException;
+	public Sequence putSequence(Sequence sequence) throws ArcturusDatabaseException;
 
 	public Contig getContigByID(int id, int options)
 			throws ArcturusDatabaseException;
