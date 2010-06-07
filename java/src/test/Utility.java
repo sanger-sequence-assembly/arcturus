@@ -96,11 +96,13 @@ public class Utility {
 	private final static String[] COMMANDS = {
 		"delete from SEQUENCE",
 		"delete from READNAME",
+		"delete from READINFO",
 		"delete from TEMPLATE",
 		"delete from LIGATION",
 		"delete from CLONE",
 		"delete from STATUS",
 		"delete from BASECALLER",
+		"delete from QUALITYCLIP",
 		"delete from SEQUENCEVECTOR",
 		"delete from CLONINGVECTOR"
 	};
