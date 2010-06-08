@@ -80,6 +80,9 @@ public class DictionaryTableManager extends AbstractManager {
 	}
 	
 	public int getID(String name) throws ArcturusDatabaseException {
+		if (name == null)
+			return -1;
+		
 		if (cacheByName.containsKey(name))
 			return cacheByName.get(name);
 		
