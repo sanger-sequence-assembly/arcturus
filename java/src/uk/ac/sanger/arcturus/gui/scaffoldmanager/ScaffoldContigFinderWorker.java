@@ -1,7 +1,6 @@
 package uk.ac.sanger.arcturus.gui.scaffoldmanager;
 
 import java.util.Enumeration;
-import java.util.concurrent.ExecutionException;
 import java.util.Vector;
 
 import javax.swing.JOptionPane;
@@ -17,7 +16,6 @@ import java.sql.SQLException;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 
-import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
@@ -96,9 +94,9 @@ public class ScaffoldContigFinderWorker extends SwingWorker<TreePath, Void> {
 		try {
 			conn = adb.getPooledConnection(this);
 			
-			String query = "select m.contig_id from READINFO r,SEQ2READ sr,MAPPING m" +
-				" where r.readname = ? and r.read_id=sr.read_id and sr.seq_id=m.seq_id" + 
-				" order by m.contig_id desc";
+			String query = "select M.contig_id from READNAME RN,SEQ2READ SR,MAPPING M" +
+				" where RN.readname = ? and RN.read_id=SR.read_id and SR.seq_id=M.seq_id" + 
+				" order by M.contig_id desc";
 			
 			pstmt = conn.prepareStatement(query);
 			
