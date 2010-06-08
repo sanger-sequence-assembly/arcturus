@@ -57,8 +57,9 @@ public class OligoFinder {
 	private PreparedStatement pstmtPopulateBusyReadsTable;
 	
 	private final String POPULATE_FREE_READS_TABLE = "insert into " + FREE_READS + "(read_id,readname)" +
-		" select R.read_id,R.readname from READINFO R left join " + BUSY_READS + " using (read_id)" +
-		" where " + BUSY_READS + ".read_id is null and R.status = ?";
+		" select RN.read_id,RN.readname from (READNAME RN left join READINFO RI using(read_id)) left join " +
+		BUSY_READS + " using (read_id)" +
+		" where " + BUSY_READS + ".read_id is null and (RI.status is null or RI.status = ?)";
 	private PreparedStatement pstmtPopulateFreeReadsTable;
 	
 	private final String SUM_CONTIG_LENGTH_FOR_PROJECT = "select sum(length) from CURRENTCONTIGS where project_id = ?";
