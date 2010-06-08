@@ -421,9 +421,16 @@ public class ReadManager extends AbstractManager {
 			pstmtInsertNewReadMetadata.setString(5, primer);
 			pstmtInsertNewReadMetadata.setString(6, chemistry);
 
-			pstmtInsertNewReadMetadata.setInt(7, basecaller_id);
-			pstmtInsertNewReadMetadata.setInt(8, status_id);
-
+			if (basecaller_id > 0)
+				pstmtInsertNewReadMetadata.setInt(7, basecaller_id);
+			else
+				pstmtInsertNewReadMetadata.setNull(7, Types.INTEGER);
+			
+			if (status_id > 0)
+				pstmtInsertNewReadMetadata.setInt(8, status_id);
+			else
+				pstmtInsertNewReadMetadata.setNull(8, Types.INTEGER);
+			
 			int rc = pstmtInsertNewReadMetadata.executeUpdate();
 			
 			return rc == 1;
