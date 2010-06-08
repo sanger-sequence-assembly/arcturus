@@ -7,6 +7,9 @@ import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -22,6 +25,10 @@ import uk.ac.sanger.arcturus.data.Template;
 
 public class TraceServerClient {
 	protected final String traceServerURL;
+	
+	protected final String DEFAULT_PROCESSING_STATUS = "PASS";
+	
+	protected final DateFormat dateFormat = new SimpleDateFormat("yyyy-M-d");
 	
 	public TraceServerClient(String traceServerURL) {
 		this.traceServerURL = traceServerURL;
@@ -132,10 +139,14 @@ public class TraceServerClient {
 		
 		Template template = (templateName != null) ? new Template(templateName) : null;
 		
-		if (template != null && ligation != null)
-			template.setLigation(ligation);
-		
 		CapillaryRead read = new CapillaryRead(readName);
+		
+		if (template != null) {
+			if (ligation != null)
+				template.setLigation(ligation);
+			
+			read.setTemplate(template);
+		}
 		
 		int primerType = parsePrimerType(map.get(ExperimentFile.KEY_PRIMER));
 		
@@ -149,9 +160,22 @@ public class TraceServerClient {
 		
 		read.setStrand(strand);
 		
-		read.setStatus(map.get(ExperimentFile.KEY_PROCESSING_STATUS));
+		String processingStatus = map.get(ExperimentFile.KEY_PROCESSING_STATUS);
+		
+		read.setStatus(processingStatus == null ? DEFAULT_PROCESSING_STATUS : processingStatus);
 		
 		read.setBasecaller(map.get(ExperimentFile.KEY_BASECALLER));
+		
+		String asped = map.get(ExperimentFile.KEY_ASPED_DATE);
+		
+		if (asped != null) {
+			try {
+				Date aspedDate = dateFormat.parse(asped);
+				read.setAsped(aspedDate);
+			} catch (ParseException e) {
+				e.printStackTrace();
+			}
+		}
 		
 		byte[] dna = parseDNA(map.get(ExperimentFile.KEY_SEQUENCE));
 		
