@@ -1,11 +1,15 @@
 package uk.ac.sanger.arcturus.utils;
 
 import java.io.File;
+import java.sql.Connection;
+import java.sql.SQLException;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Read;
 import uk.ac.sanger.arcturus.data.Sequence;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
+import uk.ac.sanger.arcturus.traceserver.TraceServerClient;
 
 import net.sf.samtools.SAMFileReader;
 import net.sf.samtools.SAMRecord;
@@ -13,12 +17,21 @@ import net.sf.samtools.util.CloseableIterator;
 
 public class BAMReadLoader {
 	private ArcturusDatabase adb;
+	private TraceServerClient traceServerClient = null;
+	private ReadNameFilter readNameFilter = new BasicCapillaryReadNameFilter();
+	
+	private long T0;
 	
 	public BAMReadLoader() throws ArcturusDatabaseException {
 		adb = Utility.getTestDatabase();
 		
 		adb.setCacheing(ArcturusDatabase.READ, false);
 		adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
+		
+		String baseURL = Arcturus.getProperty("traceserver.baseURL");
+		
+		if (baseURL != null && !Boolean.getBoolean("skiptraceserver"))
+			traceServerClient = new TraceServerClient(baseURL);
 	}
 	
 	public void processFile(File file) throws ArcturusDatabaseException {
@@ -30,15 +43,33 @@ public class BAMReadLoader {
 
 		int n = 0;
 		
-		while (iterator.hasNext()) {
-			SAMRecord record = iterator.next();
+		Connection conn = adb.getDefaultConnection();
+		
+		try {
+			boolean savedAutoCommit = conn.getAutoCommit();
+			conn.setAutoCommit(false);
 			
-			processRecord(record);
+			T0 = System.currentTimeMillis();
 			
-			n++;
+			while (iterator.hasNext()) {
+				SAMRecord record = iterator.next();
 			
-			if ((n%10000) == 0)
-				reportMemory(n);
+				processRecord(record);
+			
+				n++;
+			
+				if ((n%10000) == 0) {
+					conn.commit();
+					reportMemory(n);
+				}
+			}
+			
+			conn.commit();
+			
+			conn.setAutoCommit(savedAutoCommit);
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "An SQL exception occurred when processing a file", conn, this);
 		}
 	}
 	
@@ -55,11 +86,23 @@ public class BAMReadLoader {
 		
 		byte[] quality = record.getBaseQualities();
 		
-		Read read = new Read(readname, flags);
+		Read read = adb.getReadByNameAndFlags(readname, flags);
 		
-		Read newRead = adb.findOrCreateRead(read);
+		if (read == null) {
+			if (traceServerClient != null && readNameFilter.accept(readname)) {
+				Sequence storedSequence = traceServerClient.fetchRead(readname);
+				
+				if (storedSequence != null)
+					read = storedSequence.getRead();
+			}
+			
+			if (read == null)
+				read = new Read(readname, flags);
 		
-		Sequence sequence = new Sequence(0, newRead, dna, quality, 0);
+			read = adb.putRead(read);
+		}
+		
+		Sequence sequence = new Sequence(0, read, dna, quality, 0);
 		
 		Sequence newSequence = adb.findOrCreateSequence(sequence);
 		
@@ -81,8 +124,10 @@ public class BAMReadLoader {
 		totalMemory /= 1024;
 		usedMemory /= 1024;
 		
+		long dt = System.currentTimeMillis() - T0;
+		
 		System.err.println("Reads: " + n + " ; Memory used " + usedMemory + " kb, free " + freeMemory +
-				" kb, total " + totalMemory + " kb, per read " + perRead);
+				" kb, total " + totalMemory + " kb, per read " + perRead + "; time = " + dt + " ms");
 	}
 
 	public static void main(String[] args) {
