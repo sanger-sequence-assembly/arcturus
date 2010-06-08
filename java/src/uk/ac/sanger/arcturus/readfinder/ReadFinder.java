@@ -42,14 +42,16 @@ public class ReadFinder {
 	private void prepareConnection() throws SQLException, ArcturusDatabaseException {
 		conn = adb.getPooledConnection(this);
 		
-		String query = "select R.read_id,S.name from READINFO R left join STATUS S"
-				+ " on (R.status = S.status_id) where R.readname = ?";
+		String query = "select RN.read_id,S.name from" + 
+			" (READNAME RN left join READINFO RI using(read_id))" + 
+			" left join STATUS S on (RI.status = S.status_id) where RN.readname = ?";
 
 		pstmtReadNameToID = conn.prepareStatement(query);
 
-		query = "select R.read_id,S.name from READINFO R left join STATUS S"
-				+ " on (R.status = S.status_id) where R.readname like ?"
-				+ " order by readname asc";
+		query = "select RN.read_id,S.name from" + 
+			" (READNAME RN left join READINFO RI using(read_id))" + 
+			" left join STATUS S on (RI.status = S.status_id) where RN.readname like ?" +
+			" order by readname asc";
 
 		pstmtReadNameLikeToID = conn.prepareStatement(query);
 
@@ -82,7 +84,7 @@ public class ReadFinder {
 	}
 
 	protected boolean containsWildcards(String str) {
-		return str.indexOf("%") >= 0 || str.indexOf("_") >= 0;
+		return str.indexOf("%") >= 0;
 	}
 
 	public void findRead(String readname, boolean onlyFreeReads,
@@ -114,8 +116,8 @@ public class ReadFinder {
 				int readid = rs.getInt(1);
 				String status = rs.getString(2);
 
-				boolean passed = status != null
-						&& status.equalsIgnoreCase("PASS");
+				boolean passed = status == null
+						|| status.equalsIgnoreCase("PASS");
 
 				Read read = adb.getReadByID(readid);
 
