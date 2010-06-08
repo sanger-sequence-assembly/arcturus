@@ -24,7 +24,7 @@ public class ReadManager extends AbstractManager {
 	private PreparedStatement pstmtByNameAndFlags;
 	private PreparedStatement pstmtInsertNewReadName, pstmtInsertNewReadMetadata;
 	
-	private static final String READ_COLUMNS = "RN.read_id,readname,flags,RI.read_id,asped,strand,primer,chemistry,basecaller,status";
+	private static final String READ_COLUMNS = "RN.read_id,readname,flags,RI.read_id,template_id,asped,strand,primer,chemistry,basecaller,status";
 	
 	private static final String READ_TABLES = "READNAME RN left join READINFO RI using(read_id)";
 	
