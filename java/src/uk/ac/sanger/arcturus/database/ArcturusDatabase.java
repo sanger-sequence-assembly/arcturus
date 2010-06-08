@@ -200,6 +200,9 @@ public interface ArcturusDatabase {
 	public Read getReadByName(String name, boolean autoload)
 			throws ArcturusDatabaseException;
 
+	public Read getReadByNameAndFlags(String name, int flags)
+			throws ArcturusDatabaseException;
+
 	public Read getReadByID(int id) throws ArcturusDatabaseException;
 
 	public Read getReadByID(int id, boolean autoload)

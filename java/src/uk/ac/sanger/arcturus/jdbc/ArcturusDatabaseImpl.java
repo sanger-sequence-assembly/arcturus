@@ -450,6 +450,14 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		return readManager.getReadByName(name, autoload);
 	}
 
+	public synchronized Read getReadByNameAndFlags(String name, int flags)
+			throws ArcturusDatabaseException {
+		if (logger != null && logger.isLoggable(Level.FINE))
+			logger.info("getReadByNameAndFlags(" + name + ", " + flags + ")");
+
+		return readManager.getReadByNameAndFlags(name, flags);
+	}
+
 	public synchronized Read getReadByID(int id) throws ArcturusDatabaseException {
 		if (logger != null && logger.isLoggable(Level.FINE))
 			logger.info("getReadByID(" + id + ")");
