@@ -39,19 +39,9 @@ public class TraceServerClient {
 			
 			conn.connect();
 
-			String contentType = conn.getContentType();
-			int contentLength = conn.getContentLength();
-			long lm= conn.getLastModified();
-			Date lastModified = new Date(lm);
 			int rc = conn.getResponseCode();
-
-			System.err.println("Response code:    " + rc);
 			
 			if (rc == HttpURLConnection.HTTP_OK) {
-				System.err.println("Content type:     " + contentType);
-				System.err.println("Content length:   " + contentLength);
-				System.err.println("Last modified:    " + lastModified);
-
 				InputStream is = conn.getInputStream();
 				
 				Sequence sequence = parseRead(is);
@@ -115,8 +105,6 @@ public class TraceServerClient {
 	
 	private Sequence createSequence(Map<String, String> map) {
 		String readName = map.get(ExperimentFile.KEY_READ_NAME);
-		
-		System.err.println("PROCESSING " + readName);
 		
 		String cloneName = map.get(ExperimentFile.KEY_CLONE_NAME);
 		
