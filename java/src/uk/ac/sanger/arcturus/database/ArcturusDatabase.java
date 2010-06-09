@@ -65,6 +65,8 @@ public interface ArcturusDatabase {
 	public static final int CLONE = 6;
 	public static final int PROJECT = 7;
 	public static final int ASSEMBLY = 8;
+	public static final int MAPPING = 9;
+	public static final int LINK = 10;
 
 	/**
 	 * Closes the connection pool belonging to this object.
@@ -511,4 +513,12 @@ public interface ArcturusDatabase {
 	
 	public void handleSQLException(SQLException e, String message, Connection conn, Object source)
 			throws ArcturusDatabaseException;
+
+// caching of read-contig-link lookup
+	
+	public void prepareToLoadAllProjects() throws ArcturusDatabaseException;
+	
+	public void prepareToLoadProject(Project project) throws ArcturusDatabaseException;
+	
+	public int getCurrentContigIDForReadName(String readName) throws ArcturusDatabaseException;	
 }
