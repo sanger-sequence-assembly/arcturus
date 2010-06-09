@@ -1137,14 +1137,15 @@ sub CreateStatements {
 		   " where sihigh > ?",
 
 		   "readsfortemplate",
-		   "select READINFO.read_id,readname,strand,seq_id from READINFO left join SEQ2READ" .
-		   " using(read_id) where template_id = ? order by strand asc, READINFO.read_id asc",
+		   "select RI.read_id,RN.readname,strand,seq_id from (READNAME RN left join READINFO RI using (read_id))" .
+		   " left join SEQ2READ using(read_id)" .
+		   " where template_id = ? order by strand asc, RI.read_id asc",
 
 		   "setproject",
 		   "update CONTIG set project_id = ? where contig_id = ?",
 
 		   "readnames",
-		   "select read_id,readname from READINFO",
+		   "select read_id,readname from READNAME",
 
 		   "templatenames",
 		   "select template_id,name from TEMPLATE",
