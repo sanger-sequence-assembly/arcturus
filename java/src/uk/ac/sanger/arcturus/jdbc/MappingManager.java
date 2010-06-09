@@ -116,9 +116,9 @@ Utility.report("Building Canonical Mapping hash");
         	    int refSpan = rs.getInt(2);
         	    int subSpan = rs.getInt(3);
         	    String cigar = rs.getString(4);
-	    	    CanonicalMapping mapping = new CanonicalMapping(mapping_id,refSpan,subSpan,cigar);
-	    	    Checksum checksum = new Checksum(mapping.getCheckSum());
-		   	    cacheByChecksum.put(checksum,mapping);
+	    	    //FIXME CanonicalMapping mapping = new CanonicalMapping(mapping_id,refSpan,subSpan,cigar);
+        	  //FIXME Checksum checksum = new Checksum(mapping.getCheckSum());
+        	  //FIXME cacheByChecksum.put(checksum,mapping);
 		    }
 		    rs.close();
 	    }
@@ -143,16 +143,16 @@ Utility.report("Building Canonical Mapping hash");
 	public CanonicalMapping findOrStoreCanonicalMapping(CanonicalMapping mapping) throws ArcturusDatabaseException {
 		if (mapping == null) 
 			throw new IllegalArgumentException("A CanonicalMapping is required as argument");
-		String cigar = mapping.getExtendedCigarString();
-		if (cigar == null)
-			throw new IllegalArgumentException("Incomplete Canonical Mapping: missing cigar string");
+		//FIXME String cigar = mapping.getExtendedCigarString();
+		//FIXME if (cigar == null)
+		//FIXME 	throw new IllegalArgumentException("Incomplete Canonical Mapping: missing cigar string");
         
 		Checksum checksum = new Checksum(mapping.getCheckSum());
 		if (cacheByChecksum.containsKey(checksum))
 			return cacheByChecksum.get(checksum);
 		
 		try { // try the database for new data
-			pstmtSelectCanonicalMappingByCigarString.setString(1,cigar);
+			//FIXME 	pstmtSelectCanonicalMappingByCigarString.setString(1,cigar);
 		    ResultSet rs = pstmtSelectCanonicalMappingByCigarString.executeQuery();
 			
 			if (rs.next()) {
@@ -173,7 +173,7 @@ Utility.report("Building Canonical Mapping hash");
 		try {
 			pstmtInsertInCanonicalMapping.setInt(1,mapping.getReferenceSpan());
 			pstmtInsertInCanonicalMapping.setInt(2,mapping.getSubjectSpan());
-			pstmtInsertInCanonicalMapping.setString(3,mapping.getExtendedCigarString());
+			//FIXME pstmtInsertInCanonicalMapping.setString(3,mapping.getExtendedCigarString());
 // no transaction needed here			
 			int rc = pstmtInsertInCanonicalMapping.executeUpdate();
 			
@@ -243,16 +243,16 @@ Utility.report("Building Canonical Mapping hash");
  		    	// identify the canonical mapping;
  		    	CanonicalMapping cmapping = null;
  		    	String cigar = rs.getString(8);
- 		    	Checksum checksum = new Checksum(CanonicalMapping.getCheckSum(cigar));
-    			if (cacheByChecksum.containsKey(checksum))
-    				cmapping = cacheByChecksum.get(checksum);
-    			else {
-    				int mapping_id = rs.getInt(2);
-    	       	    int refSpan = rs.getInt(6);
-            	    int subSpan = rs.getInt(7);
- 		    		cmapping = new CanonicalMapping(mapping_id,refSpan,subSpan,cigar);
- 				    cacheByChecksum.put(checksum,cmapping);
- 		    	}
+ 		    	//FIXME Checksum checksum = new Checksum(CanonicalMapping.getCheckSum(cigar));
+ 		    	//FIXME if (cacheByChecksum.containsKey(checksum))
+ 		    	//FIXME 	cmapping = cacheByChecksum.get(checksum);
+ 		    	//FIXME else {
+ 		    	//FIXME 	int mapping_id = rs.getInt(2);
+ 		    	//FIXME     int refSpan = rs.getInt(6);
+ 		    	//FIXME     int subSpan = rs.getInt(7);
+            	//FIXME     cmapping = new CanonicalMapping(mapping_id,refSpan,subSpan,cigar);
+ 		    	//FIXME    cacheByChecksum.put(checksum,cmapping);
+ 		    	//FIXME }
    			    // build a minimal Sequence instance and complete the sequence-to-contig mapping
     			Sequence sequence = new Sequence(rs.getInt(1));
     			Direction direction = (rs.getString(5) == "Forward") ? Direction.FORWARD 

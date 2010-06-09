@@ -1,4 +1,4 @@
-package uk.ac.sanger.arcturus.utils;
+package uk.ac.sanger.arcturus.samtools;
 
 import java.io.File;
 import java.sql.Connection;
@@ -10,6 +10,8 @@ import uk.ac.sanger.arcturus.data.Sequence;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.traceserver.TraceServerClient;
+import uk.ac.sanger.arcturus.utils.BasicCapillaryReadNameFilter;
+import uk.ac.sanger.arcturus.utils.ReadNameFilter;
 
 import net.sf.samtools.SAMFileReader;
 import net.sf.samtools.SAMRecord;
@@ -26,7 +28,7 @@ public class BAMReadLoader {
 	private long T0;
 	
 	public BAMReadLoader() throws ArcturusDatabaseException {
-		adb = Utility.getTestDatabase();
+		adb = uk.ac.sanger.arcturus.utils.Utility.getTestDatabase();
 		
 		adb.setCacheing(ArcturusDatabase.READ, false);
 		adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
@@ -80,12 +82,10 @@ public class BAMReadLoader {
 		}
 	}
 	
-	private static final int FLAGS_MASK = 128 + 64 + 1;
-	
 	private void processRecord(SAMRecord record) throws ArcturusDatabaseException {
 		String readname = record.getReadName();
 		
-		int flags = record.getFlags() & FLAGS_MASK;
+		int flags = Utility.maskReadFlags(record.getFlags());
 		
 		//System.out.println("Read " + readname + ", flags " + flags);
 		

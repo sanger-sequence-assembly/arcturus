@@ -5,7 +5,8 @@ import java.io.*;
 
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.importer.*;
-import uk.ac.sanger.arcturus.utils.BAMReadLoader;
+import uk.ac.sanger.arcturus.samtools.BAMContigLoader;
+import uk.ac.sanger.arcturus.samtools.BAMReadLoader;
 import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 //import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
@@ -67,8 +68,8 @@ public class ContigLoader {
  	    	
 // set up read loader/tester and process the reads
 
- 	    	BAMReadLoader brl = new BAMReadLoader(adb);
- 			brl.processFile(reader);
+ 	    	//BAMReadLoader brl = new BAMReadLoader(adb);
+ 			//brl.processFile(reader);
  			
 // set up the contig loader and iterate through the contigs
 
