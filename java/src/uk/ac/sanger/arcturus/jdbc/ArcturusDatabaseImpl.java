@@ -341,6 +341,10 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		userManager = new UserManager(this);
 		
 		contigTransferRequestManager = new ContigTransferRequestManager(this);
+		
+		linkManager = new LinkManager(this);
+		
+		mappingManager = new MappingManager(this);
 	}
 
 	public synchronized CloneManager getCloneManager() {
@@ -1238,6 +1242,12 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 				
 			case PROJECT:
 				return projectManager;
+				
+			case MAPPING:
+				return mappingManager;
+				
+			case LINK:
+				return linkManager;
 		}
 		
 		return null;
@@ -1325,19 +1335,22 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
  * preloading readname - contig hash
  */
 	
-	public synchronized void preloadReadNameCache() throws ArcturusDatabaseException {
-		preloadReadNameCache(null);
-	}
-
-	public synchronized void preloadReadNameCache(Project project) throws ArcturusDatabaseException {
+	public synchronized void prepareToLoadProject(Project project) throws ArcturusDatabaseException {
         if (linkManager == null)
         	linkManager = new LinkManager(this);
         linkManager.preload(project);
 	}
 	
+	public synchronized void prepareToLoadAllProjects() throws ArcturusDatabaseException {
+        if (linkManager == null)
+        	linkManager = new LinkManager(this);
+        linkManager.preload();
+	}
+
 	public synchronized int getCurrentContigIDForReadName(String readName) throws ArcturusDatabaseException {
         if (linkManager == null)
-        	preloadReadNameCache(null);
+        	return 0;
         return linkManager.getCurrentContigIDForReadName(readName);		
 	}
+
 }
