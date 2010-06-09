@@ -11,7 +11,7 @@ import java.util.zip.Inflater;
 import java.util.zip.DataFormatException;
 
 /**
- * This class manages Contig objects.
+ * This class manages Contig objects
  */
 
 public class ContigManager extends AbstractManager {
@@ -179,13 +179,13 @@ public class ContigManager extends AbstractManager {
 
 		pstmtCurrentContigs = conn.prepareStatement(query);
 		
-		query = " select CURRENTCONTIGS.contig_id"
-			+ " from READINFO,SEQ2READ,MAPPING,CURRENTCONTIGS,PROJECT"
-			+ " where READINFO.readname = ?"
-			+ " and READINFO.read_id = SEQ2READ.read_id"
-			+ " and SEQ2READ.seq_id = MAPPING.seq_id"
-			+ " and MAPPING.contig_id = CURRENTCONTIGS.contig_id"
-			+ " and CURRENTCONTIGS.project_id = PROJECT.project_id";
+		query = "select CURRENTCONTIGS.contig_id"
+		      + "  from READINFO,SEQ2READ,MAPPING,CURRENTCONTIGS,PROJECT"
+			  + " where READINFO.readname = ?"
+			  + "   and READINFO.read_id = SEQ2READ.read_id"
+			  + "   and SEQ2READ.seq_id = MAPPING.seq_id"
+			  + "   and MAPPING.contig_id = CURRENTCONTIGS.contig_id"
+			  + "   and CURRENTCONTIGS.project_id = PROJECT.project_id";
 		
 		pstmtContigIDFromReadname = conn.prepareStatement(query);
 		

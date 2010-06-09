@@ -311,6 +311,8 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	protected ProjectManager projectManager;
 	protected AssemblyManager assemblyManager;
 	protected UserManager userManager;
+	protected MappingManager mappingManager;
+	protected LinkManager linkManager;
 	protected ContigTransferRequestManager contigTransferRequestManager;
 	
 	protected Set<AbstractManager> managers = new HashSet<AbstractManager>();
@@ -1317,5 +1319,25 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 			return true;
 		
 		return false;
+	}
+	
+/**
+ * preloading readname - contig hash
+ */
+	
+	public synchronized void preloadReadNameCache() throws ArcturusDatabaseException {
+		preloadReadNameCache(null);
+	}
+
+	public synchronized void preloadReadNameCache(Project project) throws ArcturusDatabaseException {
+        if (linkManager == null)
+        	linkManager = new LinkManager(this);
+        linkManager.preload(project);
+	}
+	
+	public synchronized int getCurrentContigIDForReadName(String readName) throws ArcturusDatabaseException {
+        if (linkManager == null)
+        	preloadReadNameCache(null);
+        return linkManager.getCurrentContigIDForReadName(readName);		
 	}
 }

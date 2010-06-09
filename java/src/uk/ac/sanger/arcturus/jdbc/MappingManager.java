@@ -22,14 +22,14 @@ public class MappingManager extends AbstractManager {
 	protected PreparedStatement pstmtInsertInSequenceToContig = null;
 	protected PreparedStatement pstmtInsertInParentToContig = null;
 	protected PreparedStatement pstmtInsertInCanonicalMapping = null;
-	protected PreparedStatement pstmtInsertInCanonicalSegment = null; // REDUNDENT
 	
 	protected PreparedStatement pstmtSelectCanonicalMappings = null;
 	protected PreparedStatement pstmtSelectCanonicalMappingByID = null;
-	protected PreparedStatement pstmtSelectCanonicalMappingByChecksum = null;
-	protected PreparedStatement pstmtSelectCanonicalSegment = null; // REDUNDENT
+	protected PreparedStatement pstmtSelectCanonicalMappingByCigarString = null;
 	
 	protected PreparedStatement pstmtSelectSequenceToContigMappings = null;
+	protected PreparedStatement pstmtSelectSegment = null;
+	
 //	protected PreparedStatement pstmtSelect;
 //	protected PreparedStatement pstmtSelect;
 	
@@ -59,34 +59,35 @@ public class MappingManager extends AbstractManager {
 			  + "values (?,?,?,?,?,?,?)";
 		pstmtInsertInParentToContig   = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
 
-		query = "insert into CANONICALMAPPING (cspan,rspan,checksum) values (?,?,?)";
+		query = "insert into CANONICALMAPPING (cspan,rspan,checksum,cigarstring) values (?,?,?)";
 		pstmtInsertInCanonicalMapping = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
 		
-		query = "insert into CANONICALSEGMENT (mapping_id,cstart,rstart,length) values (?,?,?,?)";
-		pstmtInsertInCanonicalSegment = conn.prepareStatement(query); // REDUNDENT
+//		query = "insert into CANONICALSEGMENT (mapping_id,cstart,rstart,length) values (?,?,?,?)";
+//		pstmtInsertInCanonicalSegment = conn.prepareStatement(query); // REDUNDENT
 
 // set up prepared statements for retrieving Canonical Mappings from the database
 
-		query = "select mapping_id,cspan,rspan,checksum from CANONICALMAPPING";
+		query = "select mapping_id,cspan,rspan,checksum,cigarstring from CANONICALMAPPING";
 		pstmtSelectCanonicalMappings = conn.prepareStatement(query);
 		
-		query = "select cspan,rspan,checksum from CANONICALMAPPING where mapping_id = ?";
+		query = "select cspan,rspan,checksum,cigarstring from CANONICALMAPPING where mapping_id = ?";
 		pstmtSelectCanonicalMappingByID = conn.prepareStatement(query);
 		
-		query = "select mapping_id,cspan,rspan from CANONICALMAPPING where checksum = ?";
-		pstmtSelectCanonicalMappingByChecksum = conn.prepareStatement(query);
-			
-		query = "select cstart,rstart,length from CANONICALSEGMENT where mapping_id = ?";
-		pstmtSelectCanonicalSegment = conn.prepareStatement(query); // NOT REDUNDENT only apply to regular
+//		query = "select mapping_id,cspan,rspan from CANONICALMAPPING where checksum = ?";
+//		pstmtSelectCanonicalMappingByChecksum = conn.prepareStatement(query);
+		query = "select mapping_id,cspan,rspan from CANONICALMAPPING where cigarstring = ?";
+		pstmtSelectCanonicalMappingByCigarString= conn.prepareStatement(query);
 
 // retrieval of Generic Mappings		
 		
 		query = "select seq_id,SEQ2CONTIG.mapping_id,coffset,roffset,direction,cspan,rspan,checksum"
 			  + "  from SEQ2CONTIG join CANONICALMAPPING using (mapping_id)"
 			  + " where contig_id = ? order by SEQ2CONTIG.mapping_id";
-
 		pstmtSelectSequenceToContigMappings = conn.prepareStatement(query);
 		
+		query = "select cstart,rstart,length from SEGMENT where mapping_id = ?";
+		pstmtSelectSegment = conn.prepareStatement(query); // only apply to regular mapping
+	
 // retrieval of mappings old-style
 		
 		query = "select seq_id,mapping_id,cstart,cfinish,direction"
@@ -106,7 +107,7 @@ public class MappingManager extends AbstractManager {
 
     public void preload() throws ArcturusDatabaseException {
         clearCache();
-	Utility.report("Building Canonical Mapping hash");
+Utility.report("Building Canonical Mapping hash");
 	    try {
 	    	ResultSet rs = pstmtSelectCanonicalMappings.executeQuery();
 		    
@@ -114,8 +115,8 @@ public class MappingManager extends AbstractManager {
             	int mapping_id = rs.getInt(1);
         	    int refSpan = rs.getInt(2);
         	    int subSpan = rs.getInt(3);
-        	    byte[] checksumbytes = rs.getBytes(4);
-	    	    CanonicalMapping mapping = new CanonicalMapping(mapping_id,refSpan,subSpan,checksumbytes);
+        	    String cigar = rs.getString(4);
+	    	    CanonicalMapping mapping = new CanonicalMapping(mapping_id,refSpan,subSpan,cigar);
 	    	    Checksum checksum = new Checksum(mapping.getCheckSum());
 		   	    cacheByChecksum.put(checksum,mapping);
 		    }
@@ -124,9 +125,6 @@ public class MappingManager extends AbstractManager {
 	    catch (SQLException e) {
 	        adb.handleSQLException(e,"Failed to build the canonical mapping cache", conn, adb);
 	    }
-	    
-// TO DO preload segments for the most common mapping IDs; requires new methods addSegmentsForCanonicalMappings()
-	    // pass array of CMappings in cache; scan to screen against those with segments; add segments for remainder  
     }
     
 /**
@@ -145,18 +143,17 @@ public class MappingManager extends AbstractManager {
 	public CanonicalMapping findOrStoreCanonicalMapping(CanonicalMapping mapping) throws ArcturusDatabaseException {
 		if (mapping == null) 
 			throw new IllegalArgumentException("A CanonicalMapping is required as argument");
-        byte[] checksumbytes = mapping.getCheckSum();
-        if (checksumbytes == null)
-			throw new IllegalArgumentException("Incomplete Canonical Mapping: missing checksum, segments");
+		String cigar = mapping.getExtendedCigarString();
+		if (cigar == null)
+			throw new IllegalArgumentException("Incomplete Canonical Mapping: missing cigar string");
         
-		Checksum checksum = new Checksum(checksumbytes);
+		Checksum checksum = new Checksum(mapping.getCheckSum());
 		if (cacheByChecksum.containsKey(checksum))
-			return cacheByChecksum.get(checksum); // update segments ?
+			return cacheByChecksum.get(checksum);
 		
 		try { // try the database for new data
-			pstmtSelectCanonicalMappingByChecksum.setBytes(1,checksumbytes);
-			
-			ResultSet rs = pstmtSelectCanonicalMappingByChecksum.executeQuery();
+			pstmtSelectCanonicalMappingByCigarString.setString(1,cigar);
+		    ResultSet rs = pstmtSelectCanonicalMappingByCigarString.executeQuery();
 			
 			if (rs.next()) {
             	mapping.setMappingID(rs.getInt(1));
@@ -173,56 +170,23 @@ public class MappingManager extends AbstractManager {
 			adb.handleSQLException(e,"Failed to access database", conn, adb);
 		}
 // this mapping is not yet in the database; add it; signal failure with return null
-		if (mapping.getSegments() == null) // incomplete mapping: no segments
-			throw new IllegalArgumentException("Incomplete Canonical Mapping: missing segments");
-		boolean success = false;
 		try {
-			beginTransaction();
-			
 			pstmtInsertInCanonicalMapping.setInt(1,mapping.getReferenceSpan());
 			pstmtInsertInCanonicalMapping.setInt(2,mapping.getSubjectSpan());
-			pstmtInsertInCanonicalMapping.setBytes(3,mapping.getCheckSum());
-			
+			pstmtInsertInCanonicalMapping.setString(3,mapping.getExtendedCigarString());
+// no transaction needed here			
 			int rc = pstmtInsertInCanonicalMapping.executeUpdate();
 			
 			if (rc == 1) {
 			    ResultSet rs = pstmtInsertInCanonicalMapping.getGeneratedKeys();
 			    int inserted_ID = rs.next() ? rs.getInt(1) : 0;
 			    rs.close();
-			    
-			    if (inserted_ID > 0) {
-			    	BasicSegment[] segments = mapping.getSegments();
-					success = true;
-			    	for (int i = 0 ; i < segments.length && success ; i++) {
-			    		pstmtInsertInCanonicalSegment.setInt(1,inserted_ID);
-			    		pstmtInsertInCanonicalSegment.setInt(2,segments[i].getReferenceStart());
-			    		pstmtInsertInCanonicalSegment.setInt(3,segments[i].getSubjectStart());
-			    		pstmtInsertInCanonicalSegment.setInt(4,segments[i].getLength());
-						
-						if (pstmtInsertInCanonicalMapping.executeUpdate() != 1)
-							success = false;
-			    	}
-			    	if (success) { // complete the input mapping
-			    		mapping.setMappingID(inserted_ID);
-						commitTransaction();
-						cacheByChecksum.put(checksum,mapping);
-						return mapping;
-			    	}
-			    }
+			    mapping.setMappingID(inserted_ID);
 			}
-// something went seriously wrong; throw exception
-		    rollbackTransaction();		    
-		    adb.handleSQLException(null,"Somehow failed to insert canonical mapping or segment(s)", conn, adb);
 		}
 		catch (SQLException e) {
             adb.handleSQLException(e,"Failed to insert new Canonical Mapping", conn, adb);
-            try {
-            	rollbackTransaction();
-            }
-            catch (Exception f) {
-    		    adb.handleSQLException(null,"Somehow failed to insert canonical mapping or segment(s)", conn, adb);
-            }
-		}
+ 		}
 		return null;
     }
 	
@@ -235,7 +199,7 @@ public class MappingManager extends AbstractManager {
 			throw new IllegalArgumentException("Mapping has no Sequence or Contig reference");
 		
 		try {
-		    beginTransaction();
+//		    beginTransaction(); // not needed here, single record insert
             pstmtInsertInSequenceToContig.setInt(1,mapping.getContig().getID());
             pstmtInsertInSequenceToContig.setInt(2,mapping.getSequence().getID());
             pstmtInsertInSequenceToContig.setInt(3,cm.getMappingID());		    
@@ -244,22 +208,14 @@ public class MappingManager extends AbstractManager {
             pstmtInsertInSequenceToContig.setString(6,(mapping.isForward() ? "Forward" : "Reverse"));		    
 
             if (pstmtInsertInSequenceToContig.executeUpdate() == 1) {
- 		        commitTransaction();
  		        return true;
             }
             else {
-            	rollbackTransaction();
                 adb.handleSQLException(null,"Somehow failed to insert sequence-to-contig mapping", conn, adb);
             }
 		}
 		catch (SQLException e) {
 	        adb.handleSQLException(e,"Failed to insert new Sequence-Contig Mapping", conn, adb);			
-	        try {
-	            rollbackTransaction();
-	        }
-	        catch (Exception f) {
-	            adb.handleSQLException(null,"Somehow failed to insert sequence-to-contig mapping", conn, adb);
-	        }
 		}
 		return false;
 	}
@@ -286,15 +242,15 @@ public class MappingManager extends AbstractManager {
             while (rs.next()) {
  		    	// identify the canonical mapping;
  		    	CanonicalMapping cmapping = null;
- 		    	byte[] checksumbytes = rs.getBytes(8);
-    			Checksum checksum = new Checksum(checksumbytes);
+ 		    	String cigar = rs.getString(8);
+ 		    	Checksum checksum = new Checksum(CanonicalMapping.getCheckSum(cigar));
     			if (cacheByChecksum.containsKey(checksum))
     				cmapping = cacheByChecksum.get(checksum);
     			else {
     				int mapping_id = rs.getInt(2);
     	       	    int refSpan = rs.getInt(6);
             	    int subSpan = rs.getInt(7);
- 		    		cmapping = new CanonicalMapping(mapping_id,refSpan,subSpan,checksumbytes);
+ 		    		cmapping = new CanonicalMapping(mapping_id,refSpan,subSpan,cigar);
  				    cacheByChecksum.put(checksum,cmapping);
  		    	}
    			    // build a minimal Sequence instance and complete the sequence-to-contig mapping
@@ -317,15 +273,16 @@ public class MappingManager extends AbstractManager {
 //		contig.setMappings(mappings);  change BasicSequenceToContigMapping?
 	}
 	
-// REDUNDENT Canonical Mappings have cigar string as checksum	pstmtSelectCanonicalSegment 
+
 	
-	public void addCanonicalSegmentsToCanonicalMapping(CanonicalMapping mapping)  throws ArcturusDatabaseException {
+	// REDUNDENT Canonical Mappings have cigar string as checksum	pstmtSelectCanonicalSegment 
+	public void addSegmentsToGenericMapping(CanonicalMapping mapping) throws ArcturusDatabaseException {
 		if (mapping == null || mapping.getMappingID() <= 0) 
 		    throw new IllegalArgumentException("Missing canonical mapping or invalid mapping ID");
 		try {
-			pstmtSelectCanonicalSegment.setInt(1, mapping.getMappingID());
+			pstmtSelectSegment.setInt(1, mapping.getMappingID());
 			
-			ResultSet rs = pstmtSelectCanonicalSegment.executeQuery();
+			ResultSet rs = pstmtSelectSegment.executeQuery();
 			
 			int size = rs.getFetchSize();
 			
