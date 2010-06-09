@@ -1,16 +1,16 @@
 package uk.ac.sanger.arcturus.data;
 
-import java.util.Arrays;
+import java.util.*;
 
-//import uk.ac.sanger.arcturus.*;
-import uk.ac.sanger.arcturus.data.GenericMapping.Direction;
 import uk.ac.sanger.arcturus.data.Utility;
 
 public class CanonicalMapping {
     protected int ID;
     protected int referenceSpan;
     protected int subjectSpan;
+    protected String extendedCigarString;
     protected BasicSegment[] segments;
+    protected Integer[] padlist;
     protected byte[] checksum;
     
     protected boolean isValid = false;
@@ -18,18 +18,23 @@ public class CanonicalMapping {
    public CanonicalMapping(int ID, BasicSegment[] segments) {
         setMappingID(ID);
         setSegments(segments);
+        // missing here: calculate subjectSpan and referenceSpan
     }
  
     public CanonicalMapping(BasicSegment[] segments) {
     	this(0,segments);
     }
    
-    public CanonicalMapping(int ID,int rs, int ss, byte[] checksum) {
+    public CanonicalMapping(int ID, int rs, int ss, String extendedCigarString) {
     	// constructor using ID from database and e.g. delayed loading segments
         setMappingID(ID);
         setReferenceSpan(rs);
         setSubjectSpan(ss);
-        setCheckSum(checksum);
+        this.extendedCigarString = extendedCigarString;
+    }
+    
+    public CanonicalMapping(String extendedCigarString) {
+        this.extendedCigarString = extendedCigarString;
     }
 
     
@@ -60,6 +65,8 @@ public class CanonicalMapping {
     }
     
     public BasicSegment[] getSegments() {
+    	if (segments == null && extendedCigarString != null)
+    		makeSegmentsFromCigarString();
         return segments;
     }
    
@@ -79,6 +86,120 @@ public class CanonicalMapping {
         return referenceSpan;
     }  
     
+    public boolean equals(CanonicalMapping that) {
+        // two canonical mappings are equal if their checksums are identical
+    	if (that == null) 
+    		return false;
+    	byte[] thisCheckSum = this.getCheckSum();
+     	byte[] thatCheckSum = that.getCheckSum();
+       	if (thisCheckSum == null || thatCheckSum == null) 
+       		return false;
+       	if (thisCheckSum.length != thatCheckSum.length)
+       		return false;
+    	for (int i = 0 ; i < thisCheckSum.length ; i++) {
+    		if (thisCheckSum[i] != thatCheckSum[i])
+    			return false;
+    	}
+    	return true;
+    }
+    
+    public String getExtendedCigarString() {
+    	if (extendedCigarString == null && segments != null)
+    		makeCigarStringFromSegments();
+        return this.extendedCigarString;
+    }
+    
+    public void setCheckSum(byte[] checksum) {
+        this.checksum = checksum;
+    }
+    
+    public static byte[] getCheckSum(String cigar) {
+        if (cigar == null) 
+        	return null;
+        else if (cigar.length() < 16)
+        	return cigar.getBytes();
+        else 
+    		return Utility.calculateMD5Hash(cigar);
+    }
+
+    public byte[] getCheckSum() {
+        if (checksum == null) 
+        	getExtendedCigarString(); // forces build if needed and possible
+            checksum = getCheckSum(extendedCigarString);
+        return checksum;
+    }
+    
+/*
+ *  methods dealing with cigar stuff    
+ */
+    private static final byte D = 68;
+    private static final byte H = 72;
+    private static final byte I = 73;
+    private static final byte M = 77;
+    private static final byte N = 78;
+    private static final byte P = 80;
+    private static final byte S = 83;
+    private static final byte X = 88;
+       
+    private void makeSegmentsFromCigarString() {
+    	// take cigar string and generate segments TO BE TESTED
+    	int number = 0;
+    	int offset = 0;
+    	referenceSpan = 0;
+    	subjectSpan = 0;
+
+		Vector<BasicSegment> BS = new Vector<BasicSegment>();
+		Vector<Integer>      PI = new Vector<Integer>();
+
+    	byte[] cigar = extendedCigarString.getBytes();
+    	for (int i=0 ; i < cigar.length ; i++) {
+    	    if (cigar[i] >= 30 && cigar[i] <= 39) 
+    	    	number = number*10 + cigar[i];
+    	    else {
+    	        if (cigar[i] == D)
+    	    	    referenceSpan += number;
+    	        else if (cigar[i] == I)
+    	    	    subjectSpan += number;
+    	        else if (cigar[i] == S)
+    	    	    offset += number;
+    	        else if (cigar[i] == N || cigar[i] == X) {
+	    	    	referenceSpan += number;
+ 	    	        subjectSpan += number;
+    	        }
+    	        else if (cigar[i] == M) { // add a segment to the segment list
+    	        	BasicSegment s = new BasicSegment(referenceSpan+1,subjectSpan+offset+1,number);
+    	    	    BS.add(s);
+    	    	    referenceSpan += number;
+    	    	    subjectSpan += number;
+    	        }
+    	   	    else if (cigar[i] == P) { // add pad position(s) to the pad list	
+    	    	    for (int j=1 ; j <= number ; j++) {
+    	    	  	    Integer pad = new Integer(subjectSpan+j);
+    	                PI.add(pad);
+    	    	    }
+    	   	    }
+    	   	    else if (cigar[i] != H) { // H is silent
+                    System.err.println("invalid cigar string " + extendedCigarString);
+                    return;
+    	   	    }
+      	    	number = 0;
+    	    }
+    	}
+    	if (BS.size() > 0)
+    		segments = BS.toArray(new BasicSegment[0]);
+    	if (PI.size() > 0)
+    		padlist = PI.toArray(new Integer[0]);
+    }
+
+    private void makeCigarStringFromSegments() {
+    	// take segments string and generate cigar string TO BE COMPLETED
+    }
+
+/**
+ *     
+ * these methods are probably redundant, some functionality has to be put in Alignment Class
+ */
+    
     public int getSubjectPositionFromReferencePosition(int rpos) {
 //        report("CanonicalMapping.getReadPositionFromContigPosition(" + rpos + ")");
      	int element = Traverser.locateElement(segments,rpos);
@@ -96,45 +217,5 @@ public class CanonicalMapping {
     public float getPadPositionFromReferencePosition(int deltaC) {
         return 0;
     }
-    
-    // two canonical mappings are equal if their checksums are identical
-    
-    public boolean equals(CanonicalMapping that) {
-    	if (that == null) 
-    		return false;
-    	byte[] thisCheckSum = this.getCheckSum();
-     	byte[] thatCheckSum = that.getCheckSum();
-       	if (thisCheckSum == null || thatCheckSum == null) 
-       		return false;
-    	for (int i = 0 ; i < thisCheckSum.length ; i++) {
-    		if (thisCheckSum[i] != thatCheckSum[i])
-    			return false;
-    	}
-    	return true;
-    }
-    
-    public void setCheckSum(byte[] checksum) {
-        this.checksum = checksum;
-    }
-
-    public byte[] getCheckSum () {
-        if (checksum == null) 
-            checksum = buildCheckSum(segments);
-        return checksum;
-    }
-    
-    private byte[] buildCheckSum(BasicSegment[] segments) {
-        if (segments == null) return null;
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0 ; i < segments.length ; i++) {
-            if (i > 0) sb.append(':');
-            sb.append(segments[i].getReferenceStart());
-            sb.append(',');
-            sb.append(segments[i].getSubjectStart());
-            sb.append(',');
-            sb.append(segments[i].getLength());
-        }
-        
-        return Utility.calculateMD5Hash(sb.toString());
-    }
+ 
 }
