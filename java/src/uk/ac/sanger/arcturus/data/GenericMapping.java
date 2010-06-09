@@ -36,47 +36,18 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 		Arrays.sort(alignments);		
 		direction = Alignment.getDirection(alignments);
 		
-		boolean test = true;
-//		test = false;
-		if (test) {
-		    buildCanonicalMapping();
-		} else {
-		
-		subjectOffset = alignments[0].getSubjectRange().getStart() - 1;
-		
-		referenceOffset = alignments[0].getReferenceRange().getStart();		
-		if (direction == Direction.FORWARD)
-			referenceOffset -= 1;
-		else
-			referenceOffset += 1;
-//System.out.println("rOffset "+referenceOffset + "  sOffset "+subjectOffset + " dir: "+direction);
-		
-		BasicSegment[] segments = new BasicSegment[alignments.length];
-		
-		for (int i = 0; i < alignments.length; i++) {
-			
-			int sstart = alignments[i].getSubjectRange().getStart();
-			int rstart = alignments[i].getReferenceRange().getStart();
-			int length = alignments[i].getSubjectRange().getLength();
-			
-			sstart -= subjectOffset;
-			rstart -= referenceOffset;
-			
-			if (direction == Direction.REVERSE)
-				rstart = -rstart;
-			
-			segments[i] = new BasicSegment(rstart, sstart, length);
-//System.out.println(segments[i].toString());
-		}
-
-		cm = new CanonicalMapping(segments);
-		}
+		buildCanonicalMapping();
 		putRanges();
 	}
 	
 	public GenericMapping(S subject, R reference, GenericMapping gm) { // ?needed?
         this(subject,reference,gm.getAlignments());
 	}
+	
+	public GenericMapping(S subject, R reference) {
+		this.subject = subject;
+		this.reference = reference;
+ 	}
 
 	public GenericMapping(CanonicalMapping cm, int referenceOffset, int subjectOffset, Direction direction) {
 		this(null,null,cm,referenceOffset,subjectOffset,direction);
@@ -85,7 +56,7 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 	public GenericMapping(Alignment[] alignments) {
 	    this(null,null,alignments);
 	}
-	
+
 	public S getSubject() {
 	    return subject;
 	}
