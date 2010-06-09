@@ -29,24 +29,9 @@ public class ConsensusReadImporter {
 	private static final String DEFAULT_TAGTYPE = "CONS";
 
 	private static final String DEFAULT_TAG_COMMENT = "Consensus read";
-	
-	private static final String DEFAULT_CHEMISTRY = "Dye_primer";
-	
-	private PreparedStatement pstmtGetPassStatus = null;
-	private static final String GET_PASS_STATUS = "select status_id from STATUS where name = ?";
 
 	private PreparedStatement pstmtInsertReadInfo = null;
-	private static final String INSERT_READINFO = "insert into READINFO(readname,chemistry,status) values (?,?,?)";
-
-	private PreparedStatement pstmtGetTemplateID = null;
-	private static final String GET_TEMPLATE_ID = "select template_id from TEMPLATE where name = ?";
-
-	private PreparedStatement pstmtInsertTemplate = null;
-	private static final String INSERT_TEMPLATE = "insert into TEMPLATE(name) values (?)";
-
-	private PreparedStatement pstmtUpdateReadInfo = null;
-	private static final String UPDATE_READINFO = "update READINFO set template_id = ? where read_id = ?"
-			+ " and template_id is null";
+	private static final String INSERT_READINFO = "insert into READNAME(readname) values (?)";
 
 	private PreparedStatement pstmtInsertSequence = null;
 	private static final String INSERT_SEQUENCE = "insert into SEQUENCE(seqlen,seq_hash,qual_hash,sequence,quality)"
@@ -68,8 +53,6 @@ public class ConsensusReadImporter {
 	private Connection conn = null;
 
 	private int qualityValue = DEFAULT_QUALITY;
-
-	private int passValue = 0;
 
 	private MessageDigest digester;
 	private Deflater compresser = new Deflater();
@@ -95,8 +78,6 @@ public class ConsensusReadImporter {
 			int oldTransactionIsolationLevel = conn.getTransactionIsolation();
 
 			prepareStatements();
-
-			getPassValue();
 
 			conn.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
 			conn.setAutoCommit(false);
@@ -129,17 +110,8 @@ public class ConsensusReadImporter {
 	}
 
 	private void prepareStatements() throws SQLException {
-		pstmtGetPassStatus = conn.prepareStatement(GET_PASS_STATUS);
-
 		pstmtInsertReadInfo = conn.prepareStatement(INSERT_READINFO,
 				Statement.RETURN_GENERATED_KEYS);
-
-		pstmtGetTemplateID = conn.prepareStatement(GET_TEMPLATE_ID);
-
-		pstmtInsertTemplate = conn.prepareStatement(INSERT_TEMPLATE,
-				Statement.RETURN_GENERATED_KEYS);
-
-		pstmtUpdateReadInfo = conn.prepareStatement(UPDATE_READINFO);
 
 		pstmtInsertSequence = conn.prepareStatement(INSERT_SEQUENCE,
 				Statement.RETURN_GENERATED_KEYS);
@@ -152,25 +124,11 @@ public class ConsensusReadImporter {
 	}
 
 	private void closeStatements() throws SQLException {
-		pstmtGetPassStatus = null;
 		pstmtInsertReadInfo = null;
-		pstmtGetTemplateID = null;
-		pstmtInsertTemplate = null;
-		pstmtUpdateReadInfo = null;
 		pstmtInsertSequence = null;
 		pstmtInsertSeq2Read = null;
 		pstmtInsertReadTag = null;
 		pstmtInsertQualityClip = null;
-	}
-
-	private void getPassValue() throws SQLException {
-		pstmtGetPassStatus.setString(1, "PASS");
-		ResultSet rs = pstmtGetPassStatus.executeQuery();
-
-		passValue = rs.next() ? rs.getInt(1) : 0;
-
-		rs.close();
-		pstmtGetPassStatus.close();
 	}
 
 	private void processFASTAFile(BufferedReader br) throws IOException,
@@ -246,31 +204,6 @@ public class ConsensusReadImporter {
 
 			notify("  -- Read ID is " + read_id);
 
-			int template_id;
-
-			String[] words = seqname.split("\\.");
-
-			String template_name = words[0];
-
-			notify("  -- Looking up template " + template_name);
-
-			pstmtGetTemplateID.setString(1, template_name);
-
-			ResultSet rs = pstmtGetTemplateID.executeQuery();
-
-			template_id = rs.next() ? rs.getInt(1) : -1;
-
-			rs.close();
-
-			if (template_id < 0) {
-				notify("  -- Creating new template " + template_name);
-				template_id = insertTemplate(template_name);
-			}
-
-			notify("  -- Template ID is " + template_id);
-
-			setTemplateForRead(read_id, template_id);
-
 			int seq_id = insertSequence(dna);
 
 			notify("  -- Sequence ID is " + seq_id);
@@ -298,8 +231,6 @@ public class ConsensusReadImporter {
 
 	private int insertReadInfo(String readname) throws SQLException {
 		pstmtInsertReadInfo.setString(1, readname);
-		pstmtInsertReadInfo.setString(2, DEFAULT_CHEMISTRY);
-		pstmtInsertReadInfo.setInt(3, passValue);
 
 		pstmtInsertReadInfo.executeUpdate();
 
@@ -310,28 +241,6 @@ public class ConsensusReadImporter {
 		rs.close();
 
 		return read_id;
-	}
-
-	private int insertTemplate(String templateName) throws SQLException {
-		pstmtInsertTemplate.setString(1, templateName);
-
-		pstmtInsertTemplate.executeUpdate();
-
-		ResultSet rs = pstmtInsertTemplate.getGeneratedKeys();
-
-		int template_id = rs.next() ? rs.getInt(1) : -1;
-
-		rs.close();
-
-		return template_id;
-	}
-
-	private void setTemplateForRead(int read_id, int template_id)
-			throws SQLException {
-		pstmtUpdateReadInfo.setInt(1, template_id);
-		pstmtUpdateReadInfo.setInt(2, read_id);
-
-		pstmtUpdateReadInfo.executeUpdate();
 	}
 
 	private int insertSequence(String dna) throws SQLException {
