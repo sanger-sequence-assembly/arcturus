@@ -15,6 +15,8 @@ public class Contig extends Core {
 	protected Date updated = null;
 	protected Date created = null;
 	protected BasicSequenceToContigMapping[] mappings = null;
+	protected SequenceToContigMapping[] scmappings = null;
+	protected ContigToParentMapping[]  cpmappings = null;
 	protected byte[] dna = null;
 	protected byte[] quality = null;
 	protected Project project = null;
@@ -28,6 +30,10 @@ public class Contig extends Core {
 
 	public Contig() {
 		super();
+	}
+
+	public Contig(String name) {
+		super(name);
 	}
 
 	/**
@@ -150,16 +156,36 @@ public class Contig extends Core {
 	public void setProject(Project project) {
 		this.project = project;
 	}
+	
+	public void setSequenceToContigMappings(SequenceToContigMapping[] mappings) {
+		this.scmappings = mappings;
 
-	public BasicSequenceToContigMapping[] getMappings() {
-		return mappings;
+		if (mappings != null)
+			this.nreads = mappings.length;
 	}
-
+	
+	public SequenceToContigMapping[] getSequenceToContigMappings() {
+		return scmappings;
+	}
+	
+	
 	public void setMappings(BasicSequenceToContigMapping[] mappings) {
 		this.mappings = mappings;
 
 		if (mappings != null)
 			this.nreads = mappings.length;
+	}
+	
+	public BasicSequenceToContigMapping[] getMappings() {
+		return mappings;
+	}
+	
+	public void setContigToParentMappings(ContigToParentMapping[] mappings) {
+		this.cpmappings = mappings;
+	}
+	
+	public ContigToParentMapping[] getContigToParentMappings() {
+		return this.cpmappings;
 	}
 
 	public byte[] getDNA() {
