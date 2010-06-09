@@ -855,4 +855,8 @@ public class SequenceManager extends AbstractManager {
 		
 		return null;
 	}
+
+	public String getCacheStatistics() {
+		return "ByReadID: " + hashByReadID.size() + ", BySequenceID: " + hashBySequenceID.size();
+	}
 }

@@ -306,4 +306,8 @@ public class TemplateManager extends AbstractManager {
 
 		return null;
 	}
+
+	public String getCacheStatistics() {
+		return "ByID: " + hashByID.size() + ", ByName: " + hashByName.size();
+	}
 }

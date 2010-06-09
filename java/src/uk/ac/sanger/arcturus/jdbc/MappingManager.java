@@ -387,4 +387,8 @@ public class MappingManager extends AbstractManager {
 			return true;
 		}
 	}
+
+	public String getCacheStatistics() {
+		return "ByChecksum: " + cacheByChecksum.size();
+	}
 }

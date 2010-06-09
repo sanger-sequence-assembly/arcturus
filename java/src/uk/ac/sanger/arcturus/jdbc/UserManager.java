@@ -182,4 +182,8 @@ public class UserManager extends AbstractManager {
 		return isCoordinator(findMe())
 				&& !Boolean.getBoolean("minerva.noadmin");
 	}
+
+	public String getCacheStatistics() {
+		return "roleMap: " + roleMap.size() + ", personMap: " + personMap.size();
+	}
 }

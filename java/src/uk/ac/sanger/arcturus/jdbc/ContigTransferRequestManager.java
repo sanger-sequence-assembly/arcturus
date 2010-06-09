@@ -1019,4 +1019,8 @@ public class ContigTransferRequestManager extends AbstractManager {
 	public void preload() throws ArcturusDatabaseException {
 		// Does nothing
 	}
+
+	public String getCacheStatistics() {
+		return "ByID: " + cache.size();
+	}
 }

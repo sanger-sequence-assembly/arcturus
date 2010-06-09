@@ -203,4 +203,8 @@ public class CloneManager extends AbstractManager {
 			adb.handleSQLException(e, "Failed to preload clones", conn, this);
 		}
 	}
+
+	public String getCacheStatistics() {
+		return "ByID: " + hashByID.size() + ", ByName: " + hashByName.size();
+	}
 }

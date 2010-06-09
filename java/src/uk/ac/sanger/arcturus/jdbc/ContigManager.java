@@ -1476,4 +1476,8 @@ public class ContigManager extends AbstractManager {
 	public void preload() throws ArcturusDatabaseException {
 		// This method does nothing, as we never want to preload all contigs.
 	}
+
+	public String getCacheStatistics() {
+		return "ByID: " + hashByID.size();
+	}
 }

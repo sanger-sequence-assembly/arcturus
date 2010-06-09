@@ -133,4 +133,8 @@ public class DictionaryTableManager extends AbstractManager {
 	public String getValue(int id) {
 		return cacheByID.get(id);
 	}
+
+	public String getCacheStatistics() {
+		return "ByID: " + cacheByID.size() + ", ByName: " + cacheByName.size();
+	}
 }

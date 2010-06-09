@@ -550,4 +550,8 @@ public class ReadManager extends AbstractManager {
 
 		return ids;
 	}
+
+	public String getCacheStatistics() {
+		return "ByID: " + hashByID.size() + ", ByName: " + hashByName.size();
+	}
 }

@@ -914,4 +914,8 @@ public class ProjectManager extends AbstractManager {
 		
 		return (bin != null) ? bin : getProjectByName(null, "BIN");
 	}
+
+	public String getCacheStatistics() {
+		return "ByID: " + hashByID.size();
+	}
 }

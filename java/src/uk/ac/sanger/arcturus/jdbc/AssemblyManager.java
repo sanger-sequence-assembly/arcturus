@@ -205,4 +205,8 @@ public class AssemblyManager extends AbstractManager {
 	public void refreshAllAssemblies() throws ArcturusDatabaseException {
 		preload();
 	}
+
+	public String getCacheStatistics() {
+		return "ByID: " + hashByID.size();
+	}
 }
