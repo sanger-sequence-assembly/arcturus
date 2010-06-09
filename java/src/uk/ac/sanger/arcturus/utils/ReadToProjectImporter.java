@@ -53,16 +53,16 @@ public class ReadToProjectImporter {
 	private void prepareStatements() throws SQLException {
 		pstmtReadToContig = conn
 				.prepareStatement("select CURRENTCONTIGS.contig_id"
-						+ " from READINFO,SEQ2READ,MAPPING,CURRENTCONTIGS"
-						+ " where READINFO.readname = ?"
-						+ " and READINFO.read_id = SEQ2READ.read_id"
+						+ " from READNAME,SEQ2READ,MAPPING,CURRENTCONTIGS"
+						+ " where READNAME.readname = ?"
+						+ " and READNAME.read_id = SEQ2READ.read_id"
 						+ " and SEQ2READ.seq_id = MAPPING.seq_id"
 						+ " and MAPPING.contig_id = CURRENTCONTIGS.contig_id");
 		
 		statements.add(pstmtReadToContig);
 
 		pstmtReadID = conn
-				.prepareStatement("select read_id from READINFO where readname = ?");
+				.prepareStatement("select read_id from READNAME where readname = ?");
 		
 		statements.add(pstmtReadID);
 
