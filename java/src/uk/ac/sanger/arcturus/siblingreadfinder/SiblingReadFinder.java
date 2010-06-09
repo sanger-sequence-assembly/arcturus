@@ -28,12 +28,12 @@ public class SiblingReadFinder {
     	" where CC.project_id = ? and RI.asped is not null and RI.template_id > 0";
 	
 	private static final String SQL_LIST_READS_FOR_TEMPLATE =
-		"select readname from READINFO where template_id = ?";
+		"select readname from READINFO left join READNAME using (read_id) where template_id = ?";
 	
 	private static final String SQL_CURRENT_CONTIG_FOR_READ =
-		"select CC.contig_id from READINFO RI left join" +
+		"select CC.contig_id from READNAME R left join" +
 		" (SEQ2READ SR, MAPPING M, CURRENTCONTIGS CC) using (read_id)" +
-		" where RI.readname = ? and SR.seq_id=M.seq_id and M.contig_id=CC.contig_id";
+		" where R.readname = ? and SR.seq_id=M.seq_id and M.contig_id=CC.contig_id";
 
 	protected PreparedStatement pstmtListTemplatesForProject;
 	protected PreparedStatement pstmtListReadsForTemplate;
