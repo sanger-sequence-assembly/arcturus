@@ -10,8 +10,8 @@ import uk.ac.sanger.arcturus.data.Sequence;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.traceserver.TraceServerClient;
-import uk.ac.sanger.arcturus.utils.BasicCapillaryReadNameFilter;
-import uk.ac.sanger.arcturus.utils.ReadNameFilter;
+import uk.ac.sanger.arcturus.utils.Utility;
+import uk.ac.sanger.arcturus.utils.*;
 
 import net.sf.samtools.SAMFileReader;
 import net.sf.samtools.SAMRecord;
@@ -28,7 +28,16 @@ public class BAMReadLoader {
 	private long T0;
 	
 	public BAMReadLoader() throws ArcturusDatabaseException {
-		adb = uk.ac.sanger.arcturus.utils.Utility.getTestDatabase();
+		adb = Utility.getTestDatabase();
+		prepareLoader();
+	}
+
+	public BAMReadLoader(ArcturusDatabase adb) throws ArcturusDatabaseException {
+		this.adb = adb;
+		prepareLoader();
+	}
+	
+	private void prepareLoader() {
 		
 		adb.setCacheing(ArcturusDatabase.READ, false);
 		adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
@@ -40,7 +49,18 @@ public class BAMReadLoader {
 			traceServerClient = new TraceServerClient(baseURL);
 	}
 	
+	public void processFile(File file) throws ArcturusDatabaseException {
+		SAMFileReader.setDefaultValidationStringency(SAMFileReader.ValidationStringency.SILENT);
+
+		SAMFileReader reader = new SAMFileReader(file);
+	   	if (reader.isBinary() == false || reader.hasIndex() == false)
+    		throw new IllegalArgumentException("The input file is not indexed: " + file.toString());
+
+    	processFile(reader);
+    }	
+	
 	public void processFile(SAMFileReader reader) throws ArcturusDatabaseException {
+
 		CloseableIterator<SAMRecord> iterator = reader.iterator();
 
 		int n = 0;
@@ -78,10 +98,12 @@ public class BAMReadLoader {
 		}
 	}
 	
+	private static final int FLAGS_MASK = 128 + 64 + 1;
+	
 	private void processRecord(SAMRecord record) throws ArcturusDatabaseException {
 		String readname = record.getReadName();
 		
-		int flags = Utility.maskReadFlags(record.getFlags());
+		int flags = record.getFlags() & FLAGS_MASK;
 		
 		//System.out.println("Read " + readname + ", flags " + flags);
 		
