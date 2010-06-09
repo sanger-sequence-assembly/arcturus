@@ -42,7 +42,7 @@ public class OligoFinder {
 	
 	private final String CREATE_FREE_READS_TABLE =
 		"create temporary table if not exists " + FREE_READS +
-			" (read_id int not null primary key, readname char(64) not null) ENGINE=InnoDB";
+			" (read_id int not null primary key, readname char(96) not null) ENGINE=InnoDB";
 	
 	private final String GET_PASS_VALUE = "select status_id from STATUS where name = ?";
 	
