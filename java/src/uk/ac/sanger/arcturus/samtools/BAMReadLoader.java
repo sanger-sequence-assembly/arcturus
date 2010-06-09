@@ -40,11 +40,7 @@ public class BAMReadLoader {
 			traceServerClient = new TraceServerClient(baseURL);
 	}
 	
-	public void processFile(File file) throws ArcturusDatabaseException {
-		SAMFileReader.setDefaultValidationStringency(SAMFileReader.ValidationStringency.SILENT);
-
-		SAMFileReader reader = new SAMFileReader(file);
-
+	public void processFile(SAMFileReader reader) throws ArcturusDatabaseException {
 		CloseableIterator<SAMRecord> iterator = reader.iterator();
 
 		int n = 0;
@@ -207,8 +203,12 @@ public class BAMReadLoader {
 		
 		try {
 			BAMReadLoader loader = new BAMReadLoader();
+
+			SAMFileReader.setDefaultValidationStringency(SAMFileReader.ValidationStringency.SILENT);
+
+			SAMFileReader reader = new SAMFileReader(file);
 		
-			loader.processFile(file);
+			loader.processFile(reader);
 		}
 		catch (ArcturusDatabaseException e) {
 			e.printStackTrace();
