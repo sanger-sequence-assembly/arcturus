@@ -20,6 +20,9 @@ public class BAMReadLoader {
 	private TraceServerClient traceServerClient = null;
 	private ReadNameFilter readNameFilter = new BasicCapillaryReadNameFilter();
 	
+	private int tsLookups;
+	private int tsFailures;
+	
 	private long T0;
 	
 	public BAMReadLoader() throws ArcturusDatabaseException {
@@ -27,6 +30,7 @@ public class BAMReadLoader {
 		
 		adb.setCacheing(ArcturusDatabase.READ, false);
 		adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
+		adb.setCacheing(ArcturusDatabase.TEMPLATE, false);
 		
 		String baseURL = Arcturus.getProperty("traceserver.baseURL");
 		
@@ -42,6 +46,9 @@ public class BAMReadLoader {
 		CloseableIterator<SAMRecord> iterator = reader.iterator();
 
 		int n = 0;
+		
+		tsLookups = 0;
+		tsFailures = 0;
 		
 		Connection conn = adb.getDefaultConnection();
 		
@@ -86,14 +93,23 @@ public class BAMReadLoader {
 		
 		byte[] quality = record.getBaseQualities();
 		
+		if (record.getReadNegativeStrandFlag()) {
+			dna = reverseComplement(dna);
+			quality = reverseQuality(quality);
+		}
+		
 		Read read = adb.getReadByNameAndFlags(readname, flags);
 		
 		if (read == null) {
 			if (traceServerClient != null && readNameFilter.accept(readname)) {
 				Sequence storedSequence = traceServerClient.fetchRead(readname);
 				
+				tsLookups++;
+				
 				if (storedSequence != null)
 					read = storedSequence.getRead();
+				else
+					tsFailures++;
 			}
 			
 			if (read == null)
@@ -108,6 +124,56 @@ public class BAMReadLoader {
 		
 		//System.out.println("\tStored with ID=" + newRead.getID() +
 		//		", sequence ID=" + newSequence.getID());
+	}
+	
+	private byte[] reverseComplement(byte[] src) {
+		if (src == null)
+			return null;
+		
+		int srclen = src.length;
+		
+		byte[] dst = new byte[srclen];
+		
+		int j = srclen - 1;
+		
+		for (int i = 0; i < srclen; i++)
+			dst[j--] = reverseComplement(src[i]);
+		
+		return dst;
+	}
+	
+	private byte reverseComplement(byte c) {
+		switch (c) {
+			case 'a': return 't';
+			case 'A': return 'T';
+			
+			case 'c': return 'g';
+			case 'C': return 'G';
+			
+			case 'g': return 'c';
+			case 'G': return 'C';
+			
+			case 't': return 'a';
+			case 'T': return 'A';
+			
+			default: return c;
+		}
+	}
+	
+	private byte[] reverseQuality(byte[] src) {
+		if (src == null)
+			return null;
+		
+		int srclen = src.length;
+		
+		byte[] dst = new byte[srclen];
+		
+		int j = srclen - 1;
+		
+		for (int i = 0; i < srclen; i++)
+			dst[j--] = src[i];
+		
+		return dst;
 	}
 
 	private void reportMemory(int n) {
@@ -127,7 +193,8 @@ public class BAMReadLoader {
 		long dt = System.currentTimeMillis() - T0;
 		
 		System.err.println("Reads: " + n + " ; Memory used " + usedMemory + " kb, free " + freeMemory +
-				" kb, total " + totalMemory + " kb, per read " + perRead + "; time = " + dt + " ms");
+				" kb, total " + totalMemory + " kb, per read " + perRead + "; time = " + dt + " ms" +
+				"; traceserver lookups = " + tsLookups + ", failures = " + tsFailures);
 	}
 
 	public static void main(String[] args) {
