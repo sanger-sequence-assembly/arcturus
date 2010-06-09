@@ -4,7 +4,6 @@ import java.io.*;
 //import java.sql.*;
 
 import uk.ac.sanger.arcturus.data.*;
-import uk.ac.sanger.arcturus.importer.*;
 import uk.ac.sanger.arcturus.samtools.BAMContigLoader;
 import uk.ac.sanger.arcturus.samtools.BAMReadLoader;
 import uk.ac.sanger.arcturus.ArcturusInstance;
