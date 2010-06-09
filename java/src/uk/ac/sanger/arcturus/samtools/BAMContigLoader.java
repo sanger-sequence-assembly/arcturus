@@ -8,6 +8,7 @@ import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.data.GenericMapping.Direction;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
+import uk.ac.sanger.arcturus.jdbc.*;
 
 //import net.sf.samtools.SAMFileHeader;
 //import net.sf.samtools.SAMFileReader;
@@ -51,12 +52,16 @@ public class BAMContigLoader {
         Vector<Contig> C = new Vector<Contig>();
     	for (SAMSequenceRecord record : seqs) {
      		String contigName = record.getSequenceName();
-     		//FIXME C.add(new Contig(contigName));
+     		C.add(new Contig(contigName));
      		System.out.println("Added contig " + contigName + " : " + record.getSequenceLength());
     	}
         Contig[] contigs = C.toArray(new Contig[0]);      	
        
-        //FIXME adb.preloadReadNameCache(project);
+        if (project != null)
+            adb.prepareToLoadProject(project);
+        else 
+            adb.prepareToLoadAllProjects();
+       	
         
         identifyParentContigs(contigs,reader); // decide later if and what type to return
     	
@@ -82,32 +87,32 @@ public class BAMContigLoader {
      		    int flags = record.getFlags() & FLAGS_MASK;
      		    Read read = new Read(record.getReadName(),flags);
     		    String readName = read.getUniqueName();
-    		  //FIXME try {
-    		    	//FIXME int parent_id = adb.getCurrentContigIDForReadName(readName);
-    		    	//FIXME if (parent_id > 0) {
-    		    	//FIXME     int count = 0;
-    		    	//FIXME     if (graph.containsKey(parent_id))
-    		    	//FIXME	    count = (Integer)graph.get(parent_id);
-    		    	//FIXME    count++;
-    		    	//FIXME    graph.put(parent_id, count);
-    		    	//FIXME}
-    		  //FIXME }
-    		  //FIXME catch (ArcturusDatabaseException e) {
-    		  //FIXME  	System.err.println(e + "possibly database access lost");
-    		  //FIXME  }
+    		    try {
+     		        int parent_id = adb.getCurrentContigIDForReadName(readName);
+     		        if (parent_id > 0) {
+     		    	    int count = 0;
+     		    	    if (graph.containsKey(parent_id))
+     		    		    count = (Integer)graph.get(parent_id);
+     		    	    count++;
+     		    	    graph.put(parent_id, count);
+     		        }
+     		    }
+    		    catch (ArcturusDatabaseException e) {
+    		    	System.err.println(e + "possibly database access lost");
+    		    }
      		}
      		Enumeration graphKeys = graph.keys();
-     		//FIXME Vector<ContigToParentMapping> M = new Vector<ContigToParentMapping>();
+            Vector<ContigToParentMapping> M = new Vector<ContigToParentMapping>();
      		while (graphKeys.hasMoreElements()) {
      			int parent_id = (Integer)graphKeys.nextElement();
      			int readCount = (Integer)graph.get(parent_id);
         		System.out.println("Parent contig ID " + parent_id + " readcount: " + readCount);
         		Contig parent = new Contig(parent_id,adb); // minimal parent object
-        		//FIXME ContigToParentMapping cpmapping = new ContigToParentMapping(contigs[i],parent);
-        		//FIXME cpmapping.setReadCount(readCount);
-        		//FIXME M.add(cpmapping);
+        		ContigToParentMapping cpmapping = new ContigToParentMapping(contigs[i],parent);
+        		cpmapping.setReadCount(readCount);
+        		M.add(cpmapping);
      		}
-     		//FIXME contigs[i].setContigToParentMappings(M.toArray(new ContigToParentMapping[0]));
+     		contigs[i].setContigToParentMappings(M.toArray(new ContigToParentMapping[0]));
      	}
 // here all input contigs have parenet to contig mappings and their weights    	
     }
@@ -121,7 +126,7 @@ public class BAMContigLoader {
     	
  		CloseableIterator<SAMRecord> iterator = reader.query(referencename, 0, 0, false);
  		
- 		//FIXME Contig contig = new Contig(referencename);
+ 		Contig contig = new Contig(referencename);
  		
  		Vector<SequenceToContigMapping> M = new Vector<SequenceToContigMapping>();
  		
@@ -134,16 +139,15 @@ public class BAMContigLoader {
  		    int contigStartPosition = record.getAlignmentStart();
  		    int contigEndPosition = record.getAlignmentEnd();
  // WHAT to do with direction REVERSE ?
- 		 //FIXME CanonicalMapping cm = new CanonicalMapping(cigar);
- 		 //FIXME SequenceToContigMapping mapping = new SequenceToContigMapping(sequence,contig, cm,
- 		 //FIXME   		                                   contigStartPosition,1,Direction.FORWARD);
- 		 //FIXME   M.add(mapping);
+ 		    CanonicalMapping cm = new CanonicalMapping(cigar);
+ 		    SequenceToContigMapping mapping = new SequenceToContigMapping(sequence,contig, cm,
+ 		    		                                   contigStartPosition,1,Direction.FORWARD);
+ 		    M.add(mapping);
  		}
  		
 // 		contig.setMappings(M.toArray(new SequenceToContigMapping[0]));
    	
- 		//FIXME return contig;	  
- 		return null;
+        return contig;	    	
     }
 	
 /*
@@ -156,8 +160,7 @@ public class BAMContigLoader {
 	}
 */
    
-    
-	
+ 
 	public void analyseGraph() {
 		// analyse graph of parent contig relations; aborted on inconsistencies
 	}
@@ -169,7 +172,7 @@ public class BAMContigLoader {
 	public void writeImportMarker() {
 		
 	}
-	
+		
 // make executable for testing
 	
 	public static void main(String[] args) {
