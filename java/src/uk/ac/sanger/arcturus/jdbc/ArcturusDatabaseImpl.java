@@ -1216,6 +1216,10 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		if (manager != null)
 			manager.preload();			
 	}
+	
+	public AbstractManager getManager(int type) {
+		return getManagerForType(type);
+	}
 
 	private AbstractManager getManagerForType(int type) {
 		switch (type) {
