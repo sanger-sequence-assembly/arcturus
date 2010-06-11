@@ -22,12 +22,21 @@ public class SiblingReadFinder {
 	private final int CONNECTION_VALIDATION_TIMEOUT = 10;
 	
 	private static final String SQL_LIST_TEMPLATES_FOR_PROJECT =
-		"select distinct RI.template_id" +
+		"select distinct RI.template_id,RI.strand" +
     	" from ((CURRENTCONTIGS CC left join MAPPING M using(contig_id))" +
     	" left join SEQ2READ using (seq_id)) left join READINFO RI using (read_id)" +
-    	" where CC.project_id = ? and RI.asped is not null and RI.template_id > 0";
+    	" where CC.project_id = ? and RI.asped is not null and RI.strand is not null and RI.template_id > 0";
 	
 	private static final String SQL_LIST_READS_FOR_TEMPLATE =
+		"select readname from READINFO where template_id = ? and strand = ?";
+	
+	private static final String SQL_LIST_TEMPLATES_FROM_BOTH_STRANDS_FOR_PROJECT =
+		"select distinct RI.template_id,'both'" +
+    	" from ((CURRENTCONTIGS CC left join MAPPING M using(contig_id))" +
+    	" left join SEQ2READ using (seq_id)) left join READINFO RI using (read_id)" +
+    	" where CC.project_id = ? and RI.asped is not null and RI.strand is not null and RI.template_id > 0";
+	
+	private static final String SQL_LIST_READS_FROM_BOTH_STRANDS_FOR_TEMPLATE =
 		"select readname from READINFO where template_id = ?";
 	
 	private static final String SQL_CURRENT_CONTIG_FOR_READ =
@@ -37,6 +46,8 @@ public class SiblingReadFinder {
 
 	protected PreparedStatement pstmtListTemplatesForProject;
 	protected PreparedStatement pstmtListReadsForTemplate;
+	protected PreparedStatement pstmtListTemplatesFromBothStrandsForProject;
+	protected PreparedStatement pstmtListReadsFromBothStrandsForTemplate;
 	protected PreparedStatement pstmtCurrentContigForRead;
 	
 	protected SiblingReadFinderEventListener listener;
@@ -68,6 +79,10 @@ public class SiblingReadFinder {
 		pstmtListTemplatesForProject = conn.prepareStatement(SQL_LIST_TEMPLATES_FOR_PROJECT);
 
 		pstmtListReadsForTemplate = conn.prepareStatement(SQL_LIST_READS_FOR_TEMPLATE);
+		
+		pstmtListTemplatesFromBothStrandsForProject = conn.prepareStatement(SQL_LIST_TEMPLATES_FROM_BOTH_STRANDS_FOR_PROJECT);
+
+		pstmtListReadsFromBothStrandsForTemplate = conn.prepareStatement(SQL_LIST_READS_FROM_BOTH_STRANDS_FOR_TEMPLATE);
 
 		pstmtCurrentContigForRead = conn.prepareStatement(SQL_CURRENT_CONTIG_FOR_READ);
 	}
@@ -91,8 +106,26 @@ public class SiblingReadFinder {
 			Arcturus.logWarning("An error occurred when finalizing the ReadFinder", e);
 		}
 	}
+	
+	class TemplateAndStrand {
+		private int template_id;
+		private String strand;
+		
+		public TemplateAndStrand(int template_id, String strand) {
+			this.template_id = template_id;
+			this.strand = strand;
+		}
+		
+		public int getTemplateID() {
+			return template_id;
+		}
+		
+		public String getStrand() {
+			return strand;
+		}
+	}
 
-	public Set<String> getSiblingReadnames(Project project, Pattern omitNamesLike)
+	public Set<String> getSiblingReadnames(Project project, Pattern omitNamesLike, boolean bothStrands)
 		throws ArcturusDatabaseException {
 		if (project == null)
 			return null;
@@ -107,21 +140,25 @@ public class SiblingReadFinder {
 				listener.siblingReadFinderUpdate(event);
 			}
 			
-			Set<Integer> templateIDs = new HashSet<Integer>();
+			Set<TemplateAndStrand> templates = new HashSet<TemplateAndStrand>();
 			
-			pstmtListTemplatesForProject.setInt(1, project.getID());
+			PreparedStatement pstmt = bothStrands ?
+					pstmtListTemplatesFromBothStrandsForProject : pstmtListTemplatesForProject;
 			
-			ResultSet rs = pstmtListTemplatesForProject.executeQuery();
+			pstmt.setInt(1, project.getID());
+			
+			ResultSet rs = pstmt.executeQuery();
 			
 			while (rs.next()) {
-				templateIDs.add(rs.getInt(1));
+				TemplateAndStrand tands = new TemplateAndStrand(rs.getInt(1), rs.getString(2));
+				templates.add(tands);
 			}
 			
 			rs.close();
 			
 			if (listener != null) {
 				event.setStatus(Status.COUNTED_SUBCLONES);
-				event.setValue(templateIDs.size());
+				event.setValue(templates.size());
 				listener.siblingReadFinderUpdate(event);
 			}
 		
@@ -131,12 +168,17 @@ public class SiblingReadFinder {
 			
 			int count = 0;
 			
-			for (int template_id : templateIDs) {
+			pstmt = bothStrands ? pstmtListReadsFromBothStrandsForTemplate : pstmtListReadsForTemplate;
+			
+			for (TemplateAndStrand tands : templates) {
 				readnames.clear();
 				
-				pstmtListReadsForTemplate.setInt(1, template_id);
+				pstmt.setInt(1, tands.getTemplateID());
 				
-				rs = pstmtListReadsForTemplate.executeQuery();
+				if (!bothStrands)
+					pstmt.setString(2, tands.getStrand());
+				
+				rs = pstmt.executeQuery();
 				
 				while (rs.next())
 					readnames.add(rs.getString(1));
