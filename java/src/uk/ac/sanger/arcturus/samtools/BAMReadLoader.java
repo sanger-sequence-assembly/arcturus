@@ -10,8 +10,8 @@ import uk.ac.sanger.arcturus.data.Sequence;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.traceserver.TraceServerClient;
-import uk.ac.sanger.arcturus.utils.Utility;
-import uk.ac.sanger.arcturus.utils.*;
+import uk.ac.sanger.arcturus.utils.BasicCapillaryReadNameFilter;
+import uk.ac.sanger.arcturus.utils.ReadNameFilter;
 
 import net.sf.samtools.SAMFileReader;
 import net.sf.samtools.SAMRecord;
@@ -26,11 +26,6 @@ public class BAMReadLoader {
 	private int tsFailures;
 	
 	private long T0;
-	
-	public BAMReadLoader() throws ArcturusDatabaseException {
-		adb = Utility.getTestDatabase();
-		prepareLoader();
-	}
 
 	public BAMReadLoader(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		this.adb = adb;
@@ -48,16 +43,6 @@ public class BAMReadLoader {
 		if (baseURL != null && !Boolean.getBoolean("skiptraceserver"))
 			traceServerClient = new TraceServerClient(baseURL);
 	}
-	
-	public void processFile(File file) throws ArcturusDatabaseException {
-		SAMFileReader.setDefaultValidationStringency(SAMFileReader.ValidationStringency.SILENT);
-
-		SAMFileReader reader = new SAMFileReader(file);
-	   	if (reader.isBinary() == false || reader.hasIndex() == false)
-    		throw new IllegalArgumentException("The input file is not indexed: " + file.toString());
-
-    	processFile(reader);
-    }	
 	
 	public void processFile(SAMFileReader reader) throws ArcturusDatabaseException {
 
@@ -98,14 +83,10 @@ public class BAMReadLoader {
 		}
 	}
 	
-	private static final int FLAGS_MASK = 128 + 64 + 1;
-	
-	private void processRecord(SAMRecord record) throws ArcturusDatabaseException {
+	public void processRecord(SAMRecord record) throws ArcturusDatabaseException {
 		String readname = record.getReadName();
 		
-		int flags = record.getFlags() & FLAGS_MASK;
-		
-		//System.out.println("Read " + readname + ", flags " + flags);
+		int maskedFlags = Utility.maskReadFlags(record.getFlags());
 		
 		byte[] dna = record.getReadBases();
 		
@@ -116,7 +97,7 @@ public class BAMReadLoader {
 			quality = reverseQuality(quality);
 		}
 		
-		Read read = adb.getReadByNameAndFlags(readname, flags);
+		Read read = adb.getReadByNameAndFlags(readname, maskedFlags);
 		
 		if (read == null) {
 			if (traceServerClient != null && readNameFilter.accept(readname)) {
@@ -131,7 +112,7 @@ public class BAMReadLoader {
 			}
 			
 			if (read == null)
-				read = new Read(readname, flags);
+				read = new Read(readname, maskedFlags);
 		
 			read = adb.putRead(read);
 		}
@@ -224,7 +205,9 @@ public class BAMReadLoader {
 		File file = new File(args[0]);
 		
 		try {
-			BAMReadLoader loader = new BAMReadLoader();
+			ArcturusDatabase adb = uk.ac.sanger.arcturus.utils.Utility.getTestDatabase();
+			
+			BAMReadLoader loader = new BAMReadLoader(adb);
 
 			SAMFileReader.setDefaultValidationStringency(SAMFileReader.ValidationStringency.SILENT);
 
