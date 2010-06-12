@@ -74,6 +74,8 @@ public class BAMReadLoader {
 				}
 			}
 			
+			iterator.close();
+			
 			conn.commit();
 			
 			conn.setAutoCommit(savedAutoCommit);
