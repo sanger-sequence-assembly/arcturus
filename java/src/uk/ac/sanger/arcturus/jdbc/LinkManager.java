@@ -61,7 +61,7 @@ public class LinkManager extends AbstractManager {
 		int lastReadID = 0;
 
 		while (lastReadID >= 0) {
-//System.out.println("loading block starting at " + lastReadID);
+System.out.println("loading block starting at " + lastReadID);
 			try {
 	            pstmtSelectReadNamesForCurrentContigs.setInt(1,lastReadID);
 

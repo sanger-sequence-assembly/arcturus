@@ -5,7 +5,7 @@ import uk.ac.sanger.arcturus.utils.ProjectSummary;
 import uk.ac.sanger.arcturus.people.*;
 
 import java.util.*;
-import java.util.zip.DataFormatException;
+//import java.util.zip.DataFormatException;
 
 /**
  * This class represents a project, which is a set of contigs.
