@@ -1,7 +1,7 @@
 package uk.ac.sanger.arcturus.samtools;
 
 import java.io.*;
-import java.sql.*;
+//import java.sql.*;
 import java.util.*;
 
 import uk.ac.sanger.arcturus.data.*;
@@ -19,11 +19,17 @@ import net.sf.samtools.util.CloseableIterator;;
 
 public class BAMContigLoader {
 	private ArcturusDatabase adb;
+	private BAMReadLoader brl;
 	
-	private static final int FLAGS_MASK = 128 + 64 + 1;
+//	private static final int FLAGS_MASK = 128 + 64 + 1;
 	
 	public BAMContigLoader(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		this.adb = adb;
+    }
+	
+	public BAMContigLoader(ArcturusDatabase adb, BAMReadLoader brl) throws ArcturusDatabaseException {
+		this.adb = adb;
+		this.brl = brl;
     }
 	
     public void processFile(File file, Project project) throws ArcturusDatabaseException {
@@ -57,22 +63,28 @@ public class BAMContigLoader {
     	}
         Contig[] contigs = C.toArray(new Contig[0]);      	
        
-        if (project != null)
+        if (project != null) {
             adb.prepareToLoadProject(project);
+            if (getCacheSize(adb) == 0)
+            	adb.prepareToLoadAllProjects();
+        }
         else 
             adb.prepareToLoadAllProjects();
-       	
         
-        identifyParentContigs(contigs,reader); // decide later if and what type to return
+ArcturusDatabaseImpl adbi = (ArcturusDatabaseImpl)adb;
+LinkManager lm = (LinkManager)adbi.getManager(ArcturusDatabaseImpl.LINK);
+System.out.println("Size of cache : " + lm.getCacheStatistics());
+      	  
+        identifyParentsForContigs(contigs,reader); // decide later if and what type to return
     	
- //   	public void identifyParents(contigs,reader) {
-    		// link contigs to parents using caching mechanism for readnames-contigs
- //   	}
-    }
+ // identify contigs with only one parent  ; test for equality, if equal ignore
+ // identify contigs with parents, analyse links for consistency; if conflict, abort
+ // load new contigs        
+   }
 
     
     
-    private void identifyParentContigs(Contig[] contigs, SAMFileReader reader) {
+    private void identifyParentsForContigs(Contig[] contigs, SAMFileReader reader) {
     	
      	for (int i=0 ; i < contigs.length ; i++) {
     		String referenceSequenceName = contigs[i].getName();
@@ -84,11 +96,12 @@ public class BAMContigLoader {
      	   	
      		while (iterator.hasNext()) {
      		    SAMRecord record = iterator.next();
-     		    int flags = record.getFlags() & FLAGS_MASK;
-     		    Read read = new Read(record.getReadName(),flags);
-    		    String readName = read.getUniqueName();
+    		    int maskedFlags = Utility.maskReadFlags(record.getFlags());
+    		    String readName = record.getReadName();
+    		    Read read = new Read(readName,maskedFlags);
+    		    String uniqueReadName = read.getUniqueName();
     		    try {
-     		        int parent_id = adb.getCurrentContigIDForReadName(readName);
+     		        int parent_id = adb.getCurrentContigIDForReadName(uniqueReadName);
      		        if (parent_id > 0) {
      		    	    int count = 0;
      		    	    if (graph.containsKey(parent_id))
@@ -96,17 +109,26 @@ public class BAMContigLoader {
      		    	    count++;
      		    	    graph.put(parent_id, count);
      		        }
+     		        // either the read is not in the database, or not in a contig
+     		        else if (brl != null) { // only load if it's not in the database
+//System.out.println("Trying to load read " + readName);
+     		            if (adb.getReadByNameAndFlags(readName,maskedFlags) == null)
+     		            	brl.processRecord(record);
+     		        }
      		    }
     		    catch (ArcturusDatabaseException e) {
     		    	System.err.println(e + "possibly database access lost");
     		    }
      		}
+     		
+     		iterator.close();
+     		
      		Enumeration graphKeys = graph.keys();
             Vector<ContigToParentMapping> M = new Vector<ContigToParentMapping>();
      		while (graphKeys.hasMoreElements()) {
      			int parent_id = (Integer)graphKeys.nextElement();
      			int readCount = (Integer)graph.get(parent_id);
-        		System.out.println("Parent contig ID " + parent_id + " readcount: " + readCount);
+System.out.println("Parent contig ID " + parent_id + " readcount: " + readCount);
         		Contig parent = new Contig(parent_id,adb); // minimal parent object
         		ContigToParentMapping cpmapping = new ContigToParentMapping(contigs[i],parent);
         		cpmapping.setReadCount(readCount);
@@ -114,7 +136,7 @@ public class BAMContigLoader {
      		}
      		contigs[i].setContigToParentMappings(M.toArray(new ContigToParentMapping[0]));
      	}
-// here all input contigs have parenet to contig mappings and their weights    	
+// here all input contigs have parent-to-contig mappings and their weights    	
     }
  
     
@@ -132,8 +154,8 @@ public class BAMContigLoader {
  		
  		while (iterator.hasNext()) {
  		    SAMRecord record = iterator.next();
- 		    int flags = record.getFlags() & FLAGS_MASK;
- 		    Read read = new Read(record.getReadName(),flags);
+ 		    int maskedFlags = Utility.maskReadFlags(record.getFlags());
+ 		    Read read = new Read(record.getReadName(),maskedFlags);
  		    Sequence sequence = new Sequence(0,read,record.getReadBases(),record.getBaseQualities(),0);
  		    String cigar = record.getCigarString();
  		    int contigStartPosition = record.getAlignmentStart();
@@ -177,6 +199,17 @@ public class BAMContigLoader {
 	
 	public static void main(String[] args) {
 	
+	}
+	
+	private int getCacheSize(ArcturusDatabase adb) {
+		int size = 0;
+	
+	    if (adb instanceof ArcturusDatabaseImpl) {
+	        ArcturusDatabaseImpl adbi = (ArcturusDatabaseImpl)adb;
+	        LinkManager lm = (LinkManager)adbi.getManager(ArcturusDatabaseImpl.LINK);
+	        size = lm.getCacheSize();
+	    }
+	    return size;
 	}
 }
 
