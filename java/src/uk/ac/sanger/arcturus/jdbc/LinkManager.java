@@ -3,6 +3,7 @@ package uk.ac.sanger.arcturus.jdbc;
 import java.sql.SQLException;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
+import uk.ac.sanger.arcturus.samtools.Utility;
 
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
@@ -21,8 +22,8 @@ public class LinkManager extends AbstractManager {
 	
 	private static final String LINK_COLUMNS = "readname,flags,read_id,SEQ2CONTIG.contig_id";
 	private static final String LINK_TABLES = "(READNAME join " 
-	                                        +    "(SEQ2READ join "
-	                                        +       "(SEQ2CONTIG join CURRENTCONTIGS using (contig_id))"
+	                                        +    "(SEQ2READ left join "
+	                                        +       "(SEQ2CONTIG left join CURRENTCONTIGS using (contig_id))"
                                             +    " using (seq_id))"
                                             + " using (read_id))";
 	private static final String SELECT_ALL = "select " + LINK_COLUMNS + " from " + LINK_TABLES;
@@ -54,8 +55,6 @@ public class LinkManager extends AbstractManager {
         pstmtSelectCurrentContigForReadName = 
         	conn.prepareStatement(SELECT_ALL + " where readname = ?");
     }
-	
-	static final int FLAG_MASK= 128 + 64 + 1;
 
 	public void preload() throws ArcturusDatabaseException {
 		clearCache();
@@ -68,23 +67,24 @@ public class LinkManager extends AbstractManager {
 
 	            ResultSet rs = pstmtSelectReadNamesForCurrentContigs.executeQuery();
 
-				lastReadID = -1; // preset end loop
+				lastReadID = -1; // preset end outer loop
 	            while (rs.next()) {
-	        	    Read read = new Read(rs.getString(1),rs.getInt(2));
-	        	    lastReadID = rs.getInt(3); // activate one further pass through loop
-	        	    String readName = read.getUniqueName();
-	 		   	    cacheByReadName.put(readName,rs.getInt(4));
+	        	    String readName = rs.getString(1);
+	    		    int maskedFlags = Utility.maskReadFlags(rs.getInt(2));
+	        	    Read read = new Read(readName,maskedFlags);
+	        	    lastReadID = rs.getInt(3); // activate one further pass through outer loop
+	 		   	    cacheByReadName.put(read.getUniqueName(),rs.getInt(4));
 			    }
 			    rs.close();				
 			}
 		    catch (SQLException e) {
 		        adb.handleSQLException(e,"Failed to build the read-contig cache", conn, adb);
-		        
 		    }
 		}
 	}
 		
 	public void preload(Project project) throws ArcturusDatabaseException {
+
 		clearCache();
 		int lastReadID = 0;
 		while (lastReadID >= 0) {
@@ -96,37 +96,40 @@ public class LinkManager extends AbstractManager {
 
 				lastReadID = -1; // preset end loop
 	            while (rs.next()) {
-	        	    Read read = new Read(rs.getString(1),rs.getInt(2));
+	            	String readName = rs.getString(1);
+	    		    int maskedFlags = Utility.maskReadFlags(rs.getInt(2));
+	        	    Read read = new Read(readName,maskedFlags);
 	        	    lastReadID = rs.getInt(3);
-	        	    String readName = read.getUniqueName();
-	 		   	    cacheByReadName.put(readName,rs.getInt(4));
+	 		   	    cacheByReadName.put(read.getUniqueName(),rs.getInt(4));
 			    }
 			    rs.close();				
 			}
 		    catch (SQLException e) {
-		        adb.handleSQLException(e,"Failed to build the read-contig cache", conn, adb);
-		        
+		        adb.handleSQLException(e,"Failed to build the read-contig cache", conn, adb);    
 		    }
 		}
+		 
 	}
 	
-	public int getCurrentContigIDForReadName(String readName) throws ArcturusDatabaseException {
+	public int getCurrentContigIDForReadName(String uniqueReadName) throws ArcturusDatabaseException {
 // returns contig_id for input read name      
-		if (cacheByReadName.containsKey(readName))
-			return cacheByReadName.get(readName);
+		if (cacheByReadName.containsKey(uniqueReadName))
+			return cacheByReadName.get(uniqueReadName);
 
 		else { // probe the database
 			try {
-		  	    pstmtSelectCurrentContigForReadName.setString(1,readName);
+		  	    pstmtSelectCurrentContigForReadName.setString(1,uniqueReadName);
 			    ResultSet rs = pstmtSelectCurrentContigForReadName.executeQuery();
 			    
 			    if (rs.next()) {
-	        	    Read read = new Read(rs.getString(1),rs.getInt(2));
+	            	String readName = rs.getString(1);
+	    		    int maskedFlags = Utility.maskReadFlags(rs.getInt(2));
+	        	    Read read = new Read(readName,maskedFlags);
 	        	    int contig_id = rs.getInt(3);
-	           	    String newReadName = read.getUniqueName();
-			   	    cacheByReadName.put(newReadName,contig_id);
+			   	    cacheByReadName.put(read.getUniqueName(),contig_id);
 			   	    return contig_id;
 			    }
+			    rs.close();
 			}
 			catch (SQLException e) {
 				adb.handleSQLException(e,"Failed to test readname in database", conn, adb);
@@ -135,6 +138,12 @@ public class LinkManager extends AbstractManager {
 // the read is not in a current contig
 		return 0;
 	}
+	
+	public int getCacheSize() {
+		return cacheByReadName.size();
+	}
+	
+//two methods for diagnostics during testing
 	
 	public String getCacheStatistics() {
 		return "CurrentContigIDsByReadName: " + cacheByReadName.size();
