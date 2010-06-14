@@ -28,6 +28,7 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 	protected JCheckBox cbxOmitShotgunReads = new JCheckBox("Don't list reads with these suffixes:");
 	protected JTextField txtSuffixes = new JTextField(20);
 	protected JCheckBox cbxSortReadsBySuffix = new JCheckBox("Sort reads by suffix");
+	protected JCheckBox cbxBothStrands = new JCheckBox("Show reads from both strands");
 	protected JButton btnFindReads;
 	protected JButton btnClearMessages = new JButton("Clear messages");
 	protected JList lstProjects;
@@ -92,6 +93,8 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 		txtSuffixes.setText("p1k,q1k");
 		
 		panel.add(cbxSortReadsBySuffix);
+		
+		panel.add(cbxBothStrands);
 			
 		add(panel);
 
@@ -168,9 +171,10 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 		String[] suffixList = cbxOmitShotgunReads.isSelected() ? getSuffixes() : null;
 		
 		boolean sortReadsBySuffix = cbxSortReadsBySuffix.isSelected();
+		boolean bothStrands = cbxBothStrands.isSelected();
 
 		ReadFinderWorker worker = new ReadFinderWorker(siblingReadFinder, project,
-				suffixList, sortReadsBySuffix, this);
+				suffixList, sortReadsBySuffix, bothStrands, this);
 		
 		worker.execute();
 	}
@@ -208,6 +212,7 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 		protected Project project;
 		protected Pattern omitSuffixes;
 		protected boolean sortReadsBySuffix;
+		protected boolean bothStrands;
 		protected SiblingReadFinderPanel parent;
 		
 		protected SortedSet<String> results;
@@ -215,11 +220,12 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 		protected ProgressMonitor monitor;
 		
 		public ReadFinderWorker(SiblingReadFinder readFinder, Project project, String[] suffixList,
-				boolean sortReadsBySuffix, SiblingReadFinderPanel parent) {
+				boolean sortReadsBySuffix, boolean bothStrands, SiblingReadFinderPanel parent) {
 			this.readFinder = readFinder;
 			this.project = project;
 			this.omitSuffixes = createPattern(suffixList);
 			this.sortReadsBySuffix = sortReadsBySuffix;
+			this.bothStrands = bothStrands;
 			this.parent = parent;
 			
 			readFinder.setListener(this);
@@ -241,7 +247,7 @@ public class SiblingReadFinderPanel extends MinervaPanel {
 
 		protected Void doInBackground() throws Exception {
 			try {
-				Set<String> rawResults = readFinder.getSiblingReadnames(project, omitSuffixes);
+				Set<String> rawResults = readFinder.getSiblingReadnames(project, omitSuffixes, bothStrands);
 				
 				if (rawResults == null)
 					results = null;
