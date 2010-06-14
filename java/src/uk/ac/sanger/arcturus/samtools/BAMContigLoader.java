@@ -1,7 +1,6 @@
 package uk.ac.sanger.arcturus.samtools;
 
 import java.io.*;
-//import java.sql.*;
 import java.util.*;
 
 import uk.ac.sanger.arcturus.data.*;
@@ -10,70 +9,28 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.jdbc.*;
 
-//import net.sf.samtools.SAMFileHeader;
-//import net.sf.samtools.SAMFileReader;
-//import net.sf.samtools.SAMRecord;
-
 import net.sf.samtools.*;
 import net.sf.samtools.util.CloseableIterator;;
 
 public class BAMContigLoader {
 	private ArcturusDatabase adb;
-	private BAMReadLoader brl;
+	private BAMReadLoader brl = null;
 	
-//	private static final int FLAGS_MASK = 128 + 64 + 1;
-	
+
 	public BAMContigLoader(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		this.adb = adb;
     }
-	
+ 	
 	public BAMContigLoader(ArcturusDatabase adb, BAMReadLoader brl) throws ArcturusDatabaseException {
 		this.adb = adb;
 		this.brl = brl;
     }
-	
-    public void processFile(File file, Project project) throws ArcturusDatabaseException {
-		SAMFileReader.setDefaultValidationStringency(SAMFileReader.ValidationStringency.SILENT);
-    	
-		SAMFileReader reader = new SAMFileReader(file);
- 	   	if (reader.isBinary() == false || reader.hasIndex() == false)
-    		throw new IllegalArgumentException("The input file is not indexed: " + file.toString());
-
-    	processFile(reader, project);
-    }	
-    	
+  	
     public void processFile(SAMFileReader reader, Project project) throws ArcturusDatabaseException {
-// project can be null    		      	
-        SAMFileHeader header = reader.getFileHeader();
-        
-// get list of reference sequence (contigs)
-        
-    	SAMSequenceDictionary dictionary = header.getSequenceDictionary(); 
-     	List<SAMSequenceRecord> seqs = dictionary.getSequences();
-     	if (seqs.isEmpty())
-    		throw new IllegalArgumentException("The input file is empty");
-
-// build a vector of minimal Contig objects
-     	
-        Vector<Contig> C = new Vector<Contig>();
-    	for (SAMSequenceRecord record : seqs) {
-     		String contigName = record.getSequenceName();
-     		C.add(new Contig(contigName));
-     		System.out.println("Added contig " + contigName + " : " + record.getSequenceLength());
-    	}
-        Contig[] contigs = C.toArray(new Contig[0]);      	
-       
-        if (project != null) {
-            adb.prepareToLoadProject(project);
-            if (getCacheSize(adb) == 0)
-            	adb.prepareToLoadAllProjects();
-        }
-        else 
-            adb.prepareToLoadAllProjects();
-        
-ArcturusDatabaseImpl adbi = (ArcturusDatabaseImpl)adb;
-LinkManager lm = (LinkManager)adbi.getManager(ArcturusDatabaseImpl.LINK);
-System.out.println("Size of cache : " + lm.getCacheStatistics());
+    	
+    	Contig[] contigs = getContigs(reader);
+    	
+    	prepareLinkManagerCache(adb, project);
       	  
         identifyParentsForContigs(contigs,reader); // decide later if and what type to return
     	
@@ -82,6 +39,57 @@ System.out.println("Size of cache : " + lm.getCacheStatistics());
  // load new contigs        
    }
 
+   /**
+   * Creates a list of minimal Contig objects from the given SAMFileReader 
+   * @param reader
+   *        SAMFileReader 
+   * @return an Array of Contig instances
+   */
+  
+    private Contig[] getContigs(SAMFileReader reader) {
+
+        SAMFileHeader header = reader.getFileHeader();
+         
+     	SAMSequenceDictionary dictionary = header.getSequenceDictionary(); 
+      	List<SAMSequenceRecord> seqs = dictionary.getSequences();
+      	if (seqs.isEmpty())
+     		throw new IllegalArgumentException("The input file is empty");
+      	
+        Vector<Contig> C = new Vector<Contig>();
+     	for (SAMSequenceRecord record : seqs) {
+      		String contigName = record.getSequenceName();
+      		C.add(new Contig(contigName));
+System.out.println("Added contig " + contigName + " : " + record.getSequenceLength());
+     	}
+     	
+        return C.toArray(new Contig[0]);      	
+    }
+    
+/**
+ * Preload the readname - current_contig_id hash for a specified project or for all projects
+ * @param adb
+ *        ArcturusDatabase instance
+ * @param project
+ *        Project instance or null
+ */
+
+    private void prepareLinkManagerCache(ArcturusDatabase adb, Project project) throws ArcturusDatabaseException {
+
+    	if (project != null) {
+            adb.prepareToLoadProject(project);
+            if (getLinkManagerCacheSize(adb) == 0)
+            	adb.prepareToLoadAllProjects();
+        }
+        else 
+            adb.prepareToLoadAllProjects();
+System.out.println("Size of cache : " + this.getLinkManagerCacheSize(adb));    	
+    }
+    
+ /**
+  *    
+  * @param contigs
+  * @param reader
+  */
     
     
     private void identifyParentsForContigs(Contig[] contigs, SAMFileReader reader) {
@@ -92,7 +100,7 @@ System.out.println("Size of cache : " + lm.getCacheStatistics());
  
      		CloseableIterator<SAMRecord> iterator = reader.query(referenceSequenceName, 0, 0, false);
 
-     	   	Hashtable<Integer,Integer> graph = new Hashtable<Integer,Integer>();
+     	   	Map<Integer,Integer> graph = new HashMap<Integer,Integer>();
      	   	
      		while (iterator.hasNext()) {
      		    SAMRecord record = iterator.next();
@@ -109,7 +117,7 @@ System.out.println("Size of cache : " + lm.getCacheStatistics());
      		    	    count++;
      		    	    graph.put(parent_id, count);
      		        }
-     		        // either the read is not in the database, or not in a contig
+// either the read is not in the database, or not in a contig
      		        else if (brl != null) { // only load if it's not in the database
 //System.out.println("Trying to load read " + readName);
      		            if (adb.getReadByNameAndFlags(readName,maskedFlags) == null)
@@ -123,10 +131,11 @@ System.out.println("Size of cache : " + lm.getCacheStatistics());
      		
      		iterator.close();
      		
-     		Enumeration graphKeys = graph.keys();
+     	    Set parentIDs = graph.keySet();
+     	    Iterator parentIDiterator = parentIDs.iterator();
             Vector<ContigToParentMapping> M = new Vector<ContigToParentMapping>();
-     		while (graphKeys.hasMoreElements()) {
-     			int parent_id = (Integer)graphKeys.nextElement();
+     		while (parentIDiterator.hasNext()) {
+     			int parent_id = (Integer)parentIDiterator.next();
      			int readCount = (Integer)graph.get(parent_id);
 System.out.println("Parent contig ID " + parent_id + " readcount: " + readCount);
         		Contig parent = new Contig(parent_id,adb); // minimal parent object
@@ -201,7 +210,7 @@ System.out.println("Parent contig ID " + parent_id + " readcount: " + readCount)
 	
 	}
 	
-	private int getCacheSize(ArcturusDatabase adb) {
+	private int getLinkManagerCacheSize(ArcturusDatabase adb) {
 		int size = 0;
 	
 	    if (adb instanceof ArcturusDatabaseImpl) {
@@ -209,6 +218,7 @@ System.out.println("Parent contig ID " + parent_id + " readcount: " + readCount)
 	        LinkManager lm = (LinkManager)adbi.getManager(ArcturusDatabaseImpl.LINK);
 	        size = lm.getCacheSize();
 	    }
+	    
 	    return size;
 	}
 }
