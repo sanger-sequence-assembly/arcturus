@@ -520,5 +520,5 @@ public interface ArcturusDatabase {
 	
 	public void prepareToLoadProject(Project project) throws ArcturusDatabaseException;
 	
-	public int getCurrentContigIDForReadName(String readName) throws ArcturusDatabaseException;	
+	public int getCurrentContigIDForRead(Read read) throws ArcturusDatabaseException;	
 }

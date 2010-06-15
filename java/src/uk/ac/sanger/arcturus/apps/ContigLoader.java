@@ -103,10 +103,10 @@ if (adb != null)
 		ps.println("MANDATORY PARAMETERS:");
 		ps.println("\t-instance\tName of instance");
 		ps.println("\t-organism\tName of organism");
-		ps.println("\t-bam\tName of ordered and indexed bam file");
+		ps.println("\t-bam\t\tName of ordered and indexed bam file");
 		ps.println();
 		ps.println("OPTIONAL PARAMETERS:");
-		ps.println("\t-project\tName of project");		
+		ps.println("\t-projectname\tName of project");		
 		ps.println("\t-preload\tDo a read import first");		
 	}
 }

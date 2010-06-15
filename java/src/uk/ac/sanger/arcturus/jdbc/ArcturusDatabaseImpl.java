@@ -1351,10 +1351,10 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
         linkManager.preload();
 	}
 
-	public synchronized int getCurrentContigIDForReadName(String readName) throws ArcturusDatabaseException {
+	public synchronized int getCurrentContigIDForRead(Read read) throws ArcturusDatabaseException {
         if (linkManager == null)
         	return 0;
-        return linkManager.getCurrentContigIDForReadName(readName);		
+        return linkManager.getCurrentContigIDForRead(read);
 	}
 
 }

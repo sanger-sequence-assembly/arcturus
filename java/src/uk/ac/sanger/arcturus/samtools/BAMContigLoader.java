@@ -1,6 +1,5 @@
 package uk.ac.sanger.arcturus.samtools;
 
-import java.io.*;
 import java.util.*;
 
 import uk.ac.sanger.arcturus.data.*;
@@ -10,11 +9,11 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.jdbc.*;
 
 import net.sf.samtools.*;
-import net.sf.samtools.util.CloseableIterator;;
+import net.sf.samtools.util.CloseableIterator;
 
 public class BAMContigLoader {
-	private ArcturusDatabase adb;
-	private BAMReadLoader brl = null;
+	protected ArcturusDatabase adb;
+	protected BAMReadLoader brl = null;
 	
 
 	public BAMContigLoader(ArcturusDatabase adb) throws ArcturusDatabaseException {
@@ -104,12 +103,15 @@ System.out.println("Size of cache : " + this.getLinkManagerCacheSize(adb));
      	   	
      		while (iterator.hasNext()) {
      		    SAMRecord record = iterator.next();
-    		    int maskedFlags = Utility.maskReadFlags(record.getFlags());
     		    String readName = record.getReadName();
-    		    Read read = new Read(readName,maskedFlags);
-    		    String uniqueReadName = read.getUniqueName();
+    		    int flags = record.getFlags();
+System.out.println("get readname " + readName + " flag " + flags);
+
     		    try {
-     		        int parent_id = adb.getCurrentContigIDForReadName(uniqueReadName);
+    			    int maskedFlags = Utility.maskReadFlags(flags);
+    				Read read = new Read(readName,maskedFlags);
+    		        int parent_id = adb.getCurrentContigIDForRead(read);
+    		        System.out.println("cpcid " + parent_id + " for readname " + readName + " flag " + flags);
      		        if (parent_id > 0) {
      		    	    int count = 0;
      		    	    if (graph.containsKey(parent_id))
@@ -117,10 +119,10 @@ System.out.println("Size of cache : " + this.getLinkManagerCacheSize(adb));
      		    	    count++;
      		    	    graph.put(parent_id, count);
      		        }
-// either the read is not in the database, or not in a contig
-     		        else if (brl != null) { // only load if it's not in the database
+// either the read is not in the database, or not in a current contig (of the project)
+     		        else if (parent_id < 0 && brl != null) { // only load if it's not in the database
 //System.out.println("Trying to load read " + readName);
-     		            if (adb.getReadByNameAndFlags(readName,maskedFlags) == null)
+     		            if (adb.getReadByNameAndFlags(readName,flags) == null)
      		            	brl.processRecord(record);
      		        }
      		    }
@@ -134,6 +136,8 @@ System.out.println("Size of cache : " + this.getLinkManagerCacheSize(adb));
      	    Set parentIDs = graph.keySet();
      	    Iterator parentIDiterator = parentIDs.iterator();
             Vector<ContigToParentMapping> M = new Vector<ContigToParentMapping>();
+System.out.println("Resulting parent contigs");
+                        
      		while (parentIDiterator.hasNext()) {
      			int parent_id = (Integer)parentIDiterator.next();
      			int readCount = (Integer)graph.get(parent_id);
@@ -148,68 +152,7 @@ System.out.println("Parent contig ID " + parent_id + " readcount: " + readCount)
 // here all input contigs have parent-to-contig mappings and their weights    	
     }
  
-    
-    
-    
-    
-    
-    private Contig buildContig(SAMFileReader reader, String referencename) {
-    	
- 		CloseableIterator<SAMRecord> iterator = reader.query(referencename, 0, 0, false);
- 		
- 		Contig contig = new Contig(referencename);
- 		
- 		Vector<SequenceToContigMapping> M = new Vector<SequenceToContigMapping>();
- 		
- 		while (iterator.hasNext()) {
- 		    SAMRecord record = iterator.next();
- 		    int maskedFlags = Utility.maskReadFlags(record.getFlags());
- 		    Read read = new Read(record.getReadName(),maskedFlags);
- 		    Sequence sequence = new Sequence(0,read,record.getReadBases(),record.getBaseQualities(),0);
- 		    String cigar = record.getCigarString();
- 		    int contigStartPosition = record.getAlignmentStart();
- 		    int contigEndPosition = record.getAlignmentEnd();
- // WHAT to do with direction REVERSE ?
- 		    CanonicalMapping cm = new CanonicalMapping(cigar);
- 		    SequenceToContigMapping mapping = new SequenceToContigMapping(sequence,contig, cm,
- 		    		                                   contigStartPosition,1,Direction.FORWARD);
- 		    M.add(mapping);
- 		}
- 		
-// 		contig.setMappings(M.toArray(new SequenceToContigMapping[0]));
-   	
-        return contig;	    	
-    }
-	
-/*
-    private void processCanonicalMappings(Contig contig, ArcturusDatabase adb) {
-	    // identify/load canonical mappings to get canonical mappings
-		SequenceToContigMapping[] mappings = contig.getMappings();
-		for (int i=0 ; i < mappings.length ; i++) {
-			
-		}
-	}
-*/
-   
- 
-	public void analyseGraph() {
-		// analyse graph of parent contig relations; aborted on inconsistencies
-	}
-	
-	public void putContigs() {
-		// put the new contigs in the database
-	}
-
-	public void writeImportMarker() {
-		
-	}
-		
-// make executable for testing
-	
-	public static void main(String[] args) {
-	
-	}
-	
+ 	
 	private int getLinkManagerCacheSize(ArcturusDatabase adb) {
 		int size = 0;
 	

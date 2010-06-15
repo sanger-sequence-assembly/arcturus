@@ -16,7 +16,7 @@ public class LinkManager extends AbstractManager {
 
 	protected PreparedStatement pstmtSelectReadNamesForCurrentContigs = null;
 	protected PreparedStatement pstmtSelectReadNamesForCurrentContigsAndProject = null;
-	protected PreparedStatement pstmtSelectCurrentContigForReadName = null;
+	protected PreparedStatement pstmtSelectCurrentContigForReadNameAndFlags = null;
 	
     private static final int BLOCK_LIMIT = 100000;
 	
@@ -52,8 +52,8 @@ public class LinkManager extends AbstractManager {
 			conn.prepareStatement(SELECT_ALL + " where " + RESTRICT_READ_ID);
 		pstmtSelectReadNamesForCurrentContigsAndProject = 
 			conn.prepareStatement(SELECT_ALL + " where " + RESTRICT_PROJECT + " and " + RESTRICT_READ_ID);
-        pstmtSelectCurrentContigForReadName = 
-        	conn.prepareStatement(SELECT_ALL + " where readname = ?");
+        pstmtSelectCurrentContigForReadNameAndFlags = 
+        	conn.prepareStatement(SELECT_ALL + " where readname = ? and flags = ?");
     }
 
 	public void preload() throws ArcturusDatabaseException {
@@ -74,11 +74,12 @@ System.out.println("loading block starting at " + lastReadID);
 	        	    Read read = new Read(readName,maskedFlags);
 	        	    lastReadID = rs.getInt(3); // activate one further pass through outer loop
 	 		   	    cacheByReadName.put(read.getUniqueName(),rs.getInt(4));
+//System.out.println("read " + readName + " flag " + maskedFlags + " last " + lastReadID + " contigID " + rs.getInt(4));	   	    
 			    }
 			    rs.close();				
 			}
 		    catch (SQLException e) {
-		        adb.handleSQLException(e,"Failed to build the read-contig cache", conn, adb);
+		        adb.handleSQLException(e,"Failed to build the LinkManager cache", conn, adb);
 		    }
 		}
 	}
@@ -101,6 +102,7 @@ System.out.println("loading block starting at " + lastReadID);
 	        	    Read read = new Read(readName,maskedFlags);
 	        	    lastReadID = rs.getInt(3);
 	 		   	    cacheByReadName.put(read.getUniqueName(),rs.getInt(4));
+//System.out.println("read " + readName + " flag " + maskedFlags + " last " + lastReadID + " contigID " + rs.getInt(4));	   	    
 			    }
 			    rs.close();				
 			}
@@ -111,32 +113,34 @@ System.out.println("loading block starting at " + lastReadID);
 		 
 	}
 	
-	public int getCurrentContigIDForReadName(String uniqueReadName) throws ArcturusDatabaseException {
-// returns contig_id for input read name      
+	public int getCurrentContigIDForRead(Read read) throws ArcturusDatabaseException {
+// returns contig_id for input read
+		
+		String uniqueReadName = read.getUniqueName();
 		if (cacheByReadName.containsKey(uniqueReadName))
 			return cacheByReadName.get(uniqueReadName);
-
-		else { // probe the database
+		
+		else {		
+//System.out.println("TRYing database again " + read.getName() + " flag " + read.getFlags());
 			try {
-		  	    pstmtSelectCurrentContigForReadName.setString(1,uniqueReadName);
-			    ResultSet rs = pstmtSelectCurrentContigForReadName.executeQuery();
+		  	    pstmtSelectCurrentContigForReadNameAndFlags.setString(1,read.getName());
+		  	    pstmtSelectCurrentContigForReadNameAndFlags.setInt(2,read.getFlags());
+			    ResultSet rs = pstmtSelectCurrentContigForReadNameAndFlags.executeQuery();
 			    
+                int contig_id = -1;
 			    if (rs.next()) {
-	            	String readName = rs.getString(1);
-	    		    int maskedFlags = Utility.maskReadFlags(rs.getInt(2));
-	        	    Read read = new Read(readName,maskedFlags);
-	        	    int contig_id = rs.getInt(3);
-			   	    cacheByReadName.put(read.getUniqueName(),contig_id);
-			   	    return contig_id;
+	        	    contig_id = rs.getInt(4);
+			   	    cacheByReadName.put(uniqueReadName,contig_id);
 			    }
 			    rs.close();
+		   	    return contig_id;
 			}
 			catch (SQLException e) {
 				adb.handleSQLException(e,"Failed to test readname in database", conn, adb);
 			}
 		}
-// the read is not in a current contig
-		return 0;
+// the read is not in the database
+		return -1;
 	}
 	
 	public int getCacheSize() {
