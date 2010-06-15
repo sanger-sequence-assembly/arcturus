@@ -6,6 +6,8 @@ import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectListModel;
 import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectProxy;
 import uk.ac.sanger.arcturus.oligo.*;
 import uk.ac.sanger.arcturus.oligo.OligoFinderEvent.Type;
+import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
+import uk.ac.sanger.arcturus.projectchange.ProjectChangeEventListener;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
@@ -34,7 +36,7 @@ import java.io.*;
 import java.text.*;
 
 public class OligoFinderPanel extends MinervaPanel implements
-		OligoFinderEventListener {
+		OligoFinderEventListener, ProjectChangeEventListener {
 	protected OligoFinder finder;
 
 	protected JTextArea txtOligoList = new JTextArea(20, 60);
@@ -129,6 +131,20 @@ public class OligoFinderPanel extends MinervaPanel implements
 		panel = new JPanel(new BorderLayout());
 
 		plm = new ProjectListModel(adb);
+		
+		plm.addListDataListener(new ListDataListener() {
+			public void contentsChanged(ListDataEvent e) {
+				refreshList();
+			}
+
+			public void intervalAdded(ListDataEvent e) {
+				refreshList();
+			}
+
+			public void intervalRemoved(ListDataEvent e) {
+				refreshList();
+			}		
+		});
 
 		lstProjects = new JList(plm);
 
@@ -164,17 +180,9 @@ public class OligoFinderPanel extends MinervaPanel implements
 
 		cbSelectAll.addItemListener(new ItemListener() {
 			public void itemStateChanged(ItemEvent e) {
-				if (e.getStateChange() == ItemEvent.SELECTED) {
-					int start = 0;
-					int end = lstProjects.getModel().getSize() - 1;
-					if (end >= 0) {
-						lstProjects.setSelectionInterval(start, end);
-						lstProjects.setEnabled(false);
-					}
-				} else {
-					lstProjects.clearSelection();
-					lstProjects.setEnabled(true);
-				}
+				boolean allSelected = e.getStateChange() == ItemEvent.SELECTED;
+				
+				setAllProjectsSelected(allSelected);
 			}
 
 		});
@@ -245,6 +253,30 @@ public class OligoFinderPanel extends MinervaPanel implements
 		add(panel);
 
 		showHashMatch = Boolean.getBoolean("showHashMatch");
+		
+		adb.addProjectChangeEventListener(this);
+	}
+	
+	protected void refreshList() {
+		boolean allSelected = cbSelectAll.isSelected();
+		
+		setAllProjectsSelected(allSelected);
+	}
+	
+	protected void setAllProjectsSelected(boolean allSelected) {
+		if (allSelected) {
+			int start = 0;
+			int end = lstProjects.getModel().getSize() - 1;
+			
+			if (end >= 0) {
+				lstProjects.setSelectionInterval(start, end);
+				lstProjects.setEnabled(false);
+			}
+		} else {
+			lstProjects.clearSelection();
+			lstProjects.setEnabled(true);
+		}
+
 	}
 
 	protected void createActions() {
@@ -722,5 +754,14 @@ public class OligoFinderPanel extends MinervaPanel implements
 
 	protected void doPrint() {
 		// Do nothing.
+	}
+
+	public void projectChanged(ProjectChangeEvent event) {
+		if (event.getType() == ProjectChangeEvent.CREATED)
+			try {
+				refresh();
+			} catch (ArcturusDatabaseException e) {
+				Arcturus.logWarning("Failed to refresh in response to a project change event", e);
+			}
 	}
 }
