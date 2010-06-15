@@ -99,7 +99,7 @@ public class TestMappingManager {
 	        System.out.println("Size of cache : " + lm.getCacheStatistics());
 	    	System.out.println("Re-loading one by one " + size + " readnames");
 	    	for (int i=0 ; i < readnames.length ; i++) {
-	    	    int contig_id = adb.getCurrentContigIDForReadName(readnames[i]);
+	    	    //FIXME int contig_id = adb.getCurrentContigIDForReadName(readnames[i]);
 	    	}
 	    	System.out.println("DONE");	        
 	        System.out.println("Size of cache : " + lm.getCacheStatistics());	        
