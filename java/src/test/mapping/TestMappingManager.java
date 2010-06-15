@@ -89,20 +89,36 @@ public class TestMappingManager {
 	        Set<String> keys = lm.getCacheKeys();
 	        Iterator<String> iterator = keys.iterator();
 	        int size = keys.size();
-	        String[] readnames = new String[size];
+	        String[]uniquereadname = new String[size];
 	        int index = 0;
 	        while (iterator.hasNext()) {
-	            readnames[index++] = (String)iterator.next();
+	           uniquereadname[index++] = (String)iterator.next();
 	        }
 	        
 	        lm.clearCache();
 	        System.out.println("Size of cache : " + lm.getCacheStatistics());
 	    	System.out.println("Re-loading one by one " + size + " readnames");
-	    	for (int i=0 ; i < readnames.length ; i++) {
-	    	    //FIXME int contig_id = adb.getCurrentContigIDForReadName(readnames[i]);
+	    	
+	    	for (int i=0 ; i <uniquereadname.length ; i++) {
+	    		Read read = new Read(uniquereadname[i]); // no flag here
+	    	    adb.getCurrentContigIDForRead(read);
 	    	}
+	    	
 	    	System.out.println("DONE");	        
-	        System.out.println("Size of cache : " + lm.getCacheStatistics());	        
+	        System.out.println("Size of cache : " + lm.getCacheStatistics());	
+	        
+	        
+	    	System.out.println("testing parent contig count");
+	    	
+	    	for (int i=0 ; i <uniquereadname.length ; i++) {
+	    		Read read = new Read(uniquereadname[i]); // no flag here
+	    	    int contig_id = adb.getCurrentContigIDForRead(read);
+	    	    if (contig_id < 0)
+	    	    	System.out.println("Warning: unexpected negative value returned " + contig_id);
+	    	    else if (contig_id > 0) {
+	    	        
+	    	    }
+	    	}
 	    }
 	}
 	
