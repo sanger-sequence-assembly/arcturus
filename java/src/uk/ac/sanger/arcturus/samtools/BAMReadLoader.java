@@ -95,8 +95,8 @@ public class BAMReadLoader {
 		byte[] quality = record.getBaseQualities();
 		
 		if (record.getReadNegativeStrandFlag()) {
-			dna = reverseComplement(dna);
-			quality = reverseQuality(quality);
+			dna = Utility.reverseComplement(dna);
+			quality = Utility.reverseQuality(quality);
 		}
 		
 		Read read = adb.getReadByNameAndFlags(readname, maskedFlags);
@@ -124,56 +124,6 @@ public class BAMReadLoader {
 		Sequence newSequence = adb.findOrCreateSequence(sequence);
 		
 		return newSequence;
-	}
-	
-	private byte[] reverseComplement(byte[] src) {
-		if (src == null)
-			return null;
-		
-		int srclen = src.length;
-		
-		byte[] dst = new byte[srclen];
-		
-		int j = srclen - 1;
-		
-		for (int i = 0; i < srclen; i++)
-			dst[j--] = reverseComplement(src[i]);
-		
-		return dst;
-	}
-	
-	private byte reverseComplement(byte c) {
-		switch (c) {
-			case 'a': return 't';
-			case 'A': return 'T';
-			
-			case 'c': return 'g';
-			case 'C': return 'G';
-			
-			case 'g': return 'c';
-			case 'G': return 'C';
-			
-			case 't': return 'a';
-			case 'T': return 'A';
-			
-			default: return c;
-		}
-	}
-	
-	private byte[] reverseQuality(byte[] src) {
-		if (src == null)
-			return null;
-		
-		int srclen = src.length;
-		
-		byte[] dst = new byte[srclen];
-		
-		int j = srclen - 1;
-		
-		for (int i = 0; i < srclen; i++)
-			dst[j--] = src[i];
-		
-		return dst;
 	}
 
 	private void reportMemory(int n) {
