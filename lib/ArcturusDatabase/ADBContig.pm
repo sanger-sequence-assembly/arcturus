@@ -699,6 +699,10 @@ sub putContig {
 	if ($@) {
 	    $message .= "; ***** ROLLBACK FAILED: " . $@ . " *****";
 	}
+
+        $contig->setContigID(0);
+
+        $contigid = 0;
     }
 
     $dbh->{RaiseError} = 0;
@@ -1295,6 +1299,7 @@ sub putMappingsForContig {
 # 1) the overall mapping
 
     my $mapping;
+    my $success = 1;
     foreach $mapping (@$mappings) {
 
 # optionally scan against empty mappings
@@ -1313,14 +1318,24 @@ sub putMappingsForContig {
 
         my $rc = $sth->execute(@data) || &queryFailed($mquery,@data);
 
-        $mapping->setMappingID($dbh->{'mysql_insertid'}) if ($rc == 1);
+        if ($rc == 1) {
+            $mapping->setMappingID($dbh->{'mysql_insertid'});
+	}
+        else {
+	    $success = 0;
+	}
+        
     }
     $sth->finish();
+
+    unless ($success) {
+	$log->severe("Failed to insert one or more sequence-to-contig mappings");
+        return 0;
+    }
 
 # 2) the individual segments (in block mode)
 
     my $block = 100;
-    my $success = 1;
     my $accumulated = 0;
     my $accumulatedQuery = $squery;
     foreach my $mapping (@$mappings) {
