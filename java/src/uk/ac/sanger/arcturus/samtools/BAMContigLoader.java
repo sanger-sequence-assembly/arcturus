@@ -123,7 +123,7 @@ System.out.println("get readname " + readName + " flag " + flags);
      		        else if (parent_id < 0 && brl != null) { // only load if it's not in the database
 //System.out.println("Trying to load read " + readName);
      		            if (adb.getReadByNameAndFlags(readName,flags) == null)
-     		            	brl.processRecord(record);
+     		            	brl.findOrCreateSequence(record);
      		        }
      		    }
     		    catch (ArcturusDatabaseException e) {

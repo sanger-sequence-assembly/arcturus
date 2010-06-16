@@ -64,7 +64,7 @@ public class BAMReadLoader {
 			while (iterator.hasNext()) {
 				SAMRecord record = iterator.next();
 			
-				processRecord(record);
+				findOrCreateSequence(record);
 			
 				n++;
 			
@@ -85,7 +85,7 @@ public class BAMReadLoader {
 		}
 	}
 	
-	public void processRecord(SAMRecord record) throws ArcturusDatabaseException {
+	public Sequence findOrCreateSequence(SAMRecord record) throws ArcturusDatabaseException {
 		String readname = record.getReadName();
 		
 		int maskedFlags = Utility.maskReadFlags(record.getFlags());
@@ -123,8 +123,7 @@ public class BAMReadLoader {
 		
 		Sequence newSequence = adb.findOrCreateSequence(sequence);
 		
-		//System.out.println("\tStored with ID=" + newRead.getID() +
-		//		", sequence ID=" + newSequence.getID());
+		return newSequence;
 	}
 	
 	private byte[] reverseComplement(byte[] src) {
