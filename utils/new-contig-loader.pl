@@ -112,6 +112,7 @@ my $minerva;
 my $mail;
 
 my $debug = 0;
+my $noabort;
 my $usage;
 
 my $production = ($0 =~ /ejz/) ? 0 : 1;
@@ -158,7 +159,7 @@ my $validkeys  = "organism|o|instance|i|"
                . "assembly|a|noscaffold|ns|scaffoldfile|sf|"
 
                . "outputfile|out|log|mapfile|minerva|verbose|info|debug|"
-               . "memory|timing|benchmark|help|h";
+               . "noabort|memory|timing|benchmark|help|h";
 
 #------------------------------------------------------------------------------
 # parse the command line input; options overwrite eachother; order is important
@@ -382,6 +383,7 @@ while (my $nextword = shift @ARGV) {
     $loglevel         = 0  if ($nextword eq '-verbose'); # info, fine, finest
     $loglevel         = 2  if ($nextword eq '-info');    # info
     $debug            = 1  if ($nextword eq '-debug');   # info, fine
+    $noabort          = 1  if ($nextword eq '-noabort'); # info, fine
     $usage            = 1  if ($nextword eq '-memory');  # info, fine
     $usage            = 1  if ($nextword eq '-timing');  # info, fine
     $usage            = 1  if ($nextword eq '-benchmark');  # info, fine
@@ -834,6 +836,8 @@ my $loaded = 0;
 my $missed = 0;
 my $lastinsertedcontig = 0;
 
+my @insertedcontigids;
+
 my @scaffoldlist;
 
 while (!$fullscan) {
@@ -1099,6 +1103,7 @@ print STDOUT " end no frugal scan\n";
             if ($added) {
                 $loaded++;
                 $lastinsertedcontig = $added;
+                push @insertedcontigids, $added;
                 $logger->info("Contig $identifier with $nr reads :"
                              ." status $added, $msg");
                 $logger->special("Contig $identifier with $nr reads :"
@@ -1159,8 +1164,19 @@ print STDOUT " end no frugal scan\n";
                 if ($loglevel) { # debugging option for failed contig
                     $contig->setSequence();
                     $contig->writeToCaf(*STDOUT);
-                    next;
 	        }
+
+# FAILED to insert a contig for whatever reason; default ABORT the whole session and remove inserted contigs
+
+                next if $noabort;
+
+                # ABORT TO BE COMPLETED
+
+                foreach my $contig_id (@insertedcontigids) {
+#                   $adb->deleteContig($contig_id);
+		}
+
+                exit 2;
             }
 #$logger->monitor("memory usage after loading contig ".$contig->getContigName(),memory=>1);
         }
