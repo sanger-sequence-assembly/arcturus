@@ -528,4 +528,8 @@ public interface ArcturusDatabase {
 	public CanonicalMapping findOrCreateCanonicalMapping(CanonicalMapping cm) throws ArcturusDatabaseException;
 
     public void putContig(Contig contig) throws ArcturusDatabaseException;
+    
+	public boolean putSequenceToContigMappings(Contig contig) throws ArcturusDatabaseException;
+
+	public boolean putContigToParentMappings(Contig contig) throws ArcturusDatabaseException;
 }
