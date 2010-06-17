@@ -1356,5 +1356,32 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
         	return 0;
         return linkManager.getCurrentContigIDForRead(read);
 	}
+	
+	/**
+	 * preloading canonical mapping hash
+	 */
+	
+	public synchronized void preloadCanonicalMappings() throws ArcturusDatabaseException {
+        if (mappingManager == null)
+        	mappingManager = new MappingManager(this);
+        mappingManager.preload();
+	}
+	
+	public synchronized CanonicalMapping findOrCreateCanonicalMapping(CanonicalMapping cm) throws ArcturusDatabaseException {
+	    if (mappingManager == null)
+        	return null;
+        return mappingManager.findOrCreateCanonicalMapping(cm);
+			
+	}
+	
+	/**
+	 * loading a contig
+	 */
+	
+	public void putContig(Contig contig) throws ArcturusDatabaseException {
+		if (contigManager == null) 
+			contigManager = new ContigManager(this);
+		contigManager.putContig(contig);
+	}
 
 }

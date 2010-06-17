@@ -20,6 +20,7 @@ import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.data.Read;
 import uk.ac.sanger.arcturus.data.Sequence;
 import uk.ac.sanger.arcturus.data.Template;
+import uk.ac.sanger.arcturus.data.CanonicalMapping;
 import uk.ac.sanger.arcturus.people.Person;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEventListener;
@@ -514,11 +515,17 @@ public interface ArcturusDatabase {
 	public void handleSQLException(SQLException e, String message, Connection conn, Object source)
 			throws ArcturusDatabaseException;
 
-// caching of read-contig-link lookup
+// caching of read-contig-link lookup and canonical mappings
 	
 	public void prepareToLoadAllProjects() throws ArcturusDatabaseException;
 	
 	public void prepareToLoadProject(Project project) throws ArcturusDatabaseException;
 	
-	public int getCurrentContigIDForRead(Read read) throws ArcturusDatabaseException;	
+	public int getCurrentContigIDForRead(Read read) throws ArcturusDatabaseException;
+
+	public void preloadCanonicalMappings() throws ArcturusDatabaseException;	
+	
+	public CanonicalMapping findOrCreateCanonicalMapping(CanonicalMapping cm) throws ArcturusDatabaseException;
+
+    public void putContig(Contig contig) throws ArcturusDatabaseException;
 }

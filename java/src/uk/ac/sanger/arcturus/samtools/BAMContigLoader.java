@@ -14,11 +14,6 @@ import net.sf.samtools.util.CloseableIterator;
 public class BAMContigLoader {
 	protected ArcturusDatabase adb;
 	protected BAMReadLoader brl = null;
-	
-
-	public BAMContigLoader(ArcturusDatabase adb) throws ArcturusDatabaseException {
-		this.adb = adb;
-    }
  	
 	public BAMContigLoader(ArcturusDatabase adb, BAMReadLoader brl) throws ArcturusDatabaseException {
 		this.adb = adb;
@@ -45,7 +40,7 @@ public class BAMContigLoader {
    * @return an Array of Contig instances
    */
   
-    private Contig[] getContigs(SAMFileReader reader) {
+    protected Contig[] getContigs(SAMFileReader reader) {
 
         SAMFileHeader header = reader.getFileHeader();
          
@@ -72,7 +67,7 @@ System.out.println("Added contig " + contigName + " : " + record.getSequenceLeng
  *        Project instance or null
  */
 
-    private void prepareLinkManagerCache(ArcturusDatabase adb, Project project) throws ArcturusDatabaseException {
+    protected void prepareLinkManagerCache(ArcturusDatabase adb, Project project) throws ArcturusDatabaseException {
 
     	if (project != null) {
             adb.prepareToLoadProject(project);

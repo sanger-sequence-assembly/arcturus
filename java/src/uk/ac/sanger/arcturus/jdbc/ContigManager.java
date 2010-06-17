@@ -43,6 +43,10 @@ public class ContigManager extends AbstractManager {
 	protected PreparedStatement pstmtContigIDFromReadname = null;
 	
 	protected PreparedStatement pstmtChildContigs = null;
+	
+	protected PreparedStatement pstmtPutContigMetaData = null;	
+	
+	
 
 	protected ManagerEvent event = null;
 
@@ -192,6 +196,10 @@ public class ContigManager extends AbstractManager {
 		query = "select contig_id from C2CMAPPING where parent_id = ?";
 		
 		pstmtChildContigs = conn.prepareStatement(query);
+		
+		query = "insert into CONTIG (gap4name,length,nctgs,nreads,project_id,creator,created,readnamehash)"
+			  + "values (?,?,?,?,?,?,now(),?)";
+		pstmtPutContigMetaData = conn.prepareStatement(query,Statement.RETURN_GENERATED_KEYS);
 	}
 
 	protected void preloadSequencingVectors() throws SQLException {
@@ -1479,5 +1487,39 @@ public class ContigManager extends AbstractManager {
 
 	public String getCacheStatistics() {
 		return "ByID: " + hashByID.size();
+	}
+
+	public void putContig(Contig contig) throws ArcturusDatabaseException {
+	    if (adb instanceof ArcturusDatabaseImpl) {
+		    ArcturusDatabaseImpl adbi = (ArcturusDatabaseImpl)adb;
+		    MappingManager mm = (MappingManager)adbi.getManager(ArcturusDatabase.MAPPING);
+
+		    try {
+		        beginTransaction();
+		    
+		        putContigMetaData(contig); // adds contig_id
+		   
+		        mm.putSequenceToContigMappingsForContig(contig);
+		        mm.putContigToParentMappingsForContig(contig);
+		        
+		        commitTransaction();
+		    }
+		    catch (SQLException e){
+//		    	rollbackTransaction();
+		    	adb.handleSQLException(e, "Failed to store contig in the database", conn, adb);
+		    }
+		}
+	    else {
+	    	throw new ArcturusDatabaseException("");
+		}
+	}
+		
+	private void putContigMetaData(Contig contig) {
+		// TODO Auto-generated method stub
+		String gap4name = contig.getName();
+		int nreads = contig.getReadCount();
+		int length = contig.getLength();
+		// put contig metadata, returns contig_id
+		
 	}
 }

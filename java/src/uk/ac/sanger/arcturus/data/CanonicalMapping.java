@@ -71,10 +71,12 @@ public class CanonicalMapping {
     }
    
     public void setSubjectSpan(int subjectSpan) {
-        this.subjectSpan = subjectSpan;
+       this.subjectSpan = subjectSpan;
     }
     
     public int getSubjectSpan() {
+//       	if (segments == null && extendedCigarString != null)
+//    		makeSegmentsFromCigarString();
         return subjectSpan;
     }
     
@@ -83,7 +85,9 @@ public class CanonicalMapping {
     }
     
     public int getReferenceSpan() {
-        return referenceSpan;
+ //      	if (segments == null && extendedCigarString != null)
+ //   		makeSegmentsFromCigarString();
+         return referenceSpan;
     }  
     
     public boolean equals(CanonicalMapping that) {
@@ -143,8 +147,6 @@ public class CanonicalMapping {
        
     private void makeSegmentsFromCigarString() {
     	// take cigar string and generate segments TO BE TESTED
-    	int number = 0;
-    	int offset = 0;
     	referenceSpan = 0;
     	subjectSpan = 0;
 
@@ -152,9 +154,13 @@ public class CanonicalMapping {
 		Vector<Integer>      PI = new Vector<Integer>();
 
     	byte[] cigar = extendedCigarString.getBytes();
-    	for (int i=0 ; i < cigar.length ; i++) {
+    	
+    	int number = 0;
+    	int offset = 0;
+   	    for (int i=0 ; i < cigar.length ; i++) {
+   	    	System.out.println("next byte " + i + " : " + cigar[i]);
     	    if (cigar[i] >= 30 && cigar[i] <= 39) 
-    	    	number = number*10 + cigar[i];
+    	    	number = number*10 + cigar[i] - 30;
     	    else {
     	        if (cigar[i] == D)
     	    	    referenceSpan += number;
@@ -180,7 +186,7 @@ public class CanonicalMapping {
     	   	    }
     	   	    else if (cigar[i] != H) { // H is silent
                     System.err.println("invalid cigar string " + extendedCigarString);
-                    return;
+ //                   return;
     	   	    }
       	    	number = 0;
     	    }

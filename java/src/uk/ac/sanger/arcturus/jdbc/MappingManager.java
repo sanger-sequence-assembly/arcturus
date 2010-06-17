@@ -17,13 +17,13 @@ import java.util.*;
  */
 
 public class MappingManager extends AbstractManager {
-	private HashMap<Checksum,CanonicalMapping> cacheByChecksum;
+	private Map<String,CanonicalMapping> cacheByChecksum;
 	
 	protected PreparedStatement pstmtInsertInSequenceToContig = null;
 	protected PreparedStatement pstmtInsertInParentToContig = null;
-	protected PreparedStatement pstmtInsertInCanonicalMapping = null;
+	protected PreparedStatement pstmtInsertCanonicalMapping = null;
 	
-	protected PreparedStatement pstmtSelectCanonicalMappings = null;
+	protected PreparedStatement pstmtSelectAllCanonicalMappings = null;
 	protected PreparedStatement pstmtSelectCanonicalMappingByID = null;
 	protected PreparedStatement pstmtSelectCanonicalMappingByCigarString = null;
 	
@@ -36,7 +36,7 @@ public class MappingManager extends AbstractManager {
 	public MappingManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		super(adb);
 
-        cacheByChecksum = new HashMap<Checksum,CanonicalMapping>();
+        cacheByChecksum = new HashMap<String,CanonicalMapping>();
 		
 		try {
 			setConnection(adb.getDefaultConnection());
@@ -50,37 +50,33 @@ public class MappingManager extends AbstractManager {
 		String query;
 
 // set up prepared statements for importing mappings into the database
+System.out.println("Preparing Mapping Manager queries");
+
+        query = "insert into CANONICALMAPPING (cspan,rspan,cigar) values (?,?,?)";
+        pstmtInsertCanonicalMapping = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
 
 		query = "insert into SEQ2CONTIG (contig_id,seq_id,mapping_id,coffset,roffset,direction) "
 			  + "values (?,?,?,?,?)";
-		pstmtInsertInSequenceToContig = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
+		pstmtInsertInSequenceToContig = conn.prepareStatement(query);
 		
 		query = "insert into PARENT2CONTIG (contig_id,parent_id,mapping_id,coffset,roffset,direction,weight) "
-			  + "values (?,?,?,?,?,?,?)";
-		pstmtInsertInParentToContig   = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
-
-		query = "insert into CANONICALMAPPING (cspan,rspan,checksum,cigarstring) values (?,?,?)";
-		pstmtInsertInCanonicalMapping = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
-		
-//		query = "insert into CANONICALSEGMENT (mapping_id,cstart,rstart,length) values (?,?,?,?)";
-//		pstmtInsertInCanonicalSegment = conn.prepareStatement(query); // REDUNDENT
+			  + "values (?,?,?,?,?,?,?)"; // or no offsets ?
+		pstmtInsertInParentToContig   = conn.prepareStatement(query);
 
 // set up prepared statements for retrieving Canonical Mappings from the database
 
-		query = "select mapping_id,cspan,rspan,checksum,cigarstring from CANONICALMAPPING";
-		pstmtSelectCanonicalMappings = conn.prepareStatement(query);
+		query = "select mapping_id,cspan,rspan,cigar from CANONICALMAPPING";
+		pstmtSelectAllCanonicalMappings = conn.prepareStatement(query);
 		
-		query = "select cspan,rspan,checksum,cigarstring from CANONICALMAPPING where mapping_id = ?";
+		query = "select cspan,rspan,cigar from CANONICALMAPPING where mapping_id = ?";
 		pstmtSelectCanonicalMappingByID = conn.prepareStatement(query);
 		
-//		query = "select mapping_id,cspan,rspan from CANONICALMAPPING where checksum = ?";
-//		pstmtSelectCanonicalMappingByChecksum = conn.prepareStatement(query);
-		query = "select mapping_id,cspan,rspan from CANONICALMAPPING where cigarstring = ?";
+		query = "select mapping_id,cspan,rspan from CANONICALMAPPING where cigar = ?";
 		pstmtSelectCanonicalMappingByCigarString= conn.prepareStatement(query);
 
 // retrieval of Generic Mappings		
 		
-		query = "select seq_id,SEQ2CONTIG.mapping_id,coffset,roffset,direction,cspan,rspan,checksum"
+		query = "select seq_id,SEQ2CONTIG.mapping_id,coffset,roffset,direction,cspan,rspan,cigar"
 			  + "  from SEQ2CONTIG join CANONICALMAPPING using (mapping_id)"
 			  + " where contig_id = ? order by SEQ2CONTIG.mapping_id";
 		pstmtSelectSequenceToContigMappings = conn.prepareStatement(query);
@@ -109,18 +105,19 @@ public class MappingManager extends AbstractManager {
         clearCache();
 Utility.report("Building Canonical Mapping hash");
 	    try {
-	    	ResultSet rs = pstmtSelectCanonicalMappings.executeQuery();
+	    	ResultSet rs = pstmtSelectAllCanonicalMappings.executeQuery();
 		    
             while (rs.next()) {
             	int mapping_id = rs.getInt(1);
         	    int refSpan = rs.getInt(2);
         	    int subSpan = rs.getInt(3);
         	    String cigar = rs.getString(4);
-	    	    //FIXME CanonicalMapping mapping = new CanonicalMapping(mapping_id,refSpan,subSpan,cigar);
-        	  //FIXME Checksum checksum = new Checksum(mapping.getCheckSum());
-        	  //FIXME cacheByChecksum.put(checksum,mapping);
+//Utility.report("Added entry " + cigar);
+	    	    CanonicalMapping mapping = new CanonicalMapping(mapping_id,refSpan,subSpan,cigar);
+        	    cacheByChecksum.put(cigar,mapping);
 		    }
 		    rs.close();
+Utility.report("DONE Building Canonical Mapping hash " + cacheByChecksum.size());
 	    }
 	    catch (SQLException e) {
 	        adb.handleSQLException(e,"Failed to build the canonical mapping cache", conn, adb);
@@ -128,7 +125,7 @@ Utility.report("Building Canonical Mapping hash");
     }
     
 /**
- * @param CanonicalMapping instance
+ * @param mapping CanonicalMapping instance
  * 
  * probe the cache or the database for presence of canonical mapping using the checksum
  *
@@ -140,57 +137,106 @@ Utility.report("Building Canonical Mapping hash");
  * @throws ArcturusDatabaseException, IllegalArgumentException
  */
 	
-	public CanonicalMapping findOrStoreCanonicalMapping(CanonicalMapping mapping) throws ArcturusDatabaseException {
+	public CanonicalMapping findOrCreateCanonicalMapping(CanonicalMapping mapping) throws ArcturusDatabaseException {
 		if (mapping == null) 
 			throw new IllegalArgumentException("A CanonicalMapping is required as argument");
-		//FIXME String cigar = mapping.getExtendedCigarString();
-		//FIXME if (cigar == null)
-		//FIXME 	throw new IllegalArgumentException("Incomplete Canonical Mapping: missing cigar string");
+		String cigar = mapping.getExtendedCigarString();
+		if (cigar == null)
+		    throw new IllegalArgumentException("Incomplete Canonical Mapping: missing cigar string");
         
-		Checksum checksum = new Checksum(mapping.getCheckSum());
-		if (cacheByChecksum.containsKey(checksum))
-			return cacheByChecksum.get(checksum);
+		if (cacheByChecksum.containsKey(cigar))
+			return cacheByChecksum.get(cigar);
+
+        if (findCanonicalMapping(mapping)) // try database for new data
+            return mapping;
+
+		if (addCanonicalMapping(mapping))
+			return mapping;
 		
-		try { // try the database for new data
-			//FIXME 	pstmtSelectCanonicalMappingByCigarString.setString(1,cigar);
-		    ResultSet rs = pstmtSelectCanonicalMappingByCigarString.executeQuery();
-			
-			if (rs.next()) {
-            	mapping.setMappingID(rs.getInt(1));
-               	mapping.setReferenceSpan(rs.getInt(2));
-               	mapping.setSubjectSpan(rs.getInt(3));
-//              mapping.verify();
-   		    	rs.close();
-   		    	cacheByChecksum.put(checksum,mapping);
-   		    	return mapping;
-   		    }
-			rs.close();
-		}
-		catch (SQLException e) {
-			adb.handleSQLException(e,"Failed to access database", conn, adb);
-		}
-// this mapping is not yet in the database; add it; signal failure with return null
-		try {
-			pstmtInsertInCanonicalMapping.setInt(1,mapping.getReferenceSpan());
-			pstmtInsertInCanonicalMapping.setInt(2,mapping.getSubjectSpan());
-			//FIXME pstmtInsertInCanonicalMapping.setString(3,mapping.getExtendedCigarString());
-// no transaction needed here			
-			int rc = pstmtInsertInCanonicalMapping.executeUpdate();
-			
-			if (rc == 1) {
-			    ResultSet rs = pstmtInsertInCanonicalMapping.getGeneratedKeys();
-			    int inserted_ID = rs.next() ? rs.getInt(1) : 0;
-			    rs.close();
-			    mapping.setMappingID(inserted_ID);
-			}
-		}
-		catch (SQLException e) {
-            adb.handleSQLException(e,"Failed to insert new Canonical Mapping", conn, adb);
- 		}
 		return null;
     }
 	
-	public boolean storeSequenceToContigMapping(SequenceToContigMapping mapping) throws ArcturusDatabaseException {
+	private boolean addCanonicalMapping(CanonicalMapping mapping) throws ArcturusDatabaseException {
+// inserts a new canonical mapping; add caching flag
+		boolean success = false;
+ 
+        try {
+            String cigar = mapping.getExtendedCigarString();
+//System.out.println("Inserting for cigar " + cigar);
+		    pstmtInsertCanonicalMapping.setInt(1,mapping.getReferenceSpan());
+			pstmtInsertCanonicalMapping.setInt(2,mapping.getSubjectSpan());
+			pstmtInsertCanonicalMapping.setString(3,cigar);
+			
+			int rc = pstmtInsertCanonicalMapping.executeUpdate();
+						
+			if (rc == 1) {
+				ResultSet rs = pstmtInsertCanonicalMapping.getGeneratedKeys();
+				int inserted_ID = rs.next() ? rs.getInt(1) : 0;
+				rs.close();
+				if (inserted_ID > 0) {
+ 				    mapping.setMappingID(inserted_ID);
+			       	cacheByChecksum.put(cigar,mapping);
+			  	   	if (inserted_ID%1000 == 0)
+			   	  		System.out.println("Canonical Mapping count " + inserted_ID);
+				    success = true;
+				}
+            }
+        }
+		catch (SQLException e) {
+			adb.handleSQLException(e,"Failed to insert new Canonical Mapping", conn, adb);
+		}
+
+		return success;
+	}
+	
+	private boolean findCanonicalMapping(CanonicalMapping mapping) throws ArcturusDatabaseException {
+		// adds canonical mapping ID to mapping; perhaps add test and caching option ?
+		String cigar = mapping.getExtendedCigarString();		
+//System.out.println("Trying database (again) for cigar " + cigar);
+		
+		try { // try the database for new data
+			pstmtSelectCanonicalMappingByCigarString.setString(1,cigar);
+		    ResultSet rs = pstmtSelectCanonicalMappingByCigarString.executeQuery();
+						
+			if (rs.next()) {
+			    mapping.setMappingID(rs.getInt(1));
+			    mapping.setReferenceSpan(rs.getInt(2));
+			    mapping.setSubjectSpan(rs.getInt(3));
+//			              mapping.verify();
+			    cacheByChecksum.put(cigar,mapping);
+		    }
+			rs.close();
+						
+			if (mapping.getMappingID() > 0)
+			    return true;
+	    }
+	    catch (SQLException e) {
+			adb.handleSQLException(e,"Failed to access database", conn, adb);
+	    }
+	    return false;
+	}
+	
+	public CanonicalMapping findCanonicalMapping(String cigar) throws ArcturusDatabaseException {
+		CanonicalMapping mapping = new CanonicalMapping(cigar);
+		if (findCanonicalMapping(mapping)) 
+			return mapping;
+		return null;
+	}
+	
+	/**
+	 * 
+	 * @param contig Contig instance
+	 * @throws ArcturusDatabaseException
+	 */
+
+	public void putSequenceToContigMappingsForContig(Contig contig) throws ArcturusDatabaseException {
+	    SequenceToContigMapping[] mappings = contig.getSequenceToContigMappings();
+	    for (int i=0 ; i < mappings.length ; i++) {
+	    	storeSequenceToContigMapping(mappings[i]);
+	    }
+	}
+	
+	private boolean storeSequenceToContigMapping(SequenceToContigMapping mapping) throws ArcturusDatabaseException {
 
 		CanonicalMapping cm = mapping.getCanonicalMapping();
 		if (cm == null || cm.getMappingID() < 1)
@@ -219,6 +265,14 @@ Utility.report("Building Canonical Mapping hash");
 		}
 		return false;
 	}
+
+	public void putContigToParentMappingsForContig(Contig contig) throws ArcturusDatabaseException {
+	    ContigToParentMapping[] mappings = contig.getContigToParentMappings();
+	    for (int i=0 ; i < mappings.length ; i++) {
+//	    	storeContigToParentMapping(mappings[i]);
+	    }
+	}
+	
 /**
 * retrieval of sequence to contig mappings with Canonical Mappings in minimal form
 */

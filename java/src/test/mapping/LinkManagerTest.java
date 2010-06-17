@@ -9,7 +9,7 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.jdbc.*;
 
-public class TestMappingManager {
+public class LinkManagerTest {
 
 	public static void main(String[] args) {
 
@@ -41,7 +41,7 @@ public class TestMappingManager {
 		}
 	    
 	    try {
-	    	TestMappingManager tm = new TestMappingManager();
+	    	LinkManagerTest tm = new LinkManagerTest();
 	    	
  	        ArcturusInstance ai = ArcturusInstance.getInstance(instance);
  		    ArcturusDatabase adb = ai.findArcturusDatabase(organism);

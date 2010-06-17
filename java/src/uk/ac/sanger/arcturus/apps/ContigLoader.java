@@ -33,7 +33,7 @@ public class ContigLoader {
                 projectName = args[++i];
             else if (args[i].equalsIgnoreCase("-assemblyname"))
                 assemblyName = args[++i];
-            else if (args[i].equalsIgnoreCase("-preload"))
+            else if (args[i].equalsIgnoreCase("-preloadreads"))
                 preloadReads = true;
             else {
             	System.err.println("Invalid parameter " + args[i]);
@@ -48,11 +48,9 @@ public class ContigLoader {
 		}
 	    
 	    try {
-System.out.println("Trying to get DB handle"); 	    	
+	    	
  	        ArcturusInstance ai = ArcturusInstance.getInstance(instance);
  			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
-if (adb != null)
-	System.out.println("DB opened");
  			
  // get the project, if specified
  			
@@ -76,19 +74,12 @@ if (adb != null)
 // set up read loader/tester and process the reads
 
  	    	BAMReadLoader brl = new BAMReadLoader(adb);
-// in preload mode, load (missing) reads first, then iterate through contigs
- 	    	if (preloadReads) {
- 	    		
- 			    brl.processFile(reader); 	    		    	
- 			    BAMContigLoader bcl = new BAMContigLoader(adb);	        
-	            bcl.processFile(reader,project);
- 	    	}
- 	    	else {
-// load missing reads as and when they are identified by the contig loader
-	    	
- 			    BAMContigLoader bcl = new BAMContigLoader(adb,brl);	        
-	            bcl.processFile(reader,project);
- 	    	}
+
+ 	    	if (preloadReads)
+ 	    		brl.processFile(reader); 	    		    	
+ 	    	
+ 			BAMContigLoader bcl = new BAMContigLoader(adb,brl);	        
+	        bcl.processFile(reader,project);
 	    }
 	    catch(Exception e) {
 	    	Arcturus.logWarning("Failed to initialise or execute the contig loader", e);
@@ -107,6 +98,7 @@ if (adb != null)
 		ps.println();
 		ps.println("OPTIONAL PARAMETERS:");
 		ps.println("\t-projectname\tName of project");		
-		ps.println("\t-preload\tDo a read import first");		
+		ps.println("\t-assemblyname\tName of project assembly");		
+		ps.println("\t-preloadreads\tDo a read import first");		
 	}
 }
