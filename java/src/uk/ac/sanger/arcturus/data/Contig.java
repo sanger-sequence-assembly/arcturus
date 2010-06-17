@@ -140,6 +140,12 @@ public class Contig extends Core {
 	public int getReadCount() {
 		return nreads;
 	}
+	
+	public int getParentContigCount() {
+		if (cpmappings == null)
+			return 0;
+		return getDistinctParentCount();
+	}
 
 	public Date getCreated() {
 		return created;
@@ -236,5 +242,12 @@ public class Contig extends Core {
 	public void update(int options) throws ArcturusDatabaseException,
 		DataFormatException {
 		adb.updateContig(this, options);
+	}
+	
+	private int getDistinctParentCount() {
+		for (ContigToParentMapping cpmapping : cpmappings ) {
+//			int parent_id = (cpmapping.getParentContig() == null) ? 0 : cpmapping.getParentContig().getID();
+		}
+		return 0;
 	}
 }
