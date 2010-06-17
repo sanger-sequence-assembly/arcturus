@@ -10,6 +10,10 @@ public class ContigToParentMapping extends GenericMapping<Contig,Contig> {
 	    super(contig,parent);
 	}
 	
+	public Contig getParentContig() {
+	    return getSubject();
+	}
+	
     public void setReadCount(int count) {
     	this.readCount = count;
     }
