@@ -56,7 +56,7 @@ System.out.println("Preparing Mapping Manager queries");
         pstmtInsertCanonicalMapping = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
 
 		query = "insert into SEQ2CONTIG (contig_id,seq_id,mapping_id,coffset,roffset,direction) "
-			  + "values (?,?,?,?,?)";
+			  + "values (?,?,?,?,?,?)";
 		pstmtInsertInSequenceToContig = conn.prepareStatement(query);
 		
 		query = "insert into PARENT2CONTIG (contig_id,parent_id,mapping_id,coffset,roffset,direction,weight) "
@@ -125,6 +125,8 @@ Utility.report("DONE Building Canonical Mapping hash " + cacheByChecksum.size())
     }
     
 /**
+ * Handling Canonical Mappings
+ * 
  * @param mapping CanonicalMapping instance
  * 
  * probe the cache or the database for presence of canonical mapping using the checksum
@@ -163,9 +165,9 @@ Utility.report("DONE Building Canonical Mapping hash " + cacheByChecksum.size())
         try {
             String cigar = mapping.getExtendedCigarString();
 //System.out.println("Inserting for cigar " + cigar);
-		    pstmtInsertCanonicalMapping.setInt(1,mapping.getReferenceSpan());
-			pstmtInsertCanonicalMapping.setInt(2,mapping.getSubjectSpan());
-			pstmtInsertCanonicalMapping.setString(3,cigar);
+		    pstmtInsertCanonicalMapping.setInt(1, mapping.getReferenceSpan());
+			pstmtInsertCanonicalMapping.setInt(2, mapping.getSubjectSpan());
+			pstmtInsertCanonicalMapping.setString(3, cigar);
 			
 			int rc = pstmtInsertCanonicalMapping.executeUpdate();
 						
@@ -195,7 +197,7 @@ Utility.report("DONE Building Canonical Mapping hash " + cacheByChecksum.size())
 //System.out.println("Trying database (again) for cigar " + cigar);
 		
 		try { // try the database for new data
-			pstmtSelectCanonicalMappingByCigarString.setString(1,cigar);
+			pstmtSelectCanonicalMappingByCigarString.setString(1, cigar);
 		    ResultSet rs = pstmtSelectCanonicalMappingByCigarString.executeQuery();
 						
 			if (rs.next()) {
@@ -224,16 +226,21 @@ Utility.report("DONE Building Canonical Mapping hash " + cacheByChecksum.size())
 	}
 	
 	/**
+	 * Handling SequenceToContigMappings
 	 * 
 	 * @param contig Contig instance
 	 * @throws ArcturusDatabaseException
 	 */
 
-	public void putSequenceToContigMappingsForContig(Contig contig) throws ArcturusDatabaseException {
-	    SequenceToContigMapping[] mappings = contig.getSequenceToContigMappings();
-	    for (int i=0 ; i < mappings.length ; i++) {
-	    	storeSequenceToContigMapping(mappings[i]);
+	public boolean putSequenceToContigMappings(Contig contig) throws ArcturusDatabaseException {
+
+		SequenceToContigMapping[] mappings = contig.getSequenceToContigMappings();
+
+		for (int i=0 ; i < mappings.length ; i++) {
+	    	if (!storeSequenceToContigMapping(mappings[i]))
+	    		return false;
 	    }
+	    return true;
 	}
 	
 	private boolean storeSequenceToContigMapping(SequenceToContigMapping mapping) throws ArcturusDatabaseException {
@@ -245,51 +252,61 @@ Utility.report("DONE Building Canonical Mapping hash " + cacheByChecksum.size())
 			throw new IllegalArgumentException("Mapping has no Sequence or Contig reference");
 		
 		try {
-//		    beginTransaction(); // not needed here, single record insert
-            pstmtInsertInSequenceToContig.setInt(1,mapping.getContig().getID());
-            pstmtInsertInSequenceToContig.setInt(2,mapping.getSequence().getID());
-            pstmtInsertInSequenceToContig.setInt(3,cm.getMappingID());		    
-            pstmtInsertInSequenceToContig.setInt(4,mapping.getReferenceOffset());		    
-            pstmtInsertInSequenceToContig.setInt(5,mapping.getSubjectOffset());		    
-            pstmtInsertInSequenceToContig.setString(6,(mapping.isForward() ? "Forward" : "Reverse"));		    
 
-            if (pstmtInsertInSequenceToContig.executeUpdate() == 1) {
- 		        return true;
-            }
-            else {
-                adb.handleSQLException(null,"Somehow failed to insert sequence-to-contig mapping", conn, adb);
-            }
+            pstmtInsertInSequenceToContig.setInt(1, mapping.getContig().getID());
+            pstmtInsertInSequenceToContig.setInt(2, mapping.getSequence().getID());
+            pstmtInsertInSequenceToContig.setInt(3, cm.getMappingID());		    
+            pstmtInsertInSequenceToContig.setInt(4, mapping.getReferenceOffset());		    
+            pstmtInsertInSequenceToContig.setInt(5, mapping.getSubjectOffset());		    
+            pstmtInsertInSequenceToContig.setString(6, (mapping.isForward() ? "Forward" : "Reverse"));		    
+
+            int rc = pstmtInsertInSequenceToContig.executeUpdate();
+            
+            return rc == 1;
 		}
 		catch (SQLException e) {
 	        adb.handleSQLException(e,"Failed to insert new Sequence-Contig Mapping", conn, adb);			
 		}
 		return false;
 	}
+	
+	/**
+	 * Handling ContigToParentMappings
+	 * 
+	 * @param contig
+	 * @throws ArcturusDatabaseException
+	 */
 
-	public void putContigToParentMappingsForContig(Contig contig) throws ArcturusDatabaseException {
+	public boolean putContigToParentMappings(Contig contig) throws ArcturusDatabaseException {
 	    ContigToParentMapping[] mappings = contig.getContigToParentMappings();
+	    
+	    if (mappings == null) 
+	    	return true;
+	    
+	    boolean success = true;
 	    for (int i=0 ; i < mappings.length ; i++) {
-//	    	storeContigToParentMapping(mappings[i]);
+//	    	if (!storeContigToParentMapping(mappings[i])) return false
 	    }
+	    
+	    return success;
 	}
 	
 /**
 * retrieval of sequence to contig mappings with Canonical Mappings in minimal form
 */
 	
-	public void addSequenceToContigMappingsToContig(Contig contig) throws ArcturusDatabaseException {
-		SequenceToContigMapping[] mappings = null;
+	public int getSequenceToContigMappings(Contig contig) throws ArcturusDatabaseException {		
+		int numberOfMappings = 0;
+		
 		if (contig == null || contig.getID() <= 0) 
 		    throw new IllegalArgumentException("Missing contig or invalid contig ID");
 		
 		try {
  		    pstmtSelectSequenceToContigMappings.setInt(1, contig.getID());
  		    
- 		    ResultSet rs = pstmtSelectSequenceToContigMappings.executeQuery();
+ 		    ResultSet rs = pstmtSelectSequenceToContigMappings.executeQuery();		    
  		    
- 		    int size = rs.getFetchSize();
- 		    
- 		    mappings = new SequenceToContigMapping[size];
+ 		    Vector<SequenceToContigMapping> mappings = new Vector<SequenceToContigMapping>();
  		    
             int nextmapping = 0;
 
@@ -313,18 +330,18 @@ Utility.report("DONE Building Canonical Mapping hash " + cacheByChecksum.size())
     					                                             : Direction.REVERSE;
     			int refOffset = rs.getInt(3);
     			int subOffset = rs.getInt(4);
-                mappings[nextmapping++] = new SequenceToContigMapping(sequence,contig,cmapping,
-                		                                           refOffset,subOffset,direction);
+                mappings.add(new SequenceToContigMapping(sequence,contig,cmapping,
+                		                                 refOffset,subOffset,direction));
  		    }
             rs.close();	
+    		
+    		contig.setSequenceToContigMappings(mappings.toArray(new SequenceToContigMapping[0]));
 		}
 		catch (SQLException e) {
 	        adb.handleSQLException(e,"Failed to retrieve Sequence-Contig Mappings", conn, adb);			
 		}
 		
-// TO DO here add segments to the mappings if so specified
-		
-//		contig.setMappings(mappings);  change BasicSequenceToContigMapping?
+		return numberOfMappings;
 	}
 	
 
@@ -364,39 +381,6 @@ Utility.report("DONE Building Canonical Mapping hash " + cacheByChecksum.size())
 	
 	public void addSegmentsToMapping(GenericMapping mappings) { // SEE perl code
 	    // 
-	}
-	
-/**
-* internal class provides hash key code for canonical mapping cache from checksum
-*/
-	
-	class Checksum {
-		byte[] data;
-		
-		Checksum(byte[] data) {
-			this.data = data;
-	    }
-		
-		public int hashCode() {
-			if (data == null)
-				return 0;
-			int hashcode = 0;
-			for (int i = 1 ; i <= 4 ; i++) {
-				hashcode += data[i];
-				hashcode = hashcode << 3;
-			}
-			return hashcode;
-		}
-		
-		public boolean equals(Checksum that) {
-			if (this.data == null || that == null || that.data == null || this.data.length != that.data.length)
-				return false;
-			for (int i = 0 ; i < data.length ; i++) {
-				if (this.data[i] != that.data[i]) 
-					return false;
-			}
-			return true;
-		}
 	}
 
 	public String getCacheStatistics() {

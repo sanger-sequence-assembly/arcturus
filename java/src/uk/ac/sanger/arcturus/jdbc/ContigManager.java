@@ -1,5 +1,6 @@
 package uk.ac.sanger.arcturus.jdbc;
 
+import uk.ac.sanger.arcturus.people.*;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
@@ -197,8 +198,8 @@ public class ContigManager extends AbstractManager {
 		
 		pstmtChildContigs = conn.prepareStatement(query);
 		
-		query = "insert into CONTIG (gap4name,length,nctgs,nreads,project_id,creator,created,readnamehash)"
-			  + "values (?,?,?,?,?,?,now(),?)";
+		query = "insert into CONTIG (gap4name,length,ncntgs,nreads,project_id,creator,created)"
+			  + "values (?,?,?,?,?,?,now())";
 		pstmtPutContigMetaData = conn.prepareStatement(query,Statement.RETURN_GENERATED_KEYS);
 	}
 
@@ -1489,37 +1490,95 @@ public class ContigManager extends AbstractManager {
 		return "ByID: " + hashByID.size();
 	}
 
-	public void putContig(Contig contig) throws ArcturusDatabaseException {
+	public boolean putContig(Contig contig) throws ArcturusDatabaseException {
+		System.out.println("ENTER ContigManager putContig " + contig);
 	    if (adb instanceof ArcturusDatabaseImpl) {
 		    ArcturusDatabaseImpl adbi = (ArcturusDatabaseImpl)adb;
 		    MappingManager mm = (MappingManager)adbi.getManager(ArcturusDatabase.MAPPING);
 
 		    try {
+				System.out.println("Trying inserts");
 		        beginTransaction();
 		    
-		        putContigMetaData(contig); // adds contig_id
-		   
-		        mm.putSequenceToContigMappingsForContig(contig);
-		        mm.putContigToParentMappingsForContig(contig);
+		        boolean success = putContigMetaData(contig); // adds contig_id
+				System.out.println("success meta data " + success);
+		 
+		        if (success)
+ 		            success = mm.putSequenceToContigMappings(contig);
+				System.out.println("success mappings " + success);
 		        
-		        commitTransaction();
+		        if (success)
+ 		            success = mm.putContigToParentMappings(contig);
+
+		        
+		        System.out.println("success all" + success);
+		        
+		        if (success)
+ 		            commitTransaction();
+		        else
+		        	rollbackTransaction();
+		        
+		        return success;
 		    }
-		    catch (SQLException e){
-//		    	rollbackTransaction();
+		    catch (SQLException e) {
+				System.out.println("Trying inserts BUMMED OUT! ");
+				e.printStackTrace();
 		    	adb.handleSQLException(e, "Failed to store contig in the database", conn, adb);
+		    	try {
+		    		rollbackTransaction();
+		    	}
+		    	catch (SQLException e1) {
+		    		adb.handleSQLException(e1, "Failed to rollback transaction", conn, adb);
+		    	}
 		    }
+		    
+		    return false;
 		}
 	    else {
-	    	throw new ArcturusDatabaseException("");
-		}
+	    	throw new ArcturusDatabaseException("?");
+	    }
 	}
 		
-	private void putContigMetaData(Contig contig) {
+	private boolean putContigMetaData(Contig contig) throws ArcturusDatabaseException {
 		// TODO Auto-generated method stub
 		String gap4name = contig.getName();
 		int nreads = contig.getReadCount();
 		int length = contig.getLength();
+		Project project = contig.getProject();
+		int project_id = (project == null) ? 1 : project.getID();
 		// put contig metadata, returns contig_id
+		Person me = adb.findMe(); // getUID
+		String creator = (me == null) ? "anon" : me.getUID();
+		int ncntgs = 0; // for the moment
+//		query = "insert into CONTIG (gap4name,length,nctgs,nreads,project_id,creator,created)"
+//			  + "values (?,?,?,?,?,?,now())";
+		try {
+			pstmtPutContigMetaData.setString(1, gap4name);
+			pstmtPutContigMetaData.setInt(2, length);
+			pstmtPutContigMetaData.setInt(3, ncntgs);
+			pstmtPutContigMetaData.setInt(4, nreads);
+			pstmtPutContigMetaData.setInt(5, project_id);
+			pstmtPutContigMetaData.setString(6, creator);
+			
+			int rc = pstmtPutContigMetaData.executeUpdate();
+			
+			if (rc == 1) {
+				ResultSet rs = pstmtPutContigMetaData.getGeneratedKeys();
+				
+				int contig_id = rs.next() ? rs.getInt(1) : -1;
+				
+				rs.close();
+				
+				if (contig_id > 0) {
+					contig.setID(contig_id);
+					return true;
+				}
+			}
+			
+		} catch (SQLException e) {
+    		adb.handleSQLException(e, "Failed to insert contig meta data", conn, adb);
+		}
 		
+		return false;
 	}
 }

@@ -52,8 +52,11 @@ public class BAMContigLoader {
         Vector<Contig> C = new Vector<Contig>();
      	for (SAMSequenceRecord record : seqs) {
       		String contigName = record.getSequenceName();
-      		C.add(new Contig(contigName));
-System.out.println("Added contig " + contigName + " : " + record.getSequenceLength());
+      		Contig contig = new Contig(contigName);
+      		contig.setLength(record.getSequenceLength());
+      		C.add(contig);
+System.out.println("Added contig " + contig);
+            
      	}
      	
         return C.toArray(new Contig[0]);      	

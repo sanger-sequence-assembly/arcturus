@@ -129,6 +129,10 @@ public class Contig extends Core {
 		this.mappings = mappings;
 	}
 
+	public void setLength(int length) {
+		this.length = length;
+	}
+
 	public int getLength() {
 		return length;
 	}

@@ -1,5 +1,6 @@
 package test.importer;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.samtools.*;
 import uk.ac.sanger.arcturus.samtools.Utility;
 
@@ -27,14 +28,18 @@ public class BAMContigLoaderWrapper extends BAMContigLoader {
     	System.out.println("USING TEST SCRIPT");
 	    	
 	    Contig[] contigs = getContigs(reader);
+	    
+	    for (Contig contig : contigs)
+	    	contig.setProject(project);
 
 //	    prepareLinkManagerCache(adb, project);
 
-//	    identifyParentsForContigs(contigs,reader); // decide later if and what type to return
+//	    identifyParentsForContigs(contigs,reader);
 
 	    adb.preloadCanonicalMappings();
 
-	    addMappingsContigs(contigs,reader);
+	    addMappingsToContigs(contigs,reader);
+	    
     }
 	
 /*	
@@ -105,7 +110,7 @@ public class BAMContigLoaderWrapper extends BAMContigLoader {
 	    
 	    
 	 
-    private void addMappingsContigs(Contig[] contigs, SAMFileReader reader) {
+    private void addMappingsToContigs(Contig[] contigs, SAMFileReader reader) {
 System.out.println("addMappingsToContigs " + contigs.length);
     	for (int i=0 ; i < contigs.length ; i++) {
     		try {
@@ -138,7 +143,12 @@ System.out.println("DONE : addMappingsToContig " + referenceName);
 	 		
 	    contig.setSequenceToContigMappings(M.toArray(new SequenceToContigMapping[0]));
 	    
-	    adb.putContig(contig);  	
+	    try {
+	        adb.putContig(contig);
+	    }
+	    catch (ArcturusDatabaseException e) {
+	        Arcturus.logWarning(e);
+	    }
     }
 	  
 	private SequenceToContigMapping buildSequenceToContigMapping(SAMRecord record, Contig contig) throws ArcturusDatabaseException {
