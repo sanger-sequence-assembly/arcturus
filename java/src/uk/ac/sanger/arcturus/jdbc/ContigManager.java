@@ -1492,66 +1492,52 @@ public class ContigManager extends AbstractManager {
 
 	public boolean putContig(Contig contig) throws ArcturusDatabaseException {
 		System.out.println("ENTER ContigManager putContig " + contig);
-	    if (adb instanceof ArcturusDatabaseImpl) {
-		    ArcturusDatabaseImpl adbi = (ArcturusDatabaseImpl)adb;
-		    MappingManager mm = (MappingManager)adbi.getManager(ArcturusDatabase.MAPPING);
 
-		    try {
-				System.out.println("Trying inserts");
-		        beginTransaction();
+		try {
+		    beginTransaction();
 		    
-		        boolean success = putContigMetaData(contig); // adds contig_id
-				System.out.println("success meta data " + success);
+		    boolean success = putContigMetaData(contig); // adds contig_id
+System.out.println("success meta data " + success);
 		 
-		        if (success)
- 		            success = mm.putSequenceToContigMappings(contig);
-				System.out.println("success mappings " + success);
+		    if (success)
+ 		        success = adb.putSequenceToContigMappings(contig);
+System.out.println("success mappings " + success);
 		        
-		        if (success)
- 		            success = mm.putContigToParentMappings(contig);
-
+		    if (success)
+ 		        success = adb.putContigToParentMappings(contig);
+System.out.println("success all " + success);
 		        
-		        System.out.println("success all" + success);
+		    if (success)
+ 		        commitTransaction();
+		    else
+		        rollbackTransaction();
 		        
-		        if (success)
- 		            commitTransaction();
-		        else
-		        	rollbackTransaction();
-		        
-		        return success;
-		    }
-		    catch (SQLException e) {
-				System.out.println("Trying inserts BUMMED OUT! ");
-				e.printStackTrace();
-		    	adb.handleSQLException(e, "Failed to store contig in the database", conn, adb);
-		    	try {
-		    		rollbackTransaction();
-		    	}
-		    	catch (SQLException e1) {
-		    		adb.handleSQLException(e1, "Failed to rollback transaction", conn, adb);
-		    	}
-		    }
-		    
-		    return false;
+		    return success;
 		}
-	    else {
-	    	throw new ArcturusDatabaseException("?");
+	    catch (SQLException e) {
+		    adb.handleSQLException(e, "Failed to store contig in the database", conn, adb);
+		    try {
+		    	rollbackTransaction();
+		   	}
+		   	catch (SQLException e1) {
+		   		adb.handleSQLException(e1, "Failed to rollback transaction", conn, adb);
+		   	}
 	    }
+		    
+		return false;
 	}
 		
 	private boolean putContigMetaData(Contig contig) throws ArcturusDatabaseException {
-		// TODO Auto-generated method stub
+
 		String gap4name = contig.getName();
-		int nreads = contig.getReadCount();
 		int length = contig.getLength();
+		int ncntgs = contig.getParentContigCount();
+		int nreads = contig.getReadCount();
 		Project project = contig.getProject();
 		int project_id = (project == null) ? 1 : project.getID();
-		// put contig metadata, returns contig_id
-		Person me = adb.findMe(); // getUID
+		Person me = adb.findMe();
 		String creator = (me == null) ? "anon" : me.getUID();
-		int ncntgs = 0; // for the moment
-//		query = "insert into CONTIG (gap4name,length,nctgs,nreads,project_id,creator,created)"
-//			  + "values (?,?,?,?,?,?,now())";
+
 		try {
 			pstmtPutContigMetaData.setString(1, gap4name);
 			pstmtPutContigMetaData.setInt(2, length);
