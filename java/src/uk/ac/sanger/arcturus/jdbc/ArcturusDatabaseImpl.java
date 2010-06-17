@@ -1358,7 +1358,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	}
 	
 	/**
-	 * preloading canonical mapping hash
+	 * pre-loading canonical mapping hash
 	 */
 	
 	public synchronized void preloadCanonicalMappings() throws ArcturusDatabaseException {
@@ -1370,11 +1370,18 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	}
 	
 	/**
-	 * loading a contig
+	 * loading a contig and its mappings
 	 */
 	
 	public synchronized void putContig(Contig contig) throws ArcturusDatabaseException {
 		contigManager.putContig(contig);
 	}
-
+	
+	public synchronized boolean putSequenceToContigMappings(Contig contig) throws ArcturusDatabaseException {
+		return mappingManager.putSequenceToContigMappings(contig);
+	}
+	
+	public synchronized boolean putContigToParentMappings(Contig contig) throws ArcturusDatabaseException {
+		return mappingManager.putContigToParentMappings(contig);
+	}
 }
