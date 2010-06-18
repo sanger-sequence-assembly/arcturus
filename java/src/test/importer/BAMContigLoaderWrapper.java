@@ -142,7 +142,7 @@ System.out.println("addMappingsToContig " + referenceName);
 	 	    
 	 	    count++;
 	 	    
-	 	    if ((count%1000) == 0) {
+	 	    if ((count%10000) == 0) {
 	 	    	long dt = System.currentTimeMillis() - t0;
 	 	    	System.err.println("addMappingsToContig: " + count + " " + dt + " ms");
 	 	    }
