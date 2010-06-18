@@ -91,7 +91,7 @@ public class JDBCLogHandler extends Handler {
 	}
 
 	public void publish(LogRecord record) {
-		if (!isLoggable(record))
+		if (!isLoggable(record) || record.getThrown() == null)
 			return;
 		
 		try {
