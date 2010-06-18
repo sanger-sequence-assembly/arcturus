@@ -600,7 +600,11 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	public synchronized Sequence findOrCreateSequence(Sequence sequence) throws ArcturusDatabaseException {
 		return sequenceManager.findOrCreateSequence(sequence);
 	}
-
+	public synchronized Sequence findSequenceByReadnameFlagsAndHash(Sequence sequence)
+		throws ArcturusDatabaseException {
+		return sequenceManager.findSequenceByReadnameFlagsAndHash(sequence);
+	}
+	
 	public Sequence putSequence(Sequence sequence) throws ArcturusDatabaseException {
 		return sequenceManager.putSequence(sequence);
 	}

@@ -62,6 +62,12 @@ public class SequenceManager extends AbstractManager {
 	private static final String GET_TAGS =
 		"select tagtype,pstart,pfinal,comment from READTAG where seq_id = ? and deprecated='N'";
 	
+	private static final String GET_SEQUENCE_BY_READNAME_FLAGS_AND_HASH =
+		"select RN.read_id,S.seq_id from READNAME RN,SEQ2READ SR,SEQUENCE S" +
+		" where RN.readname = ? and RN.flags = ?" +
+		" and RN.read_id=SR.read_id and SR.seq_id=S.seq_id" +
+		" and S.seq_hash = ? and S.qual_hash = ?";
+	
 	private static final String GET_SEQUENCE_ID_BY_READ_ID_AND_HASH =
 		"select S.seq_id from SEQ2READ SR left join SEQUENCE S using (seq_id) where SR.read_id = ?" +
 		" and S.seq_hash = ? and S.qual_hash = ?";
@@ -97,6 +103,7 @@ public class SequenceManager extends AbstractManager {
 	private PreparedStatement pstmtGetTags;
 	
 	private PreparedStatement pstmtGetSequenceIDByReadIDAndHash;
+	private PreparedStatement pstmtGetSequenceByReadnameFlagsAndAndHash;
 	
 	private PreparedStatement pstmtPutSequence;
 	
@@ -148,6 +155,8 @@ public class SequenceManager extends AbstractManager {
 		pstmtGetTags = prepareStatement(GET_TAGS);
 		
 		pstmtGetSequenceIDByReadIDAndHash = prepareStatement(GET_SEQUENCE_ID_BY_READ_ID_AND_HASH);
+		
+		pstmtGetSequenceByReadnameFlagsAndAndHash = prepareStatement(GET_SEQUENCE_BY_READNAME_FLAGS_AND_HASH);
 		
 		pstmtPutSequence = prepareStatement(PUT_SEQUENCE, Statement.RETURN_GENERATED_KEYS);
 		
@@ -644,6 +653,62 @@ public class SequenceManager extends AbstractManager {
 			return registerNewSequence(sequence, seq_id);
 		} else
 			return putSequence(sequence);
+	}
+	
+	public Sequence findSequenceByReadnameFlagsAndHash(Sequence sequence) throws ArcturusDatabaseException {
+		if (sequence == null)
+			throw new ArcturusDatabaseException("Cannot find a null sequence");
+		
+		if (sequence.getRead() == null)
+			throw new ArcturusDatabaseException("Cannot find a sequence with a null read");
+		
+		if (sequence.getRead().getName() == null)
+			throw new ArcturusDatabaseException("Cannot find a sequence with a read which has no name");
+		
+		if (sequence.getDNA() == null)
+			throw new ArcturusDatabaseException("Cannot find a sequence with no DNA");
+		
+		if (sequence.getQuality() == null)
+			throw new ArcturusDatabaseException("Cannot find a sequence with no quality");
+
+		Read read = sequence.getRead();
+		
+		try {
+			pstmtGetSequenceByReadnameFlagsAndAndHash.setString(1, read.getName());
+			pstmtGetSequenceByReadnameFlagsAndAndHash.setInt(2, read.getFlags());
+			pstmtGetSequenceByReadnameFlagsAndAndHash.setBytes(3, sequence.getDNAHash());
+			pstmtGetSequenceByReadnameFlagsAndAndHash.setBytes(4, sequence.getQualityHash());
+			
+			ResultSet rs = pstmtGetSequenceByReadnameFlagsAndAndHash.executeQuery();
+			
+			int read_id = -1;
+			int seq_id = -1;
+			
+			if (rs.next()) {
+				read_id = rs.getInt(1);
+				seq_id = rs.getInt(2);
+			}
+			
+			rs.close();
+			
+			if (read_id > 0 && seq_id > 0) {
+				read.setID(read_id);
+				read.setArcturusDatabase(adb);
+				
+				sequence.setID(seq_id);
+				sequence.setArcturusDatabase(adb);
+				
+				return sequence;
+			} else
+				return putSequence(sequence);
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to find sequence for read name \"" + read.getName() +
+					" and flags " + read.getFlags() + " and hashes",
+					conn, this);
+		}
+		
+		return null;
 	}
 
 	private Sequence registerNewSequence(Sequence sequence, int seq_id) {

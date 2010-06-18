@@ -132,12 +132,25 @@ System.out.println("addMappingsToContig " + referenceName);
 	 		
 	 	Vector<SequenceToContigMapping> M = new Vector<SequenceToContigMapping>();
 	 		
+	 	int count = 0;
+	 	long t0 = System.currentTimeMillis();
+	 	
 	    while (iterator.hasNext()) {
 	 	    SAMRecord record = iterator.next();
 	 		SequenceToContigMapping mapping = buildSequenceToContigMapping(record,contig);
 	 	    M.add(mapping);
+	 	    
+	 	    count++;
+	 	    
+	 	    if ((count%1000) == 0) {
+	 	    	long dt = System.currentTimeMillis() - t0;
+	 	    	System.err.println("addMappingsToContig: " + count + " " + dt + " ms");
+	 	    }
 	    }
-	 		
+
+	    long dt = System.currentTimeMillis() - t0;
+ 	    System.err.println("addMappingsToContig: " + count + " " + dt + " ms");
+	    
 	    iterator.close();
 System.out.println("DONE : addMappingsToContig " + referenceName);
 	 		
@@ -181,7 +194,7 @@ else if (cached.getMappingID() <= 0 ){
 		int contigEndPosition = record.getAlignmentEnd();
 //System.out.println("read " + read.getUniqueName() + " cstart " + contigStartPosition +
 //			         " cend " + contigEndPosition + " D: " + direction);
-
+		
 		return new SequenceToContigMapping(sequence,contig,cached,contigStartPosition,1,direction);
 	}
 

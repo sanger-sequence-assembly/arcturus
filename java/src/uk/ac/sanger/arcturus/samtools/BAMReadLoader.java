@@ -99,6 +99,7 @@ public class BAMReadLoader {
 			quality = Utility.reverseQuality(quality);
 		}
 		
+		/*
 		Read read = adb.getReadByNameAndFlags(readname, maskedFlags);
 		
 		if (read == null) {
@@ -118,10 +119,13 @@ public class BAMReadLoader {
 		
 			read = adb.putRead(read);
 		}
+		*/
+		
+		Read read = new Read(readname, maskedFlags);
 		
 		Sequence sequence = new Sequence(0, read, dna, quality, 0);
 		
-		Sequence newSequence = adb.findOrCreateSequence(sequence);
+		Sequence newSequence = adb.findSequenceByReadnameFlagsAndHash(sequence);
 		
 		return newSequence;
 	}
