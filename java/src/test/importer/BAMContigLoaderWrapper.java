@@ -175,6 +175,9 @@ System.out.println("DONE : addMappingsToContig " + referenceName);
 // System.out.println("RETURNED buildSequenceToContigMapping " + cigar);
 
 		Sequence sequence = brl.findOrCreateSequence(record);
+		
+		sequence.setDNA(null);
+		sequence.setQuality(null);
 
 // System.out.println("RETURNED from findOrCreateSequence");
 		  
