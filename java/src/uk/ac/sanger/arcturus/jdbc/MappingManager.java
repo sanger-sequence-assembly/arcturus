@@ -1,5 +1,6 @@
 package uk.ac.sanger.arcturus.jdbc;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.data.GenericMapping.Direction;
 
@@ -30,13 +31,17 @@ public class MappingManager extends AbstractManager {
 	protected PreparedStatement pstmtSelectSequenceToContigMappings = null;
 	protected PreparedStatement pstmtSelectSegment = null;
 	
-//	protected PreparedStatement pstmtSelect;
-//	protected PreparedStatement pstmtSelect;
+	private boolean allowDuplicateSequences = false;
 	
 	public MappingManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		super(adb);
 
         cacheByChecksum = new HashMap<String,CanonicalMapping>();
+        
+        allowDuplicateSequences = Boolean.getBoolean("mappingmanager.allowduplicatesequences");
+        
+        if (allowDuplicateSequences)
+        	System.err.println("The mapping manager *WILL* ignore duplicate sequences");
 		
 		try {
 			setConnection(adb.getDefaultConnection());
@@ -49,9 +54,6 @@ public class MappingManager extends AbstractManager {
 	protected void prepareConnection() throws SQLException {
 		String query;
 
-// set up prepared statements for importing mappings into the database
-System.out.println("Preparing Mapping Manager queries");
-
         query = "insert into CANONICALMAPPING (cspan,rspan,cigar) values (?,?,?)";
         pstmtInsertCanonicalMapping = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
 
@@ -60,10 +62,8 @@ System.out.println("Preparing Mapping Manager queries");
 		pstmtInsertInSequenceToContig = conn.prepareStatement(query);
 		
 		query = "insert into PARENT2CONTIG (contig_id,parent_id,mapping_id,coffset,roffset,direction,weight) "
-			  + "values (?,?,?,?,?,?,?)"; // or no offsets ?
+			  + "values (?,?,?,?,?,?,?)";
 		pstmtInsertInParentToContig   = conn.prepareStatement(query);
-
-// set up prepared statements for retrieving Canonical Mappings from the database
 
 		query = "select mapping_id,cspan,rspan,cigar from CANONICALMAPPING";
 		pstmtSelectAllCanonicalMappings = conn.prepareStatement(query);
@@ -73,8 +73,6 @@ System.out.println("Preparing Mapping Manager queries");
 		
 		query = "select mapping_id,cspan,rspan from CANONICALMAPPING where cigar = ?";
 		pstmtSelectCanonicalMappingByCigarString= conn.prepareStatement(query);
-
-// retrieval of Generic Mappings		
 		
 		query = "select seq_id,SEQ2CONTIG.mapping_id,coffset,roffset,direction,cspan,rspan,cigar"
 			  + "  from SEQ2CONTIG join CANONICALMAPPING using (mapping_id)"
@@ -83,8 +81,6 @@ System.out.println("Preparing Mapping Manager queries");
 		
 		query = "select cstart,rstart,length from SEGMENT where mapping_id = ?";
 		pstmtSelectSegment = conn.prepareStatement(query); // only apply to regular mapping
-	
-// retrieval of mappings old-style
 		
 		query = "select seq_id,mapping_id,cstart,cfinish,direction"
 			  + "  from MAPPING"
@@ -92,10 +88,6 @@ System.out.println("Preparing Mapping Manager queries");
 		
 		query = "select cstart,rstart,length from SEGMENT where mapping_id=?";
 	}
-
-/**
- * preload cache with all occurring canonical mappings	`	
- */
 	
     public void clearCache() {
     	cacheByChecksum.clear();
@@ -103,7 +95,11 @@ System.out.println("Preparing Mapping Manager queries");
 
     public void preload() throws ArcturusDatabaseException {
         clearCache();
-Utility.report("Building Canonical Mapping hash");
+    
+        Utility.report("Building Canonical Mapping hash");
+	
+        long t0 = System.currentTimeMillis();
+        
 	    try {
 	    	ResultSet rs = pstmtSelectAllCanonicalMappings.executeQuery();
 		    
@@ -112,12 +108,15 @@ Utility.report("Building Canonical Mapping hash");
         	    int refSpan = rs.getInt(2);
         	    int subSpan = rs.getInt(3);
         	    String cigar = rs.getString(4);
-//Utility.report("Added entry " + cigar);
+
 	    	    CanonicalMapping mapping = new CanonicalMapping(mapping_id,refSpan,subSpan,cigar);
         	    cacheByChecksum.put(cigar,mapping);
 		    }
 		    rs.close();
-Utility.report("DONE Building Canonical Mapping hash " + cacheByChecksum.size());
+		    
+		    long dt = System.currentTimeMillis() - t0;
+		    Utility.report("DONE Building Canonical Mapping hash " + cacheByChecksum.size() +
+		    		" entries in " + dt + " ms");
 	    }
 	    catch (SQLException e) {
 	        adb.handleSQLException(e,"Failed to build the canonical mapping cache", conn, adb);
@@ -235,11 +234,18 @@ Utility.report("DONE Building Canonical Mapping hash " + cacheByChecksum.size())
 	public boolean putSequenceToContigMappings(Contig contig) throws ArcturusDatabaseException {
 
 		SequenceToContigMapping[] mappings = contig.getSequenceToContigMappings();
+		
+		int failures = 0;
 
-		for (int i=0 ; i < mappings.length ; i++) {
-	    	if (!storeSequenceToContigMapping(mappings[i]))
-	    		return false;
+		for (int i = 0; i < mappings.length; i++) {
+	    	if (!storeSequenceToContigMapping(mappings[i])) {
+	    		if (allowDuplicateSequences)
+	    			failures++;
+	    		else
+	    			return false;
+	    	}
 	    }
+		
 	    return true;
 	}
 	
@@ -252,7 +258,6 @@ Utility.report("DONE Building Canonical Mapping hash " + cacheByChecksum.size())
 			throw new IllegalArgumentException("Mapping has no Sequence or Contig reference");
 		
 		try {
-
             pstmtInsertInSequenceToContig.setInt(1, mapping.getContig().getID());
             pstmtInsertInSequenceToContig.setInt(2, mapping.getSequence().getID());
             pstmtInsertInSequenceToContig.setInt(3, cm.getMappingID());		    
@@ -265,8 +270,21 @@ Utility.report("DONE Building Canonical Mapping hash " + cacheByChecksum.size())
             return rc == 1;
 		}
 		catch (SQLException e) {
-	        adb.handleSQLException(e,"Failed to insert new Sequence-Contig Mapping", conn, adb);			
+			String sqlState = e.getSQLState();
+			
+			if (allowDuplicateSequences && sqlState.equalsIgnoreCase("23000")) {
+				String readName = mapping.getSequence().getRead().getUniqueName();
+				String contigName = mapping.getContig().getName();
+				
+				String message = "The read " + readName + " appears more than once in contig " + contigName;
+				
+				Arcturus.logWarning(message);
+				
+				return true;
+			} else	        
+				adb.handleSQLException(e,"Failed to insert new Sequence-Contig Mapping", conn, adb);			
 		}
+		
 		return false;
 	}
 	
