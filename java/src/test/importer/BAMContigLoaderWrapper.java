@@ -23,11 +23,18 @@ public class BAMContigLoaderWrapper extends BAMContigLoader {
 		super(adb,brl);
 	}
 
-    public void processFile(SAMFileReader reader, Project project) throws ArcturusDatabaseException {
+    public void processFile(SAMFileReader reader, Project project, String contigName) throws ArcturusDatabaseException {
     	
     	System.out.println("USING TEST SCRIPT");
 	    	
-	    Contig[] contigs = getContigs(reader);
+	    Contig[] contigs;
+	    
+	    if (contigName == null)
+	    	contigs = getContigs(reader);
+	    else {
+	    	contigs = new Contig[1];
+	    	contigs[0] = new Contig(contigName);
+	    }
 	    
 	    for (Contig contig : contigs)
 	    	contig.setProject(project);
@@ -38,7 +45,7 @@ public class BAMContigLoaderWrapper extends BAMContigLoader {
 
 	    adb.preloadCanonicalMappings();
 
-	    addMappingsToContigs(contigs,reader);
+	    addMappingsToContigs(contigs, reader);
 	    
     }
 	

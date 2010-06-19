@@ -20,6 +20,7 @@ public class BAMContigLoaderTest {
 		String instance = null;
 		String organism = null;
 		boolean preloadReads = false;
+		String contigName = null;
 		
 	    for (int i = 0; i < args.length; i++) {
             if (args[i].equalsIgnoreCase("-in"))
@@ -32,6 +33,8 @@ public class BAMContigLoaderTest {
                 projectName = args[++i];
             else if (args[i].equalsIgnoreCase("-assemblyname"))
                 assemblyName = args[++i];
+            else if (args[i].equalsIgnoreCase("-contigname"))
+            	contigName = args[++i];
             else if (args[i].equalsIgnoreCase("-preload"))
                 preloadReads = true;
             else {
@@ -80,7 +83,7 @@ if (adb != null)
   			    brl.processFile(reader);
   			    
 			BAMContigLoaderWrapper bcl = new BAMContigLoaderWrapper(adb,brl);	        
-	        bcl.processFile(reader,project);
+	        bcl.processFile(reader, project, contigName);
 	    }
 	    catch(Exception e) {
 	    	Arcturus.logWarning("Failed to initialise or execute the contig loader", e);
