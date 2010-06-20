@@ -169,6 +169,8 @@ System.out.println("DONE : addMappingsToContig " + referenceName);
 	    catch (ArcturusDatabaseException e) {
 	        Arcturus.logWarning(e);
 	    }
+	    
+	    contig.setSequenceToContigMappings(null);
     }
 	  
 	private SequenceToContigMapping buildSequenceToContigMapping(SAMRecord record, Contig contig) throws ArcturusDatabaseException {
