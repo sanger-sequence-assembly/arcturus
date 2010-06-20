@@ -129,6 +129,17 @@ System.out.println("addMappingsToContigs " + contigs.length);
     		
     	}
     }
+    
+    private String memoryUsage() {
+    	Runtime rt = Runtime.getRuntime();
+    	
+    	long totalMemory = rt.totalMemory()/1024;
+    	long freeMemory = rt.freeMemory()/1024;
+    	
+    	long usedMemory = totalMemory - freeMemory;
+    	
+    	return "used = " + usedMemory + " kb, free = " + freeMemory + " kb, total = " + totalMemory + " kb";
+    }
 	    
 	private void addMappingsToContig(Contig contig,SAMFileReader reader) throws ArcturusDatabaseException {
 
@@ -151,7 +162,7 @@ System.out.println("addMappingsToContig " + referenceName);
 	 	    
 	 	    if ((count%10000) == 0) {
 	 	    	long dt = System.currentTimeMillis() - t0;
-	 	    	System.err.println("addMappingsToContig: " + count + " " + dt + " ms");
+	 	    	System.err.println("addMappingsToContig: " + count + "reads; " + dt + " ms; memory " + memoryUsage());
 	 	    }
 	    }
 
