@@ -46,7 +46,11 @@ public class BAMContigLoaderWrapper extends BAMContigLoader {
 
 //	    identifyParentsForContigs(contigs,reader);
 
+	    System.out.println("Memory usage: " + memoryUsage());
+	    
 	    adb.preloadCanonicalMappings();
+
+	    System.out.println("Memory usage: " + memoryUsage());
 
 	    addMappingsToContigs(contigs, reader);
 	    
