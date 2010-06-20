@@ -8,6 +8,7 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import java.sql.Connection;
+import java.text.DecimalFormat;
 import java.util.*;
 
 import uk.ac.sanger.arcturus.data.*;
@@ -18,9 +19,11 @@ import net.sf.samtools.*;
 import net.sf.samtools.util.CloseableIterator;
 
 public class BAMContigLoaderWrapper extends BAMContigLoader {
+	private DecimalFormat format = new DecimalFormat();
 	
 	public BAMContigLoaderWrapper(ArcturusDatabase adb, BAMReadLoader brl) throws ArcturusDatabaseException {
 		super(adb,brl);
+		format.setGroupingSize(3);
 	}
 
     public void processFile(SAMFileReader reader, Project project, String contigName) throws ArcturusDatabaseException {
@@ -138,7 +141,9 @@ System.out.println("addMappingsToContigs " + contigs.length);
     	
     	long usedMemory = totalMemory - freeMemory;
     	
-    	return "used = " + usedMemory + " kb, free = " + freeMemory + " kb, total = " + totalMemory + " kb";
+    	return "used = " + format.format(usedMemory) + " kb, free = " +
+    		format.format(freeMemory) + " kb, total = " +
+    		format.format(totalMemory) + " kb";
     }
 	    
 	private void addMappingsToContig(Contig contig,SAMFileReader reader) throws ArcturusDatabaseException {
@@ -162,7 +167,8 @@ System.out.println("addMappingsToContig " + referenceName);
 	 	    
 	 	    if ((count%10000) == 0) {
 	 	    	long dt = System.currentTimeMillis() - t0;
-	 	    	System.err.println("addMappingsToContig: " + count + "reads; " + dt + " ms; memory " + memoryUsage());
+	 	    	System.err.println("addMappingsToContig: " + format.format(count) + " reads; " +
+	 	    			format.format(dt) + " ms; memory " + memoryUsage());
 	 	    }
 	    }
 
