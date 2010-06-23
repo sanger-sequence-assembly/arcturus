@@ -23,6 +23,8 @@ public class SAMContigExporter {
 	
 	private final int CONNECTION_VALIDATION_TIMEOUT = 10;
 	
+	private final int FASTQ_QUALITY_OFFSET = 33;
+	
 	private static final String GET_ALIGNMENT_DATA =
 		" select RN.readname,RN.flags,SC.coffset,SC.direction,CM.cigar,S.seq_id,S.seqlen,S.sequence,S.quality" +
 		" from SEQ2CONTIG SC left join (CANONICALMAPPING CM,SEQUENCE S,SEQ2READ SR,READNAME RN) using (mapping_id) " +
@@ -75,7 +77,7 @@ public class SAMContigExporter {
 		}
 	}
 	
-	private void writeAlignment(ResultSet rs, String contigName, PrintWriter pw) throws SQLException {
+	private void writeAlignment(ResultSet rs, String contigName, PrintWriter pw) throws SQLException, ArcturusDatabaseException {
 		int column = 1;
 		
 		String readname = rs.getString(column++);
@@ -94,7 +96,8 @@ public class SAMContigExporter {
 			} catch (DataFormatException e) {
 				Arcturus.logSevere("Failed to decompress DNA for sequence ID=" + seq_id, e);
 			}
-		}
+		} else
+			throw new ArcturusDatabaseException("Missing DNA data for sequence ID=" + seq_id);
 		
 		if (quality != null) {
 			try {
@@ -102,12 +105,18 @@ public class SAMContigExporter {
 			} catch (DataFormatException e) {
 				Arcturus.logSevere("Failed to decompress quality data for sequence ID=" + seq_id, e);
 			}
-		}
+		} else
+			throw new ArcturusDatabaseException("Missing quality data for sequence ID=" + seq_id);
 		
 		boolean forward = direction.equalsIgnoreCase("Forward");
 		
-		if (sequence != null && !forward)
+		if (!forward) {
 			sequence = Utility.reverseComplement(sequence);
+			quality = Utility.reverseQuality(quality);
+		}
+		
+		for (int i = 0; i < quality.length; i++)
+			quality[i] += FASTQ_QUALITY_OFFSET;
 		
 		flags = Utility.maskReadFlags(flags);
 		
@@ -122,8 +131,16 @@ public class SAMContigExporter {
 			e.printStackTrace();
 		}
 		
+		String qualityString = null;
+		
+		try {
+			qualityString = new String(quality, "US-ASCII");
+		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
+		}
+		
 		pw.println(readname + " " + flags + " " + contigName + " " + contigOffset + " * " +
-				cigar + " * * * " + DNA + " *");
+				cigar + " * * * " + DNA + " " + qualityString);
 	}
 	
 	private void checkConnection() throws SQLException, ArcturusDatabaseException {
