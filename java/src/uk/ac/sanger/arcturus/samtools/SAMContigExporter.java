@@ -25,6 +25,10 @@ public class SAMContigExporter {
 	
 	private final int FASTQ_QUALITY_OFFSET = 33;
 	
+	private final int DEFAULT_MAPPING_QUALITY = 255;
+	
+	private final char TAB = '\t';
+	
 	private static final String GET_ALIGNMENT_DATA =
 		" select RN.readname,RN.flags,SC.coffset,SC.direction,CM.cigar,S.seq_id,S.seqlen,S.sequence,S.quality" +
 		" from SEQ2CONTIG SC left join (CANONICALMAPPING CM,SEQUENCE S,SEQ2READ SR,READNAME RN) using (mapping_id) " +
@@ -51,7 +55,7 @@ public class SAMContigExporter {
 			throw new ArcturusDatabaseException("Cannot export a null contig");
 		
 		if (contig.getID() <= 0)
-			throw new ArcturusDatabaseException("Canot export a contig without a valid ID");
+			throw new ArcturusDatabaseException("Cannot export a contig without a valid ID");
 		
 		String contigName = "Contig" + contig.getID();
 		
@@ -138,8 +142,9 @@ public class SAMContigExporter {
 			e.printStackTrace();
 		}
 		
-		pw.println(readname + " " + flags + " " + contigName + " " + contigOffset + " * " +
-				cigar + " * * * " + DNA + " " + qualityString);
+		pw.println(readname + TAB + flags + TAB + contigName + TAB + contigOffset +
+				TAB + DEFAULT_MAPPING_QUALITY +
+				TAB + cigar + TAB + "*\t0\t0\t" + DNA + TAB + qualityString);
 	}
 	
 	private void checkConnection() throws SQLException, ArcturusDatabaseException {
