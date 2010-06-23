@@ -28,8 +28,7 @@ public class SAMContigExporter {
 	private static final String GET_ALIGNMENT_DATA =
 		" select RN.readname,RN.flags,SC.coffset,SC.direction,CM.cigar,S.seq_id,S.seqlen,S.sequence,S.quality" +
 		" from SEQ2CONTIG SC left join (CANONICALMAPPING CM,SEQUENCE S,SEQ2READ SR,READNAME RN) using (mapping_id) " +
-		" where SC.contig_id=? and SC.seq_id=S.seq_id and SC.seq_id=SR.seq_id and SR.read_id=RN.read_id" +
-		" order by SC.seq_id asc";
+		" where SC.contig_id=? and SC.seq_id=S.seq_id and SC.seq_id=SR.seq_id and SR.read_id=RN.read_id";
 	
 	private PreparedStatement pstmtGetAlignmentData;
 
