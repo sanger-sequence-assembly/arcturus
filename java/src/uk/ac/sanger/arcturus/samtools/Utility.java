@@ -1,7 +1,12 @@
 package uk.ac.sanger.arcturus.samtools;
 
+import java.util.zip.DataFormatException;
+import java.util.zip.Inflater;
+
 public class Utility {
 	private static final int READ_FLAGS_MASK = 128 + 64 + 1;
+	
+	private static final Inflater decompresser = new Inflater();
 
 	public static final int maskReadFlags(int flags) {
 		return flags & READ_FLAGS_MASK;
@@ -55,6 +60,16 @@ public class Utility {
 			dst[j--] = src[i];
 		
 		return dst;
+	}
+
+	public static byte[] decodeCompressedData(byte[] compressed, int length) throws DataFormatException {
+		byte[] buffer = new byte[length];
+
+		decompresser.setInput(compressed, 0, compressed.length);
+		decompresser.inflate(buffer, 0, buffer.length);
+		decompresser.reset();
+
+		return buffer;
 	}
 
 }
