@@ -12,8 +12,10 @@ import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.samtools.SAMContigExporter;
+import uk.ac.sanger.arcturus.samtools.SAMContigExporterEvent;
+import uk.ac.sanger.arcturus.samtools.SAMContigExporterEventListener;
 
-public class ContigExporter {
+public class ContigExporter implements SAMContigExporterEventListener {
 	public static void main(String[] args) {
 		String instanceName = null;
 		String organismName = null;
@@ -51,7 +53,9 @@ public class ContigExporter {
 			
 			SAMContigExporter exporter = new SAMContigExporter(adb);
 			
-			exporter.exportContigsForProject(project, pw);
+			ContigExporter ce = new ContigExporter();
+			
+			ce.run(exporter, project, pw);
 			
 			pw.close();
 		}
@@ -69,6 +73,13 @@ public class ContigExporter {
 		System.exit(0);
 	}
 	
+	public void run(SAMContigExporter exporter, Project project, PrintWriter pw)
+		throws ArcturusDatabaseException {		
+		exporter.setSAMContigExporterEventListener(this);
+		
+		exporter.exportContigsForProject(project, pw);
+	}
+	
 	private static void printUsage(PrintStream ps) {
 		ps.println("MANDATORY PARAMETERS");
 		ps.println("\t-instance\tThe name of the instance");
@@ -78,5 +89,9 @@ public class ContigExporter {
 		ps.println();
 		ps.println("OPTIONAL PARAMETERS");
 		ps.println("\t-assembly\tThe name of the assembly, to disambiguate projects");
+	}
+
+	public void contigExporterUpdate(SAMContigExporterEvent event) {
+		System.err.println(event.getType() + " : " + event.getValue());
 	}
 }
