@@ -17,6 +17,7 @@ import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
+import uk.ac.sanger.arcturus.samtools.SAMContigExporterEvent.Type;
 
 public class SAMContigExporter {
 	private ArcturusDatabase adb;
@@ -37,6 +38,10 @@ public class SAMContigExporter {
 		" order by SC.coffset asc";
 	
 	private PreparedStatement pstmtGetAlignmentData;
+	
+	private SAMContigExporterEvent event = new SAMContigExporterEvent(this);
+	
+	private SAMContigExporterEventListener listener = null;
 
 	public SAMContigExporter(ArcturusDatabase adb) {
 		this.adb = adb;
@@ -52,13 +57,26 @@ public class SAMContigExporter {
 	}
 	
 	public void exportContigSet(Set<Contig> contigSet, PrintWriter pw) throws ArcturusDatabaseException {
+		notifyEvent(Type.START_CONTIG_SET, 0);
+		
 		pw.println("@PG\tID:" + getClass().getName());
 		
 		for (Contig contig : contigSet)
 			pw.println("@SQ\tSN:Contig" + contig.getID() + "\tLN:" + contig.getLength());
 		
-		for (Contig contig : contigSet)
+		int count = 0;
+		
+		for (Contig contig : contigSet) {
+			count++;
+			
+			notifyEvent(Type.START_CONTIG, count);
+			
 			exportContig(contig, pw);
+
+			notifyEvent(Type.FINISH_CONTIG, count);
+		}
+		
+		notifyEvent(Type.FINISH_CONTIG_SET, 0);
 	}
 	
 	public void exportContig(Contig contig, PrintWriter pw) throws ArcturusDatabaseException {
@@ -67,7 +85,7 @@ public class SAMContigExporter {
 		
 		if (contig.getID() <= 0)
 			throw new ArcturusDatabaseException("Cannot export a contig without a valid ID");
-		
+			
 		String contigName = "Contig" + contig.getID();
 		
 		try {
@@ -79,12 +97,20 @@ public class SAMContigExporter {
 			
 			int count = 0;
 			
+			notifyEvent(Type.READ_COUNT_UPDATE, count);
+			
 			while (rs.next()) {
-				count++;
 				writeAlignment(rs, contigName, pw);
+			
+				count++;
+				
+				if ((count % 10000) == 0)
+					notifyEvent(Type.READ_COUNT_UPDATE, count);
 			}
 			
 			rs.close();
+
+			notifyEvent(Type.READ_COUNT_UPDATE, count);
 		}
 		catch (SQLException e) {
 			adb.handleSQLException(e, "An error occurred when exporting a contig", conn, this);
@@ -181,5 +207,18 @@ public class SAMContigExporter {
 	              ResultSet.CONCUR_READ_ONLY);
 		
 		pstmtGetAlignmentData.setFetchSize(Integer.MIN_VALUE);
+	}
+	
+	public void setSAMContigExporterEventListener(SAMContigExporterEventListener listener) {
+		this.listener = listener;
+	}
+	
+	private void notifyEvent(Type type, int value) {
+		if (listener == null)
+			return;
+		
+		event.setTypeAndValue(type, value);
+		
+		listener.contigExporterUpdate(event);
 	}
 }
