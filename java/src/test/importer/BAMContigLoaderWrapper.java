@@ -7,16 +7,19 @@ import uk.ac.sanger.arcturus.samtools.Utility;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
-import java.sql.Connection;
+//import java.sql.Connection;
 import java.text.DecimalFormat;
 import java.util.*;
+import java.io.PrintStream;
 
 import uk.ac.sanger.arcturus.data.*;
-import uk.ac.sanger.arcturus.data.GenericMapping.Direction;
-import uk.ac.sanger.arcturus.jdbc.*;
 
 import net.sf.samtools.*;
 import net.sf.samtools.util.CloseableIterator;
+
+import org.jgrapht.graph.DefaultWeightedEdge;
+import org.jgrapht.graph.SimpleDirectedWeightedGraph;
+
 
 public class BAMContigLoaderWrapper extends BAMContigLoader {
 	private DecimalFormat format = new DecimalFormat();
@@ -42,23 +45,53 @@ public class BAMContigLoaderWrapper extends BAMContigLoader {
 	    for (Contig contig : contigs)
 	    	contig.setProject(project);
 
-//	    prepareLinkManagerCache(adb, project);
+System.out.println("before LM cache Memory usage: " + memoryUsage());
 
-//	    identifyParentsForContigs(contigs,reader);
+	    prepareLinkManagerCache(adb, project);
 
-	    System.out.println("Memory usage: " + memoryUsage());
+System.out.println("after LM cache Memory usage: " + memoryUsage());
+
+	    findParentsForContigs(contigs,reader);
 	    
+System.out.println("Building Graph");
+	    
+	    graph = gbuilder.identifyParentsForContigs(contigs,reader);
+	    
+	    discardLinkManagerCache(adb);
+
+System.out.println("after LM cache removal: " + memoryUsage());
+
+// get sub graphs
+System.out.println("Analysing SubGraphs");
+	    
+	    Set<SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge>> subGraphs = extractor.analyseSubgraphs(graph);
+
+	    Iterator<SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge>> iterator = subGraphs.iterator();
+	    
+	    while (iterator.hasNext()) {
+	    	SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> subGraph = iterator.next();
+	    	System.out.println();
+	    	System.out.println("subgraph");
+	    	System.out.println();
+	    	displayGraph(System.out, subGraph);
+	    }
+	    
+	    System.out.println("before loading canonical mappings Memory usage: " + memoryUsage());
+	    
+	    /*
 	    adb.preloadCanonicalMappings();
 
-	    System.out.println("Memory usage: " + memoryUsage());
+	    System.out.println("after loading CMsMemory usage: " + memoryUsage());
 
 	    addMappingsToContigs(contigs, reader);
-	    
+*/	    
     }
+    
+    
 	
-/*	
-	private void identifyParentsForContigs(Contig[] contigs, SAMFileReader reader) {
-	    	
+
+	private void findParentsForContigs(Contig[] contigs, SAMFileReader reader) {
+		
 	     	for (int i=0 ; i < contigs.length ; i++) {
 	    		String referenceSequenceName = contigs[i].getName();
 	     		System.out.println("Processing contig " + referenceSequenceName);
@@ -76,24 +109,24 @@ public class BAMContigLoaderWrapper extends BAMContigLoader {
 	    		    try {
 	    			    int maskedFlags = Utility.maskReadFlags(flags);
 	    				Read read = new Read(readName,maskedFlags);
-	    		        int parent_id = adb.getCurrentContigIDForRead(read);
-//	    		        System.out.println("cpcid " + parent_id + " for readname " + readName + " flag " + flags);
-	     		        if (parent_id > 0) {
+	    		        Contig parent = adb.getCurrentContigForRead(read);	    		        
+
+	    		        if (parent != null) {
+	    		            int parent_id = parent.getID();
+
 	     		    	    int count = 0;
 	     		    	    if (graph.containsKey(parent_id))
 	     		    		    count = (Integer)graph.get(parent_id);
 	     		    	    count++;
 	     		    	    graph.put(parent_id, count);
 	     		        }
-	// either the read is not in the database, or not in a current contig (of the project)
-	     		        else if (parent_id < 0 && brl != null) { // only load if it's not in the database
-	System.out.println("Trying to load read " + readName);
-	     		            if (adb.getReadByNameAndFlags(readName,flags) == null)
-	     		            	brl.findOrCreateSequence(record);
-	     		        }
+	     		        else if (parent == null &&  brl != null) 
+	     		        	// the read is not in a current contig or not in the database; try load it
+ 		             	    brl.findOrCreateSequence(record);
+
 	     		    }
 	    		    catch (ArcturusDatabaseException e) {
-	    		    	System.err.println(e + "possibly database access lost");
+	    		    	System.err.println(e + " possibly database access lost");
 	    		    }
 	     		}
 	     		
@@ -115,140 +148,80 @@ public class BAMContigLoaderWrapper extends BAMContigLoader {
 	     		}
 	     		contigs[i].setContigToParentMappings(M.toArray(new ContigToParentMapping[0]));
 	     	}
-	// here all input contigs have parent-to-contig mappings and their weights    	
-	    }
-*/	 
+	     	
+	}	 
 	    
-
-	    
-	    
-	    
-	 
-    private void addMappingsToContigs(Contig[] contigs, SAMFileReader reader) {
-System.out.println("addMappingsToContigs " + contigs.length);
-    	for (int i=0 ; i < contigs.length ; i++) {
-    		try {
-     		    addMappingsToContig(contigs[i],reader);
-    		}
-    		catch (ArcturusDatabaseException e) {
-    		
-    		}
-    		
-    	}
-    }
-    
-    private String memoryUsage() {
-    	Runtime rt = Runtime.getRuntime();
-    	
-    	long totalMemory = rt.totalMemory()/1024;
-    	long freeMemory = rt.freeMemory()/1024;
-    	
-    	long usedMemory = totalMemory - freeMemory;
-    	
-    	return "used = " + format.format(usedMemory) + " kb, free = " +
-    		format.format(freeMemory) + " kb, total = " +
-    		format.format(totalMemory) + " kb";
-    }
-	    
-	private void addMappingsToContig(Contig contig,SAMFileReader reader) throws ArcturusDatabaseException {
-
-		String referenceName = contig.getName();
-System.out.println("addMappingsToContig " + referenceName);
-		    	    	
-	    CloseableIterator<SAMRecord> iterator = reader.query(referenceName, 0, 0, false);
-	 		
-	 	Vector<SequenceToContigMapping> M = new Vector<SequenceToContigMapping>();
-	 		
-	 	int count = 0;
-	 	long t0 = System.currentTimeMillis();
-	 	
-	    while (iterator.hasNext()) {
-	 	    SAMRecord record = iterator.next();
-	 		SequenceToContigMapping mapping = buildSequenceToContigMapping(record,contig);
-	 	    M.add(mapping);
-	 	    
-	 	    count++;
-	 	    
-	 	    if ((count%10000) == 0) {
-	 	    	long dt = System.currentTimeMillis() - t0;
-	 	    	System.err.println("addMappingsToContig: " + format.format(count) + " reads; " +
-	 	    			format.format(dt) + " ms; memory " + memoryUsage());
-	 	    }
-	    }
-
-	    long dt = System.currentTimeMillis() - t0;
- 	    System.err.println("addMappingsToContig: " + count + " " + dt + " ms");
-	    
-	    iterator.close();
-System.out.println("DONE : addMappingsToContig " + referenceName);
-	 		
-	    contig.setSequenceToContigMappings(M.toArray(new SequenceToContigMapping[0]));
-	    
-	    try {
-	        adb.putContig(contig);
-	    }
-	    catch (ArcturusDatabaseException e) {
-	        Arcturus.logWarning(e);
-	    }
-	    
-	    contig.setSequenceToContigMappings(null);
-    }
-	  
-	private SequenceToContigMapping buildSequenceToContigMapping(SAMRecord record, Contig contig) throws ArcturusDatabaseException {
-		    
-	    String cigar = record.getCigarString();
-// System.out.println("buildSequenceToContigMapping " + cigar);
-
-		CanonicalMapping mapping = new CanonicalMapping(cigar);
-		CanonicalMapping cached = adb.findOrCreateCanonicalMapping(mapping);
-		
-// System.out.println("RETURNED buildSequenceToContigMapping " + cigar);
-
-		Sequence sequence = brl.findOrCreateSequence(record);
-		
-		sequence.setDNA(null);
-		sequence.setQuality(null);
-
-// System.out.println("RETURNED from findOrCreateSequence");
-		  
-		Direction direction = record.getReadNegativeStrandFlag() ? Direction.REVERSE : Direction.FORWARD;
-		  
-Read read = sequence.getRead();
-if (cached == mapping) {
-//	System.out.println("new mapping " + cigar + " read " + read.getUniqueName());
-}
-else if (cached.getMappingID() <= 0 ){
-    System.out.println("existing mapping " + cigar + " read " + read.getUniqueName());
-	System.out.println("mapping id " + cached.getMappingID());
-	System.exit(1);
-}
-
-		int contigStartPosition = record.getAlignmentStart();
-		int contigEndPosition = record.getAlignmentEnd();
-//System.out.println("read " + read.getUniqueName() + " cstart " + contigStartPosition +
-//			         " cend " + contigEndPosition + " D: " + direction);
-		
-		return new SequenceToContigMapping(sequence,contig,cached,contigStartPosition,1,direction);
-	}
-
-	/**
-	 * 
-	 */
 	
 		public void writeImportMarker() {
 			
 		}
+		   
+	    private String memoryUsage() {
+	    	Runtime rt = Runtime.getRuntime();
+	    	
+	    	long totalMemory = rt.totalMemory()/1024;
+	    	long freeMemory = rt.freeMemory()/1024;
+	    	
+	    	long usedMemory = totalMemory - freeMemory;
+	    	
+	    	return "used = " + format.format(usedMemory) + " kb, free = " +
+	    		format.format(freeMemory) + " kb, total = " +
+	    		format.format(totalMemory) + " kb";
+	    }
+	    
+	    private boolean hasEqualVertexes(SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph) {
+	        Set<Contig> vertices = graph.vertexSet();
+	        int childCount = 0;
+	        int parentCount = 0;
+	        for (Contig contig : vertices) {
+	        	if (graph.outDegreeOf(contig) > 0)
+	        		childCount++;
+	        	if (graph.inDegreeOf(contig) > 0)
+	        		parentCount++;
+	        }
+	        return childCount == 1 && parentCount == 1;
+	    }
+	    
+	    private void displayGraph(PrintStream ps, SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph) {
+	        Set<Contig> vertices = graph.vertexSet();
+	       
+	        ps.println("CHILD VERTICES");
+	       
+	        List<Contig> children = new Vector<Contig>();
+	       
+	        for (Contig contig : vertices) {
+	            if (graph.outDegreeOf(contig) > 0) {
+	                ps.println("\t" + contig);
+	                children.add(contig);
+	            }
+	        }
+	       
+	        ps.println();
+	       
+	        ps.println("PARENT VERTICES");
+	       
+	        for (Contig contig : vertices) {
+	            if (graph.inDegreeOf(contig) > 0)
+	                ps.println("\t" + contig);
+	        }
+	       
+	        ps.println();
+	       
+	        ps.println("EDGES");
+	       
+	        for (Contig child : children) {
+	            Set<DefaultWeightedEdge> outEdges = graph.outgoingEdgesOf(child);
+	           
+	            for (DefaultWeightedEdge outEdge : outEdges) {
+	                Contig parent = graph.getEdgeTarget(outEdge);
+	                double weight = graph.getEdgeWeight(outEdge);
+	               
+	                ps.println("\t" + child + " ---[" + weight + "]---> " + parent);
+	            }
+	           
+	            ps.println();
+	        }
+	    }
 		
-		private int getLinkManagerCacheSize(ArcturusDatabase adb) {
-			int size = 0;
-		
-		    if (adb instanceof ArcturusDatabaseImpl) {
-		        ArcturusDatabaseImpl adbi = (ArcturusDatabaseImpl)adb;
-		        LinkManager lm = (LinkManager)adbi.getManager(ArcturusDatabaseImpl.LINK);
-		        size = lm.getCacheSize();
-		    }
-		    
-		    return size;
-		}
 
 }

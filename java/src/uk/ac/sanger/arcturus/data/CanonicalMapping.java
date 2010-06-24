@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.data;
 
 import java.util.*;
+import java.lang.Character;
 
 import uk.ac.sanger.arcturus.data.Utility;
 
@@ -65,8 +66,8 @@ public class CanonicalMapping {
     }
     
     public BasicSegment[] getSegments() {
-    	if (segments == null && extendedCigarString != null)
-    		makeSegmentsFromCigarString();
+    	if (segments == null)
+    		initialise();
         return segments;
     }
    
@@ -75,8 +76,8 @@ public class CanonicalMapping {
     }
     
     public int getSubjectSpan() {
-//       	if (segments == null && extendedCigarString != null)
-//    		makeSegmentsFromCigarString();
+        if (subjectSpan == 0)
+        	initialise();
         return subjectSpan;
     }
     
@@ -85,9 +86,9 @@ public class CanonicalMapping {
     }
     
     public int getReferenceSpan() {
- //      	if (segments == null && extendedCigarString != null)
- //   		makeSegmentsFromCigarString();
-         return referenceSpan;
+        if (referenceSpan == 0)
+        	initialise();
+        return referenceSpan;
     }  
     
     public boolean equals(CanonicalMapping that) {
@@ -108,9 +109,9 @@ public class CanonicalMapping {
     }
     
     public String getExtendedCigarString() {
-    	if (extendedCigarString == null && segments != null)
-    		makeCigarStringFromSegments();
-        return this.extendedCigarString;
+    	if (extendedCigarString == null)
+    		initialise();
+        return extendedCigarString;
     }
     
     public void setCheckSum(byte[] checksum) {
@@ -134,19 +135,34 @@ public class CanonicalMapping {
     }
     
 /*
- *  methods dealing with cigar stuff    
+ *  private methods dealing with conversion of cigar string into segments and vice versa    
  */
-    private static final byte D = 68;
-    private static final byte H = 72;
-    private static final byte I = 73;
-    private static final byte M = 77;
-    private static final byte N = 78;
-    private static final byte P = 80;
-    private static final byte S = 83;
-    private static final byte X = 88;
+    
+    private void initialise() {
+/*
+    	if (segments == null && extendedCigarString != null)
+    		makeSegmentsFromCigarString();
+*/
+    	if (extendedCigarString == null && segments != null)
+    		makeCigarStringFromSegments();
+// stubs to be removed later
+    	if (referenceSpan == 0) {
+     	    this.referenceSpan = 1;
+    	    this.subjectSpan = 1;
+    	}
+    }
+    
+    private static final byte D = (byte)'D'; // insertion on reference (deletion with respect to)
+    private static final byte H = (byte)'H'; // hard-clipping (of no effect here)
+    private static final byte I = (byte)'I'; // insertion on subject
+    private static final byte M = (byte)'M'; // match with reference
+    private static final byte N = (byte)'N'; // long skip on reference
+    private static final byte P = (byte)'P'; // pad in both reference and subject
+    private static final byte S = (byte)'S'; // soft clip of subject (zero-point shift)
+    private static final byte X = (byte)'X'; // substitution 
        
     private void makeSegmentsFromCigarString() {
-    	// take cigar string and generate segments TO BE TESTED
+    	// take cigar string and generate segments TO BE TESTED and DEVELOPED
     	referenceSpan = 0;
     	subjectSpan = 0;
 
@@ -158,9 +174,12 @@ public class CanonicalMapping {
     	int number = 0;
     	int offset = 0;
    	    for (int i=0 ; i < cigar.length ; i++) {
-   	    	System.out.println("next byte " + i + " : " + cigar[i]);
-    	    if (cigar[i] >= 30 && cigar[i] <= 39) 
-    	    	number = number*10 + cigar[i] - 30;
+   	    	if (Character.isDigit((char)cigar[i])) {
+   	    		int value = Character.getNumericValue((char)cigar[i]);
+   	   	    	number = number*10 + value;
+   	    	}
+//    	    if (cigar[i] >= 48 && cigar[i] <= 57) 
+//    	    	number = number*10 + cigar[i] - 48;
     	    else {
     	        if (cigar[i] == D)
     	    	    referenceSpan += number;
@@ -168,7 +187,10 @@ public class CanonicalMapping {
     	    	    subjectSpan += number;
     	        else if (cigar[i] == S)
     	    	    offset += number;
-    	        else if (cigar[i] == N || cigar[i] == X) {
+    	        else if (cigar[i] == N) {
+	    	    	referenceSpan += number;
+    	        }
+    	        else if (cigar[i] == X) {
 	    	    	referenceSpan += number;
  	    	        subjectSpan += number;
     	        }
@@ -183,6 +205,8 @@ public class CanonicalMapping {
     	    	  	    Integer pad = new Integer(subjectSpan+j);
     	                PI.add(pad);
     	    	    }
+    	    	    referenceSpan += number;
+    	    	    subjectSpan += number;
     	   	    }
     	   	    else if (cigar[i] != H) { // H is silent
                     System.err.println("invalid cigar string " + extendedCigarString);
@@ -199,13 +223,17 @@ public class CanonicalMapping {
 
     private void makeCigarStringFromSegments() {
     	// take segments string and generate cigar string TO BE COMPLETED
+    	System.out.println("makeCigarStringFromSegments NOT YET OPERATIONAL");
+    	// Add stubs until this method completed
+    	this.extendedCigarString = "DUMMY";
     }
 
 /**
  *     
  * these methods are probably redundant, some functionality has to be put in Alignment Class
+ * the methods are used in the SequenceToContigMapping class  
  */
-    
+  
     public int getSubjectPositionFromReferencePosition(int rpos) {
 //        report("CanonicalMapping.getReadPositionFromContigPosition(" + rpos + ")");
      	int element = Traverser.locateElement(segments,rpos);
@@ -214,14 +242,8 @@ public class CanonicalMapping {
     	else 
     		return -1;
     }
-     
-/*  public int getReferencePositionForSubjectPosition(int spos) {
-	return -1;
-    }
-*/
-    
+
     public float getPadPositionFromReferencePosition(int deltaC) {
         return 0;
     }
- 
 }

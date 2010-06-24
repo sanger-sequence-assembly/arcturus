@@ -21,6 +21,7 @@ public class ContigLoader {
 		String instance = null;
 		String organism = null;
 		boolean preloadReads = false;
+		String contigName = null;
 		
 	    for (int i = 0; i < args.length; i++) {
             if (args[i].equalsIgnoreCase("-in"))
@@ -33,6 +34,8 @@ public class ContigLoader {
                 projectName = args[++i];
             else if (args[i].equalsIgnoreCase("-assemblyname"))
                 assemblyName = args[++i];
+            else if (args[i].equalsIgnoreCase("-contigname"))
+            	contigName = args[++i];
             else if (args[i].equalsIgnoreCase("-preloadreads"))
                 preloadReads = true;
             else {
@@ -63,23 +66,21 @@ public class ContigLoader {
  			}
  			
  // open SAM file reader and test it
- 			
- System.out.println("Try to open BAM file " + file); 	    	
-
+ 
  			SAMFileReader.setDefaultValidationStringency(SAMFileReader.ValidationStringency.SILENT);			
  			SAMFileReader reader = new SAMFileReader(file);
  	    	if (reader.isBinary() == false || reader.hasIndex() == false)
  	    		throw new IllegalArgumentException("The input file is not indexed: " + file);
- 	    	
+	    	
 // set up read loader/tester and process the reads
 
  	    	BAMReadLoader brl = new BAMReadLoader(adb);
-
- 	    	if (preloadReads)
- 	    		brl.processFile(reader); 	    		    	
  	    	
- 			BAMContigLoader bcl = new BAMContigLoader(adb,brl);	        
-	        bcl.processFile(reader,project);
+ 	    	if (preloadReads)
+  			    brl.processFile(reader);
+  			    
+			BAMContigLoader bcl = new BAMContigLoader(adb,brl);	        
+	        bcl.processFile(reader, project, contigName);
 	    }
 	    catch(Exception e) {
 	    	Arcturus.logWarning("Failed to initialise or execute the contig loader", e);
@@ -99,6 +100,7 @@ public class ContigLoader {
 		ps.println("OPTIONAL PARAMETERS:");
 		ps.println("\t-projectname\tName of project");		
 		ps.println("\t-assemblyname\tName of project assembly");		
+		ps.println("\t-contigname\tName of a specific reference sequence");		
 		ps.println("\t-preloadreads\tDo a read import first");		
 	}
 }

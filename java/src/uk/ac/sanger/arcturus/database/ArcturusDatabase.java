@@ -523,7 +523,9 @@ public interface ArcturusDatabase {
 	
 	public void prepareToLoadProject(Project project) throws ArcturusDatabaseException;
 	
-	public int getCurrentContigIDForRead(Read read) throws ArcturusDatabaseException;
+	public int getCurrentContigIDForRead(Read read) throws ArcturusDatabaseException; // TBD
+
+	public Contig getCurrentContigForRead(Read read) throws ArcturusDatabaseException;
 
 	public void preloadCanonicalMappings() throws ArcturusDatabaseException;	
 	

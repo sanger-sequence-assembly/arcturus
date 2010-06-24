@@ -1361,6 +1361,10 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
         return linkManager.getCurrentContigIDForRead(read);
 	}
 	
+	public synchronized Contig getCurrentContigForRead(Read read) throws ArcturusDatabaseException {
+        return linkManager.getCurrentContigForRead(read);
+	}
+	
 	/**
 	 * pre-loading canonical mapping hash
 	 */

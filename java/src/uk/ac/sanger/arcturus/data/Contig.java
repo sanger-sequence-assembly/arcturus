@@ -246,7 +246,7 @@ public class Contig extends Core {
 	
 	private int getDistinctParentCount() {
 		for (ContigToParentMapping cpmapping : cpmappings ) {
-//			int parent_id = (cpmapping.getParentContig() == null) ? 0 : cpmapping.getParentContig().getID();
+//			int parent_id = (cpmapping.getSubject) == null) ? 0 : cpmapping.getSubject().getID();
 		}
 		return 0;
 	}

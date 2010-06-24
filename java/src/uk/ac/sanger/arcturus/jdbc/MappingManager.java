@@ -87,6 +87,7 @@ public class MappingManager extends AbstractManager {
 			  + " where contig_id = ? order by mapping_id";
 		
 		query = "select cstart,rstart,length from SEGMENT where mapping_id=?";
+System.out.println("DONE Preparing Mapping Manager queries");
 	}
 	
     public void clearCache() {
@@ -362,34 +363,6 @@ public class MappingManager extends AbstractManager {
 		return numberOfMappings;
 	}
 	
-
-	
-	// REDUNDENT Canonical Mappings have cigar string as checksum	pstmtSelectCanonicalSegment 
-	public void addSegmentsToGenericMapping(CanonicalMapping mapping) throws ArcturusDatabaseException {
-		if (mapping == null || mapping.getMappingID() <= 0) 
-		    throw new IllegalArgumentException("Missing canonical mapping or invalid mapping ID");
-		try {
-			pstmtSelectSegment.setInt(1, mapping.getMappingID());
-			
-			ResultSet rs = pstmtSelectSegment.executeQuery();
-			
-			int size = rs.getFetchSize();
-			
-			BasicSegment[] segment = new BasicSegment[size];
-			
-			int ns = 0;
-	        while (rs.next()) {
-	        	int referenceStart = rs.getInt(1);
-	        	int subjectStart  = rs.getInt(2);
-	        	int segmentLength = rs.getInt(3);
-	        	segment[ns++] = new BasicSegment(referenceStart,subjectStart,segmentLength);
-	        }
-	        mapping.setSegments(segment);
-	    }
-		catch (SQLException e) {
-	        adb.handleSQLException(e,"Failed to retrieve CanonicalMapping segment(s)", conn, adb);			
-		}
-	}
 	
 	public void addMappingsToContig(Contig contig) {
 		// read mappings from MAPPING table (OLD REPRESENTATION)

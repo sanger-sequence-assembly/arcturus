@@ -170,6 +170,7 @@ public class GenericMapping<S,R> implements Comparable<GenericMapping> {
 	
 	private void buildCanonicalMapping() {
 // build the canonical mapping and offsets given the alignments	
+System.out.println("BuildCanonicalMapping");
         subjectOffset = alignments[0].getSubjectRange().getStart() - 1;
         
 	    referenceOffset = alignments[0].getReferenceRange().getStart();	

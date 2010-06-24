@@ -94,6 +94,7 @@ public class Utility {
 	}
 
 	private final static String[] COMMANDS = {
+/*
 		"delete from SEQUENCE",
 		"delete from READNAME",
 		"delete from READINFO",
@@ -105,6 +106,7 @@ public class Utility {
 		"delete from QUALITYCLIP",
 		"delete from SEQUENCEVECTOR",
 		"delete from CLONINGVECTOR"
+		*/
 	};
 	
 	private static void clearDatabase(ArcturusDatabase adb) throws ArcturusDatabaseException {

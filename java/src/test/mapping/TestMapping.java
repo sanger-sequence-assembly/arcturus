@@ -97,7 +97,7 @@ public class TestMapping {
 	    }
 	}
 
-	@Test
+//	@Test
 	public void testShiftReverse() {
 		Alignment[] af = stub2();
 		GenericMapping gm = new GenericMapping(af);
@@ -112,7 +112,45 @@ public class TestMapping {
 	    	System.out.println("test8 compare "+af[i].toString());
 	    	assertTrue(af[i].equals(an[i]));
 	    }
-	}	
+	}
+	
+	@Test
+	public void createUsingCigarString() {
+		System.out.println("TESTING cigarstring");
+		
+		String cigar = "50M1D1M1D1M1D3M";
+		CanonicalMapping mapping = new CanonicalMapping(cigar);
+		
+		int cspan = mapping.getReferenceSpan();
+		int rspan = mapping.getSubjectSpan();	
+		System.out.println("rSpan " + cspan + " sSpan " + rspan);
+		assertTrue(cspan > 0);
+		assertTrue(rspan > 0);
+		
+		GenericMapping gm = new GenericMapping(mapping,1,1,Direction.FORWARD);
+		Alignment[] alignments = gm.getAlignments();
+		if (alignments != null)
+		    list(alignments);
+	}
+	
+	@Test
+	public void createUsingCigarString2() {
+		
+		String cigar = "8M2I4M1D3M";
+		System.out.println("input cigar " + cigar);
+		CanonicalMapping mapping = new CanonicalMapping(cigar);
+		
+		int cspan = mapping.getReferenceSpan();
+		int rspan = mapping.getSubjectSpan();	
+		System.out.println("rSpan " + cspan + " sSpan " + rspan);
+		assertTrue(cspan > 0);
+		assertTrue(rspan > 0);
+		
+		GenericMapping gm = new GenericMapping(mapping,1,1,Direction.FORWARD);
+		Alignment[] alignments = gm.getAlignments();
+		if (alignments != null)
+		    list(alignments);
+	}
 	
 	
 	// Stubs
