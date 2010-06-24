@@ -305,7 +305,7 @@ public interface ArcturusDatabase {
 	public Set<Contig> getContigsByProject(int project_id,
 			int options, int minlen) throws ArcturusDatabaseException;
 
-	public Set getContigsByProject(int project_id, int options)
+	public Set<Contig> getContigsByProject(int project_id, int options)
 			throws ArcturusDatabaseException;
 
 	public Set<Contig> getChildContigs(Contig parent)

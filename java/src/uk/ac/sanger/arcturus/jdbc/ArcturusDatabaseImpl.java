@@ -708,7 +708,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		return contigManager.getContigsByProject(project_id, options, minlen);
 	}
 
-	public synchronized Set getContigsByProject(int project_id, int options)
+	public synchronized Set<Contig> getContigsByProject(int project_id, int options)
 			throws ArcturusDatabaseException {
 		return getContigsByProject(project_id, options, 0);
 	}
