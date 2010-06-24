@@ -1,11 +1,8 @@
 package uk.ac.sanger.arcturus.apps;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
-import java.util.HashSet;
-import java.util.Set;
 
 import javax.naming.NamingException;
 
@@ -77,7 +74,7 @@ public class ContigExporter {
 		ps.println("\t-instance\tThe name of the instance");
 		ps.println("\t-organism\tThe name of the organism");
 		ps.println("\t-project\tThe name of the project to be exported");
-		ps.println("\t-out\tThe name of the SAM file to be written");
+		ps.println("\t-out\t\tThe name of the SAM file to be written");
 		ps.println();
 		ps.println("OPTIONAL PARAMETERS");
 		ps.println("\t-assembly\tThe name of the assembly, to disambiguate projects");
