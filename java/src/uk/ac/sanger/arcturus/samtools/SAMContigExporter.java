@@ -14,6 +14,7 @@ import java.util.zip.DataFormatException;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Contig;
+import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
@@ -38,6 +39,15 @@ public class SAMContigExporter {
 
 	public SAMContigExporter(ArcturusDatabase adb) {
 		this.adb = adb;
+	}
+	
+	public void exportContigsForProject(Project project, PrintWriter pw) throws ArcturusDatabaseException {
+		if (project == null)
+			throw new ArcturusDatabaseException("Cannot export a null project");
+		
+		Set<Contig> contigSet = adb.getContigsByProject(project.getID(), ArcturusDatabase.CONTIG_BASIC_DATA);
+		
+		exportContigSet(contigSet, pw);
 	}
 	
 	public void exportContigSet(Set<Contig> contigSet, PrintWriter pw) throws ArcturusDatabaseException {
@@ -171,55 +181,4 @@ public class SAMContigExporter {
 		
 		pstmtGetAlignmentData.setFetchSize(Integer.MIN_VALUE);
 	}
-	
-	public static void main(String[] args) {
-		if (args.length < 2) {
-			System.err.println("You must supply one or more comma-separated contig numbers and an output file name");
-			System.exit(1);
-		}
-		
-		String contigIDs = args[0];
-		
-		File file = new File(args[1]);
-		
-		try {
-			ArcturusDatabase adb = uk.ac.sanger.arcturus.utils.Utility.getTestDatabase();
-			
-			String[] words = contigIDs.split(",");
-			
-			Set<Contig> contigSet = new HashSet<Contig>();
-			
-			for (String word : words) {
-				int contig_id = Integer.parseInt(word);
-				
-				Contig contig = adb.getContigByID(contig_id);
-			
-				if (contig != null) {
-					System.err.println("Contig " + contig_id + " has " + contig.getReadCount() + " reads");
-					contigSet.add(contig);
-				} else {
-					System.err.println("Contig " + contig_id + " does not exist in the database");
-				}			
-			}
-			
-			PrintWriter pw = new PrintWriter(file);
-			
-			SAMContigExporter exporter = new SAMContigExporter(adb);
-			
-			exporter.exportContigSet(contigSet, pw);
-			
-			pw.close();
-		}
-		catch (IOException ioe) {
-			ioe.printStackTrace();
-			System.exit(2);
-		}
-		catch (ArcturusDatabaseException e) {
-			e.printStackTrace();
-			System.exit(3);
-		}
-		
-		System.exit(0);
-	}
-	
 }
