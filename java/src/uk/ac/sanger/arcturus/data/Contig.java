@@ -137,6 +137,10 @@ public class Contig extends Core {
 		return length;
 	}
 
+	public void setReadCount(int readCount) {
+		this.nreads = readCount;
+	}
+	
 	public int getReadCount() {
 		return nreads;
 	}

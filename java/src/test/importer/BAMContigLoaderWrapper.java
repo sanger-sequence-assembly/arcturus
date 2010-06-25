@@ -51,11 +51,15 @@ System.out.println("before LM cache Memory usage: " + memoryUsage());
 
 System.out.println("after LM cache Memory usage: " + memoryUsage());
 
-	    findParentsForContigs(contigs,reader);
+//	    findParentsForContigs(contigs,reader); // for reference
 	    
 System.out.println("Building Graph");
 	    
 	    graph = gbuilder.identifyParentsForContigs(contigs,reader);
+ 
+	    System.out.println("graph built");
+    	System.out.println();
+    	gbuilder.displayGraph(System.out, graph);
 	    
 	    discardLinkManagerCache(adb);
 
@@ -73,16 +77,15 @@ System.out.println("Analysing SubGraphs");
 	    	System.out.println();
 	    	System.out.println("subgraph");
 	    	System.out.println();
-	    	displayGraph(System.out, subGraph);
+	    	gbuilder.displayGraph(System.out, subGraph);
 	    }
 	    
 	    System.out.println("before loading canonical mappings Memory usage: " + memoryUsage());
 	    
-	    /*
 	    adb.preloadCanonicalMappings();
 
 	    System.out.println("after loading CMsMemory usage: " + memoryUsage());
-
+/*
 	    addMappingsToContigs(contigs, reader);
 */	    
     }
@@ -168,60 +171,5 @@ System.out.println("Analysing SubGraphs");
 	    		format.format(freeMemory) + " kb, total = " +
 	    		format.format(totalMemory) + " kb";
 	    }
-	    
-	    private boolean hasEqualVertexes(SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph) {
-	        Set<Contig> vertices = graph.vertexSet();
-	        int childCount = 0;
-	        int parentCount = 0;
-	        for (Contig contig : vertices) {
-	        	if (graph.outDegreeOf(contig) > 0)
-	        		childCount++;
-	        	if (graph.inDegreeOf(contig) > 0)
-	        		parentCount++;
-	        }
-	        return childCount == 1 && parentCount == 1;
-	    }
-	    
-	    private void displayGraph(PrintStream ps, SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph) {
-	        Set<Contig> vertices = graph.vertexSet();
-	       
-	        ps.println("CHILD VERTICES");
-	       
-	        List<Contig> children = new Vector<Contig>();
-	       
-	        for (Contig contig : vertices) {
-	            if (graph.outDegreeOf(contig) > 0) {
-	                ps.println("\t" + contig);
-	                children.add(contig);
-	            }
-	        }
-	       
-	        ps.println();
-	       
-	        ps.println("PARENT VERTICES");
-	       
-	        for (Contig contig : vertices) {
-	            if (graph.inDegreeOf(contig) > 0)
-	                ps.println("\t" + contig);
-	        }
-	       
-	        ps.println();
-	       
-	        ps.println("EDGES");
-	       
-	        for (Contig child : children) {
-	            Set<DefaultWeightedEdge> outEdges = graph.outgoingEdgesOf(child);
-	           
-	            for (DefaultWeightedEdge outEdge : outEdges) {
-	                Contig parent = graph.getEdgeTarget(outEdge);
-	                double weight = graph.getEdgeWeight(outEdge);
-	               
-	                ps.println("\t" + child + " ---[" + weight + "]---> " + parent);
-	            }
-	           
-	            ps.println();
-	        }
-	    }
-		
 
 }
