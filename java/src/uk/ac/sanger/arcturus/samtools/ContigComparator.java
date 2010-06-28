@@ -20,11 +20,13 @@ public class ContigComparator {
 
 	protected MappingComparatorBySequenceID mappingComparator = new MappingComparatorBySequenceID();
 	
+	private final int CONNECTION_VALIDATION_TIMEOUT = 10;
+	
 	private static final String GET_ALIGNMENT_DATA = 
-		"select seq_id, mapping_id, coffset, roffset, direction" 
-	  + "  from SEQ2CONTIG"
+		"select seq_id, mapping_id, coffset, roffset, direction from SEQ2CONTIG"
 	  + " where contig_id = ?"
-	  + " order by seq_id";
+	  + " order by seq_id asc";
+	
 	private PreparedStatement pstmtGetAlignmentData;
 
 	public ContigComparator(ArcturusDatabase adb) {
@@ -36,68 +38,76 @@ public class ContigComparator {
 		prepareStatement();
 	}
 	
+	private void checkConnection() throws SQLException, ArcturusDatabaseException {
+		if (conn != null && conn.isValid(CONNECTION_VALIDATION_TIMEOUT))
+			return;
+		
+		if (conn != null) {
+			Arcturus.logInfo(getClass().getName() + ": connection was invalid, obtaining a new one");
+			conn.close();
+		}
+		
+		prepareConnection();
+	}
+
 	private void prepareStatement() throws SQLException {
 		pstmtGetAlignmentData = conn.prepareStatement(GET_ALIGNMENT_DATA, ResultSet.TYPE_FORWARD_ONLY,
 				ResultSet.CONCUR_READ_ONLY);
+		
 	    pstmtGetAlignmentData.setFetchSize(Integer.MIN_VALUE);
 	}
 	
-	public boolean equalsParentContig(Contig contig, Contig parent) throws ArcturusDatabaseException { // better name ?
-		boolean equals = false;
-		
+	public boolean equalsParentContig(Contig contig, Contig parent) throws ArcturusDatabaseException {
 		if (parent.getID() <= 0)
 			return false;
 		
 		SequenceToContigMapping[] mappings = contig.getSequenceToContigMappings();
+		
 		if (mappings == null)
 			return false;
-	
-		// sort mappings according to seq_id
 
 		Arrays.sort(mappings, mappingComparator);
-		
-		// draw the records from the database one at the time
+	    
+	    boolean equal = true;
 
 		try {
-			prepareConnection();
+			checkConnection();
 			
   		    pstmtGetAlignmentData.setInt(1, parent.getID());		
 		    ResultSet rs = pstmtGetAlignmentData.executeQuery();
 		    
 		    int n = 0;
-		    boolean equal = true;
-		    while (rs.next()) {
+		    
+		    while (equal && rs.next()) {
 		    	SequenceToContigMapping mapping = mappings[n++];
-		    	if (mapping.getSequence().getID() != rs.getInt(1))
+		    	
+		    	int parentSequenceID = rs.getInt(1);
+		    	int parentMappingID = rs.getInt(2);
+		    	int parentReferenceOffset = rs.getInt(3);
+		    	int parentSubjectOffset = rs.getInt(4);
+		    	Direction parentDirection = rs.getString(5).equalsIgnoreCase("Forward") ?
+		    			Direction.FORWARD : Direction.REVERSE;
+		    	
+		    	if (mapping.getSequence().getID() != parentSequenceID
+		    		|| mapping.getCanonicalMapping().getMappingID() != parentMappingID
+		    		|| mapping.getReferenceOffset() != parentReferenceOffset
+		    		|| mapping.getSubjectOffset() != parentSubjectOffset
+		    		|| mapping.getDirection() != parentDirection)
 		    		equal = false;
-		    	if (mapping.getCanonicalMapping().getMappingID() != rs.getInt(2))
-		    		equal = false;
-		    	if (mapping.getReferenceOffset() != rs.getInt(3))
-		    		equal = false;
-		    	if (mapping.getSubjectOffset() != rs.getInt(4))
-		    		equal = false;
-		    	Direction direction = rs.getString(5) == "Forward" ? Direction.FORWARD : Direction.REVERSE;
-		    	if (mapping.getDirection() != direction)
-		    		equal = false;
-		    	if (equal == false)
-		    		return false; 
 		    }
 
-		    rs.close();
-		
+		    rs.close();	
 		}
-		catch (Exception e) {
-            return false;
+		catch (SQLException e) {
+            adb.handleSQLException(e, "An error occurred when comparing parent and child contigs", conn, this);
 		}
-		
-	    equals = true;
- 	    return equals;
+
+		return equal;
 	}
 
 	class MappingComparatorBySequenceID implements Comparator<SequenceToContigMapping> {
 		public int compare(SequenceToContigMapping s1, SequenceToContigMapping s2) {
-			int diff = s1.getSequence().getID() - s2.getSequence().getID();
-			return diff;
+			return s1.getSequence().getID() - s2.getSequence().getID();
 		}
 
 		public boolean equals(Object obj) {
