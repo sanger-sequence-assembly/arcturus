@@ -95,7 +95,7 @@ public class ContigLoader {
 		ps.println("MANDATORY PARAMETERS:");
 		ps.println("\t-instance\tName of instance");
 		ps.println("\t-organism\tName of organism");
-		ps.println("\t-bam\t\tName of ordered and indexed bam file");
+		ps.println("\t-in\t\tName of ordered and indexed BAM file to be imported");
 		ps.println();
 		ps.println("OPTIONAL PARAMETERS:");
 		ps.println("\t-projectname\tName of project");		
