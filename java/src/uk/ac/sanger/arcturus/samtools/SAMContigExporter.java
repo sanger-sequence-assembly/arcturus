@@ -69,11 +69,11 @@ public class SAMContigExporter {
 		for (Contig contig : contigSet) {
 			count++;
 			
-			notifyEvent(Type.START_CONTIG, count);
+			notifyEvent(Type.START_CONTIG, contig.getID());
 			
 			exportContig(contig, pw);
 
-			notifyEvent(Type.FINISH_CONTIG, count);
+			notifyEvent(Type.FINISH_CONTIG, contig.getID());
 		}
 		
 		notifyEvent(Type.FINISH_CONTIG_SET, 0);
