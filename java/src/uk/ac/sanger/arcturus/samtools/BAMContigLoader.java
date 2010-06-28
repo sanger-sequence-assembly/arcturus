@@ -21,13 +21,13 @@ public class BAMContigLoader {
 	
     protected SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph;
     protected SubgraphExtractor<Contig> extractor;
-    protected GraphBuilder gbuilder;
+    protected ContigGraphBuilder gbuilder;
     
 	public BAMContigLoader(ArcturusDatabase adb, BAMReadLoader brl) throws ArcturusDatabaseException {
 		this.adb = adb;
 		this.brl = brl;
 		
-	    gbuilder = new GraphBuilder(adb, brl);
+	    gbuilder = new ContigGraphBuilder(adb, brl);
 	    extractor = new SubgraphExtractor<Contig>();
      }
 

@@ -13,11 +13,11 @@ import net.sf.samtools.util.CloseableIterator;
 import org.jgrapht.graph.DefaultWeightedEdge;
 import org.jgrapht.graph.SimpleDirectedWeightedGraph;
 
-public class GraphBuilder {
+public class ContigGraphBuilder {
 	protected ArcturusDatabase adb = null;
 	protected BAMReadLoader brl = null;
 	
-	public GraphBuilder(ArcturusDatabase adb, BAMReadLoader brl) {
+	public ContigGraphBuilder(ArcturusDatabase adb, BAMReadLoader brl) {
 		this.adb = adb;
 		this.brl = brl;
 	}
