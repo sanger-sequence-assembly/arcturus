@@ -18,35 +18,33 @@ import net.sf.samtools.util.CloseableIterator;
 
 public class BAMReadLoader {
 	private ArcturusDatabase adb;
-	private TraceServerClient traceServerClient = null;
-	private ReadNameFilter readNameFilter = new BasicCapillaryReadNameFilter();
-	private boolean skipTraceServer;
+	private TraceServerClient traceServerClient;
+	private ReadNameFilter readNameFilter;
 	
 	private int tsLookups;
 	private int tsFailures;
 	
 	private long T0;
 
-	public BAMReadLoader(ArcturusDatabase adb) throws ArcturusDatabaseException {
+	public BAMReadLoader(ArcturusDatabase adb, TraceServerClient traceServerClient, ReadNameFilter readNameFilter) throws ArcturusDatabaseException {
 		this.adb = adb;
+		this.traceServerClient = traceServerClient;
+		this.readNameFilter = readNameFilter;
+		
 		prepareLoader();
+	}
+	
+	public BAMReadLoader(ArcturusDatabase adb) throws ArcturusDatabaseException {
+		this(adb, null, null);
 	}
 	
 	private void prepareLoader() {		
 		adb.setCacheing(ArcturusDatabase.READ, false);
 		adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
 		adb.setCacheing(ArcturusDatabase.TEMPLATE, false);
-		
-		String baseURL = Arcturus.getProperty("traceserver.baseURL");
-		
-		skipTraceServer = baseURL == null || Boolean.getBoolean("skiptraceserver");
-		
-		if (!skipTraceServer)
-			traceServerClient = new TraceServerClient(baseURL);
 	}
 	
 	public void processFile(SAMFileReader reader) throws ArcturusDatabaseException {
-
 		CloseableIterator<SAMRecord> iterator = reader.iterator();
 
 		int n = 0;
@@ -99,30 +97,24 @@ public class BAMReadLoader {
 			dna = Utility.reverseComplement(dna);
 			quality = Utility.reverseQuality(quality);
 		}
-		
-		/*
+				
 		Read read = adb.getReadByNameAndFlags(readname, maskedFlags);
 		
-		if (read == null) {
-			if (traceServerClient != null && readNameFilter.accept(readname)) {
-				Sequence storedSequence = traceServerClient.fetchRead(readname);
+		if (read == null && traceServerClient != null && readNameFilter != null
+				&& readNameFilter.accept(readname)) {
+			Sequence storedSequence = traceServerClient.fetchRead(readname);
 				
-				tsLookups++;
+			tsLookups++;
 				
-				if (storedSequence != null)
-					read = storedSequence.getRead();
-				else
-					tsFailures++;
-			}
-			
-			if (read == null)
-				read = new Read(readname, maskedFlags);
-		
-			read = adb.putRead(read);
+			if (storedSequence != null) {
+				read = storedSequence.getRead();
+				adb.findSequenceByReadnameFlagsAndHash(storedSequence);
+			} else
+				tsFailures++;
 		}
-		*/
 		
-		Read read = new Read(readname, maskedFlags);
+		if (read == null)
+			read = new Read(readname, maskedFlags);
 		
 		Sequence sequence = new Sequence(0, read, dna, quality, 0);
 		

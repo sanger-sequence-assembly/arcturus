@@ -42,3 +42,5 @@ traceserver.url=http://trace3slb.internal.sanger.ac.uk:8888/get_exp
 uk.ac.sanger.arcturus.sequencingproject.factoryclassname=uk.ac.sanger.arcturus.sequencingproject.LDAPSequencingProjectFactory
 
 traceserver.baseURL=http://trace3slb.internal.sanger.ac.uk:8888/get_exp
+
+readnamefilter.regex=\\.[a-z]\\d\\w*$
