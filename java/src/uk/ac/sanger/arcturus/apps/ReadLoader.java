@@ -46,8 +46,6 @@ public class ReadLoader {
 		TraceServerClient traceServerClient = traceServerURL == null ?
 				null : new TraceServerClient(traceServerURL);
 		
-		System.err.println("TraceServerClient: " + traceServerClient);
-		
 		String regex = Arcturus.getProperty(REGEX_PROPERTY);
 		
 		ReadNameFilter readNameFilter = null;
@@ -59,8 +57,6 @@ public class ReadLoader {
 			e.printStackTrace();
 			System.exit(1);
 		}
-		
-		System.err.println("ReadNameFilter: " + readNameFilter);
 	    
 	    try {	    	
  	        ArcturusInstance ai = ArcturusInstance.getInstance(instance);
