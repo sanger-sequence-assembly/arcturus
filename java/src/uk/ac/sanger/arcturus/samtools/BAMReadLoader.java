@@ -1,6 +1,5 @@
 package uk.ac.sanger.arcturus.samtools;
 
-import java.io.File;
 import java.sql.Connection;
 import java.sql.SQLException;
 
@@ -21,6 +20,7 @@ public class BAMReadLoader {
 	private ArcturusDatabase adb;
 	private TraceServerClient traceServerClient = null;
 	private ReadNameFilter readNameFilter = new BasicCapillaryReadNameFilter();
+	private boolean skipTraceServer;
 	
 	private int tsLookups;
 	private int tsFailures;
@@ -32,15 +32,16 @@ public class BAMReadLoader {
 		prepareLoader();
 	}
 	
-	private void prepareLoader() {
-		
+	private void prepareLoader() {		
 		adb.setCacheing(ArcturusDatabase.READ, false);
 		adb.setCacheing(ArcturusDatabase.SEQUENCE, false);
 		adb.setCacheing(ArcturusDatabase.TEMPLATE, false);
 		
 		String baseURL = Arcturus.getProperty("traceserver.baseURL");
 		
-		if (baseURL != null && !Boolean.getBoolean("skiptraceserver"))
+		skipTraceServer = baseURL == null || Boolean.getBoolean("skiptraceserver");
+		
+		if (!skipTraceServer)
 			traceServerClient = new TraceServerClient(baseURL);
 	}
 	
@@ -149,32 +150,5 @@ public class BAMReadLoader {
 		System.err.println("Reads: " + n + " ; Memory used " + usedMemory + " kb, free " + freeMemory +
 				" kb, total " + totalMemory + " kb, per read " + perRead + "; time = " + dt + " ms" +
 				"; traceserver lookups = " + tsLookups + ", failures = " + tsFailures);
-	}
-
-	public static void main(String[] args) {
-		if (args.length == 0) {
-			System.err.println("You must supply a BAM file name");
-			System.exit(1);
-		}
-		
-		File file = new File(args[0]);
-		
-		try {
-			ArcturusDatabase adb = uk.ac.sanger.arcturus.utils.Utility.getTestDatabase();
-			
-			BAMReadLoader loader = new BAMReadLoader(adb);
-
-			SAMFileReader.setDefaultValidationStringency(SAMFileReader.ValidationStringency.SILENT);
-
-			SAMFileReader reader = new SAMFileReader(file);
-		
-			loader.processFile(reader);
-		}
-		catch (ArcturusDatabaseException e) {
-			e.printStackTrace();
-			System.exit(1);
-		}
-		
-		System.exit(0);
 	}
 }
