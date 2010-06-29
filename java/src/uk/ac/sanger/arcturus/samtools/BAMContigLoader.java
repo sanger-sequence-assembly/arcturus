@@ -61,15 +61,13 @@ public class BAMContigLoader {
 	    
 	    Set<SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge>> subGraph = extractor.analyseSubgraphs(graph);
 	    
-//	    System.out.println("before loading canonical mappings Memory usage: " + memoryUsage());
+	    Utility.reportMemory("Before loading canonical mappings");
 	    
-	    /*
 	    adb.preloadCanonicalMappings();
 
-	    System.out.println("after loading CMsMemory usage: " + memoryUsage());
+	    Utility.reportMemory("after loading canonical mappings");
 
-	    addMappingsToContigs(contigs, reader);
-*/	    
+	    addMappingsToContigs(contigs, reader);    
     }
  	
 

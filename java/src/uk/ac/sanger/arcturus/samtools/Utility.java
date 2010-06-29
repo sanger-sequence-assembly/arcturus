@@ -1,5 +1,6 @@
 package uk.ac.sanger.arcturus.samtools;
 
+import java.text.DecimalFormat;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
@@ -70,6 +71,38 @@ public class Utility {
 		decompresser.reset();
 
 		return buffer;
+	}
+
+	private static long T0 = System.currentTimeMillis();
+	
+	private static DecimalFormat format;
+	
+	static {
+		format = new DecimalFormat();
+		format.setGroupingSize(3);
+	}
+	
+	public static void reportMemory(String message) {
+		Runtime rt = Runtime.getRuntime();
+		
+		long freeMemory = rt.freeMemory();
+		long totalMemory = rt.totalMemory();
+		
+		long usedMemory = totalMemory - freeMemory;
+		
+		freeMemory /= 1024;
+		totalMemory /= 1024;
+		usedMemory /= 1024;
+		
+		long t = System.currentTimeMillis();
+		
+		long dt = t - T0;
+		
+		T0 = t;
+		
+		System.err.println(message + " ; Memory used " + format.format(usedMemory) + " kb, free " +
+				format.format(freeMemory) + " kb, total " + format.format(totalMemory) +
+				" kb ; dt = " + format.format(dt) + " ms");
 	}
 
 }
