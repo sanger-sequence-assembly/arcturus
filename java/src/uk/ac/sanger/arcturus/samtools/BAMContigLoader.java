@@ -18,11 +18,11 @@ public class BAMContigLoader {
 	protected ArcturusDatabase adb;
 	protected BAMReadLoader brl = null;
 	
-    //protected SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph;
     protected SubgraphExtractor<Contig> extractor;
     protected ContigGraphBuilder graphBuilder;
     protected ContigImportApprover approver;
 	protected SAMContigBuilder contigBuilder;
+	protected ContigComparator contigComparator;
 
 	public BAMContigLoader(ArcturusDatabase adb, BAMReadLoader brl) throws ArcturusDatabaseException {
 		this.adb = adb;
@@ -32,12 +32,10 @@ public class BAMContigLoader {
 	    extractor = new SubgraphExtractor<Contig>();
 	    approver = new SimpleContigImportApprover();
 	    contigBuilder = new SAMContigBuilder(adb, brl);
+	    contigComparator = new ContigComparator(adb);
      }
 
 	public void processFile(SAMFileReader reader, Project project, String contigName) throws ArcturusDatabaseException {
-    	
-    	System.out.println("USING PRODUCTION SCRIPT");
-	    	
 	    Set<Contig> contigs;
 	    
 	    if (contigName == null)
@@ -126,7 +124,7 @@ public class BAMContigLoader {
   
     private void importChildContigs(
 			SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph,
-			SAMFileReader reader) {
+			SAMFileReader reader) throws ArcturusDatabaseException {
     	Set<Contig> vertices = graph.vertexSet();
     	
     	Set<Contig> children = new HashSet<Contig>();
@@ -138,23 +136,38 @@ public class BAMContigLoader {
     		else
     			children.add(contig);
     	}
-	}
-
-    private void addMappingsToContigs(Set<Contig> contigs, SAMFileReader reader) {	
-    	for (Contig contig : contigs) {
-    		try {
-     		    contigBuilder.addMappingsToContig(contig, reader);
-    		}
-    		catch (ArcturusDatabaseException e) {
+    	
+    	boolean doImport = true;
+    	
+    	if (parents.size() == 1 && children.size() == 1) {
+    		Contig parent = getFirst(parents);
+    		Contig child = getFirst(children); 
     		
-    		}
+ 			doImport = contigComparator.equalsParentContig(child, parent);
+    	}
+    	
+    	if (doImport)
+    		addMappingsToContigs(children, reader);
+	}
+    
+    private Contig getFirst(Set<Contig> contigs) {
+    	if (contigs == null || contigs.isEmpty())
+    		return null;
+    	
+    	Iterator<Contig> iter = contigs.iterator();
+    	
+    	if (iter.hasNext())
+    		return iter.next();
+    	else
+    		return null;
+    }
+
+    private void addMappingsToContigs(Set<Contig> contigs, SAMFileReader reader)
+    	throws ArcturusDatabaseException {	
+    	for (Contig contig : contigs) {
+     		contigBuilder.addMappingsToContig(contig, reader);
     	    
-    	    try {
-    	        adb.putContig(contig);
-    	    }
-    	    catch (ArcturusDatabaseException e) {
-    	        Arcturus.logWarning(e);
-    	    }
+    	    adb.putContig(contig);
     	    
     	    contig.setSequenceToContigMappings(null);
     	}
