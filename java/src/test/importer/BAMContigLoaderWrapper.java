@@ -59,7 +59,7 @@ System.out.println("Building Graph");
  
 	    System.out.println("graph built");
     	System.out.println();
-    	gbuilder.displayGraph(System.out, graph);
+    	Utility.displayGraph(System.out, graph);
 	    
 	    discardLinkManagerCache(adb);
 
@@ -77,7 +77,7 @@ System.out.println("Analysing SubGraphs");
 	    	System.out.println();
 	    	System.out.println("subgraph");
 	    	System.out.println();
-	    	gbuilder.displayGraph(System.out, subGraph);
+	    	Utility.displayGraph(System.out, subGraph);
 	    }
 	    
 	    System.out.println("before loading canonical mappings Memory usage: " + memoryUsage());

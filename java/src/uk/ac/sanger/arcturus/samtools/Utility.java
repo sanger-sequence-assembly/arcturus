@@ -1,8 +1,17 @@
 package uk.ac.sanger.arcturus.samtools;
 
+import java.io.PrintStream;
 import java.text.DecimalFormat;
+import java.util.List;
+import java.util.Set;
+import java.util.Vector;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
+
+import org.jgrapht.graph.DefaultWeightedEdge;
+import org.jgrapht.graph.SimpleDirectedWeightedGraph;
+
+import uk.ac.sanger.arcturus.data.Contig;
 
 public class Utility {
 	private static final int READ_FLAGS_MASK = 128 + 64 + 1;
@@ -104,5 +113,45 @@ public class Utility {
 				format.format(freeMemory) + " kb, total " + format.format(totalMemory) +
 				" kb ; dt = " + format.format(dt) + " ms");
 	}
-
+	   
+    public static void displayGraph(PrintStream ps, SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph) {
+        Set<Contig> vertices = graph.vertexSet();
+       
+        ps.println("CHILD VERTICES");
+       
+        List<Contig> children = new Vector<Contig>();
+       
+        for (Contig contig : vertices) {
+            if (graph.outDegreeOf(contig) > 0) {
+                ps.println("\t" + contig);
+                children.add(contig);
+            }
+        }
+       
+        ps.println();
+       
+        ps.println("PARENT VERTICES");
+       
+        for (Contig contig : vertices) {
+            if (graph.inDegreeOf(contig) > 0)
+                ps.println("\t" + contig);
+        }
+       
+        ps.println();
+       
+        ps.println("EDGES");
+       
+        for (Contig child : children) {
+            Set<DefaultWeightedEdge> outEdges = graph.outgoingEdgesOf(child);
+           
+            for (DefaultWeightedEdge outEdge : outEdges) {
+                Contig parent = graph.getEdgeTarget(outEdge);
+                double weight = graph.getEdgeWeight(outEdge);
+               
+                ps.println("\n\t" + child + "\n\t\t|\n\t\t| [" + weight + "]\n\t\tV\n\t" + parent);
+            }
+           
+            ps.println();
+        }
+    }
 }

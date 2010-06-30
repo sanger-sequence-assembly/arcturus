@@ -30,11 +30,11 @@ public class ContigLoader {
                 instance = args[++i];
             else if (args[i].equalsIgnoreCase("-organism"))
                 organism = args[++i];
-            else if (args[i].equalsIgnoreCase("-projectname"))
+            else if (args[i].equalsIgnoreCase("-project"))
                 projectName = args[++i];
-            else if (args[i].equalsIgnoreCase("-assemblyname"))
+            else if (args[i].equalsIgnoreCase("-assembly"))
                 assemblyName = args[++i];
-            else if (args[i].equalsIgnoreCase("-contigname"))
+            else if (args[i].equalsIgnoreCase("-contig"))
             	contigName = args[++i];
             else if (args[i].equalsIgnoreCase("-preloadreads"))
                 preloadReads = true;
@@ -98,9 +98,9 @@ public class ContigLoader {
 		ps.println("\t-in\t\tName of ordered and indexed BAM file to be imported");
 		ps.println();
 		ps.println("OPTIONAL PARAMETERS:");
-		ps.println("\t-projectname\tName of project");		
-		ps.println("\t-assemblyname\tName of project assembly");		
-		ps.println("\t-contigname\tName of a specific reference sequence");		
+		ps.println("\t-project\tName of project");		
+		ps.println("\t-assembly\tName of project assembly");		
+		ps.println("\t-contig\tName of a specific reference sequence");		
 		ps.println("\t-preloadreads\tDo a read import first");		
 	}
 }

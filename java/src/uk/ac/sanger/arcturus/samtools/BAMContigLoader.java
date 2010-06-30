@@ -22,6 +22,7 @@ public class BAMContigLoader {
     protected SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph;
     protected SubgraphExtractor<Contig> extractor;
     protected ContigGraphBuilder gbuilder;
+    protected ContigImportApprover approver;
     
 	public BAMContigLoader(ArcturusDatabase adb, BAMReadLoader brl) throws ArcturusDatabaseException {
 		this.adb = adb;
@@ -29,6 +30,7 @@ public class BAMContigLoader {
 		
 	    gbuilder = new ContigGraphBuilder(adb, brl);
 	    extractor = new SubgraphExtractor<Contig>();
+	    approver = new SimpleContigImportApprover();
      }
 
 	public void processFile(SAMFileReader reader, Project project, String contigName) throws ArcturusDatabaseException {
@@ -47,27 +49,45 @@ public class BAMContigLoader {
 	    for (Contig contig : contigs)
 	    	contig.setProject(project);
 
-//	    System.out.println("before LM cache Memory usage: " + memoryUsage());
+	    Utility.reportMemory("Before loading readname-to-current contig cache");
 
 	    prepareLinkManagerCache(adb, project);
+	    
+	    Utility.reportMemory("After loading readname-to-current contig cache");
 
-//	    System.out.println("after LM cache Memory usage: " + memoryUsage());
-
-	    graph = gbuilder.identifyParentsForContigs(contigs,reader);
+	    graph = gbuilder.identifyParentsForContigs(contigs, reader);
+	    
+	    Utility.reportMemory("After creating parent-child graph");
+	    
+	    System.out.println("\n\nPARENT-CHILD GRAPH\n");
+	    
+	    Utility.displayGraph(System.out, graph);
 
 	    discardLinkManagerCache(adb);
 	    
-// get sub graphs
+	    Utility.reportMemory("After dropping readname-to-current contig cache");
+	    
+	    boolean approved = approver.approveImport(graph, project, System.err);
+	    
+	    System.out.println("Approver returned " + approved);
 	    
 	    Set<SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge>> subGraph = extractor.analyseSubgraphs(graph);
 	    
-	    Utility.reportMemory("Before loading canonical mappings");
+	    Utility.reportMemory("After analysing parent-child sub-graphs");
 	    
+	    System.out.println("\n\nPARENT-CHILD SUB-GRAPHS\n");
+	    
+	    for (SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> g : subGraph) {
+	    	Utility.displayGraph(System.out, g);
+	    	System.out.println("\n\n======================================================================\n");
+	    }
+  
 	    adb.preloadCanonicalMappings();
 
-	    Utility.reportMemory("after loading canonical mappings");
+	    Utility.reportMemory("After loading canonical mappings");
 
-	    addMappingsToContigs(contigs, reader);    
+	    if (approved && !Boolean.getBoolean("noloadcontigs"))
+	    	addMappingsToContigs(contigs, reader);    
     }
  	
 
