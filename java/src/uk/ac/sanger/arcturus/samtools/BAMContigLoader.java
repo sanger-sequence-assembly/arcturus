@@ -7,7 +7,6 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import uk.ac.sanger.arcturus.data.*;
-import uk.ac.sanger.arcturus.jdbc.*;
 import uk.ac.sanger.arcturus.graph.*;
 
 import net.sf.samtools.*;
@@ -21,16 +20,18 @@ public class BAMContigLoader {
 	
     protected SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph;
     protected SubgraphExtractor<Contig> extractor;
-    protected ContigGraphBuilder gbuilder;
+    protected ContigGraphBuilder graphBuilder;
     protected ContigImportApprover approver;
-    
+	protected SAMContigBuilder contigBuilder;
+
 	public BAMContigLoader(ArcturusDatabase adb, BAMReadLoader brl) throws ArcturusDatabaseException {
 		this.adb = adb;
 		this.brl = brl;
 		
-	    gbuilder = new ContigGraphBuilder(adb, brl);
+	    graphBuilder = new ContigGraphBuilder(adb, brl);
 	    extractor = new SubgraphExtractor<Contig>();
 	    approver = new SimpleContigImportApprover();
+	    contigBuilder = new SAMContigBuilder(adb, brl);
      }
 
 	public void processFile(SAMFileReader reader, Project project, String contigName) throws ArcturusDatabaseException {
@@ -51,11 +52,14 @@ public class BAMContigLoader {
 
 	    Utility.reportMemory("Before loading readname-to-current contig cache");
 
-	    prepareLinkManagerCache(adb, project);
-	    
+    	if (project != null)
+            adb.prepareToLoadProject(project);
+        else 
+            adb.prepareToLoadAllProjects();
+    
 	    Utility.reportMemory("After loading readname-to-current contig cache");
 
-	    graph = gbuilder.identifyParentsForContigs(contigs, reader);
+	    graph = graphBuilder.identifyParentsForContigs(contigs, reader);
 	    
 	    Utility.reportMemory("After creating parent-child graph");
 	    
@@ -63,7 +67,7 @@ public class BAMContigLoader {
 	    
 	    Utility.displayGraph(System.out, graph);
 
-	    discardLinkManagerCache(adb);
+	    adb.clearCache(ArcturusDatabase.LINK);
 	    
 	    Utility.reportMemory("After dropping readname-to-current contig cache");
 	    
@@ -71,13 +75,13 @@ public class BAMContigLoader {
 	    
 	    System.out.println("Approver returned " + approved);
 	    
-	    Set<SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge>> subGraph = extractor.analyseSubgraphs(graph);
+	    Set<SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge>> subGraphs = extractor.analyseSubgraphs(graph);
 	    
 	    Utility.reportMemory("After analysing parent-child sub-graphs");
 	    
 	    System.out.println("\n\nPARENT-CHILD SUB-GRAPHS\n");
 	    
-	    for (SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> g : subGraph) {
+	    for (SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> g : subGraphs) {
 	    	Utility.displayGraph(System.out, g);
 	    	System.out.println("\n\n======================================================================\n");
 	    }
@@ -86,106 +90,64 @@ public class BAMContigLoader {
 
 	    Utility.reportMemory("After loading canonical mappings");
 
-	    if (approved && !Boolean.getBoolean("noloadcontigs"))
-	    	addMappingsToContigs(contigs, reader);    
+	    if (approved && !Boolean.getBoolean("noloadcontigs")) {
+	    	for (SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph : subGraphs)
+	    		importChildContigs(graph, reader);  
+	    }
     }
- 	
 
-   /**
-   * Creates a list of minimal Contig objects from the given SAMFileReader 
-   * @param reader
-   *        SAMFileReader 
-   * @return an Array of Contig instances
-   */
-  
-    protected Contig[] getContigs(SAMFileReader reader) {
-
+	protected Contig[] getContigs(SAMFileReader reader) {
         SAMFileHeader header = reader.getFileHeader();
          
-     	SAMSequenceDictionary dictionary = header.getSequenceDictionary(); 
+     	SAMSequenceDictionary dictionary = header.getSequenceDictionary();
+     	
       	List<SAMSequenceRecord> seqs = dictionary.getSequences();
+      	
       	if (seqs.isEmpty())
      		throw new IllegalArgumentException("The input file is empty");
       	
         Vector<Contig> C = new Vector<Contig>();
+        
      	for (SAMSequenceRecord record : seqs) {
       		String contigName = record.getSequenceName();
+      		
       		Contig contig = new Contig(contigName);
+      		
       		contig.setLength(record.getSequenceLength());
+      		
       		C.add(contig);
-System.out.println("Added contig " + contig);
-            
+
+      		System.out.println("Added contig " + contig);
      	}
      	
         return C.toArray(new Contig[0]);      	
-    }
-    
-/**
- * Preload the readname - current_contig_id hash for a specified project or for all projects
- * @param adb
- *        ArcturusDatabase instance
- * @param project
- *        Project instance or null
- */
+    }    
+  
+    private void importChildContigs(
+			SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph2,
+			SAMFileReader reader) {
+		Set<Contig> children = new HashSet<Contig>();
+		
+	}
 
-    protected void prepareLinkManagerCache(ArcturusDatabase adb, Project project) throws ArcturusDatabaseException {
-
-    	if (project != null) {
-            adb.prepareToLoadProject(project);
-            if (getLinkManagerCacheSize(adb) == 0)
-            	adb.prepareToLoadAllProjects();
-        }
-        else 
-            adb.prepareToLoadAllProjects();
-System.out.println("Size of cache : " + this.getLinkManagerCacheSize(adb));    	
-    }
- 
- 	 
-    protected void addMappingsToContigs(Contig[] contigs, SAMFileReader reader) {
-    	
-    	SAMContigBuilder scb = new SAMContigBuilder(adb,brl);
-
-    	for (int i=0 ; i < contigs.length ; i++) {
+    private void addMappingsToContigs(Set<Contig> contigs, SAMFileReader reader) {	
+    	for (Contig contig : contigs) {
     		try {
-     		    scb.addMappingsToContig(contigs[i],reader);
+     		    contigBuilder.addMappingsToContig(contig, reader);
     		}
     		catch (ArcturusDatabaseException e) {
     		
     		}
     	    
     	    try {
-    	        adb.putContig(contigs[i]);
+    	        adb.putContig(contig);
     	    }
     	    catch (ArcturusDatabaseException e) {
     	        Arcturus.logWarning(e);
     	    }
     	    
-    	    contigs[i].setSequenceToContigMappings(null);
+    	    contig.setSequenceToContigMappings(null);
     	}
     }
- 	      
- /**
-  *    private methods accessing the LinkManager
-  */
- 
-	protected int getLinkManagerCacheSize(ArcturusDatabase adb) {
-		int size = 0;
-	
-	    if (adb instanceof ArcturusDatabaseImpl) {
-	        ArcturusDatabaseImpl adbi = (ArcturusDatabaseImpl)adb;
-	        LinkManager lm = (LinkManager)adbi.getManager(ArcturusDatabaseImpl.LINK);
-	        size = lm.getCacheSize();
-	    }
-	    
-	    return size;
-	}
-	
-	protected void discardLinkManagerCache(ArcturusDatabase adb) {
-	    if (adb instanceof ArcturusDatabaseImpl) {
-	        ArcturusDatabaseImpl adbi = (ArcturusDatabaseImpl)adb;
-	        LinkManager lm = (LinkManager)adbi.getManager(ArcturusDatabaseImpl.LINK);
-	        lm.clearCache();
-	    }
-	}
 }
 
