@@ -38,13 +38,13 @@ public class BAMContigLoader {
     	
     	System.out.println("USING PRODUCTION SCRIPT");
 	    	
-	    Contig[] contigs;
+	    Set<Contig> contigs;
 	    
 	    if (contigName == null)
 	    	contigs = getContigs(reader);
 	    else {
-	    	contigs = new Contig[1];
-	    	contigs[0] = new Contig(contigName);
+	    	contigs = new HashSet<Contig>();
+	    	contigs.add(new Contig(contigName));
 	    }
 	    
 	    for (Contig contig : contigs)
@@ -97,7 +97,7 @@ public class BAMContigLoader {
 	    }
     }
 
-	protected Contig[] getContigs(SAMFileReader reader) {
+	protected Set<Contig> getContigs(SAMFileReader reader) {
         SAMFileHeader header = reader.getFileHeader();
          
      	SAMSequenceDictionary dictionary = header.getSequenceDictionary();
@@ -107,7 +107,7 @@ public class BAMContigLoader {
       	if (seqs.isEmpty())
      		throw new IllegalArgumentException("The input file is empty");
       	
-        Vector<Contig> C = new Vector<Contig>();
+        Set<Contig> contigs = new HashSet<Contig>();
         
      	for (SAMSequenceRecord record : seqs) {
       		String contigName = record.getSequenceName();
@@ -116,12 +116,12 @@ public class BAMContigLoader {
       		
       		contig.setLength(record.getSequenceLength());
       		
-      		C.add(contig);
+      		contigs.add(contig);
 
       		System.out.println("Added contig " + contig);
      	}
      	
-        return C.toArray(new Contig[0]);      	
+        return contigs;      	
     }    
   
     private void importChildContigs(

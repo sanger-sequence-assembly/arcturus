@@ -18,7 +18,7 @@ public class SubgraphExtractor<V> {
 		Deque<V> allChildren = new ArrayDeque<V>();
 		
 		for (V vertex : vertexSet)
-			if (graph.outDegreeOf(vertex) > 0)
+			if (graph.inDegreeOf(vertex) == 0)
 				allChildren.add(vertex);
 		
 		while (!allChildren.isEmpty()) {

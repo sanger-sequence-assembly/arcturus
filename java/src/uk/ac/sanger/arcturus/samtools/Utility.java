@@ -122,7 +122,7 @@ public class Utility {
         List<Contig> children = new Vector<Contig>();
        
         for (Contig contig : vertices) {
-            if (graph.outDegreeOf(contig) > 0) {
+            if (graph.inDegreeOf(contig) == 0) {
                 ps.println("\t" + contig);
                 children.add(contig);
             }
