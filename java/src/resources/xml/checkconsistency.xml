@@ -57,7 +57,7 @@
 		
 		<query>
 		        select R.readname,DR.hits,CC.contig_id,P.name,CC.length,CC.nreads,CC.created,M.cstart,M.cfinish,M.direction
-		        from DUPLICATEREADS DR left join (READINFO R,SEQ2READ SR,MAPPING M,CURRENTCONTIGS CC,PROJECT P)
+		        from DUPLICATEREADS DR left join (READNAME R,SEQ2READ SR,MAPPING M,CURRENTCONTIGS CC,PROJECT P)
 		        on (DR.read_id=R.read_id)
 		        where R.read_id=SR.read_id and SR.seq_id=M.seq_id and M.contig_id=CC.contig_id and CC.project_id=P.project_id
 		        order by DR.read_id asc,CC.contig_id asc
@@ -131,29 +131,13 @@
 		</description>
 
 		<query>
-			select contig_id,mapping_id,MAPPING.seq_id from MAPPING left join (SEQ2READ,READINFO)
-			on (MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READINFO.read_id)
+			select contig_id,mapping_id,MAPPING.seq_id from MAPPING left join (SEQ2READ,READNAME)
+			on (MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READNAME.read_id)
 			where readname is null
 		</query>
 		
 		<format>
 			Mapping {1,number,#} in contig {0,number,#} has sequence {2,number,#} with undefined read
-		</format>
-	</test>
-
-	<test critical="NO">
-		<description>
-			Do all sequences have quality clipping data?
-		</description>
-
-		<query>
-			select SEQUENCE.seq_id from SEQUENCE left join QUALITYCLIP
-			using(seq_id)
-			where QUALITYCLIP.seq_id is null
-		</query>
-		
-		<format>
-			Sequence {0,number,#} has no quality clipping data
 		</format>
 	</test>
 
@@ -180,8 +164,8 @@
 		</description>
 
 		<query>
-			select SEQUENCE.seq_id,SEQ2READ.read_id from SEQUENCE left join (SEQ2READ,READINFO)
-			on (SEQUENCE.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READINFO.read_id)
+			select SEQUENCE.seq_id,SEQ2READ.read_id from SEQUENCE left join (SEQ2READ,READNAME)
+			on (SEQUENCE.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READNAME.read_id)
 			where readname is null and SEQ2READ.read_id is not null
 		</query>
 		
@@ -196,9 +180,9 @@
 		</description>
 
 		<query>
-			select READINFO.read_id,readname from READINFO left join
+			select READNAME.read_id,readname from READNAME left join
 			(SEQ2READ,SEQUENCE)
-			on (READINFO.read_id = SEQ2READ.read_id and SEQ2READ.seq_id = SEQUENCE.seq_id)
+			on (READNAME.read_id = SEQ2READ.read_id and SEQ2READ.seq_id = SEQUENCE.seq_id)
 			where sequence is null or quality is null
 		</query>
 		
@@ -213,8 +197,9 @@
 		</description>
 
 		<query>
-			select read_id,readname from READINFO left join TEMPLATE
-			using (template_id)
+			select RI.read_id,RN.readname from
+			(READINFO RI left join READNAME RN using (read_id))
+			left join TEMPLATE using (template_id)
 			where name is null
 		</query>
 		
