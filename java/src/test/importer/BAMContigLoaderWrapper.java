@@ -47,7 +47,7 @@ public class BAMContigLoaderWrapper extends BAMContigLoader {
 
 System.out.println("before LM cache Memory usage: " + memoryUsage());
 
-	    prepareLinkManagerCache(adb, project);
+	    //prepareLinkManagerCache(adb, project);
 
 System.out.println("after LM cache Memory usage: " + memoryUsage());
 
@@ -55,13 +55,13 @@ System.out.println("after LM cache Memory usage: " + memoryUsage());
 	    
 System.out.println("Building Graph");
 	    
-	    graph = gbuilder.identifyParentsForContigs(contigs,reader);
+	    graph = graphBuilder.identifyParentsForContigs(contigs,reader);
  
 	    System.out.println("graph built");
     	System.out.println();
     	Utility.displayGraph(System.out, graph);
 	    
-	    discardLinkManagerCache(adb);
+	    //discardLinkManagerCache(adb);
 
 System.out.println("after LM cache removal: " + memoryUsage());
 
