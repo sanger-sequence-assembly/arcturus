@@ -1,14 +1,11 @@
 package uk.ac.sanger.arcturus.samtools;
 
-import java.io.File;
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.zip.DataFormatException;
 

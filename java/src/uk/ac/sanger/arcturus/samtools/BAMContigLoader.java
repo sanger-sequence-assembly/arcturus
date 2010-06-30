@@ -2,7 +2,6 @@ package uk.ac.sanger.arcturus.samtools;
 
 import java.util.*;
 
-import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 

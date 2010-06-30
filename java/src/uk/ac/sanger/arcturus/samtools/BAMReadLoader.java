@@ -21,8 +21,6 @@ public class BAMReadLoader {
 	
 	private int tsLookups;
 	private int tsFailures;
-	
-	private long T0;
 
 	public BAMReadLoader(ArcturusDatabase adb, TraceServerClient traceServerClient, ReadNameFilter readNameFilter) throws ArcturusDatabaseException {
 		this.adb = adb;
@@ -55,9 +53,7 @@ public class BAMReadLoader {
 		try {
 			boolean savedAutoCommit = conn.getAutoCommit();
 			conn.setAutoCommit(false);
-			
-			T0 = System.currentTimeMillis();
-			
+						
 			while (iterator.hasNext()) {
 				SAMRecord record = iterator.next();
 			
