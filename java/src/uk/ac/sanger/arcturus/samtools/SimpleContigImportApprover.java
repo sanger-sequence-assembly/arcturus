@@ -23,7 +23,7 @@ public class SimpleContigImportApprover implements ContigImportApprover {
                 	return false;
         }
 
-		return false;
+		return true;
 	}
 
 	private boolean approveParentContig(Contig contig, Project targetProject, PrintStream reportStream) {
