@@ -18,7 +18,7 @@ public class BAMContigLoader {
 	protected ArcturusDatabase adb;
 	protected BAMReadLoader brl = null;
 	
-    protected SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph;
+    //protected SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph;
     protected SubgraphExtractor<Contig> extractor;
     protected ContigGraphBuilder graphBuilder;
     protected ContigImportApprover approver;
@@ -59,7 +59,8 @@ public class BAMContigLoader {
     
 	    Utility.reportMemory("After loading readname-to-current contig cache");
 
-	    graph = graphBuilder.identifyParentsForContigs(contigs, reader);
+	    SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph =
+	    	graphBuilder.identifyParentsForContigs(contigs, reader);
 	    
 	    Utility.reportMemory("After creating parent-child graph");
 	    
@@ -91,8 +92,8 @@ public class BAMContigLoader {
 	    Utility.reportMemory("After loading canonical mappings");
 
 	    if (approved && !Boolean.getBoolean("noloadcontigs")) {
-	    	for (SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph : subGraphs)
-	    		importChildContigs(graph, reader);  
+	    	for (SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> subgraph : subGraphs)
+	    		importChildContigs(subgraph, reader);  
 	    }
     }
 
@@ -124,10 +125,19 @@ public class BAMContigLoader {
     }    
   
     private void importChildContigs(
-			SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph2,
+			SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph,
 			SAMFileReader reader) {
-		Set<Contig> children = new HashSet<Contig>();
+    	Set<Contig> vertices = graph.vertexSet();
+    	
+    	Set<Contig> children = new HashSet<Contig>();
+       	Set<Contig> parents = new HashSet<Contig>();
 		
+    	for (Contig contig : vertices) {
+    		if (graph.inDegreeOf(contig) > 0)
+    			parents.add(contig);
+    		else
+    			children.add(contig);
+    	}
 	}
 
     private void addMappingsToContigs(Set<Contig> contigs, SAMFileReader reader) {	
