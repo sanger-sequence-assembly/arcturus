@@ -150,8 +150,22 @@ public class BAMContigLoader {
  				child.setSequenceToContigMappings(null);
     	}
     	
-    	if (doImport)
+    	if (doImport) {
     		storeChildContigs(children, reader);
+    		
+    		Set<DefaultWeightedEdge> edges = graph.edgeSet();
+    		
+    		for (DefaultWeightedEdge edge : edges) {
+    			Contig child = graph.getEdgeSource(edge);
+    			
+    			Contig parent = graph.getEdgeTarget(edge);
+    			
+    			int mapping_id = adb.setChildContig(parent, child);
+    			System.err.println("Parent contig #" + parent.getID() +
+    					" has child contig #" + child.getID() +
+    					" with mapping ID " + mapping_id);
+    		}
+    	}
 	}
     
     private Contig getFirst(Set<Contig> contigs) {
