@@ -310,6 +310,9 @@ public interface ArcturusDatabase {
 
 	public Set<Contig> getChildContigs(Contig parent)
 			throws ArcturusDatabaseException;
+	
+	public int setChildContig(Contig parent, Contig child)
+			throws ArcturusDatabaseException;
 
 	public Project getProjectByID(int id) throws ArcturusDatabaseException;
 

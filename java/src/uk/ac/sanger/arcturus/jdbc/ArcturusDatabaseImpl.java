@@ -730,6 +730,11 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	public synchronized Set<Contig> getChildContigs(Contig parent) throws ArcturusDatabaseException {
 		return contigManager.getChildContigs(parent);
 	}
+	
+	public int setChildContig(Contig parent, Contig child)
+		throws ArcturusDatabaseException {
+		return contigManager.setChildContig(parent, child);
+	}
 
 	public synchronized Project getProjectByID(int id) throws ArcturusDatabaseException {
 		if (logger != null && logger.isLoggable(Level.FINE))

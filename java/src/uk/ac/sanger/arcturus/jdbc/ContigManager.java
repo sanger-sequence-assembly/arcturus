@@ -43,11 +43,11 @@ public class ContigManager extends AbstractManager {
 	
 	protected PreparedStatement pstmtContigIDFromReadname = null;
 	
-	protected PreparedStatement pstmtChildContigs = null;
+	protected PreparedStatement pstmtGetChildContigs = null;
 	
 	protected PreparedStatement pstmtPutContigMetaData = null;	
 	
-	
+	protected PreparedStatement pstmtSetChildContig = null;
 
 	protected ManagerEvent event = null;
 
@@ -196,11 +196,16 @@ public class ContigManager extends AbstractManager {
 		
 		query = "select contig_id from C2CMAPPING where parent_id = ?";
 		
-		pstmtChildContigs = conn.prepareStatement(query);
+		pstmtGetChildContigs = conn.prepareStatement(query);
 		
 		query = "insert into CONTIG (gap4name,length,ncntgs,nreads,project_id,creator,created)"
 			  + "values (?,?,?,?,?,?,now())";
-		pstmtPutContigMetaData = conn.prepareStatement(query,Statement.RETURN_GENERATED_KEYS);
+		
+		pstmtPutContigMetaData = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
+		
+		query = "insert into C2CMAPPING(parent_id, contig_id) VALUES (?,?)";
+		
+		pstmtSetChildContig = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
 	}
 
 	protected void preloadSequencingVectors() throws SQLException {
@@ -1358,9 +1363,9 @@ public class ContigManager extends AbstractManager {
 		HashSet<Contig> children = new HashSet<Contig>();
 		
 		try {
-			pstmtChildContigs.setInt(1, parent.getID());
+			pstmtGetChildContigs.setInt(1, parent.getID());
 
-			ResultSet rs = pstmtChildContigs.executeQuery();
+			ResultSet rs = pstmtGetChildContigs.executeQuery();
 
 			while (rs.next()) {
 				int contig_id = rs.getInt(1);
@@ -1528,7 +1533,9 @@ System.out.println("success all " + success);
 	}
 		
 	private boolean putContigMetaData(Contig contig) throws ArcturusDatabaseException {
-
+		if (contig == null)
+			throw new ArcturusDatabaseException("Cannot store a null contig in the database");
+		
 		String gap4name = contig.getName();
 		int length = contig.getLength();
 		int ncntgs = contig.getParentContigCount();
@@ -1566,5 +1573,46 @@ System.out.println("success all " + success);
 		}
 		
 		return false;
+	}
+
+	public int setChildContig(Contig parent, Contig child) throws ArcturusDatabaseException {
+		if (parent == null)
+			throw new ArcturusDatabaseException("Cannot assign a child contig to a null parent");
+		
+		if (child == null)
+			throw new ArcturusDatabaseException("Cannot assign a null child contig to a parent contig");
+		
+		if (parent.getID() <= 0)
+			throw new ArcturusDatabaseException("Cannot assign a child to a parent whose ID is not valid");
+		
+		if (child.getID() <= 0)
+			throw new ArcturusDatabaseException("Cannot assign a child contig with an invalid ID to a parent contig");
+		
+		int mapping_id = -1;
+		
+		try {
+			pstmtSetChildContig.setInt(1, parent.getID());
+			pstmtSetChildContig.setInt(2, child.getID());
+			
+			int rc = pstmtSetChildContig.executeUpdate();
+			
+			if (rc == 1) {
+				ResultSet rs = pstmtSetChildContig.getGeneratedKeys();
+				
+				if (rs.next())
+					mapping_id = rs.getInt(1);
+				
+				rs.close();
+			}
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e,
+					"Failed to assign child contig " + child + " to parent contig " + parent,
+					conn, adb);
+			
+			return -1;
+		}
+		
+		return mapping_id;
 	}
 }
