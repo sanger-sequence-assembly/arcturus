@@ -140,13 +140,18 @@ public class BAMContigLoader {
     	
     	if (parents.size() == 1 && children.size() == 1) {
     		Contig parent = getFirst(parents);
-    		Contig child = getFirst(children); 
+    		Contig child = getFirst(children);
     		
- 			doImport = contigComparator.equalsParentContig(child, parent);
+    		contigBuilder.addMappingsToContig(child, reader);
+    		
+ 			doImport = !contigComparator.equalsParentContig(child, parent);
+ 			
+ 			if (!doImport)
+ 				child.setSequenceToContigMappings(null);
     	}
     	
     	if (doImport)
-    		addMappingsToContigs(children, reader);
+    		storeChildContigs(children, reader);
 	}
     
     private Contig getFirst(Set<Contig> contigs) {
@@ -161,7 +166,7 @@ public class BAMContigLoader {
     		return null;
     }
 
-    private void addMappingsToContigs(Set<Contig> contigs, SAMFileReader reader)
+    private void storeChildContigs(Set<Contig> contigs, SAMFileReader reader)
     	throws ArcturusDatabaseException {	
     	for (Contig contig : contigs) {
      		contigBuilder.addMappingsToContig(contig, reader);

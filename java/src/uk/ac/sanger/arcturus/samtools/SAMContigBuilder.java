@@ -31,7 +31,9 @@ public class SAMContigBuilder {
 	}
 	
 	public void addMappingsToContig(Contig contig,SAMFileReader reader) throws ArcturusDatabaseException {
-
+		if (contig.getContigToParentMappings() != null)
+			return;
+		
 		String referenceName = contig.getName();
 		    	    	
 	    CloseableIterator<SAMRecord> iterator = reader.query(referenceName, 0, 0, false);
