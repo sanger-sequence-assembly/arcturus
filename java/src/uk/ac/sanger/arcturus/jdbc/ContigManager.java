@@ -1496,21 +1496,16 @@ public class ContigManager extends AbstractManager {
 	}
 
 	public boolean putContig(Contig contig) throws ArcturusDatabaseException {
-		System.out.println("ENTER ContigManager putContig " + contig);
-
 		try {
 		    beginTransaction();
 		    
 		    boolean success = putContigMetaData(contig); // adds contig_id
-System.out.println("success meta data " + success);
 		 
 		    if (success)
  		        success = adb.putSequenceToContigMappings(contig);
-System.out.println("success mappings " + success);
 		        
 		    if (success)
  		        success = adb.putContigToParentMappings(contig);
-System.out.println("success all " + success);
 		        
 		    if (success)
  		        commitTransaction();

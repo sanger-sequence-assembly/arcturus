@@ -159,12 +159,11 @@ System.out.println("DONE Preparing Mapping Manager queries");
     }
 	
 	private boolean addCanonicalMapping(CanonicalMapping mapping) throws ArcturusDatabaseException {
-// inserts a new canonical mapping; add caching flag
 		boolean success = false;
  
         try {
             String cigar = mapping.getExtendedCigarString();
-//System.out.println("Inserting for cigar " + cigar);
+
 		    pstmtInsertCanonicalMapping.setInt(1, mapping.getReferenceSpan());
 			pstmtInsertCanonicalMapping.setInt(2, mapping.getSubjectSpan());
 			pstmtInsertCanonicalMapping.setString(3, cigar);
@@ -178,8 +177,6 @@ System.out.println("DONE Preparing Mapping Manager queries");
 				if (inserted_ID > 0) {
  				    mapping.setMappingID(inserted_ID);
 			       	cacheByChecksum.put(cigar,mapping);
-			  	   	if (inserted_ID%1000 == 0)
-			   	  		System.out.println("Canonical Mapping count " + inserted_ID);
 				    success = true;
 				}
             }
@@ -192,11 +189,9 @@ System.out.println("DONE Preparing Mapping Manager queries");
 	}
 	
 	private boolean findCanonicalMapping(CanonicalMapping mapping) throws ArcturusDatabaseException {
-		// adds canonical mapping ID to mapping; perhaps add test and caching option ?
 		String cigar = mapping.getExtendedCigarString();		
-//System.out.println("Trying database (again) for cigar " + cigar);
 		
-		try { // try the database for new data
+		try {
 			pstmtSelectCanonicalMappingByCigarString.setString(1, cigar);
 		    ResultSet rs = pstmtSelectCanonicalMappingByCigarString.executeQuery();
 						
@@ -204,7 +199,7 @@ System.out.println("DONE Preparing Mapping Manager queries");
 			    mapping.setMappingID(rs.getInt(1));
 			    mapping.setReferenceSpan(rs.getInt(2));
 			    mapping.setSubjectSpan(rs.getInt(3));
-//			              mapping.verify();
+
 			    cacheByChecksum.put(cigar,mapping);
 		    }
 			rs.close();

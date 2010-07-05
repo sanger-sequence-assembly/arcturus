@@ -64,8 +64,6 @@ public class SAMContigBuilder {
 	    }
 	    
 	    iterator.close();
-
-	    System.out.println("DONE : addMappingsToContig " + referenceName);
 	 		
 	    contig.setSequenceToContigMappings(M.toArray(new SequenceToContigMapping[0]));
     }
