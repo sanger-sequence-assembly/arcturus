@@ -227,9 +227,16 @@ public class Contig extends Core {
 	}
 	
 	public boolean equals(Object o) {
+		if (o == null)
+			return false;
+		
 		if (o instanceof Contig) {
 			Contig that = (Contig) o;
-			return (that != null && that.getID() == ID);
+			
+			if (ID > 0 || that.ID > 0)
+				return ID == that.ID;
+			else
+				return this.hashCode() == that.hashCode();
 		} else
 			return false;
 	}
