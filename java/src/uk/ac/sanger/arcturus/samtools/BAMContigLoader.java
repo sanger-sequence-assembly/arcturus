@@ -69,10 +69,6 @@ public class BAMContigLoader {
 	    
 	    Utility.reportMemory("After dropping readname-to-current contig cache");
 	    
-	    boolean approved = approver.approveImport(graph, project, System.err);
-	    
-	    System.out.println("Approver returned " + approved);
-	    
 	    Set<SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge>> subGraphs = extractor.analyseSubgraphs(graph);
 	    
 	    Utility.reportMemory("After analysing parent-child sub-graphs");
@@ -83,6 +79,10 @@ public class BAMContigLoader {
 	    	Utility.displayGraph(System.out, g);
 	    	System.out.println("\n\n======================================================================\n");
 	    }
+	    
+	    boolean approved = approver.approveImport(graph, project, System.err);
+	    
+	    System.out.println("Approver returned " + approved);
   
 	    adb.preloadCanonicalMappings();
 
@@ -92,6 +92,8 @@ public class BAMContigLoader {
 	    	for (SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> subgraph : subGraphs)
 	    		importChildContigs(subgraph, reader);  
 	    }
+	    
+	    System.out.println("\n\n===== " + getClass().getName() + " FINISHED =====\n\n");
     }
 
 	protected Set<Contig> getContigs(SAMFileReader reader) {
@@ -186,6 +188,8 @@ public class BAMContigLoader {
      		contigBuilder.addMappingsToContig(contig, reader);
     	    
     	    adb.putContig(contig);
+    	    
+    	    System.out.println("Contig " + contig + " stored in database");
     	    
     	    contig.setSequenceToContigMappings(null);
     	}
