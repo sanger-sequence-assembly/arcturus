@@ -2309,6 +2309,7 @@ sub putRead {
 
     if (my $updatehash = $options{metadata}) {
 
+my @keys = keys %$updatehash; print STDOUT "keys @keys\n";
         return 0,"no changes specified for read $readname" unless keys %$updatehash;
 
         if ($updatehash->{ligation} && $ligation_id && $template_id) {
@@ -2321,6 +2322,13 @@ sub putRead {
 	    }
         }
 
+        if ($updatehash->{basequality}) {
+            print STDOUT "Quality DATA to be updated\n";
+	    unless (&updateReadBaseQuality($dbh,$read)) {
+                return 0,"failed to update SEQUENCE table\nDBI::errstr=$DBI::errstrupdate:";
+	    }
+	}
+
         $query  = "update READINFO set ";
         $query .= " asped='".    $read->getAspedDate()."'," if $updatehash->{asped};
         $query .= " template_id=$template_id,"              if $updatehash->{template};
@@ -2331,6 +2339,8 @@ sub putRead {
         $query .= " status=$status,"                        if $updatehash->{status};
         chop $query; # remove trailing comma
         $query .= " where readname = '$readname' limit 1";
+
+        return 1,"no READINFO items to be updated" if ($query =~ /set where/);
 
         $sth = $dbh->prepare($query);
         $rc = $sth->execute();
@@ -2357,7 +2367,7 @@ sub putRead {
 			$template_id,
 			$read->getStrand(),
 			$read->getChemistry(),
-			$read->getPrimer(),
+			$read->getPrimer() || 'Unknown_primer',
 			$basecaller,
                         $status);
 
@@ -2433,6 +2443,42 @@ sub updateRead {
     return 2,"no changes indicated for read $readname" unless $updatehash;
     return $this->putRead($read,metadata=>$updatehash,@_) if $options{execute};
     return 1,$report;
+}
+
+sub updateReadBaseQuality {
+    my $dbh = shift;
+    my $read = shift;
+
+    my $readname = $read->getReadName();
+    my $length = $read->getSequenceLength();
+    my $query = "select SEQUENCE.seq_id from READINFO,SEQ2READ,SEQUENCE "
+              . " where SEQUENCE.seq_id = SEQ2READ.seq_id"
+              . "   and SEQ2READ.read_id = READINFO.read_id"
+              . "   and readname = ? and seqlen = ?";
+    my $sth = $dbh->prepare_cached($query);
+    my $rc = $sth->execute($readname,$length) || &failedQuery($query);
+    my ($seq_id) = $sth->fetchrow_array();
+    $sth->finish();
+#    print STDOUT "sequence ID $seq_id\n";
+
+    my $readseqhash = $read->getSequenceHash();
+
+    my $readbqlhash = $read->getBaseQualityHash();
+    my $readbquality = $read->getBaseQuality();
+    my $basequality = compress(pack("c*", @$readbquality));
+
+    unless ($readbqlhash && $basequality) {
+        print STDERR "BAD THINGS HAPPEN: undefined hashes for $readname\n";
+	return 0;
+    }
+
+    my $update = "update SEQUENCE set qual_hash=?, quality=?"
+               . " where seq_hash = ?  and seqlen = $length and seq_id = $seq_id";
+    $sth = $dbh->prepare($update);
+    $rc = $sth->execute($readbqlhash,$basequality,$readseqhash);
+    $sth->finish();
+print STDOUT "updated  $rc\n";
+    return $rc;
 }
 
 sub putSequenceForRead {
@@ -2995,7 +3041,9 @@ sub putTraceArchiveIdentifierForRead {
 
     &verifyParameter($read,'putTraceArchiveIdentifierForRead');
 
-    my $TAI = $read->getTraceArchiveIdentifier(asis=>1) || return; # if absent
+    my $TAI = $read->getTraceArchiveIdentifier(asis=>1);
+
+    return unless $TAI; # if absent
 
     my $readid = $read->getReadID() || return; # must have readid defined
 
@@ -3221,13 +3269,13 @@ sub getSequenceIDsForReads {
 # NOTE: this method may insert new read sequence into SEQUENCE table
     my $this = shift;
     my $reads = shift; # array ref
-    my %options = @_; # noload , blocksize , acceptversionzero
+    my %options = @_; # loadreadsequence , blocksize , acceptversionzero
 
-    &verifyParameter($reads,"getSequenceIDForReads",'ARRAY');
+    &verifyParameter($reads,"getSequenceIDsForReads",'ARRAY');
 
-    &verifyParameter($reads->[0],"getSequenceIDForReads");
+    &verifyParameter($reads->[0],"getSequenceIDsForReads");
 	
-    my $logger = $this->verifyLogger('getSequenceIDForReads'); 
+    my $logger = $this->verifyLogger('getSequenceIDsForReads');
 
 # collect data of all reads and pull out the data for version 0
 # test for each read the sequence and quality hashes; if they do not
@@ -3323,7 +3371,7 @@ sub getSequenceIDsForReads {
 
     @readnames = sort keys %$readhash;
 
-    my $load = ($options{noload} ? 0 : 1); # default 1
+    my $load = $options{loadreadsequence}; # define explictly 1
     foreach my $readname (sort keys %$readhash) {
 # identify which version of the read it is; if new try to load it
         my $read = $readhash->{$readname};
