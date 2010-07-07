@@ -107,7 +107,18 @@ public abstract class AbstractManager implements AbstractManagerMBean {
 		}
 	}
 
-	protected void setConnection(Connection conn) throws SQLException {
+	protected PreparedStatement prepareStatement(String query, int  resultSetType, int resultSetConcurrency) throws SQLException {
+		if (conn == null)
+			throw new SQLException("Cannot prepare a statement on a null connection");
+		
+		try {
+			return conn.prepareStatement(query, resultSetType, resultSetConcurrency);
+		}
+		catch (SQLException e) {
+			throw new SQLException("Failed to prepare statement \"" + query + "\"", e);
+		}
+	}
+protected void setConnection(Connection conn) throws SQLException {
 		this.conn = conn;		
 		prepareConnection();
 	}
