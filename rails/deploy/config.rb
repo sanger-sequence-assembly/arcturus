@@ -22,6 +22,8 @@ set :deploy_name, "arcturus"
 set :environment, "training"
 set :deploy_to, "#{deploy_base}/#{environment}"
 
+set :pid_directory, "/psg/run/#{environment}/arcturus/pid"
+
 set :reverse_proxy, "/software/webapp/nginx/bin/fairnginx"
 
 desc "Symlink shared configuration files"
@@ -57,7 +59,7 @@ namespace :deploy do
   end
 
   task :stop_nginx, :roles => :frontend do
-    fp = File.open("#{shared_path}/log/nginx.pid", "r")
+    fp = File.open("#{pid_directory}/nginx.pid", "r")
     pid = fp.readline
     pid.chomp!
     fp.close
