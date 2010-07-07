@@ -86,7 +86,10 @@ public class ReadManager extends AbstractManager {
 		
 		pstmtInsertNewReadMetadata = prepareStatement(PUT_READ_METADATA);
 		
-		pstmtPreloadReads = prepareStatement(PRELOAD_READS);
+		pstmtPreloadReads = prepareStatement(PRELOAD_READS, ResultSet.TYPE_FORWARD_ONLY,
+	              ResultSet.CONCUR_READ_ONLY);
+		
+		pstmtPreloadReads.setFetchSize(Integer.MIN_VALUE);
 	}
 
 	public void clearCache() {
@@ -347,9 +350,16 @@ public class ReadManager extends AbstractManager {
 
 		try {
 			ResultSet rs = pstmtPreloadReads.executeQuery();
+			
+			int count = 0;
 
-			while (rs.next())
+			while (rs.next()) {
 				createReadFromResultSet(rs);
+				
+				count++;
+				if ((count%1000000) == 0)
+					System.err.println("ReadManager.preload: loaded " + count + " reads");
+			}
 
 			rs.close();
 		} catch (SQLException e) {
