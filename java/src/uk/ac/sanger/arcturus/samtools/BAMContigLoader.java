@@ -48,8 +48,10 @@ public class BAMContigLoader {
 	    	contig.setProject(project);
 
 	    Utility.reportMemory("Before loading readname-to-current contig cache");
+	    
+	    boolean haveCurrentContigs = adb.countCurrentContigs() > 0;
 
-    	if (project != null)
+    	if (project != null && haveCurrentContigs)
             adb.prepareToLoadProject(project);
         else 
             adb.prepareToLoadAllProjects();
@@ -66,8 +68,9 @@ public class BAMContigLoader {
 	    Utility.displayGraph(System.out, graph);
 
 	    adb.clearCache(ArcturusDatabase.LINK);
+	    System.gc();
 	    
-	    Utility.reportMemory("After dropping readname-to-current contig cache");
+	    Utility.reportMemory("After dropping readname-to-current contig cache and garbage-collecting");
 	    
 	    Set<SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge>> subGraphs = extractor.analyseSubgraphs(graph);
 	    
@@ -185,6 +188,8 @@ public class BAMContigLoader {
     private void storeChildContigs(Set<Contig> contigs, SAMFileReader reader)
     	throws ArcturusDatabaseException {	
     	for (Contig contig : contigs) {
+    		System.out.println("Storing contig " + contig + " in database");
+    		
      		contigBuilder.addMappingsToContig(contig, reader);
     	    
     	    adb.putContig(contig);
