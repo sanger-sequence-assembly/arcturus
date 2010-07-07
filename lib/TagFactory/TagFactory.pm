@@ -947,6 +947,10 @@ sub remapper {
 
     return undef unless &verifyPrivate($tag,'remapper');
 
+my $logger = &verifyLogger('remapper');
+$logger->debug("remapping next tag ".$tag->writeToCaf(),preskip=>2);
+$logger->debug($mapping->toString());
+
     my $newmapping = $tag->getPositionMapping(); # ; x:tag , y:sequence domain
 
     if ($options{prewindowstart} || $options{prewindowfinal}) {
@@ -964,6 +968,8 @@ sub remapper {
 #    $moptions{repair}        = $options{repair}       || 0;
 
     $newmapping = $newmapping->multiply($mapping,%options) if $mapping;
+
+$logger->debug($newmapping->toString());
 
     return undef unless $newmapping; # mapped tag out of range
 
@@ -986,12 +992,11 @@ sub remapper {
 
     $tag->setPositionMapping($newmapping); # replace by new mapping
 
-my $logger = &verifyLogger('remapper');
 $logger->debug("e:$isequal  a:$align  o:$shift") if $isequal;
 $logger->debug($oldmapping->toString()) unless $isequal;
 $logger->debug($newmapping->toString()) unless $isequal;
 
-    $tag->setStrand('C') if ($isequal && $align == -1); # signal other strand
+    $tag->setStrand('C') if ($mapping->getAlignment() < 0); # signal other strand
 
     return 1 if $isequal; # tagposition identical apart from linear transform
 
@@ -1061,7 +1066,7 @@ sub remap {
     return undef unless &verifyParameter($mapping,'remap', class=>'Mapping');
 
 my $logger = &verifyLogger('newremap');
-$logger->fine("TagFactory::remap options @_");
+$logger->debug("TagFactory::remap options @_");
 
 # experimental new remapping
 
@@ -1449,7 +1454,14 @@ if ($options{debug} && $options{debug}>1) {
 # and check the new comment
         my ($lead,$total,$frags) = &unravelfragments($newcomment);
 
-        if (@$frags == 1 && $frags->[0]->[0] == 1 && $frags->[0]->[1] == $total) {
+        if (!$frags) {
+	    my $unravel = "unravel fail .. ";
+            $unravel .= "l:$lead " if defined($lead);
+            $unravel .= "t:$total " if defined($total);
+	    $newcomment .= " ($unravel)";
+            $logger->special($unravel);
+	}
+        elsif (@$frags == 1 && $frags->[0]->[0] == 1 && $frags->[0]->[1] == $total) {
             $comment = 'rejoined intermediate tag fragments (original tag)';
             $newcomment = $lead;
         }
