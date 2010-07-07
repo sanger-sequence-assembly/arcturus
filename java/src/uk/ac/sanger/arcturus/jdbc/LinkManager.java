@@ -1,5 +1,6 @@
 package uk.ac.sanger.arcturus.jdbc;
 
+import java.sql.ResultSet;
 import java.sql.SQLException;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
@@ -18,9 +19,7 @@ public class LinkManager extends AbstractManager {
 	protected PreparedStatement pstmtSelectReadNamesForCurrentContigsAndProject = null;
 	protected PreparedStatement pstmtSelectCurrentContigsForReadName = null;
 	
-    private static final int BLOCK_LIMIT = 100000;
-	
-	private static final String COLUMNS = "RN.readname,RN.flags,RN.read_id,SC.contig_id";
+	private static final String COLUMNS = "RN.readname,RN.flags,SC.contig_id";
 	
 	private static final String TABLES_BY_READ = "(READNAME RN join " 
 	                                        +    "(SEQ2READ SR left join "
@@ -34,10 +33,8 @@ public class LinkManager extends AbstractManager {
 	
 	private static final String SELECT_BY_READ = "select " + COLUMNS + " from " + TABLES_BY_READ;
 	
-	private static final String RESTRICT_MINIMUM_READ_ID = "RN.read_id > ? order by RN.read_id limit " + BLOCK_LIMIT;
-	
 	private static final String GET_READ_NAMES_FOR_ALL_CURRENT_CONTIGS =
-		SELECT_BY_READ + " where " + RESTRICT_MINIMUM_READ_ID;
+		"select " + COLUMNS + " from " + TABLES_BY_READ;
 	
 	private static final String GET_READ_NAMES_FOR_CURRENT_CONTIGS_IN_PROJECT =
 		"select " + COLUMNS + " from " + TABLES_BY_PROJECT;
@@ -64,13 +61,16 @@ public class LinkManager extends AbstractManager {
 
 	protected void prepareConnection() throws SQLException {
 		pstmtSelectReadNamesForCurrentContigs = 
-			conn.prepareStatement(GET_READ_NAMES_FOR_ALL_CURRENT_CONTIGS);
+			prepareStatement(GET_READ_NAMES_FOR_ALL_CURRENT_CONTIGS, ResultSet.TYPE_FORWARD_ONLY,
+		              ResultSet.CONCUR_READ_ONLY);
+		
+		pstmtSelectReadNamesForCurrentContigs.setFetchSize(Integer.MIN_VALUE);
 		
 		pstmtSelectReadNamesForCurrentContigsAndProject = 
-			conn.prepareStatement(GET_READ_NAMES_FOR_CURRENT_CONTIGS_IN_PROJECT);
+			prepareStatement(GET_READ_NAMES_FOR_CURRENT_CONTIGS_IN_PROJECT);
 		
         pstmtSelectCurrentContigsForReadName = 
-        	conn.prepareStatement(GET_CURRENT_CONTIG_FOR_READ_NAME);
+        	prepareStatement(GET_CURRENT_CONTIG_FOR_READ_NAME);
     }
 
 	public void preload() throws ArcturusDatabaseException {
@@ -83,43 +83,39 @@ public class LinkManager extends AbstractManager {
 		PreparedStatement pstmt = project == null ? pstmtSelectReadNamesForCurrentContigs :
 			pstmtSelectReadNamesForCurrentContigsAndProject;
 		
-		boolean done = false;
-		int lastReadID = 0;
+		int count = 0;
 		
-		while (!done) {
-			try {
-				if (project == null)
-					pstmt.setInt(1, lastReadID);
-				else
-					pstmt.setInt(1, project.getID());
-			
-	            ResultSet rs = pstmt.executeQuery();
+		try {
+			if (project != null)
+				pstmt.setInt(1, project.getID());
 
-	            int count = 0;
+			ResultSet rs = pstmt.executeQuery();
 
-	            while (rs.next()) {
-	            	String readName = rs.getString(1);
-	    		    int maskedFlags = Utility.maskReadFlags(rs.getInt(2));
-	    		    
-	        	    Read read = new Read(readName, maskedFlags);
-	        	    
-	        	    lastReadID = rs.getInt(3);
-	        	    
-	        	    Contig currentContig = adb.getContigByID(rs.getInt(4));
-	        	    
-	 		   	    cacheByReadName.put(read.getUniqueName(), currentContig);
-	 		   	    
-	 		   	    count++;
-			    }
-	            
-			    rs.close();				
-			    
-			    done = count == 0 || project != null;
+			while (rs.next()) {
+				String readName = rs.getString(1);
+				int maskedFlags = Utility.maskReadFlags(rs.getInt(2));
+
+				Read read = new Read(readName, maskedFlags);
+
+				int contig_id = rs.getInt(3);
+
+				Contig currentContig = rs.wasNull() ? null : adb
+						.getContigByID(contig_id);
+
+				cacheByReadName.put(read.getUniqueName(), currentContig);
+				
+				count++;
+				if ((count%1000000) == 0)
+					System.err.println("LinkManager.preload: loaded " + count + " read names into cache");
 			}
-		    catch (SQLException e) {
-		        adb.handleSQLException(e,"Failed to build the read-contig cache", conn, adb);    
-		    }
-		}		 
+
+			rs.close();
+
+		} catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to build the read-contig cache",
+					conn, adb);
+		}
+			 
 	}
 	
 
@@ -137,19 +133,25 @@ public class LinkManager extends AbstractManager {
 		else {		
 			try {
 		  	    pstmtSelectCurrentContigsForReadName.setString(1,read.getName());
-//		  	    pstmtSelectCurrentContigForReadNameAndFlags.setInt(2,read.getFlags());
-			    ResultSet rs = pstmtSelectCurrentContigsForReadName.executeQuery();
-//  we pull out all flags, because the masked flags used in cache may not match the database value(s)
+
+		  	    ResultSet rs = pstmtSelectCurrentContigsForReadName.executeQuery();
 			    
                 Contig contig = null;
                 while (rs.next()) {
 	            	String readName = rs.getString(1);
 	    		    int maskedFlags = Utility.maskReadFlags(rs.getInt(2));
+	    		    
 	        	    Read dbread = new Read(readName, maskedFlags);
+	        	    
 	        	    String dbUniqueReadName = dbread.getUniqueName();
+	        	    
 	        	    if (!cacheByReadName.containsKey(dbUniqueReadName)) {
-	        	    	Contig currentContig = adb.getContigByID(rs.getInt(4));
+	        	    	int contig_id = rs.getInt(3);
+	        	    	
+	        	    	Contig currentContig = adb.getContigByID(contig_id);
+	        	    	
 	        	    	cacheByReadName.put(dbUniqueReadName, currentContig);
+	        	    	
 	        	    	if (dbUniqueReadName == uniqueReadName)
 	        	    		contig = currentContig;
 	        	    }
