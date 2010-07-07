@@ -241,7 +241,8 @@ sub insertProject {
         $query .=             ",'$_[5]'" if defined($_[5]); # directory
         $query .=             ", $_[6] " if defined($_[6]); # project ID
 	$query .= "  from USER,ASSEMBLY"
-               .  " where username = ? and assembly_id = ? limit 1";
+               .  " where username = ? and assembly_id = ?";
+#               .  " where username = ? and assembly_id = ? limit 1"; # breaks because of MySQL bug
         push @qdata,$_[2],$_[0]; # owner & assembly
     }
 
