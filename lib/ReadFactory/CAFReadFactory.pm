@@ -282,7 +282,12 @@ sub CAFFileParser {
                 $Read->setClone($items[1]);
             }
             elsif ($items[0] =~ /^Pro/i) {
-                $Read->setProcessStatus($items[1]) if ($record !~ /PASS/);
+                my @status = @items;
+                shift @status;
+                my $status = "@status";
+#print STDOUT "$status\n"; exit if ($status =~ /FAIL Tr/);
+                $Read->setProcessStatus($status) if ($record !~ /PASS/);
+#                $Read->setProcessStatus($status);
             }
             elsif ($items[0] =~ /^Asp/i) {
                 $Read->setAspedDate($items[1]);
