@@ -12,7 +12,7 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
 import net.sf.samtools.*;
 
-public class ContigLoader {
+public class ContigLoader extends AbstractLoader {
 
 	public static void main (String[] args) {
 		File file = null;
@@ -54,32 +54,34 @@ public class ContigLoader {
 	    	
  	        ArcturusInstance ai = ArcturusInstance.getInstance(instance);
  			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
- 			
- // get the project, if specified
+
  			
  			Project project = null;
+ 			
  			if (projectName != null) {
  				Assembly assembly = null;
+ 				
  				if (assemblyName != null)
  				    assembly = adb.getAssemblyByName(assemblyName);
+ 				
   			    project = adb.getProjectByName(assembly,projectName);
  			}
- 			
- // open SAM file reader and test it
+
  
- 			SAMFileReader.setDefaultValidationStringency(SAMFileReader.ValidationStringency.SILENT);			
+ 			SAMFileReader.setDefaultValidationStringency(SAMFileReader.ValidationStringency.SILENT);	
+ 			
  			SAMFileReader reader = new SAMFileReader(file);
+ 			
  	    	if (reader.isBinary() == false || reader.hasIndex() == false)
  	    		throw new IllegalArgumentException("The input file is not indexed: " + file);
-	    	
-// set up read loader/tester and process the reads
 
- 	    	BAMReadLoader brl = new BAMReadLoader(adb);
+ 	    	BAMReadLoader brl = createBAMReadLoader(adb);
  	    	
  	    	if (preloadReads)
   			    brl.processFile(reader);
   			    
-			BAMContigLoader bcl = new BAMContigLoader(adb,brl);	        
+			BAMContigLoader bcl = new BAMContigLoader(adb,brl);	   
+			
 	        bcl.processFile(reader, project, contigName);
 	    }
 	    catch(Exception e) {
