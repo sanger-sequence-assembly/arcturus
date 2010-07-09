@@ -13,7 +13,13 @@ my $slaves = [
 	      { 'host' => 'mcs3a',
 		'port' => 15002,
 		'username' => 'monitor',
-		'password' => 'WhoWatchesTheWatchers' }
+		'password' => 'WhoWatchesTheWatchers' },
+
+              { 'host' => 'mcs3a',
+                'port' => 15005,
+	        'username' => 'monitor',
+	        'password' => 'WhoWatchesTheWatchers' }
+
 	      ];
 
 foreach my $slave (@{$slaves}) {
