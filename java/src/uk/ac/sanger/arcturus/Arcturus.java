@@ -21,7 +21,6 @@ import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
-import java.util.logging.SimpleFormatter;
 
 import javax.management.MBeanServer;
 import javax.management.remote.JMXConnectorServer;
@@ -32,6 +31,7 @@ import uk.ac.sanger.arcturus.logging.JDBCLogHandler;
 import uk.ac.sanger.arcturus.logging.LongMessageFormatter;
 import uk.ac.sanger.arcturus.logging.MailHandler;
 import uk.ac.sanger.arcturus.logging.MessageDialogHandler;
+import uk.ac.sanger.arcturus.logging.ShortMessageFormatter;
 
 public class Arcturus {
 	protected static final String PROJECT_PROPERTIES_FILE = ".arcturus.props";
@@ -51,6 +51,8 @@ public class Arcturus {
 	protected static final boolean LINUX; 
 	
 	protected static boolean testing = Boolean.getBoolean("testing");
+	
+	protected static boolean debugging = Boolean.getBoolean("debugging"); 
 
 	static {
 		setJarFileTimestamp();
@@ -70,6 +72,10 @@ public class Arcturus {
 	
 	public static boolean isTesting() {
 		return testing;
+	}
+	
+	public static boolean isDebugging() {
+		return debugging;
 	}
 
 	private static void setJarFileTimestamp() {
@@ -285,14 +291,16 @@ public class Arcturus {
 
 		logger.setUseParentHandlers(false);
 		
-		logger.setLevel(testing ? Level.FINE : Level.WARNING);
+		logger.setLevel(debugging ? Level.FINE : Level.WARNING);
 		
 		boolean headless = GraphicsEnvironment.isHeadless();
 
-		if (headless || testing || Boolean.getBoolean("useConsoleLogHandler")) {
+		if (headless || testing || debugging || Boolean.getBoolean("useConsoleLogHandler")) {
 			Handler consoleHandler = new ConsoleHandler();
 			
-			consoleHandler.setLevel(testing ? Level.FINE : Level.INFO);
+			consoleHandler.setLevel(debugging ? Level.FINE : Level.INFO);
+			
+			consoleHandler.setFormatter(new ShortMessageFormatter());
 
 			logger.addHandler(consoleHandler);
 		} 
@@ -313,7 +321,7 @@ public class Arcturus {
 				FileHandler filehandler = new FileHandler(
 						"%h/.arcturus/arcturus%u.%g.log", 10000000, 10, true);
 				
-				filehandler.setLevel(testing ? Level.FINE : Level.INFO);
+				filehandler.setLevel(debugging ? Level.FINE : Level.INFO);
 				
 				filehandler.setFormatter(new LongMessageFormatter());
 				
