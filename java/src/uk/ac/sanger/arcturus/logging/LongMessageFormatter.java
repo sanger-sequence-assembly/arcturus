@@ -11,6 +11,8 @@ public class LongMessageFormatter extends AbstractFormatter {
 	private final String SEPARATOR = "\n\n########################################################################\n\n";
 	
 	public String format(LogRecord record) {
+		Date timestamp = new Date(record.getMillis());
+		
 		if (record.getThrown() != null) {
 			StringBuffer sb = new StringBuffer(16384);
 
@@ -42,8 +44,6 @@ public class LongMessageFormatter extends AbstractFormatter {
 			sb.append("The source method name is "
 					+ record.getSourceMethodName() + "\n");
 
-			Date timestamp = new Date(record.getMillis());
-
 			sb.append("The timestamp is " + timestamp + "\n");
 
 			Throwable thrown = getUnderlyingException(record.getThrown());
@@ -66,7 +66,7 @@ public class LongMessageFormatter extends AbstractFormatter {
 			sb.append(SEPARATOR);
 			return sb.toString();
 		} else
-			return record.getMessage() + "\n\n";
+			return timestamp + " : " + record.getMessage() + "\n\n";
 	}
 
 }
