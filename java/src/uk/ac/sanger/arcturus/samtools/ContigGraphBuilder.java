@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.samtools;
 
 import java.util.Set;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
@@ -72,7 +73,7 @@ public class ContigGraphBuilder {
 				if (parent != null)
 					addOrUpdateLink(graph, contig, parent);				
 			} catch (ArcturusDatabaseException e) {
-				System.err.println(e + " possibly database access lost");
+				Arcturus.logWarning("A problem occurred whilst identifying parent contigs for " + contig, e);
 			}
 		}
 

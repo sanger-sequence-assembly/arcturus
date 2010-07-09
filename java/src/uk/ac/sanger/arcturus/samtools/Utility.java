@@ -11,9 +11,12 @@ import java.util.zip.Inflater;
 import org.jgrapht.graph.DefaultWeightedEdge;
 import org.jgrapht.graph.SimpleDirectedWeightedGraph;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Contig;
 
 public class Utility {
+	private static final String NL = "\n";
+	
 	private static final int READ_FLAGS_MASK = 128 + 64 + 1;
 	
 	private static final Inflater decompresser = new Inflater();
@@ -109,37 +112,41 @@ public class Utility {
 		
 		T0 = t;
 		
-		System.err.println(message + " ; Memory used " + format.format(usedMemory) + " kb, free " +
+		Arcturus.logFine(message + " ; Memory used " + format.format(usedMemory) + " kb, free " +
 				format.format(freeMemory) + " kb, total " + format.format(totalMemory) +
 				" kb ; dt = " + format.format(dt) + " ms");
 	}
 	   
-    public static void displayGraph(PrintStream ps, SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph) {
+    public static void displayGraph(String caption, SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph) {
         Set<Contig> vertices = graph.vertexSet();
+        
+        StringBuilder sb = new StringBuilder();
+        
+        sb.append(caption + NL + NL);
        
-        ps.println("CHILD VERTICES");
+        sb.append("CHILD VERTICES" + NL);
        
         List<Contig> children = new Vector<Contig>();
        
         for (Contig contig : vertices) {
             if (graph.inDegreeOf(contig) == 0) {
-                ps.println("\t" + contig);
+                sb.append("\t" + contig + NL);
                 children.add(contig);
             }
         }
        
-        ps.println();
+        sb.append(NL);
        
-        ps.println("PARENT VERTICES");
+        sb.append("PARENT VERTICES" + NL);
        
         for (Contig contig : vertices) {
             if (graph.inDegreeOf(contig) > 0)
-                ps.println("\t" + contig);
+            	sb.append("\t" + contig + NL);
         }
        
-        ps.println();
+        sb.append(NL);
        
-        ps.println("EDGES");
+        sb.append("EDGES" + NL);
        
         for (Contig child : children) {
             Set<DefaultWeightedEdge> outEdges = graph.outgoingEdgesOf(child);
@@ -148,10 +155,12 @@ public class Utility {
                 Contig parent = graph.getEdgeTarget(outEdge);
                 double weight = graph.getEdgeWeight(outEdge);
                
-                ps.println("\n\t" + child + "\n\t\t|\n\t\t| [" + weight + "]\n\t\tV\n\t" + parent);
+                sb.append("\n\t" + child + "\n\t\t|\n\t\t| [" + weight + "]\n\t\tV\n\t" + parent + NL);
             }
            
-            ps.println();
+            sb.append(NL);
         }
+        
+        Arcturus.logFine(sb.toString());
     }
 }

@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.samtools;
 
 import java.util.*;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
@@ -63,9 +64,7 @@ public class BAMContigLoader {
 	    
 	    Utility.reportMemory("After creating parent-child graph");
 	    
-	    System.out.println("\n\nPARENT-CHILD GRAPH\n");
-	    
-	    Utility.displayGraph(System.out, graph);
+	    Utility.displayGraph("PARENT-CHILD GRAPH", graph);
 
 	    adb.clearCache(ArcturusDatabase.LINK);
 	    System.gc();
@@ -76,16 +75,16 @@ public class BAMContigLoader {
 	    
 	    Utility.reportMemory("After analysing parent-child sub-graphs");
 	    
-	    System.out.println("\n\nPARENT-CHILD SUB-GRAPHS\n");
+	    int i = 0;
 	    
 	    for (SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> g : subGraphs) {
-	    	Utility.displayGraph(System.out, g);
-	    	System.out.println("\n\n======================================================================\n");
+	    	i++;
+	    	Utility.displayGraph("PARENT-CHILD SUB-GRAPH " + i, g);
 	    }
 	    
 	    boolean approved = approver.approveImport(graph, project, System.err);
 	    
-	    System.out.println("Approver returned " + approved);
+	    Arcturus.logFine("Approver returned " + approved + "\n");
   
 	    adb.preloadCanonicalMappings();
 
@@ -96,7 +95,7 @@ public class BAMContigLoader {
 	    		importChildContigs(subgraph, reader);  
 	    }
 	    
-	    System.out.println("\n\n===== " + getClass().getName() + " FINISHED =====\n\n");
+	    Arcturus.logFine("===== " + getClass().getName() + " FINISHED =====");
     }
 
 	protected Set<Contig> getContigs(SAMFileReader reader) {
@@ -120,7 +119,7 @@ public class BAMContigLoader {
       		
       		contigs.add(contig);
 
-      		System.out.println("Added contig " + contig);
+      		Arcturus.logFine("Added contig " + contig);
      	}
      	
         return contigs;      	
@@ -166,7 +165,7 @@ public class BAMContigLoader {
     			Contig parent = graph.getEdgeTarget(edge);
     			
     			int mapping_id = adb.setChildContig(parent, child);
-    			System.err.println("Parent contig #" + parent.getID() +
+    			Arcturus.logFine("Parent contig #" + parent.getID() +
     					" has child contig #" + child.getID() +
     					" with mapping ID " + mapping_id);
     		}
@@ -188,13 +187,13 @@ public class BAMContigLoader {
     private void storeChildContigs(Set<Contig> contigs, SAMFileReader reader)
     	throws ArcturusDatabaseException {	
     	for (Contig contig : contigs) {
-    		System.out.println("Storing contig " + contig + " in database");
+    		Arcturus.logFine("Storing contig " + contig + " in database");
     		
      		contigBuilder.addMappingsToContig(contig, reader);
     	    
     	    adb.putContig(contig);
     	    
-    	    System.out.println("Contig " + contig + " stored in database");
+    	    Arcturus.logFine("Contig " + contig + " stored in database");
     	    
     	    contig.setSequenceToContigMappings(null);
     	}

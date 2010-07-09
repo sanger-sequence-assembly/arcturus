@@ -3,6 +3,7 @@ package uk.ac.sanger.arcturus.samtools;
 import java.util.*;
 import java.text.DecimalFormat;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.*;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
@@ -11,7 +12,6 @@ import uk.ac.sanger.arcturus.data.GenericMapping.Direction;
 
 import net.sf.samtools.*;
 import net.sf.samtools.util.CloseableIterator;
-
 
 public class SAMContigBuilder {
 	protected ArcturusDatabase adb = null;
@@ -53,14 +53,14 @@ public class SAMContigBuilder {
 	 	    
 	 	    if (diagnostics && (count%10000) == 0) {
 	 	    	long dt = System.currentTimeMillis() - t0;
-	 	    	System.err.println("addMappingsToContig: " + format.format(count) + " reads; " +
+	 	    	Arcturus.logFine("addMappingsToContig: " + format.format(count) + " reads; " +
 	 	    			format.format(dt) + " ms; memory " + memoryUsage());
 	 	    }
 	    }
 
 	    if (diagnostics) {
 	        long dt = System.currentTimeMillis() - t0;
- 	        System.err.println("addMappingsToContig: " + count + " " + dt + " ms");
+ 	        Arcturus.logFine("addMappingsToContig: " + count + " " + dt + " ms");
 	    }
 	    
 	    iterator.close();
