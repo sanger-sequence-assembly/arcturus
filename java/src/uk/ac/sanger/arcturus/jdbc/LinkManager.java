@@ -20,7 +20,7 @@ public class LinkManager extends AbstractManager {
 	protected PreparedStatement pstmtSelectReadNamesForCurrentContigsAndProject = null;
 	protected PreparedStatement pstmtSelectCurrentContigsForReadName = null;
 	
-	private static final String COLUMNS = "RN.readname,RN.flags,SC.contig_id";
+	private static final String COLUMNS = "RN.readname,RN.flags,CC.contig_id";
 	
 	private static final String TABLES_BY_READ = "(READNAME RN join " 
 	                                        +    "(SEQ2READ SR left join "
@@ -32,16 +32,21 @@ public class LinkManager extends AbstractManager {
 		"(CURRENTCONTIGS CC left join SEQ2CONTIG SC using (contig_id)),SEQ2READ SR,READNAME RN" +
 			" where CC.project_id = ? and SC.seq_id=SR.seq_id and SR.read_id=RN.read_id";
 	
-	private static final String SELECT_BY_READ = "select " + COLUMNS + " from " + TABLES_BY_READ;
-	
 	private static final String GET_READ_NAMES_FOR_ALL_CURRENT_CONTIGS =
 		"select " + COLUMNS + " from " + TABLES_BY_READ;
 	
 	private static final String GET_READ_NAMES_FOR_CURRENT_CONTIGS_IN_PROJECT =
 		"select " + COLUMNS + " from " + TABLES_BY_PROJECT;
 	
+	private static final String READ_TO_CONTIG =
+		" READNAME RN,SEQ2READ SR,SEQ2CONTIG SC,CURRENTCONTIGS CC"
+		+ " where RN.readname = ?" 
+		+ " and RN.read_id = SR.read_id"
+		+ " and SR.seq_id = SC.seq_id"
+		+ " and SC.contig_id = CC.contig_id";
+
 	private static final String GET_CURRENT_CONTIG_FOR_READ_NAME =
-		SELECT_BY_READ + " where readname = ?";
+		"select " + COLUMNS + " from " + READ_TO_CONTIG;
 	
 	public LinkManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		super(adb);
