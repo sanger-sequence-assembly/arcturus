@@ -85,14 +85,20 @@ public class BAMContigLoader {
 	    boolean approved = approver.approveImport(graph, project, System.err);
 	    
 	    Arcturus.logFine("Approver returned " + approved + "\n");
+	
+	    if (!approved) {
+	    	Arcturus.logWarning("The import was not approved: " + approver.getReason());
+	    } else {
+	    	if (Boolean.getBoolean("noloadcontigs")) {
+	    		Arcturus.logWarning("The \"noloadcontigs\" option was specified, so no contigs will be loaded");
+			} else {
+				adb.preloadCanonicalMappings();
 
-	    if (approved && !Boolean.getBoolean("noloadcontigs")) {  
-		    adb.preloadCanonicalMappings();
+				Utility.reportMemory("After loading canonical mappings");
 
-		    Utility.reportMemory("After loading canonical mappings");
-
-		    for (SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> subgraph : subGraphs)
-	    		importChildContigs(subgraph, reader);  
+				for (SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> subgraph : subGraphs)
+					importChildContigs(subgraph, reader);
+			}
 	    }
 	    
 	    Arcturus.logFine("===== " + getClass().getName() + " FINISHED =====");

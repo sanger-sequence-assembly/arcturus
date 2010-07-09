@@ -12,4 +12,6 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 public interface ContigImportApprover {
 	public boolean approveImport(SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph,
 			Project targetProject, PrintStream reportStream) throws ArcturusDatabaseException;
+	
+	public String getReason();
 }
