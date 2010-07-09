@@ -30,7 +30,7 @@ public class ContigTransferRequestNotifier {
 		Properties props = Arcturus.getProperties();
 		session = Session.getDefaultInstance(props);
 		
-		noMail = Boolean.getBoolean("contigtransferrequestnotifier.nomail");
+		noMail = Boolean.getBoolean("contigtransferrequestnotifier.nomail") || Arcturus.isTesting();
 	}
 
 	public static ContigTransferRequestNotifier getInstance() {
