@@ -41,8 +41,6 @@ public class ContigTransferRequestManager extends AbstractManager {
 	
 	protected PreparedStatement pstmtContigsByProjectID = null;
 
-	protected boolean debugging = false;
-
 	protected ContigTransferRequestNotifier notifier = ContigTransferRequestNotifier
 			.getInstance();
 
@@ -60,8 +58,6 @@ public class ContigTransferRequestManager extends AbstractManager {
 		} catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to initialise the contig transfer request manager", conn, adb);
 		}
-		
-		debugging = Boolean.getBoolean("debugging");
 	}
 
 	protected void prepareConnection() throws SQLException {
@@ -970,10 +966,6 @@ public class ContigTransferRequestManager extends AbstractManager {
 			sb.append("\n\tClosed on " + closed + "\n");
 
 		return sb.toString();
-	}
-
-	public void setDebugging(boolean debugging) {
-		this.debugging = debugging;
 	}
 
 	public void moveContigs(Project fromProject, Project toProject) throws ArcturusDatabaseException {

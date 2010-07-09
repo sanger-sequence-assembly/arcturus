@@ -486,8 +486,6 @@ public interface ArcturusDatabase {
 			boolean notifyListeners) throws ContigTransferRequestException,
 			ArcturusDatabaseException;
 
-	public void setDebugging(boolean debugging);
-
 	public boolean canCancelRequest(ContigTransferRequest request,
 			Person person) throws ArcturusDatabaseException;
 

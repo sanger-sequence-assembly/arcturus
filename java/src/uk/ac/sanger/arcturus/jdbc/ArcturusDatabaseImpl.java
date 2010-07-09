@@ -1095,10 +1095,6 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 				notifyListeners);
 	}
 
-	public synchronized void setDebugging(boolean debugging) {
-		contigTransferRequestManager.setDebugging(debugging);
-	}
-
 	public synchronized boolean canCancelRequest(ContigTransferRequest request,
 			Person person) throws ArcturusDatabaseException {
 		return contigTransferRequestManager.canCancelRequest(request, person);
