@@ -38,13 +38,13 @@ public class LongMessageFormatter extends AbstractFormatter {
 			sb.append("The logger is " + record.getLoggerName() + "\n");
 			sb.append("The sequence number is " + record.getSequenceNumber()
 					+ "\n");
-			sb.append("The level is " + record.getLevel().intValue() + "\n");
+			sb.append("The level is " + record.getLevel().getName() + "\n");
 			sb.append("The source class name is " + record.getSourceClassName()
 					+ "\n");
 			sb.append("The source method name is "
 					+ record.getSourceMethodName() + "\n");
 
-			sb.append("The timestamp is " + timestamp + "\n");
+			sb.append("The timestamp is " + formatDate(timestamp) + "\n");
 
 			Throwable thrown = getUnderlyingException(record.getThrown());
 
@@ -66,7 +66,7 @@ public class LongMessageFormatter extends AbstractFormatter {
 			sb.append(SEPARATOR);
 			return sb.toString();
 		} else
-			return timestamp + " : " + record.getMessage() + "\n\n";
+			return record.getLevel().getName() + " : " + formatDate(timestamp) + " " + record.getMessage() + "\n\n";
 	}
 
 }

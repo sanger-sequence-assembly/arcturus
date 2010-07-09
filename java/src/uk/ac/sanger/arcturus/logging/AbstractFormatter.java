@@ -1,11 +1,19 @@
 package uk.ac.sanger.arcturus.logging;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.logging.Formatter;
 import java.sql.SQLException;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 public abstract class AbstractFormatter extends Formatter {	
+	protected SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+	
+	protected String formatDate(Date date) {
+		return dateFormat.format(date);
+	}
+	
 	protected void displayThrowable(Throwable thrown, StringBuffer sb) {
 		StackTraceElement ste[] = thrown.getStackTrace();
 

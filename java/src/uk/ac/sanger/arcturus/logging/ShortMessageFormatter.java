@@ -5,7 +5,7 @@ import java.util.Date;
 import java.util.logging.Formatter;
 import java.util.logging.LogRecord;
 
-public class ShortMessageFormatter extends Formatter {
+public class ShortMessageFormatter extends AbstractFormatter {
 	public String format(LogRecord record) {
 		Date timestamp = new Date(record.getMillis());
 		
@@ -16,7 +16,7 @@ public class ShortMessageFormatter extends Formatter {
 
 			sb.append("An error has occurred.  Please notify a developer.\n\n");
 			
-			sb.append("Timestamp : " + timestamp + "\n\n");
+			sb.append("Timestamp : " + formatDate(timestamp) + "\n\n");
 
 			sb.append(throwable.getClass().getName() + ": "
 					+ throwable.getMessage() + "\n");
@@ -54,8 +54,7 @@ public class ShortMessageFormatter extends Formatter {
 
 			return sb.toString();
 		} else
-			return timestamp + " : " + record.getMessage() + "\n\n";
-		
+			return record.getLevel().getName() + " : " + formatDate(timestamp) + " " + record.getMessage() + "\n\n";	
 	}
 
 }
