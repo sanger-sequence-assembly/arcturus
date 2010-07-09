@@ -3,6 +3,7 @@ package uk.ac.sanger.arcturus.jdbc;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.samtools.Utility;
 
@@ -106,7 +107,7 @@ public class LinkManager extends AbstractManager {
 				
 				count++;
 				if ((count%1000000) == 0)
-					System.err.println("LinkManager.preload: loaded " + count + " read names into cache");
+					Arcturus.logFine("LinkManager.preload: loaded " + count + " read names into cache");
 			}
 
 			rs.close();

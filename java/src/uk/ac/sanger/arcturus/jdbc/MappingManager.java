@@ -41,7 +41,7 @@ public class MappingManager extends AbstractManager {
         allowDuplicateSequences = Boolean.getBoolean("mappingmanager.allowduplicatesequences");
         
         if (allowDuplicateSequences)
-        	System.err.println("The mapping manager *WILL* ignore duplicate sequences");
+        	Arcturus.logInfo("The mapping manager *WILL* ignore duplicate sequences");
 		
 		try {
 			setConnection(adb.getDefaultConnection());
@@ -87,7 +87,6 @@ public class MappingManager extends AbstractManager {
 			  + " where contig_id = ? order by mapping_id";
 		
 		query = "select cstart,rstart,length from SEGMENT where mapping_id=?";
-System.out.println("DONE Preparing Mapping Manager queries");
 	}
 	
     public void clearCache() {
@@ -97,7 +96,7 @@ System.out.println("DONE Preparing Mapping Manager queries");
     public void preload() throws ArcturusDatabaseException {
         clearCache();
     
-        Utility.report("Building Canonical Mapping hash");
+        Arcturus.logFine("Building Canonical Mapping hash");
 	
         long t0 = System.currentTimeMillis();
         
@@ -116,7 +115,7 @@ System.out.println("DONE Preparing Mapping Manager queries");
 		    rs.close();
 		    
 		    long dt = System.currentTimeMillis() - t0;
-		    Utility.report("DONE Building Canonical Mapping hash " + cacheByChecksum.size() +
+		    Arcturus.logFine("DONE Building Canonical Mapping hash " + cacheByChecksum.size() +
 		    		" entries in " + dt + " ms");
 	    }
 	    catch (SQLException e) {
