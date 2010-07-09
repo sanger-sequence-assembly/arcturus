@@ -41,14 +41,16 @@ public class Arcturus {
 	public final static String BUILD_BY_KEY = "build.by";
 	public final static String BUILD_HOST_KEY = "build.host";
 
-
 	protected static Properties arcturusProps = new Properties(System
 			.getProperties());
+	
 	protected static Logger logger = Logger.getLogger("uk.ac.sanger.arcturus");
 
 	protected static long jarFileTimestamp = 0L;
 	
 	protected static final boolean LINUX; 
+	
+	protected static boolean testing = Boolean.getBoolean("testing");
 
 	static {
 		setJarFileTimestamp();
@@ -64,6 +66,10 @@ public class Arcturus {
 	
 	public static boolean isLinux() {
 		return LINUX;
+	}
+	
+	public static boolean isTesting() {
+		return testing;
 	}
 
 	private static void setJarFileTimestamp() {
@@ -279,15 +285,14 @@ public class Arcturus {
 
 		logger.setUseParentHandlers(false);
 		
-		boolean testing = Boolean.getBoolean("testing");
-		
-		logger.setLevel(testing ? Level.INFO : Level.WARNING);
+		logger.setLevel(testing ? Level.FINE : Level.WARNING);
 		
 		boolean headless = GraphicsEnvironment.isHeadless();
 
 		if (headless || testing || Boolean.getBoolean("useConsoleLogHandler")) {
 			Handler consoleHandler = new ConsoleHandler();
-			consoleHandler.setLevel(Level.INFO);
+			
+			consoleHandler.setLevel(testing ? Level.FINE : Level.INFO);
 
 			logger.addHandler(consoleHandler);
 		} 
@@ -307,8 +312,11 @@ public class Arcturus {
 			if (dotarcturus.exists() || dotarcturus.mkdir()) {
 				FileHandler filehandler = new FileHandler(
 						"%h/.arcturus/arcturus%u.%g.log", 10000000, 10, true);
-				filehandler.setLevel(Level.INFO);
+				
+				filehandler.setLevel(testing ? Level.FINE : Level.INFO);
+				
 				filehandler.setFormatter(new LongMessageFormatter());
+				
 				logger.addHandler(filehandler);
 			} else
 				throw new IOException(
