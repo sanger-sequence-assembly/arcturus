@@ -350,6 +350,22 @@ public class Arcturus {
 		logger.log(level, message);
 	}
 
+	public static void logConfig(String message) {
+		logger.log(Level.CONFIG, message);
+	}
+
+	public static void logFine(String message) {
+		logger.log(Level.FINE, message);
+	}
+
+	public static void logFiner(String message) {
+		logger.log(Level.FINER, message);
+	}
+
+	public static void logFinest(String message) {
+		logger.log(Level.FINEST, message);
+	}
+
 	public static void logInfo(String message) {
 		logger.log(Level.INFO, message);
 	}
