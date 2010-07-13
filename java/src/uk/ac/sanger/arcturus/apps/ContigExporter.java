@@ -8,6 +8,7 @@ import java.util.Set;
 
 import javax.naming.NamingException;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.data.Assembly;
 import uk.ac.sanger.arcturus.data.Contig;
@@ -132,6 +133,6 @@ public class ContigExporter implements SAMContigExporterEventListener {
 	}
 
 	public void contigExporterUpdate(SAMContigExporterEvent event) {
-		System.err.println(event.getType() + " : " + event.getValue());
+		Arcturus.logFine(event.getType() + " : " + event.getValue());
 	}
 }
