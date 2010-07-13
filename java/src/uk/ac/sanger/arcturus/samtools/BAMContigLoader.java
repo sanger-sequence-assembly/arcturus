@@ -199,7 +199,7 @@ public class BAMContigLoader {
     	    
     	    adb.putContig(contig);
     	    
-    	    Arcturus.logFine("Contig " + contig + " stored in database");
+    	    Utility.reportMemory("Contig " + contig + " stored in database");
     	    
     	    contig.setSequenceToContigMappings(null);
     	}
