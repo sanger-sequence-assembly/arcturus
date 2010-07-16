@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 
 <!-- build.xml - a simple Ant buildfile -->
-<project name="Arcturus" default="jar" basedir=".">
+<project name="Arcturus2" default="jar" basedir=".">
 	<property name="project.name" value="arcturus"/>
 	<property name="package.prefix" value="uk.ac.sanger"/>
 	<property name="jar.file" value="${project.name}.jar" />
