@@ -108,7 +108,7 @@ public class Minerva {
 	}
 
 	private MinervaFrame createMinervaFrame(String name) {
-		String caption = "Minerva - " + name;
+		String caption = "Minerva 2 - " + name;
 
 		if (PeopleManager.isMasquerading())
 			caption += " [Masquerading as  "
