@@ -869,7 +869,7 @@ DELIMITER ;
 /*!50001 DROP VIEW IF EXISTS `DUPLICATEREADS`*/;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
 /*!50013 DEFINER=`arcturus_dba`@`%` SQL SECURITY INVOKER */
-/*!50001 VIEW `DUPLICATEREADS` AS select `SEQ2READ`.`read_id` AS `read_id`,count(0) AS `hits` from (`CURRENTCONTIGS` left join (`SEQ2CONTIG` left join `SEQ2READ` on((`MAPPING`.`seq_id` = `SEQ2READ`.`seq_id`))) on((`CURRENTCONTIGS`.`contig_id` = `MAPPING`.`contig_id`))) group by `SEQ2READ`.`read_id` having (`hits` > 1) */;
+/*!50001 VIEW `DUPLICATEREADS` AS select `SEQ2READ`.`read_id` AS `read_id`,count(0) AS `hits` from (`CURRENTCONTIGS` left join (`SEQ2CONTIG` left join `SEQ2READ` on((`SEQ2CONTIG`.`seq_id` = `SEQ2READ`.`seq_id`))) on((`CURRENTCONTIGS`.`contig_id` = `SEQ2CONTIG`.`contig_id`))) group by `SEQ2READ`.`read_id` having (`hits` > 1) */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
