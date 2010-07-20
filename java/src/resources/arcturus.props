@@ -5,7 +5,7 @@ java.naming.ldap.factory.socket=uk.ac.sanger.arcturus.utils.LDAPSocketFactory
 
 arcturus.naming.people.url=ldap://ldap.internal.sanger.ac.uk/ou=people,dc=sanger,dc=ac,dc=uk
 arcturus.default.algorithm=uk.ac.sanger.arcturus.utils.Gap4BayesianConsensus
-arcturus.default.instance=pathogen,vertebrates
+arcturus.default.instance=illumina
 
 arcturus.update.url=http://intweb.sanger.ac.uk/Software/Arcturus/arcturus.zip
 
