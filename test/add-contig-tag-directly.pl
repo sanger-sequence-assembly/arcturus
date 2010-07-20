@@ -10,8 +10,6 @@ use DataSource;
 my $nextword;
 my $instance;
 my $organism;
-my $host;
-my $port;
 my $depadded = 0;
 my $verbose = 0;
 
@@ -22,14 +20,15 @@ my $cstart;
 my $cfinal;
 my $strand;
 
+my $rows_per_tx = 10000;
+
 while ($nextword = shift @ARGV) {
     $instance      = shift @ARGV if ($nextword eq '-instance');
     $organism      = shift @ARGV if ($nextword eq '-organism');
 
-    $host          = shift @ARGV if ($nextword eq '-host');
-    $port          = shift @ARGV if ($nextword eq '-port');
-
     $depadded      = 1 if ($nextword eq '-depadded');
+
+    $rows_per_tx   = shift @ARGV if ($nextword eq '-rows_per_tx');
 
     $verbose       = 1 if ($nextword eq '-verbose');
 
@@ -85,6 +84,10 @@ if ($depadded) {
     &db_die("prepare($query) failed");
 }
 
+my $rows = 0;
+
+$dbh->begin_work();
+
 while (my $line = <STDIN>) {
     chop $line;
 
@@ -114,7 +117,19 @@ while (my $line = <STDIN>) {
     &db_die("insert tag mapping ($tag_id,$contig_id,$cstart,$cfinal,$strand) failed");
 
     print STDERR "Tag $systematic_id (contig $contig_id $cstart:$cfinal) added OK\n" if $verbose;
+
+    $rows++;
+
+    if (($rows % $rows_per_tx) == 0) {
+	$dbh->commit();
+	print STDERR "Loaded $rows tags\n";
+	$dbh->begin_work();
+    }
 }
+
+$dbh->commit();
+
+print STDERR "Loaded $rows tags\n";
 
 $sth_get_contig_tag->finish();
 $sth_insert_contig_tag->finish();
@@ -169,10 +184,13 @@ sub get_depadded_to_padded_offsets {
 sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-instance\t\tName of instance\n";
-    print STDERR "-organism\t\tName of organism\n";
+    print STDERR "-instance\tName of instance\n";
+    print STDERR "-organism\tName of organism\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-depadded\t\tTag positions are on depadded sequences\n";
+    print STDERR "-depadded\tTag positions are on depadded sequences\n";
+    print STDERR "-verbose\tGenerate verbose output, including details of each tag\n";
+    print STDERR "\t\twhich is successfully stored.\n";
+    print STDERR "-rows_per_tx\tBatch inserts, this many per transaction [default: 10000]\n";
 }
