@@ -102,6 +102,8 @@ public class BAMContigLoader {
 	    }
 	    
 	    Arcturus.logFine("===== " + getClass().getName() + " FINISHED =====");
+	    
+	    System.out.println("===== The contig loader has finished =====");
     }
 
 	protected Set<Contig> getContigs(SAMFileReader reader) {
@@ -200,6 +202,8 @@ public class BAMContigLoader {
     	    adb.putContig(contig);
     	    
     	    Utility.reportMemory("Contig " + contig + " stored in database");
+    	    
+    	    System.out.println("Contig " + contig + " was stored in the database");
     	    
     	    contig.setSequenceToContigMappings(null);
     	}

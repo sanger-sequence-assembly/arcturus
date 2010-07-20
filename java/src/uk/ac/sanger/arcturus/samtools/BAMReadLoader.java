@@ -121,5 +121,7 @@ public class BAMReadLoader {
 		String message = "Reads: " + n + "; traceserver lookups = " + tsLookups + ", failures = " + tsFailures;
 
 		Utility.reportMemory(message);
+		
+		System.out.println("Loaded " + n + " new reads");
 	}
 }

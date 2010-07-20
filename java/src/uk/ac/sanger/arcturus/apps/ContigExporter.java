@@ -17,6 +17,7 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.samtools.SAMContigExporter;
 import uk.ac.sanger.arcturus.samtools.SAMContigExporterEvent;
+import uk.ac.sanger.arcturus.samtools.SAMContigExporterEvent.Type;
 import uk.ac.sanger.arcturus.samtools.SAMContigExporterEventListener;
 
 public class ContigExporter implements SAMContigExporterEventListener {
@@ -134,5 +135,15 @@ public class ContigExporter implements SAMContigExporterEventListener {
 
 	public void contigExporterUpdate(SAMContigExporterEvent event) {
 		Arcturus.logFine(event.getType() + " : " + event.getValue());
+		
+		switch (event.getType()) {
+			case FINISH_CONTIG:
+				System.out.println("Exported contig " + event.getValue());
+				break;
+				
+			case FINISH_CONTIG_SET:
+				System.out.println("All contigs exported");
+				break;
+		}
 	}
 }
