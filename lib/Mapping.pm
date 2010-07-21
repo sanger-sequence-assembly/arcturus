@@ -19,6 +19,7 @@ sub new {
     bless $this, $class;
 
 # create a token which can be used to identify this Mapping to its Segments
+# TO BE REPLACE BY reference to this
 
     my $token = "$this";
     $token =~ s/.*\((\S+)\).*/$1/;
@@ -122,7 +123,23 @@ sub setHostSequenceID { # alias
 # alignment 
 #-------------------------------------------------------------------
 
+my %DIRECTION = (Forward => 1, Reverse => -1, F => 1, R => -1); # call variable
+
+sub newsetAlignmentDirection {
+# must be defined when creating Mapping instance from database
+    my $this = shift;
+    $this->setAlignment($DIRECTION{shift});
+}
+
+sub newgetAlignmentDirection {
+# returns 'Forward', 'Reverse' or undef
+    my $this = shift;
+    my $direction = $this->getAlignment() || return undef;
+    return ($direction > 0) ? 'Forward' : 'Reverse';
+}
+
 sub setAlignmentDirection {
+# return &newsetAlignmentDirection(@_); # TEST
 # must be defined when creating Mapping instance from database
     my $this = shift;
     my $direction = shift;
@@ -136,6 +153,7 @@ sub setAlignmentDirection {
 }
 
 sub getAlignmentDirection {
+# return &newgetAlignmentDirection(@_); # TEST
 # returns 'Forward', 'Reverse' or undef
     my $this = shift;
 
@@ -192,9 +210,14 @@ sub isEqual {
     my $tmaps = $mapping->normalise(%options); # also sorts segments 
     my $cmaps = $compare->normalise(%options); # also sorts segments
 
+# return ($mapping->inverse())->isEqual($compare->inverse()) if ($options{domain} eq 'X'); # TO BE TESTED
+
 # test presence of mappings
 
-    return (0,0,0) unless ($tmaps && $cmaps && scalar(@$tmaps));
+    unless ($tmaps && $cmaps && scalar(@$tmaps) && scalar(@$cmaps)) {
+        return (0,0,0) if $options{not_equal_on_no_segments};
+        return (1,0,0);
+    }
 
 # compare each segment individually; if the mappings are identical
 # apart from a linear shift and possibly counter alignment, all
@@ -233,7 +256,14 @@ sub isEqual {
     return (1,$align,$shift);
 }
 
-sub compare {
+sub newcompare {
+    my $mapping = shift;
+    my $compare = shift;
+
+    return $mapping->multiply($compare->inverse(),@_); # test
+}
+
+sub compare { # TO BE DEPRECATED after replacement by mapping operations 
 # compare this Mapping instance with input Mapping at the segment level
     my $mapping = shift;
     my $compare = shift;
@@ -244,6 +274,8 @@ sub compare {
     if (ref($compare) ne 'Mapping') {
         die "Mapping->compare expects an instance of the Mapping class";
     }
+
+# return ($mapping->inverse())->compare($compare->inverse()) if ($options{domain} eq 'X');
 
 my $list = $options{list};
 
@@ -393,12 +425,20 @@ print STDOUT "after segment test loop\n" if $list;
 #                 order the segments according to x or y position
 #-------------------------------------------------------------------
 
+sub orderSegmentsInXdomain {
+    return &normaliseOnX(@_);
+}
+
 sub normaliseOnX {
 # alias for normalise: order segments in x domain
     my $this = shift;
     my %options = @_; # silent=>
     $options{domain} = 'X';
     return $this->normalise(%options);
+}
+
+sub orderSegmentsInYdomain {
+    return &normaliseOnY(@_);
 }
 
 sub normaliseOnY {
@@ -410,6 +450,10 @@ sub normaliseOnY {
 }
     
 my %NORMALISATION = (x => 1, X => 1, y => 2, Y => 2); # class variable
+
+sub orderSegments {
+    return &normalise(@_);
+}
 
 sub normalise {
 # sort the segments according to increasing read position
@@ -571,7 +615,8 @@ sub diagnose {
         my $gapstart = $lastsegment->getFinis($cdomain);
         my $interalignment = ($gapfinis > $gapstart) ? 1 : -1;
         if ($interalignment != $localalignment) {
-            $report = "Alignment inversion(s) detected" unless $report;
+#my @last = $lastsegment->getSegment(); my @next = $segment->getSegment(); print STDERR "alignment inversion l:@last  n:@next\n";
+            $report = "Segment inconsistency detected" unless $report;
 	}
 
         $lastsegment = $segment;
@@ -719,6 +764,7 @@ sub putSegment {
 # validity input is tested in Segment constructor
 
     $_[4] = $this->{token}; # add mapping identifier at the end
+#    $_[4] = $this; # add parent mapping reference
 
     my $segment = new Segment(@_);
 
@@ -867,6 +913,12 @@ sub multiply {
 # align the mappings such that the Y (mapped) domain of R and the 
 # X domain of T are both ordered according to segment position 
 
+    unless ($mapping) {
+	print STDERR "Mapping->multply expects a Mapping object as parameter\n";
+        print STDERR "Host mapping : ".($thismap->getMappingName() || 'R')."\n";
+#        return undef;
+    }
+
     my $rname = $thismap->getMappingName() || 'R';
     my $tname = $mapping->getMappingName() || 'T';
 
@@ -882,15 +934,9 @@ sub multiply {
 # find the starting point in segment arrays if activated
 
     my ($rs,$ts) = (0,0);
+
 # tracking of segments option to start the search at a different position
 # (use this method repeatedly for a list of mappings sorted on mapped? position) 
-my $nzs = $options{nonzerostart};
-if ($nzs && ref($nzs) eq 'HASH') {
- $rs = $nzs->{rstart} if ($nzs->{rstart} && $nzs->{rstart} > 0);
- $ts = $nzs->{tstart} if ($nzs->{tstart} && $nzs->{tstart} > 0);
-print STDERR "segment tracking: start rs=$rs  ts=$ts\n";
-}
-# new construction (TO BE VERIFIED and TESTED)
 
     if (my $track = $options{tracksegments}) { # undef,0  or  1,2,3
         my $backskip = $options{backskip}; 
@@ -967,14 +1013,6 @@ print STDERR "segment tracking: start rs=$rs  ts=$ts\n";
             $rs++ if ($ryf <= $txf);
 	}
     }
-
-# adjust the non-zero start parameters TO BE DEPRECATED
-
-if ($nzs && ref($nzs) eq 'HASH') {
- $nzs->{rstart} = $rs;
- $nzs->{tstart} = $ts;
-print STDERR "segment tracking:  end  rs=$rs  ts=$ts\n";
-}
 
 # register the current segment counter numbers (default start values)
 

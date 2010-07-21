@@ -140,15 +140,6 @@ sub modify {
     $this->[($item eq 'L' ? 2 : 3)] = $value;
 }
 
-sub error {
-# signal error inmethod call and terminate execution
-    my $method = shift;
-    print STDERR "Segment->$method called without correct Mapping "
-               . "identifier\n";
-    exit 1; 
-#    return undef;
-}
-
 #----------------------------------------------------------------------
 
 sub getStart { # generic method
@@ -267,24 +258,25 @@ sub getXforY {
 # mapYvalueToXdomain (inside this mapping segment)
     my $this = shift;
     my $ypos = shift;
+    my $full = shift;
 
 # apply transformation X = d * Y + o
 
     my $k = ($this->[3] >= $this->[2]) ? 2 : 3;
 
     if ($ypos < $this->[$k] || $ypos > $this->[5-$k]) {
-        return undef; # out of range
+        return undef unless $full; # out of range
     }
-    else {
-        $ypos = -$ypos if ($this->[0] < 0);
-        return $ypos + $this->[1];
-    }
+
+    $ypos = -$ypos if ($this->[0] < 0);
+    return $ypos + $this->[1];
 }
 
 sub getYforX {
 # mapXvalueToYdomain (inside this mapping segment)
     my $this = shift;
     my $xpos = shift;
+    my $full = shift;
 
 # apply transformation Y = d * [X - o]
 
@@ -296,11 +288,18 @@ sub getYforX {
     my $k = ($this->[3] >= $this->[2]) ? 2 : 3;
 
     if ($ypos < $this->[$k] || $ypos > $this->[5-$k]) {
-        return undef; # out of range
+        return undef unless $full; # out of range
     }
-    else {
-        return $ypos;
-    }
+
+    return $ypos;
+}
+
+sub error {
+# signal error inmethod call and terminate execution
+    my $method = shift;
+    print STDERR "Segment->$method called without correct Mapping "
+               . "identifier\n";
+    exit 1;
 }
 
 #----------------------------------------------------------------------
