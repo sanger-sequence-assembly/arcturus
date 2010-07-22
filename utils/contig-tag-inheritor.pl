@@ -229,7 +229,7 @@ foreach my $contig_id (@contigs) {
             $logger->warning("parent contig ".$parent->getContigName()." has no tags");
 	    next;
 	}
-#        $contig->addParentContig($parent);
+        $contig->addParentContig($parent);
         push @parents, $parent;
     }
 
