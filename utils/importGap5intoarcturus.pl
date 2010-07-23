@@ -1,6 +1,7 @@
 #!/usr/local/bin/perl -w
 
 use strict;
+use Cwd;
 
 use ArcturusDatabase;
 
@@ -12,23 +13,21 @@ use ArcturusDatabase;
 
 #------------------------------------------------------------------------------
 
-my $pwd = `pwd`; chomp $pwd; # the current directory
-   $pwd =~ s?.*automount.*/nfs?/nfs?;
-   $pwd =~ s?.*automount.*/root?/nfs?;
+my $pwd = cwd();
+
 my $basedir = `dirname $0`; chomp $basedir; # directory of the script
 my $arcturus_home = "${basedir}/..";
 $arcturus_home =~ s?/utils/\.\.??;
 
 my $gap5root = "/software/badger/bin";
 
-#my $javabasedir   = "${arcturus_home}/utils";
-#$javabasedir = "/nfs/users/nfs_e/ejz/workspace/core-system-migration/src/uk/ac/sanger/arcturus/apps"; # test
-
 my $gap5toSam = "$gap5root/gap5_export -test "; # test to be disabled later
 my $gap5consensus = "$gap5root/gap5_consensus ";
 my $samtools = "/software/solexa/bin/aligners/samtools/current/samtools";
-my $javacontroller = "/nfs/users/nfs_e/ejz/arcturus/dev/utils/run-arcturus-class.sh";
-my $memory;
+
+my $import_script = "${arcturus_home}/java/scripts/importbamfile";
+
+my $java_opts = defined($ENV{'JAVA_DEBUG'}) ? "-Ddebugging=true -Dtesting=true -Xmx4000M" : "-Xmx4000M";
 
 #------------------------------------------------------------------------------
 # command line input parser
@@ -37,8 +36,6 @@ my $memory;
 my ($instance,$organism,$projectname,$assembly,$gap5name,$version);
 
 my $problemproject = 'PROBLEMS'; # default
-
-my $import_script = "uk.ac.sanger.arcturus.apps.ContigLoader";
 
 my $scaffold_script = "${arcturus_home}/utils/contigorder.sh";
 
@@ -49,7 +46,7 @@ my ($forcegetlock,$keep,$abortonwarning,$noagetest,$rundir,$debug);
 my $validkeys = "instance|i|organism|o|project|p|assembly|a|gap5name|g|"
               . "version|v|superuser|su|problem|script|abortonwarning|aow|"
               . "noagetest|nat|keep|rundir|rd|debug|help|h|passon|po|"
-              . "memory|mem";
+              . "java_opts";
 
 #------------------------------------------------------------------------------
 
@@ -134,8 +131,8 @@ while (my $nextword = shift @ARGV) {
         &showusage(); # and exit
     }
 
-    if ($nextword eq '-memory' || $nextword eq '-mem') {
-	$memory = shift @ARGV; # abort input parsing here
+    if ($nextword eq '-java_opts') {
+	$java_opts = shift @ARGV; # abort input parsing here
     }
 
     if ($nextword eq '-passon' || $nextword eq '-po') {
@@ -161,14 +158,12 @@ unless (defined($projectname)) {
 }
 
 #------------------------------------------------------------------------------
-# test memory spec
+# Set the JVM options
 #------------------------------------------------------------------------------
 
-if ($memory && $memory != 4) {
-    my $xJAVA_OPTS = "-Ddebugging=true -Dtesting=true -Xmx${memory}000M";
-    $javacontroller .= " xJAV_OPTS \"$xJAVA_OPTS\"";
+if (defined($java_opts)) {
+    $ENV{'JAVA_OPTS'} = $java_opts;
 }
-
 
 #------------------------------------------------------------------------------
 # get a Project instance
@@ -219,9 +214,7 @@ if ($rundir && $rundir ne $pwd) {
 	print STDOUT "chdir recovered from automount failure\n";
     }
  # get current directory
-    $pwd = `pwd`; chomp $pwd;
-    $pwd =~ s?.*automount.*/nfs?/nfs?;
-    $pwd =~ s?.*automount.*/root?/nfs?;
+    $pwd = cwd();
 }
 
 #------------------------------------------------------------------------------
@@ -370,8 +363,8 @@ $project->fetchContigIDs(); # load the current contig IDs before import
 
 print STDOUT "Importing into Arcturus\n";
 
-$command  = "$javacontroller $import_script -instance $instance -organism $organism "
-          . "-projectname $projectname -in $bamfile"; 
+$command  = "$import_script -instance $instance -organism $organism "
+          . "-project $projectname -in $bamfile"; 
 
 print STDOUT "$command \n";
 
@@ -490,9 +483,9 @@ sub showusage {
     print STDERR "\n";
     print STDERR "\nParameter input ERROR for $0: $code \n" if $code;
     print STDERR "\n";
-    print STDERR "Import a Gap4 database into Arcturus for a specified project\n";
+    print STDERR "Import a Gap5 database into Arcturus for a specified project\n";
     print STDERR "\n";
-    print STDERR "script to run in directory of Gap4 database\n";
+    print STDERR "script to run in directory of Gap5 database\n";
     print STDERR "\n";
     $version = "0" unless defined($version);
     print STDERR "import will be from database 'project.$version'\n";
@@ -510,9 +503,11 @@ sub showusage {
     print STDERR "\n";
     print STDERR "-assembly\t(a) needed to resolve ambiguous project name\n";
     print STDERR "\n";
-    print STDERR "-gap5name\t(g) Gap4 database if different from default "
+    print STDERR "-gap5name\t(g) Gap5 database if different from default "
                 ."project.0\n";
-    print STDERR "-version\t(v) Gap4 database version if different from 0\n";
+    print STDERR "-version\t(v) Gap5 database version if different from 0\n";
+    print STDERR "\n";
+    print STDERR "-java_opts\tOptions to be passed to the JVM\n";
     print STDERR "\n";
     print STDERR "-rundir\t\t(rd) explicitly set directory where script will run\n";
     print STDERR "\n";
@@ -524,7 +519,7 @@ sub showusage {
                . "parent contigs\n";
     print STDERR "\n";
     print STDERR "-aow\t\t(abortonwarning) stop if any db is BUSY or backup fails\n";
-    print STDERR "-nat\t\t(noagetest) skip age test on Gap4 database(s)\n";
+    print STDERR "-nat\t\t(noagetest) skip age test on Gap5 database(s)\n";
     print STDERR "-keep\t\t keep temporary files\n";
     print STDERR "\n";
     print STDERR "-debug\n";

@@ -10,24 +10,29 @@ set ARCTURUS_PACKAGE=uk.ac.sanger.arcturus
 # This is the utils package
 set ARCTURUS_UTILS_PACKAGE=${ARCTURUS_PACKAGE}.utils
 
+# This is the apps package
+set ARCTURUS_APPS_PACKAGE=${ARCTURUS_PACKAGE}.apps
+
 # This is the test package
 set ARCTURUS_TEST_PACKAGE=${ARCTURUS_PACKAGE}.test
 
+# Set default heap size
+
+if ( `uname -m` == 'x86_64' && $PROGNAME != 'minerva' ) then
+    set DEFAULT_JAVA_HEAP_SIZE=-Xmx4096M
+else
+    set DEFAULT_JAVA_HEAP_SIZE=-Xmx512M
+endif
+
 # Specify minimum heap size
 if ( ! $?JAVA_HEAP_SIZE) then
-    setenv JAVA_HEAP_SIZE -Xmx512M
+    setenv JAVA_HEAP_SIZE $DEFAULT_JAVA_HEAP_SIZE
 endif
 
 # Set JAVA_HOME and location of Arcturus JAR file
 
 setenv JAVA_HOME /software/jdk1.6.0_13
 set ARCTURUS_JAR=${ARCTURUS_HOME}/../arcturus.jar
-
-# Augment heap size if running on a 64-bit cluster machine
-
-if ( `uname -m` == 'x86_64' && $PROGNAME != 'minerva' ) then
-    setenv JAVA_HEAP_SIZE -Xmx4096M
-endif
 
 echo Using Java in $JAVA_HOME 
 echo Arcturus JAR file is $ARCTURUS_JAR
