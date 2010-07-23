@@ -18,7 +18,7 @@ set ARCTURUS_TEST_PACKAGE=${ARCTURUS_PACKAGE}.test
 
 # Set default heap size
 
-if ( `uname -m` == 'x86_64' && $PROGNAME != 'minerva' ) then
+if ( `uname -m` == 'x86_64' && $PROGNAME != 'minerva' && $PROGNAME != 'minerva2' ) then
     set DEFAULT_JAVA_HEAP_SIZE=-Xmx4096M
 else
     set DEFAULT_JAVA_HEAP_SIZE=-Xmx512M
