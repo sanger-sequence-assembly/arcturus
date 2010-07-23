@@ -102,7 +102,7 @@ public class ContigLoader extends AbstractLoader {
 		ps.println("OPTIONAL PARAMETERS:");
 		ps.println("\t-project\tName of project");		
 		ps.println("\t-assembly\tName of project assembly");		
-		ps.println("\t-contig\tName of a specific reference sequence");		
+		ps.println("\t-contig\t\tName of a specific reference sequence");		
 		ps.println("\t-preloadreads\tDo a read import first");		
 	}
 }
