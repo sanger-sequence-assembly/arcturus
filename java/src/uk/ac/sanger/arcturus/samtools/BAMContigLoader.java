@@ -45,12 +45,18 @@ public class BAMContigLoader {
 	    	contigs.add(new Contig(contigName));
 	    }
 	    
+	    reportProgress("===== WELCOME TO THE ARCTURUS 2 CONTIG LOADER =====");
+	    
+	    reportProgress("\nFound " + contigs.size() + " contigs in the input file.");
+	    
 	    for (Contig contig : contigs)
 	    	contig.setProject(project);
 
 	    Utility.reportMemory("Before loading readname-to-current contig cache");
 	    
 	    boolean haveCurrentContigs = adb.countCurrentContigs() > 0;
+	    
+	    reportProgress("\nBuilding list of names of reads in current contigs.");
 
     	if (project != null && haveCurrentContigs)
             adb.prepareToLoadProject(project);
@@ -58,10 +64,16 @@ public class BAMContigLoader {
             adb.prepareToLoadAllProjects();
     
 	    Utility.reportMemory("After loading readname-to-current contig cache");
+	    
+	    reportProgress("DONE.");
+	    
+	    reportProgress("\nLinking contigs in the file to their parents in the database.");
 
 	    SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph =
 	    	graphBuilder.identifyParentsForContigs(contigs, reader);
 	    
+	    reportProgress("DONE.");
+    
 	    Utility.reportMemory("After creating parent-child graph");
 	    
 	    Utility.displayGraph("PARENT-CHILD GRAPH", graph);
@@ -71,8 +83,12 @@ public class BAMContigLoader {
 	    
 	    Utility.reportMemory("After dropping readname-to-current contig cache and garbage-collecting");
 	    
+	    reportProgress("\nGrouping parent contigs and their children into family groups.");
+	    
 	    Set<SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge>> subGraphs = extractor.analyseSubgraphs(graph);
 	    
+	    reportProgress("DONE.");
+    
 	    Utility.reportMemory("After analysing parent-child sub-graphs");
 	    
 	    int i = 0;
@@ -82,8 +98,12 @@ public class BAMContigLoader {
 	    	Utility.displayGraph("PARENT-CHILD SUB-GRAPH " + i, g);
 	    }
 	    
+	    reportProgress("\nDetermining whether there are any problems which might prevent the import.");
+    
 	    boolean approved = approver.approveImport(graph, project, System.err);
 	    
+	    reportProgress("DONE.");
+    
 	    Arcturus.logFine("Approver returned " + approved + "\n");
 	
 	    if (!approved) {
@@ -92,9 +112,15 @@ public class BAMContigLoader {
 	    	if (Boolean.getBoolean("noloadcontigs")) {
 	    		Arcturus.logWarning("The \"noloadcontigs\" option was specified, so no contigs will be loaded");
 			} else {
+			    reportProgress("\nPreparing to analyse the new contigs in detail.");
+			    
 				adb.preloadCanonicalMappings();
+			    
+			    reportProgress("DONE.");
 
 				Utility.reportMemory("After loading canonical mappings");
+
+				reportProgress("\nPreparing to import any new child contigs.");
 
 				for (SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> subgraph : subGraphs)
 					importChildContigs(subgraph, reader);
@@ -103,8 +129,12 @@ public class BAMContigLoader {
 	    
 	    Arcturus.logFine("===== " + getClass().getName() + " FINISHED =====");
 	    
-	    System.out.println("===== The contig loader has finished =====");
+	    reportProgress("\n===== THE ARCTURUS 2 CONTIG LOADER HAS FINISHED =====");
     }
+	
+	protected void reportProgress(String message) {
+		System.out.println(message);
+	}
 
 	protected Set<Contig> getContigs(SAMFileReader reader) {
         SAMFileHeader header = reader.getFileHeader();
@@ -158,8 +188,15 @@ public class BAMContigLoader {
     		
  			doImport = !contigComparator.equalsParentContig(child, parent);
  			
- 			if (!doImport)
+ 			if (!doImport) {
  				child.setSequenceToContigMappings(null);
+ 				
+ 				reportProgress("\nChild contig " + child.getName() + 
+ 						" (" + child.getLength() + " bp, " + child.getReadCount() + " reads)" + 
+ 						" is identical to parent contig " + parent.getName() +
+						" (Arcturus ID " + parent.getID() + ", " + parent.getLength() + " bp, " + parent.getReadCount() + " reads, created " +
+						parent.getCreated() + ") and does not need to be imported.");
+ 			}
     	}
     	
     	if (doImport) {
@@ -195,15 +232,23 @@ public class BAMContigLoader {
     private void storeChildContigs(Set<Contig> contigs, SAMFileReader reader)
     	throws ArcturusDatabaseException {	
     	for (Contig contig : contigs) {
-    		Arcturus.logFine("Storing contig " + contig + " in database");
+    		String message = "Contig " + contig.getName() + 
+				" (" + contig.getLength() + " bp, " + contig.getReadCount() +
+				" reads) will be stored in the database.";
+    		
+    		Arcturus.logFine(message);
+    		
+    		reportProgress("\n" + message);
     		
      		contigBuilder.addMappingsToContig(contig, reader);
     	    
     	    adb.putContig(contig);
     	    
-    	    Utility.reportMemory("Contig " + contig + " stored in database");
+    	    message = "Stored with Arcturus ID " + contig.getID();
     	    
-    	    System.out.println("Contig " + contig + " was stored in the database");
+    	    Utility.reportMemory(message);
+    	    
+    	    reportProgress(message);
     	    
     	    contig.setSequenceToContigMappings(null);
     	}
