@@ -29,8 +29,8 @@ public class ProjectTablePanel extends MinervaPanel implements
 	protected ProjectTableModel model = null;
 
 	protected MinervaAbstractAction actionViewProject;
-	protected MinervaAbstractAction actionExportToGap4;
-	protected MinervaAbstractAction actionImportFromGap4;
+	protected MinervaAbstractAction actionExportToGap5;
+	protected MinervaAbstractAction actionImportFromGap5;
 	protected MinervaAbstractAction actionExportForAssembly;
 	protected MinervaAbstractAction actionRetireProject;
 	protected MinervaAbstractAction actionCreateNewProject;
@@ -79,22 +79,22 @@ public class ProjectTablePanel extends MinervaPanel implements
 			}
 		};
 
-		actionExportToGap4 = new MinervaAbstractAction(
-				"Export project to Gap4", null,
-				"Export selected project to Gap4", new Integer(KeyEvent.VK_E),
+		actionExportToGap5 = new MinervaAbstractAction(
+				"Export project to Gap5", null,
+				"Export selected project to Gap5", new Integer(KeyEvent.VK_E),
 				KeyStroke.getKeyStroke(KeyEvent.VK_E, ActionEvent.ALT_MASK)) {
 			public void actionPerformed(ActionEvent e) {
-				exportToGap4();
+				exportToGap5();
 			}
 		};
 
-		actionImportFromGap4 = new MinervaAbstractAction(
-				"Import project from Gap4", null,
-				"Import selected project from Gap4",
+		actionImportFromGap5 = new MinervaAbstractAction(
+				"Import project from Gap5", null,
+				"Import selected project from Gap5",
 				new Integer(KeyEvent.VK_I), KeyStroke.getKeyStroke(
 						KeyEvent.VK_I, ActionEvent.ALT_MASK)) {
 			public void actionPerformed(ActionEvent e) {
-				importFromGap4();
+				importFromGap5();
 			}
 		};
 
@@ -129,8 +129,8 @@ public class ProjectTablePanel extends MinervaPanel implements
 	protected void updateActions() {
 		int rowcount = table.getSelectedRowCount();
 
-		actionExportToGap4.setEnabled(rowcount == 1);
-		actionImportFromGap4.setEnabled(false);
+		actionExportToGap5.setEnabled(rowcount == 1);
+		actionImportFromGap5.setEnabled(false);
 		actionExportForAssembly.setEnabled(rowcount == 1);
 
 		actionViewProject.setEnabled(rowcount > 0);
@@ -139,7 +139,7 @@ public class ProjectTablePanel extends MinervaPanel implements
 			ProjectProxy proxy = table.getSelectedProject();
 			Project project = proxy.getProject();
 
-			actionImportFromGap4.setEnabled(!project.isBin() || allowBinImport);
+			actionImportFromGap5.setEnabled(!project.isBin() || allowBinImport);
 
 			boolean canRetire = false;
 
@@ -252,8 +252,8 @@ public class ProjectTablePanel extends MinervaPanel implements
 		JMenu projectMenu = createMenu("Project", KeyEvent.VK_P, "Project");
 		menubar.add(projectMenu);
 
-		projectMenu.add(actionExportToGap4);
-		projectMenu.add(actionImportFromGap4);
+		projectMenu.add(actionExportToGap5);
+		projectMenu.add(actionImportFromGap5);
 
 		projectMenu.addSeparator();
 
@@ -300,7 +300,7 @@ public class ProjectTablePanel extends MinervaPanel implements
 		return coordinator || proxy.isMine() || owner == null;
 	}
 
-	protected void exportToGap4() {
+	protected void exportToGap5() {
 		ProjectProxy proxy = table.getSelectedProject();
 
 		String projectName = proxy.getName();
@@ -361,7 +361,7 @@ public class ProjectTablePanel extends MinervaPanel implements
 		return coordinator || proxy.isMine() || owner == null;
 	}
 
-	protected void importFromGap4() {
+	protected void importFromGap5() {
 		ProjectProxy proxy = table.getSelectedProject();
 
 		String projectName = proxy.getName();
