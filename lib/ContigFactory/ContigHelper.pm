@@ -3134,8 +3134,8 @@ sub newlinkcontigs {
 
 # define accepted minumum cross-correlation coefficient and maximum defects
 
-    my $ccthreshold = $options{ccthreshold} || 0.75;
-#    my $ccthreshold = $options{ccthreshold} || 0.9;
+#    my $ccthreshold = $options{ccthreshold} || 0.75;
+    my $ccthreshold = $options{ccthreshold} || 0.9;
     my $aligndefect = $options{maxadefects} || 5;
     my $nominalreadlength = $options{readlength} || 800;
 
@@ -3219,7 +3219,7 @@ sub newlinkcontigs {
 
 # do some analysis, first on the whole thing:
 
-        my $accept;
+        my $accept = 0;
            
 # get the cross-correlations coefficient and other stats for the whole alignment set
 
@@ -3227,38 +3227,51 @@ sub newlinkcontigs {
 
         $logger->info("Global correlation test R = $R  penalty $penalty  wgtsum $wtsum");
 
-        if (abs($R) >= $ccthreshold && $penalty <= $aligndefect && !$options{perinterval}) {
+        if (abs($R) >= 0.98 && $penalty <= $aligndefect) { # only very good correlation
             my $mapping = &buildmapping($segmentlist,$parentname,$parentseqid);
-            push @mappings, $mapping if $mapping;
-            $accept = 1;
+            if ($mapping && $mapping->hasSegments()) {
+                push @mappings, $mapping;
+                $accept = 1;
+	    } 
 	}
         elsif (@$contigsections > 1) {
 # check the correlation coefficient for each segment; should be very good 
-            $accept = 1;
             foreach my $contigsection (@$contigsections) {
                 my @window = @$contigsection[0..1];
                 @window = sort {$a <=> $b} @window; # redundent ?
                 my ($R,$penalty,$wtsum) = &alignmentstats($segmentlist,[@window]);
-                $logger->info("Local (@window) correlation test R = $R  penalty $penalty");
-                $accept = 0 if ( abs($R) < $ccthreshold);
-                $accept = 0 if ($penalty > $aligndefect);
-                if ($accept && $options{perinterval}) {
+                my $acceptthissection = 1;
+                $acceptthissection = 0 if ( abs($R) < $ccthreshold);
+                $acceptthissection = 0 if ($penalty > $aligndefect);
+                $accept = 1 if $acceptthissection;
+                $logger->info("Local (@window) correlation test R = $R  penalty $penalty: "
+                             ."accept $acceptthissection");
+                if ($acceptthissection && $options{perinterval}) {
 # on each interval individually
                     my $mapping = &buildmapping($segmentlist,$parentname,$parentseqid,[@window]);
-                    push @mappings, $mapping if $mapping;         
+                    if ($mapping && $mapping->hasSegments()) {
+                        push @mappings, $mapping;        
+                        $accept = 1;
+	            } 
 		}
 	    }
             if ($accept && !$options{perinterval}) {
 # &prunesegments($segmentlist,$alignment,0,ambivalent=>1);
                 my $mapping = &buildmapping($segmentlist,$parentname,$parentseqid);
-                push @mappings, $mapping if $mapping; # on the whole thing
+                if ($mapping && $mapping->hasSegments()) { # on the whole thing
+                    push @mappings, $mapping;
+                    $accept = 1;
+	        } 
             }
 	}
         elsif (abs($R) >= $ccthreshold && $penalty < $aligndefect) {
             my $mapping = &buildmapping($segmentlist,$parentname,$parentseqid);
-            push @mappings, $mapping if $mapping;
-            $accept = 1;
+            if ($mapping && $mapping->hasSegments()) { # on the whole thing
+                push @mappings, $mapping;
+                $accept = 1;
+	    } 
 	}
+	$logger->info("accept = $accept"); 
 
 # if we still have no satisfactory mapping (bad correlation, also in possible subsections)
 # we try if the offset range has a number of outliers which should be ignored; we build the
@@ -3266,6 +3279,7 @@ sub newlinkcontigs {
 
         unless ($accept) {
 $logger = &verifyLogger('linkcontigs');
+$logger->info("TRYING TO recover");
 $logger->debug("ENTER recover");
 # the relation between offset and contig position looks messy
             $logger->special("Suspect mapping between $contigname and $parentname "
@@ -3381,7 +3395,7 @@ $logger->debug("bad contig range: @badmap");
         $mapping->setSequenceID($parentseqid);
         push @mappings,$mapping;
         $validmappinghash->{$mapping}++;
-        $logger->info("Empty mapping added for link between $contigname and $parentname"); 
+        $logger->info("Empty mapping added for link between $contigname and $parentname");
     }
     
 # prevent the storing of duplicates
@@ -3576,10 +3590,12 @@ sub alignmentstats {
     @$extracted = sort {$a->[0] <=> $b->[0]} @$extracted;
 
     my $sumpp = 0.0; # for sum position**2
-    my $sumoo = 0.0; # for sum offset*2
     my $sumop = 0.0; # for sum offset*position
+    my $sumoo = 0.0; # for sum offset*2
+    my $summp = 0.0; # for sum (position-offset)*position
+    my $summm = 0.0; # for sum (position-offset)*2
 
-    my ($R,$penalty,$weightedsum) = (0,0,0);
+    my ($R,$S,$penalty,$weightedsum) = (0,0,0);
 
     my @positionhistory;
 
@@ -3587,14 +3603,15 @@ sub alignmentstats {
 
         my $position = 0.5 * ($segment->[0] + $segment->[1]);
         my $weight   = abs   ($segment->[1] - $segment->[0]) + 1;
-# measure == offset,  re: build of segmentlist in main loop             
         my $measure = $segment->[4];
-        $measure += $position;
 
         $weightedsum += $weight;
-        $sumpp += $position * $position * $weight; # weighted?
+        $sumpp += $position * $position * $weight;
         $sumop += $position * $measure  * $weight;
         $sumoo += $measure  * $measure  * $weight;
+        $measure = $position - $measure;
+        $summp += $position * $measure  * $weight;
+        $summm += $measure  * $measure  * $weight;
 
         unshift @positionhistory,$position; # put new position upfront
 # collect penalties for reversals of direction
@@ -3611,6 +3628,8 @@ sub alignmentstats {
 
     if ($sumpp && $sumoo) {
         $R = $sumop / sqrt($sumpp * $sumoo); # protect
+        $S = $summp / sqrt($sumpp * $summm);
+        $R = $S if (abs($S) > abs($R));
     }
     elsif ($sumpp) { # all offsets are 0
         $R = 1;
@@ -3951,16 +3970,18 @@ sub isvalidmapping {
                 .  sprintf("%6.3f",$rfractions[$i]) . "\n";
     }
 
-# return valid read if number of overlap reads equals number in either contig
+# return valid if number of overlap reads equals number in either contig
 
     return 1,$report if ($olreads == $readsincontig[1]); # all parent reads in child
     return 1,$report if ($olreads == $readsincontig[0]); # all child reads in parent
 #    return 1 if ($olreads == $readsincontig[0] && $olreads <= 2); # ? of child
 
-# get threshold for spurious link to the parent
+# get refined threshold for spurious link to the parent
 
-    my $threshold = $thresholds[1];
+    my $n = ($readsincontig[1] < $readsincontig[0]) ? 1 : 0; # get the smallest contig involved
+    my $threshold = $readsincontig[$n] - $thresholds[$n]; # set threshold to nreads - sqrt(reads)
 
+#print STDERR "olreads $olreads threshold $threshold\n"; exit;
     return 0,$report if ($olreads < $threshold); # probably spurious link
 
 # extra test for very small parents with incomplete overlaping reads: 
