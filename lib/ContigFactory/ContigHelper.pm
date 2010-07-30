@@ -3134,8 +3134,8 @@ sub newlinkcontigs {
 
 # define accepted minumum cross-correlation coefficient and maximum defects
 
-#    my $ccthreshold = $options{ccthreshold} || 0.75;
-    my $ccthreshold = $options{ccthreshold} || 0.9;
+    my $ccthreshold = $options{ccthreshold} || 0.8;
+#    my $ccthreshold = $options{ccthreshold} || 0.9;
     my $aligndefect = $options{maxadefects} || 5;
     my $nominalreadlength = $options{readlength} || 800;
 
@@ -3227,7 +3227,7 @@ sub newlinkcontigs {
 
         $logger->info("Global correlation test R = $R  penalty $penalty  wgtsum $wtsum");
 
-        if (abs($R) >= 0.98 && $penalty <= $aligndefect) { # only very good correlation
+        if (abs($R) >= 0.95 && $penalty <= $aligndefect) { # only very good correlation
             my $mapping = &buildmapping($segmentlist,$parentname,$parentseqid);
             if ($mapping && $mapping->hasSegments()) {
                 push @mappings, $mapping;
@@ -3251,7 +3251,6 @@ sub newlinkcontigs {
                     my $mapping = &buildmapping($segmentlist,$parentname,$parentseqid,[@window]);
                     if ($mapping && $mapping->hasSegments()) {
                         push @mappings, $mapping;        
-                        $accept = 1;
 	            } 
 		}
 	    }
@@ -3260,7 +3259,6 @@ sub newlinkcontigs {
                 my $mapping = &buildmapping($segmentlist,$parentname,$parentseqid);
                 if ($mapping && $mapping->hasSegments()) { # on the whole thing
                     push @mappings, $mapping;
-                    $accept = 1;
 	        } 
             }
 	}
@@ -3280,7 +3278,7 @@ sub newlinkcontigs {
         unless ($accept) {
 $logger = &verifyLogger('linkcontigs');
 $logger->info("TRYING TO recover");
-$logger->debug("ENTER recover");
+$logger->debug("ENTER recover (method TO BE COMPLETED, is experimental)");
 # the relation between offset and contig position looks messy
             $logger->special("Suspect mapping between $contigname and $parentname "
                              ." (correlation R = $R; defect penalty = $penalty)");
@@ -3368,7 +3366,8 @@ $logger->debug("bad contig range: @badmap");
             unless ($isvalid) {
                 $logger->special("Suspect link detected between contigs $contigname "
                                 ."and (parent) $parentname : $msg");
-                if ($contigmappedsections == 1 && $readsincommon >= 5) {
+                if (($contigmappedsections == 1 && $readsincommon >= 5)  # rule of thumb heuristic
+                 || ($contigmappedsections == 2 && $readsincommon >= 9)) {
 		    $isvalid = 1; # accept 
                     $logger->special("Link accepted nevertheless because of contiguous read coverage");
 		}
@@ -3626,7 +3625,7 @@ sub alignmentstats {
 
 # get the correlation coefficient
 
-    if ($sumpp && $sumoo) {
+    if ($sumpp && $sumoo && $summm) {
         $R = $sumop / sqrt($sumpp * $sumoo); # protect
         $S = $summp / sqrt($sumpp * $summm);
         $R = $S if (abs($S) > abs($R));
