@@ -56,11 +56,11 @@ public class ReadFinder {
 		pstmtReadNameLikeToID = conn.prepareStatement(query);
 
 		pstmtReadToContig = conn
-				.prepareStatement("select CURRENTCONTIGS.contig_id,cstart,cfinish,direction"
-						+ " from SEQ2READ,MAPPING,CURRENTCONTIGS"
+				.prepareStatement("select CURRENTCONTIGS.contig_id,coffset,direction"
+						+ " from SEQ2READ,SEQ2CONTIG,CURRENTCONTIGS"
 						+ " where SEQ2READ.read_id = ?"
-						+ " and SEQ2READ.seq_id = MAPPING.seq_id"
-						+ " and MAPPING.contig_id = CURRENTCONTIGS.contig_id");
+						+ " and SEQ2READ.seq_id = SEQ2CONTIG.seq_id"
+						+ " and SEQ2CONTIG.contig_id = CURRENTCONTIGS.contig_id");
 	}
 
 	public void close() throws ArcturusDatabaseException {
@@ -137,15 +137,14 @@ public class ReadFinder {
 
 					int contigid = rs2.getInt(1);
 					int cstart = rs2.getInt(2);
-					int cfinish = rs2.getInt(3);
-					boolean forward = rs2.getString(4).equalsIgnoreCase(
+					boolean forward = rs2.getString(3).equalsIgnoreCase(
 							"forward");
 
 					Contig contig = adb.getContigByID(contigid,
 							ArcturusDatabase.CONTIG_BASIC_DATA);
 					
 					event.setContigAndMapping(read, contig, cstart,
-							cfinish, forward);
+							0, forward);
 
 					if (listener != null)
 						listener.readFinderUpdate(event);

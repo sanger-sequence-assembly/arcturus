@@ -269,13 +269,15 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 				
 			case ReadFinderEvent.READ_IS_IN_CONTIG:
 				Contig contig = event.getContig();
+				int coffset = event.getContigStart();
+				int cfinish = event.getContigFinish();
 				message = readname + " is in contig " + contig.getID() +
 				" (" + contig.getName() + ", " + contig.getReadCount() +
 				" reads, " + contig.getLength() + " bp, updated " +
 				contig.getUpdated() +
 				") in project " +
-				contig.getProject().getName() + " at " + event.getContigStart() +
-				" to " + event.getContigFinish() + " in " +
+				contig.getProject().getName() + " at " + coffset +
+				(cfinish > 0 ? " to " + event.getContigFinish() : "") + " in " +
 				(event.isForward() ? "forward" : "reverse") + " sense\n";
 				break;
 				
