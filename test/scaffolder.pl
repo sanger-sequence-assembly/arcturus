@@ -27,7 +27,7 @@ my $seedcontig;
 my $fastadir;
 my $c2sfile;
 my $fastaminlen = 5000;
-my $nogap4name = 0;
+my $contig_name_format = 'normal';
 my $depad = 0;
 
 ###
@@ -66,7 +66,7 @@ while (my $nextword = shift @ARGV) {
 
     $c2sfile = shift @ARGV if ($nextword eq '-contigmap');
 
-    $nogap4name = 1 if ($nextword eq '-nogap4name');
+    $contig_name_format = shift @ARGV if ($nextword eq '-contignameformat');
 
     $depad = 1 if ($nextword eq '-depad');
 
@@ -223,8 +223,15 @@ if (defined($onlyproject)) {
 
 while (my ($ctgid, $ctgname, $ctglen, $ctgproject) = $sth->fetchrow_array()) {
     $contiglength->{$ctgid} = $ctglen;
-    $contigname->{$ctgid} = (!$nogap4name && defined($ctgname)) ?
-	$ctgname : sprintf("contig%06d", $ctgid);
+
+    if ($contig_name_format eq 'gap4') {
+	$contigname->{$ctgid} = $ctgname;
+    } elsif ($contig_name_format eq 'short') {
+	$contigname->{$ctgid} = sprintf("contig%06d", $ctgid);
+    } else {
+	$contigname->{$ctgid} = $instance . '_' . $organism . '_contig_' . $ctgid;
+    }
+
     $project->{$ctgid} = $ctgproject;
     push @contiglist, $ctgid;
 }
@@ -1406,5 +1413,5 @@ sub showUsage {
     print STDERR "-depad\t\tDepad the FASTA sequences\n";
     print STDERR "-fastaminlen\tMinimum scaffold length for FASTA output\n";
     print STDERR "-contigmap\tScaffold-contig mapping file\n";
-    print STDERR "-nogap4name\tUse contig IDs as contig names instead of Gap4 names\n";
+    print STDERR "-contignameformat\tHow to display the contig name [normal|short|gap4]\n";
 }
