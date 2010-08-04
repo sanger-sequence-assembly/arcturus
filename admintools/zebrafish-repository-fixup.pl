@@ -10,6 +10,7 @@ my $port;
 my $username;
 my $password;
 my $verbose = 0;
+my $fixit = 0;
 
 while (my $nextword = shift @ARGV) {
     if ($nextword eq '-host') {
@@ -22,6 +23,8 @@ while (my $nextword = shift @ARGV) {
 	$password = shift @ARGV;
     } elsif ($nextword eq '-verbose') {
 	$verbose = 1;
+    } elsif ($nextword eq '-fixit') {
+	$fixit = 1;
     } elsif ($nextword eq '-help') {
 	&showHelp();
 	exit(0);
@@ -81,9 +84,15 @@ eval {
 	    if (defined($rdir) && $rdir ne $pdir) {
 		print STDERR "\tDirectory for $pname (ID=$projid) is\n\t\t$pdir in Arcturus\n\t\t$rdir in Tracking DB\n";
 
-		my $rc = $sth_set_directory->execute($rdir, $projid);
+		if ($fixit) {
+		    my $rc = $sth_set_directory->execute($rdir, $projid);
 
-		print STDERR "\tSet directory to $rdir in Arcturus.\n\n";
+		    print STDERR "\tSet directory to $rdir in Arcturus.\n";
+		} else {
+		    print STDERR "\tRe-run this script with the -fixit option to repair this problem.\n";
+		}
+
+		print STDERR "\n";
 	    }
 	}
 
@@ -115,5 +124,6 @@ sub showHelp {
     print STDERR "\n";
 
     print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "\t-fixit\tFix all incorrect directory locations\n";
     print STDERR "\t-verbose\tRun in verbose mode\n";
 }
