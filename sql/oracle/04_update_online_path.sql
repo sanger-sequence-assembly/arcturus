@@ -1,0 +1,1 @@
+update online_data set online_path=replace(online_path,'/nfs/','/tmp/')
