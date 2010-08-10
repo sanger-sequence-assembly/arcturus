@@ -378,10 +378,61 @@ sub setDirectory {
     my $this = shift;
     $this->{data}->{directory} = shift;
 }
+
+sub getSchemaName {
+  my $this = shift;
+  my $ADB = $this->{ADB} || return (0,"Missing database connection");
+  return $ADB->getOrganism();
+}
   
 sub getDirectory {
     my $this = shift;
-    return $this->{data}->{directory};
+    my $metadir =$this->{data}->{directory};
+    return $this->metadirToDirectory($metadir);
+}
+
+sub metadirToDirectory {
+  my $this = shift;
+  my $metadir = shift;
+
+  my ($to_find, $suffix, $prefix);
+  SWITCH: {
+  if ($metadir =~ /^#SCHEMA#(.*)$/) {
+    $to_find = $this->getSchemaName();
+    $suffix = $1;
+    last SWITCH;
+  }
+
+  if ($metadir =~ /^#PROJECT#(.*)$/) {
+    $to_find = $this->getProjectName();
+    $suffix = $1;
+    last SWITCH;
+  }
+
+  if ($metadir =~ /^{(\w+)}(.*)/) {
+    $to_find = $1;
+    $suffix = $2;
+    last SWITCH;
+  }
+  # default
+  $suffix = $metadir;
+  $prefix = "";
+}
+
+#  print "*** $metadir *** $to_find ** $suffix ***\n";
+
+  if (defined($to_find)) {
+    $prefix = `pfind -q -u $to_find`;
+    die ("Can't find repository for '$prefix'") unless $prefix;
+    $prefix .= "/";
+  }
+
+  #
+  my $basedir = $ENV{ARCTURUS_TEST_DIRECTORY_BASE};
+  $prefix  = "$basedir/$prefix" if $basedir;
+
+  return $prefix. $suffix;
+
 }
   
 sub setLockDate {
