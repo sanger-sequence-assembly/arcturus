@@ -4,7 +4,8 @@ import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectListModel;
 import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectProxy;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
-import uk.ac.sanger.arcturus.utils.*;
+import uk.ac.sanger.arcturus.utils.ReadToProjectImporter;
+import uk.ac.sanger.arcturus.utils.ReadToProjectImporter.Status;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
@@ -246,13 +247,13 @@ public class ImportReadsPanel extends MinervaPanel {
 				+ "\n\n");
 
 		try {
-			int[] rcs = importer.makeSingleReadContigs(readnames, project
+			Status[] rcs = importer.makeSingleReadContigs(readnames, project
 					.getID());
 
 			int ok = 0;
 
 			for (int i = 0; i < rcs.length; i++)
-				if (rcs[i] == ReadToProjectImporter.OK)
+				if (rcs[i] == Status.OK)
 					ok++;
 
 			for (int i = 0; i < readnames.length; i++)

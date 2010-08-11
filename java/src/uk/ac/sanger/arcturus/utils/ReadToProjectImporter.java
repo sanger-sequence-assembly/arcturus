@@ -2,24 +2,20 @@ package uk.ac.sanger.arcturus.utils;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
+import uk.ac.sanger.arcturus.jdbc.ArcturusDatabaseClient;
 
 import java.sql.*;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.zip.*;
 
-public class ReadToProjectImporter {
-	public static final int OK = 0;
-	public static final int READNAME_WAS_NULL = 1;
-	public static final int READ_ALREADY_IN_CONTIG = 2;
-	public static final int READ_NOT_FOUND = 3;
-	public static final int FAILED_TO_INSERT_CONTIG = 4;
-	public static final int FAILED_TO_INSERT_MAPPING = 5;
-	public static final int FAILED_TO_INSERT_SEGMENT = 6;
-	public static final int FAILED_TO_INSERT_CONSENSUS = 7;
-	public static final int FAILED_TO_VALIDATE_CONTIG = 8;
-	public static final int NO_CONNECTION_TO_DATABASE = 9;
-	public static final int ZERO_LENGTH = 10; 
+public class ReadToProjectImporter extends ArcturusDatabaseClient {
+	public enum Status {
+		OK, READNAME_WAS_NULL, READ_ALREADY_IN_CONTIG,
+		READ_NOT_FOUND, FAILED_TO_INSERT_CONTIG, FAILED_TO_INSERT_CANONICAL_MAPPING,
+		FAILED_TO_INSERT_SEQUENCE_TO_CONTIG_LINK, FAILED_TO_INSERT_CONSENSUS, FAILED_TO_VALIDATE_CONTIG,
+		NO_CONNECTION_TO_DATABASE, ZERO_LENGTH
+	}
 	
 	private Connection conn;
 
@@ -31,106 +27,67 @@ public class ReadToProjectImporter {
 	private PreparedStatement pstmtQualityClip;
 	private PreparedStatement pstmtNewContig;
 	private PreparedStatement pstmtValidateContig;
-	private PreparedStatement pstmtNewMapping;
-	private PreparedStatement pstmtNewSegment;
+	private PreparedStatement pstmtNewSequenceToContigLink;
+	private PreparedStatement pstmtFindCanonicalMapping;
+	private PreparedStatement pstmtNewCanonicalMapping;
 	private PreparedStatement pstmtNewConsensus;
-	
-	private Set<PreparedStatement> statements = new HashSet<PreparedStatement>();
 
 	private Inflater decompresser = new Inflater();
 	private Deflater compresser = new Deflater(Deflater.BEST_COMPRESSION);
 
 	public ReadToProjectImporter(ArcturusDatabase adb) throws ArcturusDatabaseException {
-		conn = adb.getPooledConnection(this);
-
+		super(adb);
+		
 		try {
-			prepareStatements();
+			setConnection(adb.getPooledConnection(this));
 		} catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to initialise the read-to-project importer", conn, this);
 		}
 	}
 
-	private void prepareStatements() throws SQLException {
-		pstmtReadToContig = conn
-				.prepareStatement("select CURRENTCONTIGS.contig_id"
-						+ " from READNAME,SEQ2READ,MAPPING,CURRENTCONTIGS"
+	protected void prepareConnection() throws SQLException {
+		pstmtReadToContig = prepareStatement("select CURRENTCONTIGS.contig_id"
+						+ " from READNAME,SEQ2READ,SEQ2READ,CURRENTCONTIGS"
 						+ " where READNAME.readname = ?"
 						+ " and READNAME.read_id = SEQ2READ.read_id"
-						+ " and SEQ2READ.seq_id = MAPPING.seq_id"
-						+ " and MAPPING.contig_id = CURRENTCONTIGS.contig_id");
-		
-		statements.add(pstmtReadToContig);
+						+ " and SEQ2READ.seq_id = SEQ2READ.seq_id"
+						+ " and SEQ2READ.contig_id = CURRENTCONTIGS.contig_id");
 
-		pstmtReadID = conn
-				.prepareStatement("select read_id from READNAME where readname = ?");
-		
-		statements.add(pstmtReadID);
+		pstmtReadID = prepareStatement("select read_id from READNAME where readname = ?");
 
-		pstmtSequence = conn
-				.prepareStatement("select seq_id,seqlen,sequence,quality"
+		pstmtSequence = prepareStatement("select seq_id,seqlen,sequence,quality"
 						+ " from SEQ2READ left join SEQUENCE using(seq_id)"
 						+ " where read_id = ? order by seq_id asc limit 1");
-		
-		statements.add(pstmtSequence);
 
-		pstmtSeqVector = conn.prepareStatement("select svleft,svright,name"
+		pstmtSeqVector = prepareStatement("select svleft,svright,name"
 				+ " from SEQVEC left join SEQUENCEVECTOR using(svector_id)"
 				+ " where seq_id = ?");
-		
-		statements.add(pstmtSeqVector);
 
-		pstmtSeqVectorCount = conn.prepareStatement("select count(*)"
+		pstmtSeqVectorCount = prepareStatement("select count(*)"
 				+ " from SEQVEC left join SEQUENCEVECTOR using(svector_id)"
 				+ " where seq_id = ?");
-		
-		statements.add(pstmtSeqVectorCount);
 
-		pstmtQualityClip = conn
-				.prepareStatement("select qleft,qright from QUALITYCLIP where seq_id = ?");
-		
-		statements.add(pstmtQualityClip);
+		pstmtQualityClip = prepareStatement("select qleft,qright from QUALITYCLIP where seq_id = ?");
 
-		pstmtNewContig = conn.prepareStatement(
+		pstmtNewContig = prepareStatement(
 				"insert into CONTIG(gap4name,length,project_id,created)"
 						+ " VALUES(?,?,?,NOW())",
 				Statement.RETURN_GENERATED_KEYS);
-		
-		statements.add(pstmtNewContig);
 
-		pstmtValidateContig = conn
-				.prepareStatement("update CONTIG set nreads=1 where contig_id = ?");
-		
-		statements.add(pstmtValidateContig);
+		pstmtValidateContig = prepareStatement("update CONTIG set nreads=1 where contig_id = ?");
 
-		pstmtNewMapping = conn.prepareStatement(
-				"insert into MAPPING(contig_id,seq_id,cstart,cfinish,direction)"
-						+ " VALUES(?,?,?,?,'Forward')",
+		pstmtNewSequenceToContigLink = prepareStatement(
+				"insert into SEQ2CONTIG(mapping_id,contig_id,seq_id,coffset,roffset,direction)"
+						+ " VALUES(?,?,?,1,?,'Forward')",
 				Statement.RETURN_GENERATED_KEYS);
 		
-		statements.add(pstmtNewMapping);
+		pstmtFindCanonicalMapping = prepareStatement("select mapping_id from CANONICALMAPPING where cigar = ?");
+		
+		pstmtNewCanonicalMapping = prepareStatement("insert into CANONICALMAPPING(cspan,rspan,cigar)"
+						+ " VALUES(?,?,?)", Statement.RETURN_GENERATED_KEYS);
 
-		pstmtNewSegment = conn
-				.prepareStatement("insert into SEGMENT(mapping_id,cstart,rstart,length)"
+		pstmtNewConsensus = prepareStatement("insert into CONSENSUS(contig_id,sequence,quality,length)"
 						+ " VALUES(?,?,?,?)");
-		
-		statements.add(pstmtNewSegment);
-
-		pstmtNewConsensus = conn
-				.prepareStatement("insert into CONSENSUS(contig_id,sequence,quality,length)"
-						+ " VALUES(?,?,?,?)");
-		
-		statements.add(pstmtNewConsensus);
-	}
-
-	public void close() throws SQLException {
-		if (conn != null) {
-			for (PreparedStatement p : statements)
-				p.close();
-			
-			conn.close();
-		}
-		
-		conn = null;
 	}
 	
 	protected void finalize() {
@@ -140,12 +97,12 @@ public class ReadToProjectImporter {
 		catch (SQLException sqle) {}
 	}
 
-	public int[] makeSingleReadContigs(String[] readnames, int projectid)
+	public Status[] makeSingleReadContigs(String[] readnames, int projectid)
 			throws SQLException {
 		if (readnames == null)
 			return null;
 
-		int[] status = new int[readnames.length];
+		Status[] status = new Status[readnames.length];
 
 		for (int i = 0; i < readnames.length; i++)
 			status[i] = makeSingleReadContig(readnames[i], projectid);
@@ -153,22 +110,24 @@ public class ReadToProjectImporter {
 		return status;
 	}
 
-	public int makeSingleReadContig(String readname, int projectid)
+	public Status makeSingleReadContig(String readname, int projectid)
 			throws SQLException {
 		if (readname == null)
-			return READNAME_WAS_NULL;
+			return Status.READNAME_WAS_NULL;
 		
 		if (conn == null)
-			return NO_CONNECTION_TO_DATABASE;
+			return Status.NO_CONNECTION_TO_DATABASE;
 
 		if (isReadAllocated(readname))
-			return READ_ALREADY_IN_CONTIG;
+			return Status.READ_ALREADY_IN_CONTIG;
 
 		int readid = findReadID(readname);
 
 		if (readid < 0)
-			return READ_NOT_FOUND;
+			return Status.READ_NOT_FOUND;
 
+		beginTransaction();
+		
 		pstmtSequence.setInt(1, readid);
 
 		ResultSet rs = pstmtSequence.executeQuery();
@@ -204,32 +163,50 @@ public class ReadToProjectImporter {
 		int offset = rleft - 1;
 		int ctglen = rright - rleft + 1;
 		
-		if (ctglen <= 0)
-			return ZERO_LENGTH;
+		if (ctglen <= 0) {
+			rollbackTransaction();
+			return Status.ZERO_LENGTH;
+		}
 
 		int contigid = insertNewContig(readname, ctglen, projectid);
 
-		if (contigid < 0)
-			return FAILED_TO_INSERT_CONTIG;
+		if (contigid < 0) {
+			rollbackTransaction();
+			return Status.FAILED_TO_INSERT_CONTIG;
+		}
+		
+		String cigar = ctglen + "M";
+		
+		int mappingid = findOrCreateCanonicalMapping(cigar);
 
-		int mappingid = insertNewMapping(contigid, seqid, ctglen);
-
-		if (mappingid < 0)
-			return FAILED_TO_INSERT_MAPPING;
-
-		if (!insertSegment(mappingid, rleft, ctglen))
-			return FAILED_TO_INSERT_SEGMENT;
-
+		if (mappingid < 0) {
+			rollbackTransaction();
+			return Status.FAILED_TO_INSERT_CANONICAL_MAPPING;
+		}
+		
+		boolean success = insertSequenceToContigLink(mappingid, contigid, seqid, offset);
+		
+		if (!success) {
+			rollbackTransaction();
+			return Status.FAILED_TO_INSERT_SEQUENCE_TO_CONTIG_LINK;
+		}
+		
 		dna = encodeCompressedData(dna, offset, ctglen);
 		qual = encodeCompressedData(qual, offset, ctglen);
 
-		if (!insertConsensus(contigid, dna, qual, ctglen))
-			return FAILED_TO_INSERT_CONSENSUS;
+		if (!insertConsensus(contigid, dna, qual, ctglen)) {
+			rollbackTransaction();
+			return Status.FAILED_TO_INSERT_CONSENSUS;
+		}
 
-		if (!validateContig(contigid))
-			return FAILED_TO_VALIDATE_CONTIG;
-
-		return OK;
+		if (!validateContig(contigid)) {
+			rollbackTransaction();
+			return Status.FAILED_TO_VALIDATE_CONTIG;
+		}
+		
+		commitTransaction();
+		
+		return Status.OK;
 	}
 
 	private boolean isReadAllocated(String readname) throws SQLException {
@@ -353,33 +330,48 @@ public class ReadToProjectImporter {
 		return contigid;
 	}
 
-	private int insertNewMapping(int contigid, int seqid, int ctglen)
-			throws SQLException {
-		pstmtNewMapping.setInt(1, contigid);
-		pstmtNewMapping.setInt(2, seqid);
-		pstmtNewMapping.setInt(3, 1);
-		pstmtNewMapping.setInt(4, ctglen);
-
-		if (pstmtNewMapping.executeUpdate() != 1)
-			return -1;
-
-		ResultSet rs = pstmtNewMapping.getGeneratedKeys();
-
-		int mappingid = rs.next() ? rs.getInt(1) : -1;
-
-		rs.close();
-
-		return mappingid;
+	private boolean insertSequenceToContigLink(int mappingid, int contigid,
+			int seqid, int offset) throws SQLException {
+		pstmtNewSequenceToContigLink.setInt(1, mappingid);
+		pstmtNewSequenceToContigLink.setInt(2, contigid);
+		pstmtNewSequenceToContigLink.setInt(3, seqid);
+		pstmtNewSequenceToContigLink.setInt(4, offset);
+		
+		int rc = pstmtNewSequenceToContigLink.executeUpdate();
+		
+		return rc == 1;
 	}
 
-	private boolean insertSegment(int mappingid, int rleft, int ctglen)
-			throws SQLException {
-		pstmtNewSegment.setInt(1, mappingid);
-		pstmtNewSegment.setInt(2, 1);
-		pstmtNewSegment.setInt(3, rleft);
-		pstmtNewSegment.setInt(4, ctglen);
-
-		return pstmtNewSegment.executeUpdate() == 1;
+	private int findOrCreateCanonicalMapping(String cigar) throws SQLException {
+		pstmtFindCanonicalMapping.setString(1, cigar);
+		
+		ResultSet rs = pstmtFindCanonicalMapping.executeQuery();
+		
+		int mappingid = rs.next() ? rs.getInt(1) : -1;
+		
+		rs.close();
+		
+		if (mappingid > 0)
+			return mappingid;
+		
+		int len = cigar.length();
+		
+		pstmtNewCanonicalMapping.setInt(1, len);
+		pstmtNewCanonicalMapping.setInt(2, len);
+		pstmtNewCanonicalMapping.setString(3, cigar);
+		
+		int rc = pstmtNewCanonicalMapping.executeUpdate();
+		
+		if (rc != 1)
+			return -1;
+		
+		rs = pstmtNewCanonicalMapping.getGeneratedKeys();
+		
+		mappingid = rs.next() ? rs.getInt(1) : -1;
+		
+		rs.close();
+		
+		return mappingid;
 	}
 
 	private boolean insertConsensus(int contigid, byte[] dna, byte[] qual,
@@ -398,7 +390,7 @@ public class ReadToProjectImporter {
 		return pstmtValidateContig.executeUpdate() == 1;
 	}
 
-	public String getErrorMessage(int code) {
+	public String getErrorMessage(Status code) {
 		switch (code) {
 			case OK:
 				return "OK";
@@ -415,11 +407,11 @@ public class ReadToProjectImporter {
 			case FAILED_TO_INSERT_CONTIG:
 				return "Failed to insert contig into database";
 
-			case FAILED_TO_INSERT_MAPPING:
-				return "Failed to insert mapping into database";
+			case FAILED_TO_INSERT_CANONICAL_MAPPING:
+				return "Failed to insert canonical mapping into database";
 
-			case FAILED_TO_INSERT_SEGMENT:
-				return "Failed to insert segment into database";
+			case FAILED_TO_INSERT_SEQUENCE_TO_CONTIG_LINK:
+				return "Failed to insert sequence-to-contig link into database";
 
 			case FAILED_TO_INSERT_CONSENSUS:
 				return "Failed to insert consensus into database";
