@@ -1,6 +1,7 @@
 #!/usr/local/bin/perl -w
 
 use strict;
+use Cwd;
 
 use ArcturusDatabase;
 
@@ -15,14 +16,16 @@ use constant BACKUP_VERSION => 'Z';
 
 #------------------------------------------------------------------------------
 
-my $pwd = `pwd`; chomp $pwd;  # the current directory
+my $pwd = cwd();
+
 my $basedir = `dirname $0`; chomp $basedir; # directory of the script
 my $arcturus_home = "${basedir}/..";
 
 my $gap5root = "/software/badger/bin";
 
-my $javacontroller = "/nfs/users/nfs_e/ejz/arcturus/dev/utils/run-arcturus-class.sh";
-my $export_script = "uk.ac.sanger.arcturus.apps.ContigExporter";
+my $export_script = "${arcturus_home}/java/scripts/exportsamfile";
+
+my $java_opts = defined($ENV{'JAVA_DEBUG'}) ? "-Ddebugging=true -Dtesting=true -Xmx4000M" : "-Xmx4000M";
 
 #------------------------------------------------------------------------------
 # command line input parser
@@ -37,7 +40,7 @@ my $minerva = '';
 my $validkeys = "instance|i|organism|o|project|p|assembly|a|scaffold|c|"
               . "gap5name|g|version|v|nolock|nl|"
               . "script|rundir|rd|create|superuser|su|"
-              . "keep|minerva|m|passon|po|help|h";
+              . "keep|minerva|m|passon|po|help|h|java_opts";
 
 while (my $nextword = shift @ARGV) {
 
@@ -115,6 +118,10 @@ while (my $nextword = shift @ARGV) {
         last; # abort parsing here and pass remainder of ARGV on to export script
     }
 
+    if ($nextword eq '-java_opts') {
+	$java_opts = shift @ARGV; # abort input parsing here
+    }
+
     if ($nextword eq '-help'     || $nextword eq '-h') {
         &showusage(); # and exit
     }
@@ -133,6 +140,14 @@ unless (defined($instance) && defined($organism)) {
 unless (defined($projectname)) {
     print STDERR "!! -- No project name specified --\n";
     &showusage(); # and exit
+}
+
+#------------------------------------------------------------------------------
+# Set the JVM options
+#------------------------------------------------------------------------------
+
+if (defined($java_opts)) {
+    $ENV{'JAVA_OPTS'} = $java_opts;
 }
 
 # if no scaffold is defined, the project will be exported to gap5name
@@ -209,7 +224,7 @@ if ($rundir) {
         }
         print STDOUT "chdir recovered from automount failure\n";
     }
-    $pwd = `pwd`; chomp $pwd;
+    $pwd = cwd();
 }
 
 #------------------------------------------------------------------------------
@@ -299,15 +314,14 @@ unless ($nolock) {
 
 my $samfile = "/tmp/${gap5name}.$$.samfile.sam";
 
-my $command = "$javacontroller $export_script -instance $instance -organism $organism "
-            . "-out $samfile ";
+my $command = "$export_script -instance $instance -organism $organism -out $samfile";
 
 if ($scaffold) {
 # export using contig-export.pl TO BE DEVELOPED project must be mentioned
-    $command .= "-project $projectname "; # always required?
-    $command .= "-minerva " if $minerva;
+    $command .= " -project $projectname"; # always required?
+    $command .= " -minerva" if $minerva;
 
-    $command .= "-scaffold $scaffold "; # processing of $scaffold in export script
+    $command .= " -scaffold $scaffold"; # processing of $scaffold in export script
     unless ($gap5name) {
 # if gap5name defined, use that, else generate one project_scaffold_NN
 # to be developed (or function in export script?)
@@ -315,15 +329,15 @@ if ($scaffold) {
     $command .= " @ARGV" if @ARGV;
 }
 else { # standard project export
-    $command .= "-project $projectname ";
-    $command .= "-minerva " if $minerva;
+    $command .= " -project $projectname";
+    $command .= " -minerva" if $minerva;
     $command .= " @ARGV" if @ARGV;
 }
 
 print STDERR "Exporting to SAM file $samfile\n";
 print STDERR "${minerva}Exporting as SAM\n";
 
-print STDERR "c:$command\n";
+print STDERR "Command: $command\n";
 my $rc = &mySystem ($command);
 
 if ($rc) {
