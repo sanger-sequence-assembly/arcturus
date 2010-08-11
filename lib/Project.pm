@@ -396,29 +396,24 @@ sub metadirToDirectory {
   my $metadir = shift;
 
   my ($to_find, $suffix, $prefix);
-  SWITCH: {
+
   if ($metadir =~ /^#SCHEMA#(.*)$/) {
     $to_find = $this->getSchemaName();
     $suffix = $1;
-    last SWITCH;
   }
-
-  if ($metadir =~ /^#PROJECT#(.*)$/) {
+  elsif ($metadir =~ /^#PROJECT#(.*)$/) {
     $to_find = $this->getProjectName();
     $suffix = $1;
-    last SWITCH;
   }
-
-  if ($metadir =~ /^{(\w+)}(.*)/) {
+  elsif ($metadir =~ /^{(\w+)}(.*)/) {
     $to_find = $1;
     $suffix = $2;
-    last SWITCH;
   }
-  # default
-  $suffix = $metadir;
-  $prefix = "";
-}
-
+  else {
+    # default
+    $suffix = $metadir;
+    $prefix = "";
+  }
 #  print "*** $metadir *** $to_find ** $suffix ***\n";
 
   if (defined($to_find)) {
