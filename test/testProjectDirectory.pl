@@ -19,68 +19,61 @@ my ($import, $export);
 
 # parsing ARGS
 while (my $nextword = shift @ARGV) {
-    $instance = shift @ARGV if ($nextword eq '-instance');
+  $instance = shift @ARGV if ($nextword eq '-instance');
 
-    $organism = shift @ARGV if ($nextword eq '-organism');
+  $organism = shift @ARGV if ($nextword eq '-organism');
 
-    $project_name = shift @ARGV if ($nextword eq '-project');
+  $project_name = shift @ARGV if ($nextword eq '-project');
 
-    push @metadirs, shift @ARGV if ($nextword eq '-metadir');
+  push @metadirs, shift @ARGV if ($nextword eq '-metadir');
 
-    $ENV{ARCTURUS_TEST_DIRECTORY_BASE}= "" if ($nextword eq '-no_base_directory');
+  $ENV{ARCTURUS_TEST_DIRECTORY_BASE}= "" if ($nextword eq '-no_base_directory');
 
-    $import = 1 if ($nextword eq '-import');
-    $export = 1 if ($nextword eq '-export');
+  $import = 1 if ($nextword eq '-import');
+  $export = 1 if ($nextword eq '-export');
 }
 
 @metadirs = @metadirs || (
-    "/baredirectory" ,
-    "#SCHEMA#subdir" ,
-    "#PROJECT#subdir" ,
-    "{SHISTO}subdir" ,
-    "{to_fail}subdir" ,
+  "/baredirectory" ,
+  "#SCHEMA#subdir" ,
+  "#PROJECT#subdir" ,
+  "{SHISTO}subdir" ,
+  "{to_fail}subdir" ,
+  undef,
 );
 
-SWITCH: {
 if (defined($export) && $ENV{ARCTURUS_TEST_DIRECTORY_BASE}) {
   print "exporting ...\n";
 
   print `utils/exportfromarcturus.lsf -instance $instance -organism $organism -project $project_name`;
 
-
-
-
-  last SWITCH;
 }
 
-if (defined($import) && $ENV{ARCTURUS_TEST_DIRECTORY_BASE}) {
+elsif (defined($import) && $ENV{ARCTURUS_TEST_DIRECTORY_BASE}) {
   print "importing ...\n";
 
   print `utils/importintoarcturus.lsf -instance $instance -organism $organism -project $project_name`;
 
   print "done\n";
 
-
-
-
-  last SWITCH;
 }
+else {
 
-my $adb = new ArcturusDatabase(-instance => $instance, -organism => $organism);
-my @projects = $adb->getProject(projectname => $project_name);
-my $project = $projects[0][0];
-print "MyProject => $project\n";
+  my $adb = new ArcturusDatabase(-instance => $instance, -organism => $organism);
+  my @projects = $adb->getProject(projectname => $project_name);
+  my $project = $projects[0][0];
+  print "MyProject => $project\n";
 
-for my $metadir (@metadirs) {
-  eval {
-    my $project_dir  = $project->metadirToDirectory($metadir);
-    print "meta: $metadir => '$project_dir'\n"; 
-  } or do {
-    print "meta: $metadir ** not metadir found ***\n";
-  };
-}
+  for my $metadir (@metadirs) {
+    eval {
+      my $project_dir  = $project->metadirToDirectory($metadir);
+      print "meta: $metadir => '$project_dir'\n"; 
+    } or do {
+      print "meta: $metadir ** not metadir found ***\n";
+    };
+  }
 
-print "dir: ", $project->getDirectory(), "\n";
+  print "dir: ", $project->getDirectory(), "\n";
 
 
 }

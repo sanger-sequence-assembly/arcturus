@@ -394,6 +394,7 @@ sub getDirectory {
 sub metadirToDirectory {
   my $this = shift;
   my $metadir = shift;
+  return $metadir unless defined($metadir);
 
   my ($to_find, $suffix, $prefix);
 
