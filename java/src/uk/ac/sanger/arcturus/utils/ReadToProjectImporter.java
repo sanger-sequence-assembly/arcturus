@@ -5,8 +5,6 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.jdbc.ArcturusDatabaseClient;
 
 import java.sql.*;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.zip.*;
 
 public class ReadToProjectImporter extends ArcturusDatabaseClient {
@@ -16,8 +14,6 @@ public class ReadToProjectImporter extends ArcturusDatabaseClient {
 		FAILED_TO_INSERT_SEQUENCE_TO_CONTIG_LINK, FAILED_TO_INSERT_CONSENSUS, FAILED_TO_VALIDATE_CONTIG,
 		NO_CONNECTION_TO_DATABASE, ZERO_LENGTH
 	}
-	
-	private Connection conn;
 
 	private PreparedStatement pstmtReadToContig;
 	private PreparedStatement pstmtReadID;
@@ -47,11 +43,11 @@ public class ReadToProjectImporter extends ArcturusDatabaseClient {
 
 	protected void prepareConnection() throws SQLException {
 		pstmtReadToContig = prepareStatement("select CURRENTCONTIGS.contig_id"
-						+ " from READNAME,SEQ2READ,SEQ2READ,CURRENTCONTIGS"
+						+ " from READNAME,SEQ2READ,SEQ2CONTIG,CURRENTCONTIGS"
 						+ " where READNAME.readname = ?"
 						+ " and READNAME.read_id = SEQ2READ.read_id"
-						+ " and SEQ2READ.seq_id = SEQ2READ.seq_id"
-						+ " and SEQ2READ.contig_id = CURRENTCONTIGS.contig_id");
+						+ " and SEQ2READ.seq_id = SEQ2CONTIG.seq_id"
+						+ " and SEQ2CONTIG.contig_id = CURRENTCONTIGS.contig_id");
 
 		pstmtReadID = prepareStatement("select read_id from READNAME where readname = ?");
 
@@ -59,13 +55,11 @@ public class ReadToProjectImporter extends ArcturusDatabaseClient {
 						+ " from SEQ2READ left join SEQUENCE using(seq_id)"
 						+ " where read_id = ? order by seq_id asc limit 1");
 
-		pstmtSeqVector = prepareStatement("select svleft,svright,name"
-				+ " from SEQVEC left join SEQUENCEVECTOR using(svector_id)"
-				+ " where seq_id = ?");
+		pstmtSeqVector = prepareStatement("select svleft,svright"
+				+ " from SEQVEC where seq_id = ?");
 
 		pstmtSeqVectorCount = prepareStatement("select count(*)"
-				+ " from SEQVEC left join SEQUENCEVECTOR using(svector_id)"
-				+ " where seq_id = ?");
+				+ " from SEQVEC where seq_id = ?");
 
 		pstmtQualityClip = prepareStatement("select qleft,qright from QUALITYCLIP where seq_id = ?");
 
@@ -143,58 +137,56 @@ public class ReadToProjectImporter extends ArcturusDatabaseClient {
 
 		int svclip[][] = getSeqVectorClip(seqid);
 
-		int rleft = (qclip == null) ? 1 : qclip[0] + 1;
+		int rleft = (qclip == null) ? 1 : qclip[0];
 
-		int rright = (qclip == null) ? seqlen : qclip[1] - 1;
+		int rright = (qclip == null) ? seqlen : qclip[1];
 
 		if (svclip != null) {
 			for (int i = 0; i < svclip.length; i++) {
 				int svleft = svclip[i][0];
 				int svright = svclip[i][1];
 
-				if (svleft == 1 && svright > rleft)
+				if (svleft == 1 && svright + 1 > rleft)
 					rleft = svright + 1;
 
-				if (svleft > 1 && svleft < rright)
-					rright = svleft;
+				if (svleft > 1 && svleft - 1 < rright)
+					rright = svleft - 1;
 			}
 		}
 
 		int offset = rleft - 1;
-		int ctglen = rright - rleft + 1;
+		int matchLength = rright - rleft + 1;
 		
-		if (ctglen <= 0) {
+		if (matchLength <= 0) {
 			rollbackTransaction();
 			return Status.ZERO_LENGTH;
 		}
 
-		int contigid = insertNewContig(readname, ctglen, projectid);
+		int contigid = insertNewContig(readname, matchLength, projectid);
 
 		if (contigid < 0) {
 			rollbackTransaction();
 			return Status.FAILED_TO_INSERT_CONTIG;
 		}
 		
-		String cigar = ctglen + "M";
-		
-		int mappingid = findOrCreateCanonicalMapping(cigar);
+		int mappingid = findOrCreateCanonicalMapping(matchLength);
 
 		if (mappingid < 0) {
 			rollbackTransaction();
 			return Status.FAILED_TO_INSERT_CANONICAL_MAPPING;
 		}
 		
-		boolean success = insertSequenceToContigLink(mappingid, contigid, seqid, offset);
+		boolean success = insertSequenceToContigLink(mappingid, contigid, seqid, rleft);
 		
 		if (!success) {
 			rollbackTransaction();
 			return Status.FAILED_TO_INSERT_SEQUENCE_TO_CONTIG_LINK;
 		}
 		
-		dna = encodeCompressedData(dna, offset, ctglen);
-		qual = encodeCompressedData(qual, offset, ctglen);
+		dna = encodeCompressedData(dna, offset, matchLength);
+		qual = encodeCompressedData(qual, offset, matchLength);
 
-		if (!insertConsensus(contigid, dna, qual, ctglen)) {
+		if (!insertConsensus(contigid, dna, qual, matchLength)) {
 			rollbackTransaction();
 			return Status.FAILED_TO_INSERT_CONSENSUS;
 		}
@@ -342,7 +334,9 @@ public class ReadToProjectImporter extends ArcturusDatabaseClient {
 		return rc == 1;
 	}
 
-	private int findOrCreateCanonicalMapping(String cigar) throws SQLException {
+	private int findOrCreateCanonicalMapping(int matchLength) throws SQLException {
+		String cigar = matchLength + "M";
+		
 		pstmtFindCanonicalMapping.setString(1, cigar);
 		
 		ResultSet rs = pstmtFindCanonicalMapping.executeQuery();
@@ -354,10 +348,8 @@ public class ReadToProjectImporter extends ArcturusDatabaseClient {
 		if (mappingid > 0)
 			return mappingid;
 		
-		int len = cigar.length();
-		
-		pstmtNewCanonicalMapping.setInt(1, len);
-		pstmtNewCanonicalMapping.setInt(2, len);
+		pstmtNewCanonicalMapping.setInt(1, matchLength);
+		pstmtNewCanonicalMapping.setInt(2, matchLength);
 		pstmtNewCanonicalMapping.setString(3, cigar);
 		
 		int rc = pstmtNewCanonicalMapping.executeUpdate();
