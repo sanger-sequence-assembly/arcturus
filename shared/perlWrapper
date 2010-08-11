@@ -14,6 +14,19 @@ else
   export PERL5LIB=${PERL_LIB_DIR}
 fi
 
+if [ "x${ARCTURUS_ENV}" == "xtest" ]
+then
+  WRAPDBI_TEST_CONFIG=${SCRIPT_HOME}/../oracle/DBlogs
+
+  if [ ! -f ${WRAPDBI_TEST_CONFIG} ]
+  then
+    echo You are running in test mode but the file ${WRAPDBI_TEST_CONFIG} does not exist
+    exit 2
+  fi
+
+  export WRAPDBI_TEST_CONFIG
+fi
+
 if [ -x ${PERL_SCRIPT_NAME} ]
 then
     exec ${PERL_SCRIPT_NAME} "$@"
