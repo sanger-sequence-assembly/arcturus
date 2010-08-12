@@ -262,6 +262,12 @@ public interface ArcturusDatabase {
 
 	public Contig getContigByID(int id) throws ArcturusDatabaseException;
 
+	public Contig getContigByName(String name, int options)
+			throws ArcturusDatabaseException;
+
+	public Contig getContigByName(String name)
+			throws ArcturusDatabaseException;
+
 	public Contig getContigByReadName(String readname, int options)
 			throws ArcturusDatabaseException;
 
@@ -313,6 +319,8 @@ public interface ArcturusDatabase {
 	
 	public int setChildContig(Contig parent, Contig child)
 			throws ArcturusDatabaseException;
+	
+	public void putContigConsensus(Contig contig) throws ArcturusDatabaseException;
 
 	public Project getProjectByID(int id) throws ArcturusDatabaseException;
 

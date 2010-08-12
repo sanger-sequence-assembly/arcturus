@@ -618,6 +618,16 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		return contigManager.getContigByID(id);
 	}
 
+	public synchronized Contig getContigByName(String name, int options)
+			throws ArcturusDatabaseException {
+		return contigManager.getContigByName(name, options);
+	}
+
+	public synchronized Contig getContigByName(String name)
+			throws ArcturusDatabaseException {
+		return contigManager.getContigByName(name);
+	}
+
 	public synchronized Contig getContigByReadName(String readname, int options)
 			throws ArcturusDatabaseException {
 		return contigManager.getContigByReadName(readname, options);
@@ -731,9 +741,13 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		return contigManager.getChildContigs(parent);
 	}
 	
-	public int setChildContig(Contig parent, Contig child)
+	public synchronized int setChildContig(Contig parent, Contig child)
 		throws ArcturusDatabaseException {
 		return contigManager.setChildContig(parent, child);
+	}
+	
+	public synchronized void putContigConsensus(Contig contig) throws ArcturusDatabaseException {
+		contigManager.putContigConsensus(contig);
 	}
 
 	public synchronized Project getProjectByID(int id) throws ArcturusDatabaseException {

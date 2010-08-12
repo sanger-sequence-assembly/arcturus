@@ -8,6 +8,7 @@ import uk.ac.sanger.arcturus.database.ContigProcessor;
 
 import java.sql.*;
 import java.util.*;
+import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 import java.util.zip.DataFormatException;
 
@@ -19,6 +20,7 @@ public class ContigManager extends AbstractManager {
 	private HashMap<Integer, Contig> hashByID;
 
 	private Inflater decompresser = new Inflater();
+	private Deflater compresser = new Deflater(Deflater.BEST_COMPRESSION);
 
 	protected PreparedStatement pstmtContigData = null;
 	protected PreparedStatement pstmtCurrentContigData = null;
@@ -43,11 +45,15 @@ public class ContigManager extends AbstractManager {
 	
 	protected PreparedStatement pstmtContigIDFromReadname = null;
 	
+	protected PreparedStatement pstmtContigIDFromName = null;
+	
 	protected PreparedStatement pstmtGetChildContigs = null;
 	
 	protected PreparedStatement pstmtPutContigMetaData = null;	
 	
 	protected PreparedStatement pstmtSetChildContig = null;
+	
+	protected PreparedStatement pstmtStoreConsensus = null;
 
 	protected ManagerEvent event = null;
 
@@ -91,37 +97,37 @@ public class ContigManager extends AbstractManager {
 		query = "select gap4name,length,nreads,created,updated,project_id "
 				+ " from CONTIG where contig_id = ?";
 
-		pstmtContigData = conn.prepareStatement(query);
+		pstmtContigData = prepareStatement(query);
 
 		query = "select gap4name,length,nreads,created,updated,project_id"
 				+ " from CURRENTCONTIGS" + " where contig_id = ?";
 
-		pstmtCurrentContigData = conn.prepareStatement(query);
+		pstmtCurrentContigData = prepareStatement(query);
 
 		query = "select count(*) from MAPPING where contig_id = ?";
 
-		pstmtCountMappings = conn.prepareStatement(query);
+		pstmtCountMappings = prepareStatement(query);
 
 		query = "select count(*) from MAPPING left join SEGMENT using(mapping_id) where contig_id = ?";
 
-		pstmtCountSegments = conn.prepareStatement(query);
+		pstmtCountSegments = prepareStatement(query);
 
 		query = "select MAPPING.seq_id,cstart,cfinish,direction"
 				+ " from MAPPING where contig_id=?";
 
-		pstmtMappingData = conn.prepareStatement(query);
+		pstmtMappingData = prepareStatement(query);
 
 		query = "select seq_id,SEGMENT.cstart,rstart,length "
 				+ " from MAPPING left join SEGMENT using(mapping_id) "
 				+ " where contig_id = ?";
 
-		pstmtSegmentData = conn.prepareStatement(query);
+		pstmtSegmentData = prepareStatement(query);
 
 		query = "select MAPPING.seq_id,seqlen,sequence,quality "
 				+ " from MAPPING left join SEQUENCE using(seq_id) "
 				+ " where contig_id = ?";
 
-		pstmtSequenceData = conn.prepareStatement(query);
+		pstmtSequenceData = prepareStatement(query);
 
 		query = "select MAPPING.seq_id,READINFO.read_id,readname,strand,chemistry,primer,asped,"
 				+ " basecaller,status,"
@@ -131,58 +137,58 @@ public class ContigManager extends AbstractManager {
 				+ " using (read_id)) using (seq_id))"
 				+ " where contig_id = ?";
 
-		pstmtReadAndTemplateData = conn.prepareStatement(query);
+		pstmtReadAndTemplateData = prepareStatement(query);
 
 		query = "select MAPPING.seq_id,qleft,qright"
 				+ " from MAPPING left join QUALITYCLIP using(seq_id) where contig_id = ?";
 
-		pstmtQualityClipping = conn.prepareStatement(query);
+		pstmtQualityClipping = prepareStatement(query);
 
 		query = "select MAPPING.seq_id,svector_id,svleft,svright"
 				+ " from MAPPING left join SEQVEC using(seq_id) where contig_id = ? and svleft is not null";
 
-		pstmtSequenceVector = conn.prepareStatement(query);
+		pstmtSequenceVector = prepareStatement(query);
 
 		query = "select MAPPING.seq_id,cvector_id,cvleft,cvright"
 				+ " from MAPPING left join CLONEVEC using(seq_id) where contig_id = ? and cvleft is not null";
 
-		pstmtCloningVector = conn.prepareStatement(query);
+		pstmtCloningVector = prepareStatement(query);
 
 		query = "select MAPPING.seq_id,startinseq,startinscf,length"
 				+ " from MAPPING left join ALIGN2SCF using(seq_id) where contig_id = ? and startinseq is not null";
 
-		pstmtAlignToSCF = conn.prepareStatement(query);
+		pstmtAlignToSCF = prepareStatement(query);
 
 		query = "select length,sequence,quality from CONSENSUS where contig_id = ?";
 
-		pstmtConsensus = conn.prepareStatement(query);
+		pstmtConsensus = prepareStatement(query);
 
 		query = "select tagtype,cstart,cfinal,tagcomment"
 				+ " from TAG2CONTIG left join CONTIGTAG using(tag_id)"
 				+ " where contig_id = ?";
 
-		pstmtTags = conn.prepareStatement(query);
+		pstmtTags = prepareStatement(query);
 
 		query = "select count(*) from CURRENTCONTIGS"
 				+ " where project_id = ? and length > ?";
 
-		pstmtCountContigsByProject = conn.prepareStatement(query);
+		pstmtCountContigsByProject = prepareStatement(query);
 
 		query = "select contig_id,gap4name,length,nreads,created,updated"
 				+ " from CURRENTCONTIGS"
 				+ " where project_id = ? and length > ?";
 
-		pstmtContigsByProject = conn.prepareStatement(query);
+		pstmtContigsByProject = prepareStatement(query);
 
 		query = "select count(*) " + " from CURRENTCONTIGS"
 				+ " where length > ?";
 
-		pstmtCountCurrentContigs = conn.prepareStatement(query);
+		pstmtCountCurrentContigs = prepareStatement(query);
 
 		query = "select contig_id,gap4name,length,nreads,created,updated,project_id "
 				+ " from CURRENTCONTIGS" + " where length > ?";
 
-		pstmtCurrentContigs = conn.prepareStatement(query);
+		pstmtCurrentContigs = prepareStatement(query);
 		
 		query = "select CURRENTCONTIGS.contig_id"
 		      + "  from READINFO,SEQ2READ,MAPPING,CURRENTCONTIGS,PROJECT"
@@ -192,20 +198,32 @@ public class ContigManager extends AbstractManager {
 			  + "   and MAPPING.contig_id = CURRENTCONTIGS.contig_id"
 			  + "   and CURRENTCONTIGS.project_id = PROJECT.project_id";
 		
-		pstmtContigIDFromReadname = conn.prepareStatement(query);
+		pstmtContigIDFromReadname = prepareStatement(query);
+	
+		query = "select contig_id from CONTIG where gao4name = ? order by created desc limit 1";
+		
+		pstmtContigIDFromName = prepareStatement(query);
 		
 		query = "select contig_id from C2CMAPPING where parent_id = ?";
 		
-		pstmtGetChildContigs = conn.prepareStatement(query);
+		pstmtGetChildContigs = prepareStatement(query);
 		
 		query = "insert into CONTIG (gap4name,length,ncntgs,nreads,project_id,creator,created)"
 			  + "values (?,?,?,?,?,?,now())";
 		
-		pstmtPutContigMetaData = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
+		pstmtPutContigMetaData = prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
 		
 		query = "insert into C2CMAPPING(parent_id, contig_id) VALUES (?,?)";
 		
-		pstmtSetChildContig = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
+		pstmtSetChildContig = prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
+		
+		query = "insert into CONSENSUS"
+			+ " (contig_id,length,sequence,quality)"
+			+ " VALUES(?,?,?,?)"
+			+ " ON DUPLICATE KEY UPDATE" 
+			+ " sequence=VALUES(sequence), quality=VALUES(quality), length=VALUES(length)";
+	
+		pstmtStoreConsensus = prepareStatement(query);	
 	}
 
 	protected void preloadSequencingVectors() throws SQLException {
@@ -250,6 +268,32 @@ public class ContigManager extends AbstractManager {
 		}
 
 		rs.close();
+	}
+
+	public Contig getContigByName(String name) throws ArcturusDatabaseException {
+		return getContigByName(name, ArcturusDatabase.CONTIG_BASIC_DATA);
+	}
+	
+	public Contig getContigByName(String name, int options) throws ArcturusDatabaseException {
+		Contig contig = null;
+		
+		try {
+			pstmtContigIDFromName.setString(1, name);
+
+			ResultSet rs = pstmtContigIDFromName.executeQuery();
+
+			int contig_id = rs.next() ? rs.getInt(1) : -1;
+
+			rs.close();
+
+			if (contig_id > 0)
+				contig = getContigByID(contig_id, options);
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get contig by name=\"" + name + "\"", conn, this);
+		}
+		
+		return contig;
 	}
 
 	public Contig getContigByReadName(String readname) throws ArcturusDatabaseException {
@@ -1609,5 +1653,62 @@ public class ContigManager extends AbstractManager {
 		}
 		
 		return mapping_id;
+	}
+	
+	public void putContigConsensus(Contig contig) throws ArcturusDatabaseException {
+		if (contig == null)
+			throw new ArcturusDatabaseException("Cannot store consensus for a null contig");
+		
+		int contig_id = contig.getID();
+		
+		if (contig_id <= 0)
+			throw new ArcturusDatabaseException("Cannot store consensus for a contig that is not yet in the database");
+		
+		byte[] sequence = contig.getDNA();
+		
+		if (sequence == null)
+			throw new ArcturusDatabaseException("DNA was null for contig " + contig);
+		
+		byte[] quality = contig.getQuality();
+		
+		if (quality == null)
+			throw new ArcturusDatabaseException("Base quality was null for contig " + contig);
+
+		int seqlen = sequence.length;
+
+		byte[] buffer = new byte[12 + (5 * seqlen) / 4];
+
+		compresser.reset();
+		compresser.setInput(sequence);
+		compresser.finish();
+		
+		int compressedSequenceLength = compresser.deflate(buffer);
+		
+		byte[] compressedSequence = new byte[compressedSequenceLength];
+		
+		for (int i = 0; i < compressedSequenceLength; i++)
+			compressedSequence[i] = buffer[i];
+
+		compresser.reset();
+		compresser.setInput(quality);
+		compresser.finish();
+		
+		int compressedQualityLength = compresser.deflate(buffer);
+		
+		byte[] compressedQuality = new byte[compressedQualityLength];
+		
+		for (int i = 0; i < compressedQualityLength; i++)
+			compressedQuality[i] = buffer[i];
+
+		try {
+			pstmtStoreConsensus.setInt(1, contig_id);
+			pstmtStoreConsensus.setInt(2, seqlen);
+			pstmtStoreConsensus.setBytes(3, compressedSequence);
+			pstmtStoreConsensus.setBytes(4, compressedQuality);
+			pstmtStoreConsensus.executeUpdate();
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to set consensus for contig " + contig, conn, this);
+		}
 	}
 }
