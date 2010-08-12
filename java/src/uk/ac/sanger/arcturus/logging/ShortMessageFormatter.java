@@ -17,6 +17,11 @@ public class ShortMessageFormatter extends AbstractFormatter {
 			sb.append("An error has occurred.  Please notify a developer.\n\n");
 			
 			sb.append("Timestamp : " + formatDate(timestamp) + "\n\n");
+			
+			String message = record.getMessage();
+			
+			if (message != null)
+				sb.append(message + "\n\n");
 
 			sb.append(throwable.getClass().getName() + ": "
 					+ throwable.getMessage() + "\n");
