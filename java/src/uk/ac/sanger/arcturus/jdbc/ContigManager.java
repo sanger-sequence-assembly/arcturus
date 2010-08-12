@@ -200,7 +200,7 @@ public class ContigManager extends AbstractManager {
 		
 		pstmtContigIDFromReadname = prepareStatement(query);
 	
-		query = "select contig_id from CONTIG where gao4name = ? order by created desc limit 1";
+		query = "select contig_id from CONTIG where gap4name = ? order by created desc limit 1";
 		
 		pstmtContigIDFromName = prepareStatement(query);
 		
