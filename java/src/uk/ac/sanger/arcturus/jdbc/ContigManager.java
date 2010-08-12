@@ -1677,15 +1677,9 @@ public class ContigManager extends AbstractManager {
 		int sequenceLength = sequence.length;
 		int qualityLength = quality.length;
 		
-		int contigLength = contig.getLength();
-		
-		if (contigLength != sequenceLength)
-			throw new ArcturusDatabaseException("DNA length (" +
-					sequenceLength + ") does not match contig length from meta-data (" + contigLength + ")");
-		
-		if (contigLength != qualityLength)
+		if (sequenceLength != qualityLength)
 			throw new ArcturusDatabaseException("Base quality length (" +
-					qualityLength + ") does not match contig length from meta-data (" + contigLength + ")");
+					qualityLength + ") does not match DNA length (" + sequenceLength + ")");
 		
 		byte[] buffer = new byte[12 + (5 * sequenceLength) / 4];
 
