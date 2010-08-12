@@ -160,22 +160,38 @@
 	     package="no"
              packagenames="${package.prefix}.${project.name}.*,${package.prefix}.${project.name}.*.*"/>
 	</target>
-	<target name="test" depends="compile">
+
+	<target name="test" depends="compile"
+	  description="Run the unit tests">
 	  <javac srcdir="test" destdir="${build.classes}" debug="true" deprecation="true">
 		   <classpath refid="test.classpath" />
-		</javac>
-		<mkdir dir="tmp"/>
+	  </javac>
+	
+          <mkdir dir="tmp"/>
 
 	  <junit>
-	    <formatter type="xml"  />
-	    <batchtest todir="tmp">
-                <fileset dir="${build.classes}">
-                   <include name="test/*Test.class"/>
-                </fileset>
-            </batchtest>
+             <sysproperty key="testdb.instance" value="testing"/>
+             <sysproperty key="testdb.organism" value="TESTDB_HUDSON"/>
 
-	    <classpath refid="build.classpath" />
-	    <classpath refid="test.classpath" />
+	     <formatter type="xml"  />
+
+	     <batchtest todir="tmp">
+                <fileset dir="${build.classes}">
+                   <include name="test/**/Test*.class" />
+		   <exclude name="test/**/Test*$*.class" />
+                </fileset>
+             </batchtest>
+
+	     <classpath>
+		    <fileset dir="${lib.dir}">
+			<include name="*.jar" />
+		    </fileset>
+		    <fileset dir="." >
+			<include name="${jar.file}" />
+		    </fileset>
+		    <pathelement location="${build.classes}" />
+		    <pathelement path="${java.class.path}"/>
+             </classpath >
 	  </junit>
 	</target>
 </project>
