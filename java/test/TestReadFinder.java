@@ -11,7 +11,7 @@ import static org.mockito.Mockito.*;
 import org.mockito.*;
 
 
-public class ReadFinderTest {
+public class TestReadFinder {
 
     public class ReaderFinderAccess extends ReadFinder {
         public ReaderFinderAccess(ArcturusDatabaseImpl adb) throws java.sql.SQLException {
