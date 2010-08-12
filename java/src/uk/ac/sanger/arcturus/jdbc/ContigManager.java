@@ -1674,9 +1674,20 @@ public class ContigManager extends AbstractManager {
 		if (quality == null)
 			throw new ArcturusDatabaseException("Base quality was null for contig " + contig);
 
-		int seqlen = sequence.length;
-
-		byte[] buffer = new byte[12 + (5 * seqlen) / 4];
+		int sequenceLength = sequence.length;
+		int qualityLength = quality.length;
+		
+		int contigLength = contig.getLength();
+		
+		if (contigLength != sequenceLength)
+			throw new ArcturusDatabaseException("DNA length (" +
+					sequenceLength + ") does not match contig length from meta-data (" + contigLength + ")");
+		
+		if (contigLength != qualityLength)
+			throw new ArcturusDatabaseException("Base quality length (" +
+					qualityLength + ") does not match contig length from meta-data (" + contigLength + ")");
+		
+		byte[] buffer = new byte[12 + (5 * sequenceLength) / 4];
 
 		compresser.reset();
 		compresser.setInput(sequence);
@@ -1702,7 +1713,7 @@ public class ContigManager extends AbstractManager {
 
 		try {
 			pstmtStoreConsensus.setInt(1, contig_id);
-			pstmtStoreConsensus.setInt(2, seqlen);
+			pstmtStoreConsensus.setInt(2, sequenceLength);
 			pstmtStoreConsensus.setBytes(3, compressedSequence);
 			pstmtStoreConsensus.setBytes(4, compressedQuality);
 			pstmtStoreConsensus.executeUpdate();
