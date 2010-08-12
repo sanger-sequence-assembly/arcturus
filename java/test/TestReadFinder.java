@@ -35,7 +35,7 @@ public class TestReadFinder {
     private ReaderFinderAccess readFinder;
     
     public static junit.framework.Test suite() {
-        return new JUnit4TestAdapter(ReadFinderTest.class);
+        return new JUnit4TestAdapter(TestReadFinder.class);
     }
     
     
