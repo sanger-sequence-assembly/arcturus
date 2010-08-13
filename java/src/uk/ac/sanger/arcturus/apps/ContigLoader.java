@@ -11,7 +11,6 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.fasta.FastqFileReader;
 import uk.ac.sanger.arcturus.fasta.SequenceProcessor;
-//import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import net.sf.samtools.*;
 
