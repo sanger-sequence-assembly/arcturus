@@ -8,6 +8,7 @@ import uk.ac.sanger.arcturus.database.ProjectLockException;
 import uk.ac.sanger.arcturus.people.Person;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.utils.ProjectSummary;
+import uk.ac.sanger.arcturus.repository.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -35,6 +36,7 @@ public class ProjectManager extends AbstractManager {
 	private PreparedStatement pstmtSetProjectOwner;
 	private PreparedStatement pstmtCreateNewProject;
 	private PreparedStatement pstmtChangeProjectStatus;
+  private DirectoryNameConverter directoryNameConverter; // so we can mess around with it, it tests
 
 	/**
 	 * Creates a new ProjectManager to provide project management services to an
@@ -46,6 +48,8 @@ public class ProjectManager extends AbstractManager {
 	
 		try {
 			setConnection(adb.getDefaultConnection());
+      directoryNameConverter = new StubDirectoryNameConverter();
+
 		} catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to initialise the project manager", conn, adb);
 		}
@@ -150,10 +154,12 @@ public class ProjectManager extends AbstractManager {
 				String lockowner = rs.getString(6);
 				java.util.Date created = rs.getTimestamp(7);
 				String creator = rs.getString(8);
-				String directory = rs.getString(9);
+				String metadir = rs.getString(9);
 				int status = statusStringToCode(rs.getString(10));
 
 				Assembly assembly = adb.getAssemblyByID(assembly_id);
+
+        String directory = convertMetadirToDirectory(name, metadir);
 
 				project = createAndRegisterNewProject(id, assembly, name,
 						updated, owner, lockdate, lockowner, created, creator,
@@ -199,8 +205,9 @@ public class ProjectManager extends AbstractManager {
 					String lockowner = rs.getString(5);
 					java.util.Date created = rs.getTimestamp(6);
 					String creator = rs.getString(7);
-					String directory = rs.getString(8);
+					String metadir = rs.getString(8);
 					int status = statusStringToCode(rs.getString(9));
+          String directory = convertMetadirToDirectory(name, metadir);
 
 					project = createAndRegisterNewProject(project_id, assembly,
 							name, updated, owner, lockdate, lockowner, created,
@@ -253,8 +260,9 @@ public class ProjectManager extends AbstractManager {
 				String lockowner = rs.getString(7);
 				java.util.Date created = rs.getTimestamp(8);
 				String creator = rs.getString(9);
-				String directory = rs.getString(10);
+				String metadir= rs.getString(10);
 				int status = statusStringToCode(rs.getString(11));
+        String directory = convertMetadirToDirectory(name, metadir);
 
 				Assembly assembly = adb.getAssemblyByID(assembly_id);
 
@@ -339,8 +347,9 @@ public class ProjectManager extends AbstractManager {
 				String lockowner = rs.getString(6);
 				java.util.Date created = rs.getTimestamp(7);
 				String creator = rs.getString(8);
-				String directory = rs.getString(9);
+				String metadir = rs.getString(9);
 				int status = statusStringToCode(rs.getString(10));
+        String directory = convertMetadirToDirectory(name, metadir);
 
 				Assembly assembly = adb.getAssemblyByID(assembly_id);
 
@@ -821,13 +830,14 @@ public class ProjectManager extends AbstractManager {
 		int rc = 0;
 		
 		String creator = System.getProperty("user.name");
+    String metadir = convertDirectoryToMetadir(name, directory);
 		
 		try {
 			pstmtCreateNewProject.setInt(1, assembly.getID());
 			pstmtCreateNewProject.setString(2, name);
 			pstmtCreateNewProject.setString(3, creator);
 			pstmtCreateNewProject.setString(4, owner.getUID());
-			pstmtCreateNewProject.setString(5, directory);
+			pstmtCreateNewProject.setString(5, metadir);
 
 			rc = pstmtCreateNewProject.executeUpdate();
 		} catch (SQLException e) {
@@ -915,4 +925,25 @@ public class ProjectManager extends AbstractManager {
 		
 		return (bin != null) ? bin : getProjectByName(null, "BIN");
 	}
+
+  public String convertDirectoryToMetadir(String projectName, String directory) {
+    if (this.directoryNameConverter == null)
+      return null;
+
+    return directoryNameConverter.convertAbsolutePathToMetaDirectory(this.adb.getName(), projectName, directory);
+  }
+
+  public String convertMetadirToDirectory(String projectName, String metadir) {
+    if (this.directoryNameConverter == null)
+      return null;
+
+    return directoryNameConverter.convertMetaDirectoryToAbsolutePath(this.adb.getName(), projectName, metadir);
+  }
+
+  public void xx(DirectoryNameConverter converter) {
+  }
+  public void setDirectoryNameConverter(DirectoryNameConverter converter) {
+    this.directoryNameConverter = converter;
+  }
+
 }

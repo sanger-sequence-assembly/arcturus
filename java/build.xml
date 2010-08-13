@@ -170,8 +170,9 @@
           <mkdir dir="tmp"/>
 
 	  <junit>
-             <sysproperty key="testdb.instance" value="testing"/>
-             <sysproperty key="testdb.organism" value="TESTDB_HUDSON"/>
+             <sysproperty key="test.repository.instance" value="test"/>
+             <sysproperty key="test.repository.organism" value="SHISTO"/>
+             <sysproperty key="testing" value="true"/>
 
 	     <formatter type="xml"  />
 
