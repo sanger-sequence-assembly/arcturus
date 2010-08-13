@@ -42,5 +42,4 @@ public class TestFastqFileReader implements SequenceProcessor {
 		System.out.println(name + " " + (dna == null ? 0 : dna.length) +
 				" " + (quality == null ? 0 : quality.length));
 	}
-
 }
