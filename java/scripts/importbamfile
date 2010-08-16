@@ -2,10 +2,12 @@
 
 set HEADLESS="-Djava.awt.headless=true"
 
+set ALLOWDUPLICATES="-Dmappingmanager.allowduplicatesequences=true"
+
 if ( $?JAVA_OPTS) then
-  setenv JAVA_OPTS "${JAVA_OPTS} ${HEADLESS}"
+  setenv JAVA_OPTS "${JAVA_OPTS} ${HEADLESS} ${ALLOWDUPLICATES}"
 else
-  setenv JAVA_OPTS $HEADLESS
+  setenv JAVA_OPTS "${HEADLESS} ${ALLOWDUPLICATES}"
 endif
 
 set basedir=`dirname $0`
