@@ -14,16 +14,10 @@
 	<property name="lib.dir" value="lib"/>
 
 	<!-- Classpath for compilation -->
-	<path id="build.classpath">
+	<path id="compile.classpath">
 		<fileset dir="${lib.dir}">
 			<include name="*.jar" />
 		</fileset>
-	</path>
-
-	<path id="test.classpath">
-	  <pathelement location="./lib/junit.jar" />
-	  <pathelement location="./lib/mockito-all-1.8.4.jar" />
-	  <pathelement location="./build/classes" />
 	</path>
 
 	<!-- The directory containing the test classes -->
@@ -73,7 +67,7 @@
 		<javac srcdir="${src.dir}" destdir="${build.classes}" 
            source="${build.target}"
            target="${build.target}"
-	   classpathref="build.classpath"
+	   classpathref="compile.classpath"
 	   debug="true"/>
 	</target>
 
@@ -161,10 +155,16 @@
              packagenames="${package.prefix}.${project.name}.*,${package.prefix}.${project.name}.*.*"/>
 	</target>
 
+	<path id="test.compile.classpath">
+		<path refid="compile.classpath"/>
+		<pathelement location="${build.classes}" />
+		<pathelement path="${java.class.path}" />	
+	</path>
+
 	<target name="test" depends="compile"
 	  description="Run the unit tests">
 	  <javac srcdir="test" destdir="${build.classes}" debug="true" deprecation="true">
-		   <classpath refid="test.classpath" />
+		   <classpath refid="test.compile.classpath" />
 	  </javac>
 	
           <mkdir dir="tmp"/>
@@ -184,14 +184,8 @@
              </batchtest>
 
 	     <classpath>
-		    <fileset dir="${lib.dir}">
-			<include name="*.jar" />
-		    </fileset>
-		    <fileset dir="." >
-			<include name="${jar.file}" />
-		    </fileset>
-		    <pathelement location="${build.classes}" />
-		    <pathelement path="${java.class.path}"/>
+		<pathelement location="${build.test.classes}" />
+		<path refid="test.compile.classpath" />
              </classpath >
 	  </junit>
 	</target>

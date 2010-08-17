@@ -67,10 +67,10 @@ public interface ArcturusDatabase {
 	public static final int ASSEMBLY = 8;
 
 	/**
-	 * Closes the connection pool belonging to this object.
+	 * Closes all resources belonging to this object.
 	 */
 
-	public void closeConnectionPool();
+	public void close() throws ArcturusDatabaseException;
 
 	/**
 	 * Returns the DataSource which was used to create this object.

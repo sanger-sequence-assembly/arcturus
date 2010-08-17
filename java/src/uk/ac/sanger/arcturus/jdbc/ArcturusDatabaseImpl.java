@@ -111,7 +111,11 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		createManagers();
 	}
 
-	public synchronized void closeConnectionPool() {
+	public synchronized void close() throws ArcturusDatabaseException {
+		closeConnectionPool();
+	}
+	
+	private void closeConnectionPool() {
 		if (connectionPool != null) {
 			connectionPool.close();
 			connectionPool = null;
