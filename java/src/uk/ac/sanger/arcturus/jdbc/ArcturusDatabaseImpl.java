@@ -110,8 +110,23 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 		createManagers();
 	}
+	
+	public synchronized void close() throws ArcturusDatabaseException {
+		try {
+			closeManagers();
+		} catch (SQLException e) {
+			handleSQLException(e, "A problem occurred when closing the Arcturus database", null, this);
+		}
+		
+		closeConnectionPool();
+	}
+	
+	private void closeManagers() throws SQLException {
+		for (AbstractManager manager : managers)
+			manager.close();
+	}
 
-	public synchronized void closeConnectionPool() {
+	private synchronized void closeConnectionPool() {
 		if (connectionPool != null) {
 			connectionPool.close();
 			connectionPool = null;

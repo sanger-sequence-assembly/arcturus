@@ -68,12 +68,12 @@ public interface ArcturusDatabase {
 	public static final int ASSEMBLY = 8;
 	public static final int MAPPING = 9;
 	public static final int LINK = 10;
-
+	
 	/**
-	 * Closes the connection pool belonging to this object.
+	 * Closes this object.
 	 */
-
-	public void closeConnectionPool();
+	
+	public void close() throws ArcturusDatabaseException;
 
 	/**
 	 * Returns the DataSource which was used to create this object.

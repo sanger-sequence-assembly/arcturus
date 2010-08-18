@@ -70,7 +70,7 @@ public class Utility {
 		if (verifyThatThisIsATestDatabase(adb)) {
 			return adb;
 		} else {
-			adb.closeConnectionPool();
+			adb.close();
 			throw new ArcturusDatabaseException("The database is not a valid test database");
 		}
 	}

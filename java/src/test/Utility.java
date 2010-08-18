@@ -71,7 +71,7 @@ public class Utility {
 			clearDatabase(adb);
 			return adb;
 		} else {
-			adb.closeConnectionPool();
+			adb.close();
 			return null;
 		}
 	}
@@ -142,7 +142,7 @@ public class Utility {
 			ArcturusDatabase adb = Utility.getTestDatabase();
 			
 			if (adb != null) {
-				adb.closeConnectionPool();
+				adb.close();
 				System.out.println("If you are reading this message, everything worked.");
 			} else {
 				System.out.println("If you are reading this message, the ArcturusDatabase object was null.");

@@ -66,8 +66,6 @@ public abstract class ArcturusDatabaseClient {
 		if (conn != null) {
 			for (PreparedStatement p : statements)
 				p.close();
-			
-			conn.close();
 		}
 		
 		conn = null;		

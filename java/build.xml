@@ -2,31 +2,32 @@
 
 <!-- build.xml - a simple Ant buildfile -->
 <project name="Arcturus2" default="jar" basedir=".">
-	<property name="project.name" value="arcturus2"/>
-	<property name="package.prefix" value="uk.ac.sanger"/>
+	<property name="project.name" value="arcturus2" />
+	<property name="package.prefix" value="uk.ac.sanger" />
 	<property name="jar.file" value="${project.name}.jar" />
 	<property name="zip.file" value="${project.name}.zip" />
 
 	<!-- The directory containing source code -->
-	<property name="src.dir" value="src"/>
+	<property name="src.dir" value="src" />
 
 	<!-- The directory containing classpath JAR files -->
-	<property name="lib.dir" value="lib"/>
+	<property name="lib.dir" value="lib" />
 
 	<!-- Classpath for compilation -->
-	<path id="build.classpath">
+	<path id="compile.classpath">
 		<fileset dir="${lib.dir}">
 			<include name="*.jar" />
 		</fileset>
 	</path>
 
 	<!-- Temporary build directories -->
-	<property name="build.dir" value="build"/>
-	<property name="build.classes" value="${build.dir}/classes"/>
-	<property name="build.lib" value="${build.dir}/lib"/>
+	<property name="build.dir" value="build" />
+	<property name="build.classes" value="${build.dir}/classes" />
+	<property name="build.lib" value="${build.dir}/lib" />
+	<property name="build.test.classes" value="${build.dir}/test/classes" />
 
 	<!-- Documents directory -->
-	<property name="javadoc.dir" value="${build.dir}/docs"/>
+	<property name="javadoc.dir" value="${build.dir}/docs" />
 
 	<!-- Resources directory -->
 	<property name="resources.dir" value="${src.dir}/resources" />
@@ -36,7 +37,7 @@
 
 	<!-- Build properties -->
 	<property name="build.props.file" value="${resources.dir}/build.props" />
-	
+
 	<target name="setBuildVersion">
 		<exec executable="svnversion" dir="${basedir}" outputproperty="build.version" />
 		<exec executable="hostname" outputproperty="build.host" />
@@ -49,44 +50,39 @@
 	<!-- Target to create the build directories prior to the -->
 	<!-- compile target. -->
 	<target name="prepare" depends="">
-		<mkdir dir="${build.dir}"/>
-		<mkdir dir="${build.classes}"/>
-		<mkdir dir="${build.lib}"/>
-		<mkdir dir="${javadoc.dir}"/>
+		<mkdir dir="${build.dir}" />
+		<mkdir dir="${build.classes}" />
+		<mkdir dir="${build.lib}" />
+		<mkdir dir="${build.test.classes}" />
+		<mkdir dir="${javadoc.dir}" />
 	</target>
 
 	<target name="clean" description="Remove all generated files.">
-		<delete dir="${build.dir}"/>
+		<delete dir="${build.dir}" />
 	</target>
 
-	<target name="compile" depends="prepare"
-          description="Compiles all source code.">
-		<javac srcdir="${src.dir}" destdir="${build.classes}" 
-           source="${build.target}"
-           target="${build.target}"
-	   classpathref="build.classpath"
-	   debug="true"/>
+	<target name="compile" depends="prepare" description="Compiles all source code.">
+		<javac srcdir="${src.dir}" destdir="${build.classes}" source="${build.target}" target="${build.target}" classpathref="compile.classpath" debug="true">
+			<exclude name="test/**" />
+		</javac>
 	</target>
 
 	<tstamp>
-		<format property="build.time" pattern="yyyy MMM dd HH:mm" locale="en,UK"/>
+		<format property="build.time" pattern="yyyy MMM dd HH:mm" locale="en,UK" />
 	</tstamp>
 
-	<target name="jar" depends="compile, setBuildVersion"
-          description="Generates the JAR file for Arcturus">
+	<target name="jar" depends="compile, setBuildVersion" description="Generates the JAR file for Arcturus">
 		<echo file="${src.dir}/resources/buildtime.props">BuildTime=${build.time}${line.separator}</echo>
 
 		<delete file="${jar.file}" quiet="true" failonerror="false" />
 
-		<jar jarfile="${jar.file}"
-         manifest="${src.dir}/MANIFEST.MF">
+		<jar jarfile="${jar.file}" manifest="${src.dir}/MANIFEST.MF">
 			<fileset dir="${build.classes}" />
-			<fileset dir="${src.dir}" includes="resources/icons/*.*,resources/images/*.*,resources/xml/*.*,resources/*.props"/>
+			<fileset dir="${src.dir}" includes="resources/icons/*.*,resources/images/*.*,resources/xml/*.*,resources/*.props" />
 		</jar>
 	</target>
 
-	<target name="zip" depends="jar"
-          description="Generates a ZIP archive of Arcturus">
+	<target name="zip" depends="jar" description="Generates a ZIP archive of Arcturus">
 		<zip destfile="${zip.file}" compress="false">
 			<fileset dir="." includes="${jar.file}" />
 			<zipfileset dir="${lib.dir}" includes="*.jar" prefix="lib" />
@@ -105,25 +101,21 @@
 
 	<property name="webapp.webdir" value="/nfs/WWWdev/INTWEB_docs/htdocs/Software/Arcturus" />
 
-	<target name="web" depends="compile"
-		  description="Generates a JAR file for the Minerva web runner">
-		<jar jarfile="${webapp.jar}"
-  		 manifest="${webapp.src}/MANIFEST.MF" >
-			<fileset dir="${build.classes}" includes="${webapp.path}/*.class"/>
+	<target name="web" depends="compile" description="Generates a JAR file for the Minerva web runner">
+		<jar jarfile="${webapp.jar}" manifest="${webapp.src}/MANIFEST.MF">
+			<fileset dir="${build.classes}" includes="${webapp.path}/*.class" />
 			<fileset dir="${src.dir}" includes="resources/remotejarrunner.props" />
 		</jar>
 	</target>
 
-	<target name="webzip" depends="web"
-			  description="Generates a Zip file for the Minerva web runner">
+	<target name="webzip" depends="web" description="Generates a Zip file for the Minerva web runner">
 		<zip destfile="${webapp.zip}" compress="false">
 			<fileset dir="." includes="${webapp.jar}" />
 			<zipfileset dir="${lib.dir}" includes="*.jar" prefix="lib" />
 		</zip>
 	</target>
 
-	<target name="deploy" depends="jar,webzip"
-      description="Deploy the web application to the internal web site" >
+	<target name="deploy" depends="jar,webzip" description="Deploy the web application to the internal web site">
 		<echo message="Copying ${webapp.zip} to ${webapp.webdir}" />
 		<copy file="${webapp.zip}" todir="${webapp.webdir}" />
 
@@ -131,62 +123,57 @@
 		<copy file="${jar.file}" todir="${webapp.webdir}" />
 
 		<echo message="Running webpublish on ${webapp.zip} and ${jar.file}" />
-		<exec dir="${webapp.webdir}" executable="webpublish" >
+		<exec dir="${webapp.webdir}" executable="webpublish">
 			<arg value="${webapp.zip}" />
 			<arg value="${jar.file}" />
 		</exec>
 	</target>
 
-	<target name="all" depends="clean,jar,webzip"
-          description="Cleans, compiles, then builds the JAR file."/>
+	<target name="all" depends="clean,jar,webzip" description="Cleans, compiles, then builds the JAR file." />
 
-	<target name="docs" depends="prepare"
-          description="Generates Javadoc documentation">
-		<javadoc sourcepath="${src.dir}" destdir="${javadoc.dir}"
-             author="yes"
-	     version="yes"
-	     public="yes"
-	     private="no"
-	     protected="no"
-	     package="no"
-             packagenames="${package.prefix}.${project.name}.*,${package.prefix}.${project.name}.*.*"/>
+	<target name="docs" depends="prepare" description="Generates Javadoc documentation">
+		<javadoc sourcepath="${src.dir}" destdir="${javadoc.dir}" author="yes" version="yes" public="yes" private="no" protected="no" package="no" packagenames="${package.prefix}.${project.name}.*,${package.prefix}.${project.name}.*.*" />
 	</target>
 
 	<!-- Definitions and tasks related to automated testing with JUnit -->
 
 	<!-- The directory containing the test classes -->
-	<property name="testsrc.dir" value="${src.dir}/test"/>
-	
-	<target name="test" depends="clean,jar">
-	  <javac srcdir="${testsrc.dir}" destdir="${build.classes}" debug="true" deprecation="true">
-		   <classpath refid="build.classpath" />
-	  </javac>
-	
-	  <mkdir dir="tmp"/>
+	<property name="testsrc.dir" value="${src.dir}/test" />
 
-	  <junit>
-             <sysproperty key="testdb.instance" value="testing"/>
-             <sysproperty key="testdb.organism" value="TESTDB_HUDSON"/>
+	<path id="test.compile.classpath">
+		<path refid="compile.classpath"/>
+		<pathelement location="${build.classes}" />
+		<pathelement path="${java.class.path}" />	
+	</path>
 
-	     <formatter type="xml"  />
+	<target name="test" depends="compile" description="Run the test suite.">
+		<javac srcdir="${testsrc.dir}" destdir="${build.test.classes}" debug="true" deprecation="true">
+			<classpath>
+				<path refid="test.compile.classpath" />
+			</classpath>
+		</javac>
 
-	     <batchtest todir="tmp">
-                <fileset dir="${build.classes}">
-                   <include name="test/**/Test*.class" />
-		   <exclude name="test/**/Test*$*.class" />
-                </fileset>
-             </batchtest>
+		<mkdir dir="tmp" />
 
-	     <classpath>
-		    <fileset dir="${lib.dir}">
-			<include name="*.jar" />
-		    </fileset>
-		    <fileset dir="." >
-			<include name="${jar.file}" />
-		    </fileset>
-		    <pathelement location="${build.classes}" />
-		    <pathelement path="${java.class.path}"/>
-             </classpath >
-	  </junit>
+		<junit>
+			<sysproperty key="testdb.instance" value="testing" />
+			<sysproperty key="testdb.organism" value="TESTDB_HUDSON" />
+			<sysproperty key="java.awt.headless" value="true" />
+			<sysproperty key="testing" value="true"/>
+
+			<formatter type="xml" />
+
+			<batchtest todir="tmp">
+				<fileset dir="${build.test.classes}">
+					<include name="test/**/Test*.class" />
+					<exclude name="test/**/Test*$*.class" />
+				</fileset>
+			</batchtest>
+
+			<classpath>
+				<pathelement location="${build.test.classes}" />
+				<path refid="test.compile.classpath" />
+			</classpath >
+		</junit>
 	</target>
 </project>

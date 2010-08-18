@@ -20,7 +20,7 @@ public abstract class Base {
 	@AfterClass
 	public static void tearDownAfterClass() throws Exception {
 		if (adb != null)
-			adb.closeConnectionPool();
+			adb.close();
 	}
 
 	protected ArcturusDatabase getArcturusDatabase() {
