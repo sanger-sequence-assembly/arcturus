@@ -95,7 +95,7 @@ public class TestProjectManager {
     }
   @Test
     public void newBare() throws Exception {
-      checkNewProject("zFD380G20", "/bare", "bare");
+      checkNewProject("zFD380G20", "/bare", "/bare");
     }
 
   public void checkProjectDirectory (String projectName , String expectedDirectory, String expectedRaw) throws Exception {
