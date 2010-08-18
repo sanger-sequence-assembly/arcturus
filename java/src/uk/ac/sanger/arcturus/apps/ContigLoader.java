@@ -103,6 +103,8 @@ public class ContigLoader extends AbstractLoader {
 					ConsensusFileProcessor processor = new ConsensusFileProcessor(adb);
 
 					FastqFileReader reader = new FastqFileReader();
+					
+					System.out.println("PROCESSING CONTIG CONSENSUS SEQUENCES");
 
 					reader.processFile(consensusFile, processor);
  				} else
@@ -125,18 +127,23 @@ public class ContigLoader extends AbstractLoader {
 		}
 		
 		public void processSequence(String name, byte[] dna, byte[] quality) {
-			System.out.println(name + " " + (dna == null ? 0 : dna.length) +
-					" " + (quality == null ? 0 : quality.length));
+			if (dna == null)
+				return;
+			
+			System.out.println("\nContig " + name + " : consensus length is " + dna.length + " bp");
 			
 			try {
 				Contig contig = adb.getContigByName(name);
 				
 				if (contig == null) {
-					Arcturus.logWarning("Failed to find a contig with name \"" + name + "\"");
+					System.out.println("\tIGNORED consensus, because no matching contig was found in the database.");
 				} else {
 					contig.setConsensus(dna, quality);
 					
 					adb.putContigConsensus(contig);
+					
+					System.out.println("\tSTORED consensus for contig " + name +
+							" (Arcturus ID " + contig.getID() + ")");
 					
 					contig.setConsensus(null, null);
 				}
