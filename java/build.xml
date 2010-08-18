@@ -23,6 +23,7 @@
 	<!-- Temporary build directories -->
 	<property name="build.dir" value="build" />
 	<property name="build.classes" value="${build.dir}/classes" />
+	<property name="build.resources" value="${build.dir}/classes/resources" />
 	<property name="build.lib" value="${build.dir}/lib" />
 	<property name="build.test.classes" value="${build.dir}/test/classes" />
 
@@ -65,6 +66,12 @@
 		<javac srcdir="${src.dir}" destdir="${build.classes}" source="${build.target}" target="${build.target}" classpathref="compile.classpath" debug="true">
 			<exclude name="test/**" />
 		</javac>
+	</target>
+
+	<target name="copyresources" description="Copy the resource files to the build directory">
+		<copy todir="${build.classes}/resources">
+			<fileset dir="${resources.dir}"/>
+		</copy>
 	</target>
 
 	<tstamp>
@@ -146,7 +153,7 @@
 		<pathelement path="${java.class.path}" />	
 	</path>
 
-	<target name="test" depends="compile" description="Run the test suite.">
+	<target name="test" depends="compile,copyresources" description="Run the test suite.">
 		<javac srcdir="${testsrc.dir}" destdir="${build.test.classes}" debug="true" deprecation="true">
 			<classpath>
 				<path refid="test.compile.classpath" />
@@ -171,8 +178,8 @@
 			</batchtest>
 
 			<classpath>
-				<pathelement location="${build.test.classes}" />
 				<path refid="test.compile.classpath" />
+				<pathelement location="${build.test.classes}" />
 			</classpath >
 		</junit>
 	</target>
