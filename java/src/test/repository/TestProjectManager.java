@@ -79,23 +79,23 @@ public class TestProjectManager {
 
   @Test
     public void checkProjects() throws Exception {
-      checkProjectDirectory("zFD381H22", "/nfs/users/nfs_m/mb14/base/tmp/repository/d0014/zFD381H22/tmp", ":PROJECT:/tmp");
-      checkProjectDirectory("zFD380D9", "/nfs/users/nfs_m/mb14/base/tmp/repository/d0014/zFD381H22/tmp2", "{zFD381H22}/tmp2");
+      checkProjectDirectory("zFD381H22", "/tmp/repository/d0014/zFD381H22/tmp", ":PROJECT:/tmp");
+      checkProjectDirectory("zFD380D9", "/tmp/repository/d0014/zFD381H22/tmp2", "{zFD381H22}/tmp2");
     }
 
   // each check need to be in a different test ,to roll back the newly created project
   @Test
     public void newWithProject() throws Exception {
-      checkNewProject("zFD380G20", "/nfs/users/nfs_m/mb14/base/tmp/repository/d0002/zFD380G20/test1", ":PROJECT:test1");
+      checkNewProject("zFD380G20", "/tmp/repository/d0002/zFD380G20/test1", ":PROJECT:test1");
     }
 
   @Test
     public void newWithSchema() throws Exception {
-      checkNewProject("zFD380G20", "/nfs/users/nfs_m/mb14/base/tmp/repository/d0050/SHISTO/test2", ":SCHEMA:test2");
+      checkNewProject("zFD380G20", "/tmp/repository/d0050/SHISTO/test2", ":SCHEMA:test2");
     }
   @Test
     public void newBare() throws Exception {
-      checkNewProject("zFD380G20", "/nfs/users/nfs_m/mb14/base/bare", "bare");
+      checkNewProject("zFD380G20", "/bare", "bare");
     }
 
   public void checkProjectDirectory (String projectName , String expectedDirectory, String expectedRaw) throws Exception {
