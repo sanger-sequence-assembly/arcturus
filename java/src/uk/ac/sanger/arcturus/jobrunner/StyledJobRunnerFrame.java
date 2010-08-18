@@ -171,4 +171,8 @@ public class StyledJobRunnerFrame extends JFrame implements JobRunnerClient {
 		}
 
 	}
+
+  public boolean synchronous () {
+  return false; // we want the callbacks to be called in the Event Dispatcher Threads.
+  }
 }

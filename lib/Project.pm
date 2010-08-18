@@ -394,16 +394,26 @@ sub getDirectory {
 sub metadirToDirectory {
   my $this = shift;
   my $metadir = shift;
+  return $this->convertMetadirToDirectory($metadir, $this->getSchemaName(), $this->getProjectName())
+}
+
+# Static Method so we can do it even on non existing project
+sub convertMetadirToDirectory {
+  my $this = shift;
+  my $metadir = shift;
+  my $schemaName = shift;
+  my $projectName = shift;
+
   return $metadir unless defined($metadir);
 
   my ($to_find, $suffix, $prefix);
 
-  if ($metadir =~ /^#SCHEMA#(.*)$/) {
-    $to_find = $this->getSchemaName();
+  if ($metadir =~ /^:SCHEMA:(.*)$/) {
+    $to_find = $schemaName;
     $suffix = $1;
   }
-  elsif ($metadir =~ /^#PROJECT#(.*)$/) {
-    $to_find = $this->getProjectName();
+  elsif ($metadir =~ /^:PROJECT:(.*)$/) {
+    $to_find = $projectName;
     $suffix = $1;
   }
   elsif ($metadir =~ /^{(\w+)}(.*)/) {
@@ -427,7 +437,42 @@ sub metadirToDirectory {
   my $basedir = $ENV{ARCTURUS_TEST_DIRECTORY_BASE};
   $prefix  = "$basedir/$prefix" if $basedir;
 
-  return $prefix. $suffix;
+  my $directory =  $prefix. $suffix;
+  $directory=~ s#//#/#g;
+  return $directory;
+
+}
+
+sub directoryToMetadir {
+  my $this = shift;
+  my $directory = shift;
+  return $this->convertDirectoryToMetadir($directory, $this->getSchemaName(), $this->getProjectName())
+}
+
+# Static Method so we can do it even on non existing project
+sub convertDirectoryToMetadir {
+  my $this = shift;
+  my $directory = shift;
+  my $schemaName = shift;
+  my $projectName = shift;
+  $directory =~ s#//#/#g;
+
+  return undef unless defined($directory);
+
+  for my $pattern (":PROJECT:", ":SCHEMA:", "") {
+    my $pattern_dir = $this->convertMetadirToDirectory($pattern, $schemaName, $projectName);
+    $pattern_dir=~ s#//#/#g;
+#    print "PAT: $pattern => $pattern_dir\n";
+
+    my $metadir = $directory;
+    $metadir =~ s/^$pattern_dir/$pattern/;
+    $metadir=~ s#//#/#g;
+
+#    print "SUB: $metadir $directory\n";
+    return $metadir unless $metadir eq $directory;
+  }
+
+  return $directory;
 
 }
   

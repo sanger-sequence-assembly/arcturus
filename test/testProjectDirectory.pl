@@ -65,12 +65,18 @@ else {
   print "MyProject => $project\n";
 
   for my $metadir (@metadirs) {
+    my $project_dir;
     eval {
-      my $project_dir  = $project->metadirToDirectory($metadir);
-      print "meta: $metadir => '$project_dir'\n"; 
+      $project_dir  = $project->metadirToDirectory($metadir);
+      my $superdir = $project->directoryToMetadir($project_dir);
+      print "meta: $metadir => '$project_dir' => $superdir\n"; 
+#      print "meta: $metadir => '$project_dir'\n"; 
     } or do {
       print "meta: $metadir ** not metadir found ***\n";
     };
+
+
+
   }
 
   print "dir: ", $project->getDirectory(), "\n";

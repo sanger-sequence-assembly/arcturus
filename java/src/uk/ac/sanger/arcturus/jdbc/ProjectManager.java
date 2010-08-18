@@ -48,7 +48,7 @@ public class ProjectManager extends AbstractManager {
 	
 		try {
 			setConnection(adb.getDefaultConnection());
-      directoryNameConverter = new StubDirectoryNameConverter();
+      directoryNameConverter = new SSHDirectoryNameConverter(adb.getInstance().getName());
 
 		} catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to initialise the project manager", conn, adb);
@@ -926,22 +926,20 @@ public class ProjectManager extends AbstractManager {
 		return (bin != null) ? bin : getProjectByName(null, "BIN");
 	}
 
-  public String convertDirectoryToMetadir(String projectName, String directory) {
+  public String convertDirectoryToMetadir(String projectName, String directory) throws ArcturusDatabaseException {
     if (this.directoryNameConverter == null)
       return null;
 
     return directoryNameConverter.convertAbsolutePathToMetaDirectory(this.adb.getName(), projectName, directory);
   }
 
-  public String convertMetadirToDirectory(String projectName, String metadir) {
+  public String convertMetadirToDirectory(String projectName, String metadir) throws ArcturusDatabaseException {
     if (this.directoryNameConverter == null)
       return null;
 
     return directoryNameConverter.convertMetaDirectoryToAbsolutePath(this.adb.getName(), projectName, metadir);
   }
 
-  public void xx(DirectoryNameConverter converter) {
-  }
   public void setDirectoryNameConverter(DirectoryNameConverter converter) {
     this.directoryNameConverter = converter;
   }

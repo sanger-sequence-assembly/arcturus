@@ -21,7 +21,7 @@
 	</path>
 
 	<!-- The directory containing the test classes -->
-	<property name="testsrc.dir" value="test"/>
+	<property name="testsrc.dir" value="src/test"/>
 
 	<!-- Temporary build directories -->
 	<property name="build.dir" value="build"/>
@@ -163,7 +163,7 @@
 
 	<target name="test" depends="compile"
 	  description="Run the unit tests">
-	  <javac srcdir="test" destdir="${build.classes}" debug="true" deprecation="true">
+	  <javac srcdir="src/test" destdir="${build.classes}" debug="true" deprecation="true">
 		   <classpath refid="test.compile.classpath" />
 	  </javac>
 	
@@ -173,6 +173,8 @@
              <sysproperty key="test.repository.instance" value="test"/>
              <sysproperty key="test.repository.organism" value="SHISTO"/>
              <sysproperty key="testing" value="true"/>
+             <sysproperty key="jobplacer.host" value="seq1"/>
+              <sysproperty key="arcturus.home" value="/nfs/users/nfs_m/mb14/devel/arcturus"/>
 
 	     <formatter type="xml"  />
 

@@ -103,7 +103,7 @@ public class JobRunner extends SwingWorker<Void, JobOutput> {
 
 					String text = "Running for " + (runtime/1000) + " seconds";
 					JobOutput output = new JobOutput(JobOutput.STATUS, text);
-					publish(output);
+					_publish(output);
 				}
 
 				/*
@@ -147,7 +147,7 @@ public class JobRunner extends SwingWorker<Void, JobOutput> {
 				if (len > 0) {
 					String text = new String(buffer, 0, len);
 					JobOutput output = new JobOutput(JobOutput.STDOUT, text);
-					publish(output);
+					_publish(output);
 				}
 			}
 
@@ -156,13 +156,17 @@ public class JobRunner extends SwingWorker<Void, JobOutput> {
 				if (len > 0) {
 					String text = new String(buffer, 0, len);
 					JobOutput output = new JobOutput(JobOutput.STDERR, text);
-					publish(output);
+					_publish(output);
 				}
 			}
 		}
 
 		rc = sess.getExitStatus();
 
+    if (client.synchronous()) {
+      // we need to do that to set the error code "synchronoulsy" so it's available after get returns
+      _done(); 
+    }
 		sess.close();
 	}
 
@@ -194,6 +198,13 @@ public class JobRunner extends SwingWorker<Void, JobOutput> {
 	}
 
 	protected void done() {
+    if (client != null && client.synchronous() == false) {
+      _done();
+    }
+    // else, nothing, already done.
+  }
+      
+  protected void _done() {
 		long timeNow = System.currentTimeMillis();
 
 		long runtime = timeNow - startTime;
@@ -209,4 +220,13 @@ public class JobRunner extends SwingWorker<Void, JobOutput> {
 		
 		client.done(irc);
 	}
+
+  protected void _publish(JobOutput output) {
+    if (client.synchronous()) {
+      processOutput(output);
+    }
+    else {
+      publish(output);
+    }
+  }
 }
