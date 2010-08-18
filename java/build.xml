@@ -2,16 +2,16 @@
 
 <!-- build.xml - a simple Ant buildfile -->
 <project name="Arcturus" default="jar" basedir=".">
-	<property name="project.name" value="arcturus"/>
-	<property name="package.prefix" value="uk.ac.sanger"/>
+	<property name="project.name" value="arcturus" />
+	<property name="package.prefix" value="uk.ac.sanger" />
 	<property name="jar.file" value="${project.name}.jar" />
 	<property name="zip.file" value="${project.name}.zip" />
 
 	<!-- The directory containing source code -->
-	<property name="src.dir" value="src"/>
+	<property name="src.dir" value="src" />
 
 	<!-- The directory containing classpath JAR files -->
-	<property name="lib.dir" value="lib"/>
+	<property name="lib.dir" value="lib" />
 
 	<!-- Classpath for compilation -->
 	<path id="compile.classpath">
@@ -20,16 +20,15 @@
 		</fileset>
 	</path>
 
-	<!-- The directory containing the test classes -->
-	<property name="testsrc.dir" value="src/test"/>
-
 	<!-- Temporary build directories -->
-	<property name="build.dir" value="build"/>
-	<property name="build.classes" value="${build.dir}/classes"/>
-	<property name="build.lib" value="${build.dir}/lib"/>
+	<property name="build.dir" value="build" />
+	<property name="build.classes" value="${build.dir}/classes" />
+	<property name="build.resources" value="${build.dir}/classes/resources" />
+	<property name="build.lib" value="${build.dir}/lib" />
+	<property name="build.test.classes" value="${build.dir}/test/classes" />
 
 	<!-- Documents directory -->
-	<property name="javadoc.dir" value="${build.dir}/docs"/>
+	<property name="javadoc.dir" value="${build.dir}/docs" />
 
 	<!-- Resources directory -->
 	<property name="resources.dir" value="${src.dir}/resources" />
@@ -39,10 +38,10 @@
 
 	<!-- Build properties -->
 	<property name="build.props.file" value="${resources.dir}/build.props" />
-	
+
 	<target name="setBuildVersion">
-		<exec executable="svnversion" dir="${basedir}" outputproperty="build.version" error="/dev/tty" />
-		<exec executable="hostname" outputproperty="build.host" error="/dev/tty" />
+		<exec executable="svnversion" dir="${basedir}" outputproperty="build.version" />
+		<exec executable="hostname" outputproperty="build.host" />
 		<echo file="${build.props.file}">build.date=${build.time}${line.separator}</echo>
 		<echo file="${build.props.file}" append="true">build.version=${build.version}${line.separator}</echo>
 		<echo file="${build.props.file}" append="true">build.by=${user.name}${line.separator}</echo>
@@ -52,44 +51,45 @@
 	<!-- Target to create the build directories prior to the -->
 	<!-- compile target. -->
 	<target name="prepare" depends="">
-		<mkdir dir="${build.dir}"/>
-		<mkdir dir="${build.classes}"/>
-		<mkdir dir="${build.lib}"/>
-		<mkdir dir="${javadoc.dir}"/>
+		<mkdir dir="${build.dir}" />
+		<mkdir dir="${build.classes}" />
+		<mkdir dir="${build.lib}" />
+		<mkdir dir="${build.test.classes}" />
+		<mkdir dir="${javadoc.dir}" />
 	</target>
 
 	<target name="clean" description="Remove all generated files.">
-		<delete dir="${build.dir}"/>
+		<delete dir="${build.dir}" />
 	</target>
 
-	<target name="compile" depends="prepare"
-          description="Compiles all source code.">
-		<javac srcdir="${src.dir}" destdir="${build.classes}" 
-           source="${build.target}"
-           target="${build.target}"
-	   classpathref="compile.classpath"
-	   debug="true"/>
+	<target name="compile" depends="prepare" description="Compiles all source code.">
+		<javac srcdir="${src.dir}" destdir="${build.classes}" source="${build.target}" target="${build.target}" classpathref="compile.classpath" debug="true">
+			<exclude name="test/**" />
+		</javac>
+	</target>
+
+	<target name="copyresources" description="Copy the resource files to the build directory">
+		<copy todir="${build.classes}/resources">
+			<fileset dir="${resources.dir}"/>
+		</copy>
 	</target>
 
 	<tstamp>
-		<format property="build.time" pattern="yyyy MMM dd HH:mm" locale="en,UK"/>
+		<format property="build.time" pattern="yyyy MMM dd HH:mm" locale="en,UK" />
 	</tstamp>
 
-	<target name="jar" depends="compile, setBuildVersion"
-          description="Generates the JAR file for Arcturus">
+	<target name="jar" depends="compile, setBuildVersion" description="Generates the JAR file for Arcturus">
 		<echo file="${src.dir}/resources/buildtime.props">BuildTime=${build.time}${line.separator}</echo>
 
 		<delete file="${jar.file}" quiet="true" failonerror="false" />
 
-		<jar jarfile="${jar.file}"
-         manifest="${src.dir}/MANIFEST.MF">
-			<fileset dir="${build.classes}" includes="uk/**" />
-			<fileset dir="${src.dir}" includes="resources/icons/*.*,resources/images/*.*,resources/xml/*.*,resources/*.props"/>
+		<jar jarfile="${jar.file}" manifest="${src.dir}/MANIFEST.MF">
+			<fileset dir="${build.classes}" />
+			<fileset dir="${src.dir}" includes="resources/icons/*.*,resources/images/*.*,resources/xml/*.*,resources/*.props" />
 		</jar>
 	</target>
 
-	<target name="zip" depends="jar"
-          description="Generates a ZIP archive of Arcturus">
+	<target name="zip" depends="jar" description="Generates a ZIP archive of Arcturus">
 		<zip destfile="${zip.file}" compress="false">
 			<fileset dir="." includes="${jar.file}" />
 			<zipfileset dir="${lib.dir}" includes="*.jar" prefix="lib" />
@@ -108,25 +108,21 @@
 
 	<property name="webapp.webdir" value="/nfs/WWWdev/INTWEB_docs/htdocs/Software/Arcturus" />
 
-	<target name="web" depends="compile"
-		  description="Generates a JAR file for the Minerva web runner">
-		<jar jarfile="${webapp.jar}"
-  		 manifest="${webapp.src}/MANIFEST.MF" >
-			<fileset dir="${build.classes}" includes="${webapp.path}/*.class"/>
+	<target name="web" depends="compile" description="Generates a JAR file for the Minerva web runner">
+		<jar jarfile="${webapp.jar}" manifest="${webapp.src}/MANIFEST.MF">
+			<fileset dir="${build.classes}" includes="${webapp.path}/*.class" />
 			<fileset dir="${src.dir}" includes="resources/remotejarrunner.props" />
 		</jar>
 	</target>
 
-	<target name="webzip" depends="web"
-			  description="Generates a Zip file for the Minerva web runner">
+	<target name="webzip" depends="web" description="Generates a Zip file for the Minerva web runner">
 		<zip destfile="${webapp.zip}" compress="false">
 			<fileset dir="." includes="${webapp.jar}" />
 			<zipfileset dir="${lib.dir}" includes="*.jar" prefix="lib" />
 		</zip>
 	</target>
 
-	<target name="deploy" depends="jar,webzip"
-      description="Deploy the web application to the internal web site" >
+	<target name="deploy" depends="jar,webzip" description="Deploy the web application to the internal web site">
 		<echo message="Copying ${webapp.zip} to ${webapp.webdir}" />
 		<copy file="${webapp.zip}" todir="${webapp.webdir}" />
 
@@ -134,26 +130,22 @@
 		<copy file="${jar.file}" todir="${webapp.webdir}" />
 
 		<echo message="Running webpublish on ${webapp.zip} and ${jar.file}" />
-		<exec dir="${webapp.webdir}" executable="webpublish" >
+		<exec dir="${webapp.webdir}" executable="webpublish">
 			<arg value="${webapp.zip}" />
 			<arg value="${jar.file}" />
 		</exec>
 	</target>
 
-	<target name="all" depends="clean,jar,webzip"
-          description="Cleans, compiles, then builds the JAR file."/>
+	<target name="all" depends="clean,jar,webzip" description="Cleans, compiles, then builds the JAR file." />
 
-	<target name="docs" depends="prepare"
-          description="Generates Javadoc documentation">
-		<javadoc sourcepath="${src.dir}" destdir="${javadoc.dir}"
-             author="yes"
-	     version="yes"
-	     public="yes"
-	     private="no"
-	     protected="no"
-	     package="no"
-             packagenames="${package.prefix}.${project.name}.*,${package.prefix}.${project.name}.*.*"/>
+	<target name="docs" depends="prepare" description="Generates Javadoc documentation">
+		<javadoc sourcepath="${src.dir}" destdir="${javadoc.dir}" author="yes" version="yes" public="yes" private="no" protected="no" package="no" packagenames="${package.prefix}.${project.name}.*,${package.prefix}.${project.name}.*.*" />
 	</target>
+
+	<!-- Definitions and tasks related to automated testing with JUnit -->
+
+	<!-- The directory containing the test classes -->
+	<property name="testsrc.dir" value="${src.dir}/test" />
 
 	<path id="test.compile.classpath">
 		<path refid="compile.classpath"/>
@@ -161,34 +153,39 @@
 		<pathelement path="${java.class.path}" />	
 	</path>
 
-	<target name="test" depends="compile"
-	  description="Run the unit tests">
-	  <javac srcdir="src/test" destdir="${build.classes}" debug="true" deprecation="true">
-		   <classpath refid="test.compile.classpath" />
-	  </javac>
-	
-          <mkdir dir="tmp"/>
+	<target name="test" depends="compile,copyresources" description="Run the test suite.">
+		<javac srcdir="${testsrc.dir}" destdir="${build.test.classes}" debug="true" deprecation="true">
+			<classpath>
+				<path refid="test.compile.classpath" />
+			</classpath>
+		</javac>
 
-	  <junit>
-             <sysproperty key="test.repository.instance" value="test"/>
-             <sysproperty key="test.repository.organism" value="SHISTO"/>
-             <sysproperty key="testing" value="true"/>
-             <sysproperty key="jobplacer.host" value="seq1"/>
-              <sysproperty key="arcturus.home" value="/nfs/users/nfs_m/mb14/devel/arcturus"/>
+		<mkdir dir="tmp" />
 
-	     <formatter type="xml"  />
+		<delete includeemptydirs="true">
+ 			<fileset dir="tmp" includes="**/*"/>
+ 		</delete>
 
-	     <batchtest todir="tmp">
-                <fileset dir="${build.classes}">
-                   <include name="test/**/Test*.class" />
-		   <exclude name="test/**/Test*$*.class" />
-                </fileset>
-             </batchtest>
+		<junit showoutput="true" >
+			<sysproperty key="test.repository.instance" value="test" />
+			<sysproperty key="test.repository.organism" value="SHISTO" />
+			<sysproperty key="java.awt.headless" value="true" />
+			<sysproperty key="testing" value="true"/>
+			<sysproperty key="arcturus.home" value="/nfs/users/nfs_m/mb14/devel/arcturus"/>
 
-	     <classpath>
-		<pathelement location="${build.test.classes}" />
-		<path refid="test.compile.classpath" />
-             </classpath >
-	  </junit>
+			<formatter type="xml" />
+
+			<batchtest todir="tmp">
+				<fileset dir="${build.test.classes}">
+					<include name="test/**/Test*.class" />
+					<exclude name="test/**/Test*$*.class" />
+				</fileset>
+			</batchtest>
+
+			<classpath>
+				<path refid="test.compile.classpath" />
+				<pathelement location="${build.test.classes}" />
+			</classpath >
+		</junit>
 	</target>
 </project>
