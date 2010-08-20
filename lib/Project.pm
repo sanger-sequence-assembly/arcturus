@@ -430,14 +430,14 @@ sub convertMetadirToDirectory {
   if (defined($to_find)) {
     $prefix = `pfind -q -u $to_find`;
     die ("Can't find repository for '$prefix'") unless $prefix;
-    $prefix .= "/";
   }
 
   #
   my $basedir = $ENV{ARCTURUS_TEST_DIRECTORY_BASE};
   $prefix  = "$basedir/$prefix" if $basedir;
 
-  my $directory =  $prefix. $suffix;
+  my $directory =  $prefix;
+  $directory .= '/' . $suffix if (defined($suffix) && length($suffix) > 0);
   $directory=~ s#//#/#g;
   return $directory;
 
