@@ -12,6 +12,7 @@ use Project;
 #------------------------------------------------------------------------------
 
 my ($instance, $organism, $projectname, $directory, $metadir);
+my $newline = 0;
 
 
 while (my $nextword = shift @ARGV) {
@@ -38,8 +39,16 @@ while (my $nextword = shift @ARGV) {
     die "You can'r define a directory a metametadir" if $metadir;
     $metadir  = shift;
   }
+  elsif ($nextword eq "-newline" || $nextword eq "-nl") {
+    $newline = 1;
+  }
+  elsif ($nextword eq "-help") {
+    &showusage();
+    exit 0;
+  }
   else {
-    &showusage("Invalid keyword '$nextword'"); # and exit
+    &showusage("Invalid keyword '$nextword'");
+    exit 1;
   }
 }
 
@@ -48,47 +57,21 @@ while (my $nextword = shift @ARGV) {
 #------------------------------------------------------------------------------
 
 unless (defined($instance) && defined($organism)) {
-    print STDOUT "\n";
-    print STDOUT "!! -- No database instance specified --\n" unless $instance;
-    print STDOUT "!! -- No organism database specified --\n" unless $organism;
-    &showusage(); # and exit
+    print STDERR "!! -- No database instance specified --\n" unless $instance;
+    print STDERR "!! -- No organism database specified --\n" unless $organism;
+    &showusage();
+    exit 1;
 }
 
 unless (defined($projectname)) {
-    print STDOUT "\n";
-    print STDOUT "!! -- No project name specified --\n";
-    &showusage(); # and exit
+    print STDERR "!! -- No project name specified --\n";
+    &showusage();
+    exit 1;
 }
 
 #------------------------------------------------------------------------------
 # get a Project instance
 #------------------------------------------------------------------------------
-sub showusage {
-  my $code = shift || 0;
-
-  print STDERR "\n";
-  print STDERR "\n Parameter input ERROR for $0: $code \n" if $code;
-  print STDERR "\n";
-  print STDERR "Convert a directory to a metadirectory for a given project.\n";
-  print STDERR "\n";
-  print STDERR "MANDATORY PARAMETERS:\n";
-  print STDERR "\n";
-  print STDERR "-instance\t(i) Database instance name\n";
-  print STDERR "\n";
-  print STDERR "-organism \t(o) Arcturus database name\n";
-  print STDERR "\n";
-  print STDERR "-project\t(p) project name\n";
-  print STDERR "\n";
-  print STDERR "OPTIONAL PARAMETERS:\n";
-  print STDERR "\n";
-  print STDERR "-directory\t(d) the path to convert to a metadir\n";
-  print STDERR "\n";
-  print STDERR "-metadir\t(m) use the metadir of the project\n";
-  print STDERR "\n";
-  print STDERR "\n Parameter input ERROR for $0: $code \n" if $code;
-  exit 1;
-
-}
 
 #my $adb = new ArcturusDatabase(-instance => $instance, -organism => $organism);
 #if (!$adb || $adb->errorStatus()) {
@@ -125,9 +108,40 @@ else {
 
 if (defined($output)) {
   print $output;
+  print "\n" if $newline;
 }
 else {
   die "Problem ";
+}
 
+exit 0;
+
+sub showusage {
+  my $code = shift || 0;
+
+  print STDERR "\n";
+  print STDERR "\n Parameter input ERROR for $0: $code \n" if $code;
+  print STDERR "\n";
+  print STDERR "Convert a directory to a metadirectory for a given project.\n";
+  print STDERR "\n";
+  print STDERR "MANDATORY PARAMETERS:\n";
+  print STDERR "\n";
+  print STDERR "-instance\t(i) Database instance name\n";
+  print STDERR "\n";
+  print STDERR "-organism \t(o) Arcturus database name\n";
+  print STDERR "\n";
+  print STDERR "-project\t(p) project name\n";
+  print STDERR "\n";
+  print STDERR "EXCLUSIVE MANDATORY PARAMETERS:\n";
+  print STDERR "\n";
+  print STDERR "-directory\t(d) the path to convert to a metadir\n";
+  print STDERR "\n";
+  print STDERR "-metadir\t(m) use the metadir of the project\n";
+  print STDERR "\n";
+  print STDERR "\n";
+  print STDERR "OPTIONAL PARAMETERS:\n";
+  print STDERR "\n";
+  print STDERR "-newline\t(nl) add a newline to the ouput, for debugging\n";
+  print STDERR "\n Parameter input ERROR for $0: $code \n" if $code;
 }
 
