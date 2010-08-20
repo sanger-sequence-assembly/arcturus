@@ -86,16 +86,16 @@ public class TestProjectManager {
   // each check need to be in a different test ,to roll back the newly created project
   @Test
     public void newWithProject() throws Exception {
-      checkNewProject("zFD380G20", "/tmp/repository/d0002/zFD380G20/test1", ":PROJECT:test1");
+      checkNewProject("zFD380G20", "/tmp/repository/d0002/zFD380G20/test1", ":PROJECT:/test1");
     }
 
   @Test
     public void newWithSchema() throws Exception {
-      checkNewProject("zFD380G20", "/tmp/repository/d0050/SHISTO/test2", ":SCHEMA:test2");
+      checkNewProject("zFD380G20", "/tmp/repository/d0050/SHISTO/test2", ":SCHEMA:/test2");
     }
   @Test
     public void newBare() throws Exception {
-      checkNewProject("zFD380G20", "/bare", "/bare");
+      checkNewProject("zFD380G20", "/tmp/repository/bare", "/tmp/repository/bare");
     }
 
   public void checkProjectDirectory (String projectName , String expectedDirectory, String expectedRaw) throws Exception {
