@@ -63,6 +63,15 @@ eval {
 
     $sth->finish();
 
+    $sth = $dbh->prepare("show databases like 'ZFISH2%'");
+
+    $sth->execute();
+
+    while (my ($dbname) = $sth->fetchrow_array()) {
+	push @dblist, $dbname;
+    }
+
+    $sth->finish();
     my $sth_set_directory = $dbh->prepare("update PROJECT set directory = ? where project_id = ?");
 
     print STDERR " done.\n";
