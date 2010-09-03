@@ -3,7 +3,7 @@
 echo
 echo ------------------------------------------------------------
 echo
-echo Making Arcturus web reports at `date`
+echo Making Arcturus web reports at `date` on `hostname`
 
 set ARCTURUS=/software/arcturus
 set REPORTSCRIPT=${ARCTURUS}/utils/make-web-report
