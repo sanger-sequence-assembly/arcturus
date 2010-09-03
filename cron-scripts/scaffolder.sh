@@ -2,7 +2,7 @@
 
 ARCTURUS=/software/arcturus
 SCAFFOLDER=${ARCTURUS}/test/scaffolder
-OPTIONS='-instance pathogen -out /dev/null -xml DATABASE! -puclimit 15000'
+OPTIONS='-instance pathogen -out /dev/null -xml DATABASE -puclimit 15000 -shownames'
 #NOTIFY_TO=arcturus-help@sanger.ac.uk
 NOTIFY_TO=adh@sanger.ac.uk
 
@@ -29,7 +29,7 @@ done
 
 if [ $failed -gt 0 ]
 then
-    mail -s "Arcturus scafflder failures" ${NOTIFY_TO} <<EOF
+    mail -s "Arcturus scaffolder failures" ${NOTIFY_TO} <<EOF
 Errors occurred during the latest run of the Arcturus scaffolder.
 
 The following organisms had problems:
