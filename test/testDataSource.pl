@@ -31,9 +31,11 @@ my $ds = (defined($ldapuser) && defined($ldappass)) ?
     new DataSource(-instance => $instance,
 		   -organism => $organism,
 		   -ldapuser => $ldapuser,
-		   -ldappass => $ldappass) :
+		   -ldappass => $ldappass,
+		   -verbose  => 1) :
     new DataSource(-instance => $instance,
-		   -organism => $organism);
+		   -organism => $organism,
+		   -verbose  => 1);
 
 if (!defined($ds)) {
     print STDERR "Failed to locate a datasource for instance=\"$instance\" and organism=\"$organism\"\n";

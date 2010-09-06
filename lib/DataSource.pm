@@ -2,14 +2,19 @@ package DataSource;
 
 use strict;
 
+use Socket;
 use Net::LDAP;
 use DBI;
+
+use constant DEFAULT_URL => 'ldap.internal.sanger.ac.uk';
+use constant DEFAULT_BASE => 'cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk';
 
 sub new {
     my $type = shift;
 
     my ($url, $base, $instance, $organism, $newUsername, $newPassword);
     my ($ldapuser, $ldappass);
+    my $verbose = 0;
 
     while (my $nextword = shift) {
 	$nextword =~ s/^\-//;
@@ -29,17 +34,22 @@ sub new {
 	$newUsername = shift if ($nextword eq 'username');
 
 	$newPassword = shift if ($nextword eq 'password');
+
+	$verbose = 1 if ($nextword eq 'verbose');
     }
 
-    $url = 'ldap.internal.sanger.ac.uk' unless defined($url);
+    $url = DEFAULT_URL unless defined($url);
 
-    $instance = 'pathogen' unless defined($instance);
+    $base = DEFAULT_BASE unless defined($base);
 
-    $base = "cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk" unless defined($base);
+    die "Instance not specified in DataSource constructor" unless defined($instance);
 
-    $base = "cn=$instance," . $base if defined($instance);
+    die "Organism not specified in DataSource constructor" unless defined($organism);
 
-    return undef unless defined($organism);
+    die "Running in test mode but instance was not \"test\" in DataSource constructor"
+	if (defined($ENV{ARCTURUS_ENV}) && $ENV{ARCTURUS_ENV} eq 'test' && $instance ne 'test');
+
+    $base = "cn=$instance," . $base;
 
     my $this = {};
     bless $this, $type;
@@ -49,7 +59,7 @@ sub new {
 
     my $filter = "&(objectClass=javaNamingReference)(cn=$organism)";
 
-    my $ldap = Net::LDAP->new($url) or die "Cannot connect to LDAP server: $@";
+    my $ldap = &openLDAPConnection($url, $verbose);
 
     # Bind anonymously if no username and password were given
     my $mesg = (defined($ldapuser) && defined($ldappass)) ?
@@ -114,7 +124,37 @@ sub new {
     # Close LDAP session
     $mesg = $ldap->unbind;
 
-    return $found ? $this : undef;
+    return $this if $found;
+
+    die "Failed to find DataSource for instance=$instance organism=$organism";
+}
+
+sub openLDAPConnection {
+    my $hostname = shift;
+    my $verbose = shift || 0;
+
+    die "No hostname specified in openLDAPConnection" unless defined($hostname);
+
+    my $ldap = Net::LDAP->new($hostname);
+
+    return $ldap if defined($ldap);
+
+    print STDERR "DataSource: initial attempt to connect to LDAP server at $hostname failed," .
+	" trying alternate addresses.\n" if $verbose;
+
+    my ($name, $aliases, $addrtype, $infolength, @addrs) = gethostbyname($hostname);
+
+    foreach my $addr (@addrs) {
+	my $name = inet_ntoa($addr);
+
+	$ldap = Net::LDAP->new($name);
+    
+	return $ldap if defined($ldap);
+
+	print STDERR "DataSource: $addr did not respond.\n" if $verbose;
+    }
+
+    die "Failed to find an LDAP server at $hostname: $@";
 }
 
 # Build a DBI URL from the parameters in the DataSource hash
