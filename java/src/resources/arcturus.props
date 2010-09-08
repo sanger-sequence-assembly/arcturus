@@ -36,3 +36,10 @@ project.allowbinimport=false
 oligofinder.useRegex=true
 
 LDAPSocketFactory.debug=false
+
+uk.ac.sanger.arcturus.repository.managerclassname=uk.ac.sanger.arcturus.repository.SangerRepositoryManager
+
+sangerrepositorymanager.url=jdbc:oracle:thin:@ocs14:1555:casp
+sangerrepositorymanager.username=***REMOVED***
+sangerrepositorymanager.password=***REMOVED***
+sangerrepositorymanager.cachelifetime=300
