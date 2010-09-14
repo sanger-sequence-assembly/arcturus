@@ -18,6 +18,8 @@ import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.gui.*;
+import uk.ac.sanger.arcturus.gui.common.InputDialog;
+import uk.ac.sanger.arcturus.gui.common.InputDialog.Status;
 import uk.ac.sanger.arcturus.people.*;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEventListener;
@@ -36,13 +38,15 @@ public class ProjectTablePanel extends MinervaPanel implements
 	protected MinervaAbstractAction actionCreateNewProject;
 
 	protected final NewProjectPanel panelNewProject;
+	protected final InputDialog dialogNewProject;
 	
 	private final static boolean allowBinImport = Arcturus.getBoolean("project.allowbinimport");
 
 	public ProjectTablePanel(MinervaTabbedPane parent, ArcturusDatabase adb) throws ArcturusDatabaseException {
 		super(parent, adb);
 
-		panelNewProject = new NewProjectPanel(this, adb);
+		panelNewProject = new NewProjectPanel(adb);
+		dialogNewProject = new InputDialog(null, "Create a new project", panelNewProject);
 
 		adb.addProjectChangeEventListener(this);
 
@@ -493,9 +497,13 @@ public class ProjectTablePanel extends MinervaPanel implements
 	}
 
 	private void createNewProject() {
-		int rc = panelNewProject.display();
+		panelNewProject.refresh();
+		
+		dialogNewProject.setOKActionEnabled(false);
+		
+		Status rc = dialogNewProject.showDialog();
 
-		if (rc == JOptionPane.OK_OPTION) {
+		if (rc == Status.OK) {
 			String name = panelNewProject.getName();
 			String directory = panelNewProject.getDirectory();
 			Person owner = panelNewProject.getOwner();

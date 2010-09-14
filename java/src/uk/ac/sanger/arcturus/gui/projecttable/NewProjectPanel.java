@@ -1,31 +1,45 @@
 package uk.ac.sanger.arcturus.gui.projecttable;
 
 import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.HierarchyEvent;
+import java.awt.event.HierarchyListener;
+import java.awt.event.ItemEvent;
+import java.awt.event.ItemListener;
 import java.io.File;
 
 import uk.ac.sanger.arcturus.data.Assembly;
+import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.people.Person;
 import uk.ac.sanger.arcturus.Arcturus;
+import uk.ac.sanger.arcturus.gui.common.InputDialog;
 
 public class NewProjectPanel extends JPanel {
+	private static final String ENTER_A_VALID_NAME = "You must enter a valid project name";
+	private static final String NAME_IS_IN_USER = "That project name is already in use in the selected assembly";
+	
 	private JTextField txtName = new JTextField(25);
+	private JLabel lblMessage = new JLabel(ENTER_A_VALID_NAME);
 	private JComboBox cbxDirectory = new JComboBox();
 	private JComboBox cbxOwner = new JComboBox();
 	private JComboBox cbxAssembly = new JComboBox();
 	private JButton btnBrowse = new JButton("Browse...");
 	
-	private ArcturusDatabase adb;
-	private JComponent parent;
+	private Assembly selectedAssembly;
 	
-	public NewProjectPanel(JComponent parent, ArcturusDatabase adb) {
+	private Container ancestor;
+	
+	private ArcturusDatabase adb;
+	
+	public NewProjectPanel(ArcturusDatabase adb) {
 		super(new GridBagLayout());
-		
-		this.parent = parent;
 		this.adb = adb;
 		
 		GridBagConstraints c = new GridBagConstraints();
@@ -38,6 +52,8 @@ public class NewProjectPanel extends JPanel {
 		c.gridwidth = GridBagConstraints.REMAINDER;
 		c.weightx = 0.0;
 
+		// Add name label and text field
+		
 		c.gridwidth = 1;
 		c.anchor = GridBagConstraints.EAST;
 		c.fill = GridBagConstraints.NONE;
@@ -50,6 +66,27 @@ public class NewProjectPanel extends JPanel {
 		c.weightx = 1.0;
 		
 		add(txtName, c);
+		
+		// Add message label and text field
+		
+		c.gridy++;
+				
+		c.gridwidth = 1;
+		c.anchor = GridBagConstraints.EAST;
+		c.fill = GridBagConstraints.NONE;
+		c.weightx = 0.0;
+		
+		add(new JLabel(""), c);
+
+		c.anchor = GridBagConstraints.EAST;
+		c.fill = GridBagConstraints.HORIZONTAL;
+		c.weightx = 1.0;
+				
+		add(lblMessage, c);
+
+		lblMessage.setForeground(Color.red);
+		
+		// Add assembly label and combo box
 		
 		c.gridy++;
 				
@@ -66,6 +103,8 @@ public class NewProjectPanel extends JPanel {
 				
 		add(cbxAssembly, c);
 
+		// Add directory label and combo box
+		
 		c.gridy++;
 		
 		c.gridwidth = 1;
@@ -97,6 +136,8 @@ public class NewProjectPanel extends JPanel {
 		// Disable the directory browser unless we are running on Linux
 		btnBrowse.setEnabled(Arcturus.isLinux());
 
+		// Add owner label and combo box
+		
 		c.gridy++;
 		
 		c.gridwidth = 1;
@@ -111,6 +152,63 @@ public class NewProjectPanel extends JPanel {
 		c.weightx = 1.0;
 				
 		add(cbxOwner, c);
+		
+		addHierarchyListener(new HierarchyListener() {
+			public void hierarchyChanged(HierarchyEvent e) {
+				ancestor = getTopLevelAncestor();
+			}
+		});
+		
+		txtName.getDocument().addDocumentListener(new DocumentListener() {
+			public void changedUpdate(DocumentEvent e) {
+				// Do nothing
+			}
+
+			public void insertUpdate(DocumentEvent e) {
+				verifyNameField();
+			}
+
+			public void removeUpdate(DocumentEvent e) {
+				verifyNameField();
+			}
+		});
+		
+		cbxAssembly.addItemListener(new ItemListener() {
+			public void itemStateChanged(ItemEvent e) {
+				if (e.getStateChange() == ItemEvent.SELECTED) {
+					selectedAssembly = (Assembly)e.getItem();
+					verifyNameField();
+				}
+			}			
+		});
+	}
+
+	private void verifyNameField() {
+		String text = txtName.getText();
+		
+		boolean empty = text == null || text.length() == 0;
+		
+		boolean nameInUse = false;
+		
+		if (!empty) {			
+			try {
+				Project p = adb.getProjectByName(selectedAssembly, text);
+				
+				nameInUse = p != null;
+			} catch (ArcturusDatabaseException e) {
+				Arcturus.logWarning("Failed to fetch project by name", e);
+			}		
+		}
+		
+		if (empty)
+			lblMessage.setText(ENTER_A_VALID_NAME);
+		else if (nameInUse)
+			lblMessage.setText(NAME_IS_IN_USER);
+		else
+			lblMessage.setText(" ");
+
+		if (ancestor instanceof InputDialog)		
+			((InputDialog)ancestor).setOKActionEnabled(! (empty || nameInUse));
 	}
 	
 	protected void browseWorkDir() {
@@ -155,14 +253,7 @@ public class NewProjectPanel extends JPanel {
 		return (Assembly)cbxAssembly.getSelectedItem();
 	}
 	
-	public int display() {
-		refresh();
-		
-		return JOptionPane.showConfirmDialog(parent, this, "Create a new project",
-				JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-	}
-	
-	private void refresh() {
+	public void refresh() {
 		updateUserList();
 		updateAssemblyList();
 		updateDirectoryList();

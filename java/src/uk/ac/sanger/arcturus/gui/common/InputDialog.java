@@ -76,6 +76,8 @@ public class InputDialog extends JDialog {
 	}
 	
 	public Status showDialog() {
+		pack();
+		
 		setVisible(true);
 		
 		return status;
