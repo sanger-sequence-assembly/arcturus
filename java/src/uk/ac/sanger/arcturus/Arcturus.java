@@ -21,7 +21,6 @@ import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
-import java.util.logging.SimpleFormatter;
 
 import javax.management.MBeanServer;
 import javax.management.remote.JMXConnectorServer;
@@ -32,6 +31,8 @@ import uk.ac.sanger.arcturus.logging.JDBCLogHandler;
 import uk.ac.sanger.arcturus.logging.LongMessageFormatter;
 import uk.ac.sanger.arcturus.logging.MailHandler;
 import uk.ac.sanger.arcturus.logging.MessageDialogHandler;
+import uk.ac.sanger.arcturus.repository.RepositoryManager;
+import uk.ac.sanger.arcturus.repository.RepositoryManagerFactory;
 
 public class Arcturus {
 	protected static final String PROJECT_PROPERTIES_FILE = ".arcturus.props";
@@ -41,10 +42,12 @@ public class Arcturus {
 	public final static String BUILD_BY_KEY = "build.by";
 	public final static String BUILD_HOST_KEY = "build.host";
 
-
 	protected static Properties arcturusProps = new Properties(System
 			.getProperties());
+	
 	protected static Logger logger = Logger.getLogger("uk.ac.sanger.arcturus");
+	
+	protected static RepositoryManager repositoryManager = null;
 
 	protected static long jarFileTimestamp = 0L;
 	
@@ -240,6 +243,18 @@ public class Arcturus {
 		pstmtInsert.close();
 
 		conn.close();
+	}
+	
+	public static RepositoryManager getRepositoryManager() {
+		if (repositoryManager == null) {
+			try {
+				repositoryManager = RepositoryManagerFactory.createRepositoryManager(arcturusProps);
+			} catch (Exception e) {
+				logWarning("Failed to create a repository manager", e);
+			}
+		}
+		
+		return repositoryManager;
 	}
 
 	public static Properties getProperties() {
