@@ -805,21 +805,6 @@ public class ProjectManager extends AbstractManager {
 
 	public boolean createNewProject(Assembly assembly, String name, Person owner,
 			String directory) throws ArcturusDatabaseException, IOException {
-		if (Arcturus.isLinux()) {
-			File dir = new File(directory);
-		
-			if (dir.exists()) {
-				if (!dir.isDirectory())
-					throw new IOException("A file named \"" + directory +
-					"\" already exists and is not a directory");
-			} else {
-				if (!dir.mkdirs())
-					throw new IOException("Unable to create a directory named \"" + directory + "\"");
-			}
-		}
-		
-		int rc = 0;
-		
 		String creator = System.getProperty("user.name");
 		
 		try {
@@ -829,14 +814,16 @@ public class ProjectManager extends AbstractManager {
 			pstmtCreateNewProject.setString(4, owner.getUID());
 			pstmtCreateNewProject.setString(5, directory);
 
-			rc = pstmtCreateNewProject.executeUpdate();
+			int rc = pstmtCreateNewProject.executeUpdate();
+			
+			return rc == 1;
 		} catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to create a new project with assembly ID=" + assembly.getID() +
 					", name=\"" + name + "\", creator=" + creator + ", owner=" + owner + ", directory=" + directory,
 					conn, this);
 		}
 	
-		return rc == 1;
+		return false;
 	}
 
 	public boolean canUserChangeProjectStatus(Project project, Person user)
