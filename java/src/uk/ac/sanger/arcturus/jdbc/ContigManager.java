@@ -191,11 +191,11 @@ public class ContigManager extends AbstractManager {
 		pstmtCurrentContigs = prepareStatement(query);
 		
 		query = "select CURRENTCONTIGS.contig_id"
-		      + "  from READINFO,SEQ2READ,MAPPING,CURRENTCONTIGS,PROJECT"
-			  + " where READINFO.readname = ?"
-			  + "   and READINFO.read_id = SEQ2READ.read_id"
-			  + "   and SEQ2READ.seq_id = MAPPING.seq_id"
-			  + "   and MAPPING.contig_id = CURRENTCONTIGS.contig_id"
+		      + "  from READNAME,SEQ2READ,SEQ2CONTIG,CURRENTCONTIGS,PROJECT"
+			  + " where READNAME.readname = ?"
+			  + "   and READNAME.read_id = SEQ2READ.read_id"
+			  + "   and SEQ2READ.seq_id = SEQ2CONTIG.seq_id"
+			  + "   and SEQ2CONTIG.contig_id = CURRENTCONTIGS.contig_id"
 			  + "   and CURRENTCONTIGS.project_id = PROJECT.project_id";
 		
 		pstmtContigIDFromReadname = prepareStatement(query);
