@@ -91,9 +91,9 @@ public class ProjectImporterExporter extends Thread {
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
 				final StyledJobRunnerFrame frame = importing ?
-						new ImporterFrame(host, directory, command,
+						new ImporterFrame(host, null, command,
 								proxy, ProjectImporterExporter.this, caption, log) :
-						new ExporterFrame(host, directory, command,
+						new ExporterFrame(host, null, command,
 								proxy, ProjectImporterExporter.this, caption, log);		;
 				
 				frame.setSize(800, 600);
