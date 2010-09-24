@@ -62,11 +62,14 @@ public class ProjectImporterExporter extends Thread {
 			Arcturus.logWarning("Project name was null", new Throwable());
 			return;
 		}
-
-		String utilsDir = System.getProperty("arcturus.home", "/software/arcturus") + "/utils/";
 		
-		String shellcommand = utilsDir + (importing ?
-				"importintoarcturus" : "exportfromarcturus") + ".lsf";		
+		String shellcommand = Arcturus.getProperty(importing ?
+				"projectimport.command" : "projectexport.command");
+		
+		if (shellcommand == null) {
+			Arcturus.logWarning("Could not find the " + (importing ? "import" : "export") + " command!");
+			return;
+		}
 		
 		final String command = shellcommand + " -instance " +
 				instance + " -organism " + organism + " -project " + project;

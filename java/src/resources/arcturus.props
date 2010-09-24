@@ -29,6 +29,10 @@ jobplacer.prefix=ssh
 jobplacer.host=seq1
 jobplacer.command=/software/arcturus/utils/find_a_host.csh
 
+projectimport.command=/software/arcturus/utils/importintoarcturus.lsf -gap4
+
+projectexport.command=/software/arcturus/utils/exportfromarcturus.lsf -gap4
+
 scaffoldbuilder.puclimit=15000
 
 project.allowbinimport=false
