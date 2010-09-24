@@ -3371,7 +3371,7 @@ sub getSequenceIDsForReads {
 
     @readnames = sort keys %$readhash;
 
-    my $load = $options{loadreadsequence}; # define explictly 1
+    my $load = ($options{noload} ? 0 : 1); # default 1
     foreach my $readname (sort keys %$readhash) {
 # identify which version of the read it is; if new try to load it
         my $read = $readhash->{$readname};
