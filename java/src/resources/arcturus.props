@@ -41,10 +41,13 @@ oligofinder.useRegex=true
 
 LDAPSocketFactory.debug=false
 
-traceserver.url=http://trace3slb.internal.sanger.ac.uk:8888/get_exp
-
-uk.ac.sanger.arcturus.sequencingproject.factoryclassname=uk.ac.sanger.arcturus.sequencingproject.LDAPSequencingProjectFactory
-
 traceserver.baseURL=http://trace3slb.internal.sanger.ac.uk:8888/get_exp
 
 readnamefilter.regex=\\.[a-z]\\d\\w*$
+
+uk.ac.sanger.arcturus.repository.managerclassname=uk.ac.sanger.arcturus.repository.SangerRepositoryManager
+
+sangerrepositorymanager.url=jdbc:oracle:thin:@ocs14:1555:casp
+sangerrepositorymanager.username=***REMOVED***
+sangerrepositorymanager.password=***REMOVED***
+sangerrepositorymanager.cachelifetime=300
