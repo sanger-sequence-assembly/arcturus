@@ -5,9 +5,9 @@ use Cwd;
 
 use ArcturusDatabase;
 
-# import a single gap5 database into arcturus
+# import a single gap database into arcturus
 
-# script to be run from directory of gap5 database to be imported 
+# script to be run from directory of gap database to be imported 
 
 # for input parameter description use help
 
@@ -15,14 +15,14 @@ use ArcturusDatabase;
 
 my $pwd = cwd();
 
-my $basedir = `dirname $0`; chomp $basedir; # directory of the script
+my $basedir = `dirname $0`;
+chomp $basedir; # directory of the script
 my $arcturus_home = "${basedir}/..";
-$arcturus_home =~ s?/utils/\.\.??;
 
-my $gap5root = "/software/badger/bin";
+my $gaproot = "/software/badger/bin";
 
-my $gap5toSam = "$gap5root/gap5_export -test "; # test to be disabled later
-my $gap5consensus = "$gap5root/gap5_consensus ";
+my $gaptoSam = "$gaproot/gap_export -test "; # test to be disabled later
+my $gapconsensus = "$gaproot/gap_consensus ";
 my $samtools = "/software/solexa/bin/aligners/samtools/current/samtools";
 
 my $import_script = "${arcturus_home}/java/scripts/importbamfile";
@@ -33,7 +33,7 @@ my $java_opts = defined($ENV{'JAVA_DEBUG'}) ? "-Ddebugging=true -Dtesting=true -
 # command line input parser
 #------------------------------------------------------------------------------
 
-my ($instance,$organism,$projectname,$assembly,$gap5name,$version);
+my ($instance,$organism,$projectname,$assembly,$gapname,$version);
 
 my $problemproject = 'PROBLEMS'; # default
 
@@ -43,7 +43,7 @@ my $repair = "-movetoproblems";
 
 my ($forcegetlock,$keep,$abortonwarning,$noagetest,$rundir,$debug);
 
-my $validkeys = "instance|i|organism|o|project|p|assembly|a|gap5name|g|"
+my $validkeys = "instance|i|organism|o|project|p|assembly|a|gapname|g|"
               . "version|v|superuser|su|problem|script|abortonwarning|aow|"
               . "noagetest|nat|keep|rundir|rd|debug|help|h|passon|po|"
               . "java_opts";
@@ -72,15 +72,15 @@ while (my $nextword = shift @ARGV) {
         die "You can't re-define project" if $projectname;
         $projectname  = shift @ARGV;
         $version = "0" unless defined($version);
-        $gap5name = uc($projectname) unless $gap5name;
+        $gapname = uc($projectname) unless $gapname;
     }
 
     if ($nextword eq '-assembly' || $nextword eq '-a') { # optional
         $assembly = shift @ARGV;
     }
 
-    if ($nextword eq '-gap5name' || $nextword eq '-g') { # optional, default project
-        $gap5name = shift @ARGV;
+    if ($nextword eq '-gapname' || $nextword eq '-g') { # optional, default project
+        $gapname = shift @ARGV;
     }
 
     if ($nextword eq '-version'  || $nextword eq '-v') { # optional, default 0
@@ -218,48 +218,48 @@ if ($rundir && $rundir ne $pwd) {
 }
 
 #------------------------------------------------------------------------------
-# check existence and accessibility of gap5 database to be imported
+# check existence and accessibility of gap database to be imported
 #------------------------------------------------------------------------------
 
-unless ( -f "${gap5name}.$version") {
-    print STDOUT "!! -- Project $gap5name version $version"
+unless ( -f "${gapname}.$version") {
+    print STDOUT "!! -- Project $gapname version $version"
                      ." does not exist in $pwd --\n";
     exit 1;
 }
 
-if ( -f "${gap5name}.$version.BUSY") {
-    print STDOUT "!! -- Import of project $gap5name aborted:"
+if ( -f "${gapname}.$version.BUSY") {
+    print STDOUT "!! -- Import of project $gapname aborted:"
                      ." version $version is BUSY --\n";
     exit 1;
 }
 
-if ( -f "${gap5name}.A.BUSY") {
-    print STDOUT "!! -- Import of project $gap5name WARNING:"
+if ( -f "${gapname}.A.BUSY") {
+    print STDOUT "!! -- Import of project $gapname WARNING:"
                      ." version A is BUSY --\n";
     exit 1 if $abortonwarning;
 }
 
-if ( -f "${gap5name}.B.BUSY") {
-    print STDOUT "!! -- Import of project $gap5name aborted:"
+if ( -f "${gapname}.B.BUSY") {
+    print STDOUT "!! -- Import of project $gapname aborted:"
                      ." version B is BUSY --\n";
     exit 1;
 }
 
 # determine if script run in standard mode
 
-my $nonstandard = (uc($gap5name) ne uc($projectname) || $version ne '0') ? 1 : 0;
+my $nonstandard = (uc($gapname) ne uc($projectname) || $version ne '0') ? 1 : 0;
 print STDOUT "$0 running in non-standard mode\n" if $nonstandard;
 
 # check age
 
 unless ($version eq "A" || $nonstandard) {
-    my @astat = stat "$gap5name.A";
-    my @vstat = stat "$gap5name.$version";
+    my @astat = stat "$gapname.A";
+    my @vstat = stat "$gapname.$version";
     if (@vstat && @astat && $vstat[9] <= $astat[9]) {
-        print STDERR "!! -- Import of project $gap5name WARNING:"
+        print STDERR "!! -- Import of project $gapname WARNING:"
                      ." version $version is older than version A --\n";
         unless ($noagetest) {
-	    print STDERR "!! -- Import of $gap5name.$version skipped --\n";
+	    print STDERR "!! -- Import of $gapname.$version skipped --\n";
             exit 0;
 	}
     }
@@ -288,32 +288,32 @@ if ($?) {
 # export the database as a depadded CAF file
 #------------------------------------------------------------------------------
 
-my $samfile = "/tmp/${gap5name}.$$.samfile.sam";
+my $samfile = "/tmp/${gapname}.$$.samfile.sam";
 
-my $bamroot = "/tmp/${gap5name}.$$.bamfile";
+my $bamroot = "/tmp/${gapname}.$$.bamfile";
 my $bamfile = "$bamroot.bam";
 my $idxfile = "$bamroot.bai";
 
-my $tmpfile = "/tmp/${gap5name}.$$.tmpfile.bam"; # intermediate
+my $tmpfile = "/tmp/${gapname}.$$.tmpfile.bam"; # intermediate
 
-my $consensus = "/tmp/${gap5name}.$$.consensus.faq";
+my $consensus = "/tmp/${gapname}.$$.consensus.faq";
 
-print STDOUT "Converting Gap5 database $gap5name.$version to indexed BAM\n";
+print STDOUT "Converting Gap database $gapname.$version to indexed BAM\n";
 
-system ("$gap5toSam -out $samfile  $gap5name.$version"); # create sam file
+system ("$gaptoSam -out $samfile  $gapname.$version"); # create sam file
 print STDOUT "using samtools to convert SAM to BAM\n";
 system ("$samtools view -S -b -u $samfile > $tmpfile") if ($? == 0);    # create raw bam file
 print STDOUT "using samtools to sort and index\n";
 system ("$samtools sort $tmpfile $bamroot")            if ($? == 0);    # sort bam file
 system ("$samtools index $bamfile $idxfile")           if ($? == 0);    # index bam file
 
-print STDOUT "Writing Gap5 consensus for database $gap5name.$version to fastq file\n";
+print STDOUT "Writing Gap consensus for database $gapname.$version to fastq file\n";
 
-system ("$gap5consensus -out $consensus $gap5name.$version"); # create fasta file
+system ("$gapconsensus -out $consensus $gapname.$version"); # create fasta file
 
 unless ($? == 0) {
-    print STDERR "!! -- FAILED to create a BAM file from $gap5name.$version ($?) --\n";
-    print STDERR "!! -- Import of $gap5name.$version aborted --\n";
+    print STDERR "!! -- FAILED to create a BAM file from $gapname.$version ($?) --\n";
+    print STDERR "!! -- Import of $gapname.$version aborted --\n";
     exit 1;
 }
 
@@ -322,37 +322,37 @@ unless ($? == 0) {
 #------------------------------------------------------------------------------
 
 unless ($version eq "B" || $nonstandard) {
-    print STDOUT "Backing up version $version to $gap5name.B\n";
-    if (-f "$gap5name.B") {
+    print STDOUT "Backing up version $version to $gapname.B\n";
+    if (-f "$gapname.B") {
 # extra protection against busy B version preventing the backup
-        if ( -f "${gap5name}.B.BUSY") {
-            print STDERR "!! -- Import of project $gap5name ABORTED:"
+        if ( -f "${gapname}.B.BUSY") {
+            print STDERR "!! -- Import of project $gapname ABORTED:"
                         ." version B is BUSY; backup cannot be made --\n";
             exit 1;
         }
-        system ("rmdb $gap5name B");
+        system ("rmdb $gapname B");
         unless ($? == 0) {
-            print STDERR "!! -- FAILED to remove existing $gap5name.B ($?) --\n"; 
-            print STDERR "!! -- Import of $gap5name.$version aborted --\n";
+            print STDERR "!! -- FAILED to remove existing $gapname.B ($?) --\n"; 
+            print STDERR "!! -- Import of $gapname.$version aborted --\n";
             exit 1;
         }
     }
-    system ("cpdb $gap5name $version $gap5name B");
+    system ("cpdb $gapname $version $gapname B");
     unless ($? == 0) {
-        print STDERR "!! -- WARNING: failed to back up $gap5name.$version ($?) --\n";
+        print STDERR "!! -- WARNING: failed to back up $gapname.$version ($?) --\n";
         if ($abortonwarning) {
-            print STDERR "!! -- Import of $gap5name.$version aborted --\n";
+            print STDERR "!! -- Import of $gapname.$version aborted --\n";
             exit 1;
         }
     }       
 }
 
 #------------------------------------------------------------------------------
-# extract contig order from the Gap5 database
+# extract contig order from the Gap database
 #------------------------------------------------------------------------------
 
-#my $scaffoldfile = "/tmp/".lc($gap5name.".".$version.".$$.sff");
-#&mySystem ("$scaffold_script $gap5name $version > $scaffoldfile");
+#my $scaffoldfile = "/tmp/".lc($gapname.".".$version.".$$.sff");
+#&mySystem ("$scaffold_script $gapname $version > $scaffoldfile");
 
 #------------------------------------------------------------------------------
 # change the data in Arcturus
@@ -364,7 +364,7 @@ $project->fetchContigIDs(); # load the current contig IDs before import
 print STDOUT "Importing into Arcturus\n";
 
 $command  = "$import_script -instance $instance -organism $organism "
-          . "-project $projectname -in $bamfile"; 
+          . "-project $projectname -in $bamfile -consensus $consensus"; 
 
 print STDOUT "$command \n";
 
@@ -404,7 +404,7 @@ if (0 && $project->hasNewContigs()) { # disabled for the moment
 
 # do not use repair mode for inconsistencies between projects, just record them
 
-    my $allocation_b_log = "readallocation-b-.$$.${gap5name}.log"; # between projects
+    my $allocation_b_log = "readallocation-b-.$$.${gapname}.log"; # between projects
 
     &mySystem ("$allocation_script -instance $instance -organism $organism "
            ."-nr -problemproject $problemproject -workproject $projectname "
@@ -415,17 +415,17 @@ if (0 && $project->hasNewContigs()) { # disabled for the moment
 
 # use repair mode for inconsistencies inside the project
 
-    my $allocation_i_log = "readallocation-i-.$$.${gap5name}.log"; # inside project
+    my $allocation_i_log = "readallocation-i-.$$.${gapname}.log"; # inside project
 
     &mySystem ("$allocation_script -instance $instance -organism $organism "
            ."$repair -problemproject $problemproject -workproject $projectname "
            ."-inside -log $allocation_i_log -mail arcturus-help");
 
-    print STDOUT "New data from database $gap5name.$version successfully processed\n";
+    print STDOUT "New data from database $gapname.$version successfully processed\n";
 }
 
 else {
-    print STDOUT "Database $gap5name.$version successfully processed, "
+    print STDOUT "Database $gapname.$version successfully processed, "
                . "but does not contain new contigs\n";
 }
      
@@ -483,9 +483,9 @@ sub showusage {
     print STDERR "\n";
     print STDERR "\nParameter input ERROR for $0: $code \n" if $code;
     print STDERR "\n";
-    print STDERR "Import a Gap5 database into Arcturus for a specified project\n";
+    print STDERR "Import a Gap database into Arcturus for a specified project\n";
     print STDERR "\n";
-    print STDERR "script to run in directory of Gap5 database\n";
+    print STDERR "script to run in directory of Gap database\n";
     print STDERR "\n";
     $version = "0" unless defined($version);
     print STDERR "import will be from database 'project.$version'\n";
@@ -503,9 +503,9 @@ sub showusage {
     print STDERR "\n";
     print STDERR "-assembly\t(a) needed to resolve ambiguous project name\n";
     print STDERR "\n";
-    print STDERR "-gap5name\t(g) Gap5 database if different from default "
+    print STDERR "-gapname\t(g) Gap database if different from default "
                 ."project.0\n";
-    print STDERR "-version\t(v) Gap5 database version if different from 0\n";
+    print STDERR "-version\t(v) Gap database version if different from 0\n";
     print STDERR "\n";
     print STDERR "-java_opts\tOptions to be passed to the JVM\n";
     print STDERR "\n";
@@ -519,7 +519,7 @@ sub showusage {
                . "parent contigs\n";
     print STDERR "\n";
     print STDERR "-aow\t\t(abortonwarning) stop if any db is BUSY or backup fails\n";
-    print STDERR "-nat\t\t(noagetest) skip age test on Gap5 database(s)\n";
+    print STDERR "-nat\t\t(noagetest) skip age test on Gap database(s)\n";
     print STDERR "-keep\t\t keep temporary files\n";
     print STDERR "\n";
     print STDERR "-debug\n";

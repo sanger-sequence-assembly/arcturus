@@ -25,25 +25,27 @@ my @dblist = ();
 
 my $instance;
 my $organism;
-my $minlen;
+my $minlen = 1000;
 my $verbose;
 my $fastafile;
 my $destdir;
 my $paddingmode = NONE;
 my $fastafh;
-my $contigids;
 my $allcontigs = 0;
 my $maxseqperfile;
 my $seqfilenum;
 my $totseqlen;
 my $pinclude;
 my $pexclude;
-my $useshortname = 0;
-my $projectprefix = 0;
-my $usegapname = 0;
+my $fofn;
+
+my $contig_name_mode = 'normal';
+
 my $ends = 0;
 my $padmapfile;
 my $ascaf = 0;
+
+my @contigids;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -57,7 +59,12 @@ while (my $nextword = shift @ARGV) {
 
     $destdir = shift @ARGV if ($nextword eq '-destdir');
 
-    $contigids = shift @ARGV if ($nextword eq '-contigs');
+    if ($nextword eq '-contigs') {
+	my $word = shift @ARGV;
+	@contigids = split(/,/, $word);
+    }
+
+    $fofn = shift @ARGV if ($nextword eq '-fofn');
 
     $maxseqperfile = shift @ARGV if ($nextword eq '-maxseqperfile');
 
@@ -78,11 +85,13 @@ while (my $nextword = shift @ARGV) {
 
     $padmapfile = shift @ARGV if ($nextword eq '-padmap');
 
-    $usegapname = 1 if ($nextword eq '-usegap4name');
+    $contig_name_mode = shift @ARGV if ($nextword eq '-contignamemode');
 
-    $projectprefix = 1 if ($nextword eq '-projectprefix');
+    $contig_name_mode = 'gap4' if ($nextword eq '-usegap4name');
 
-    $useshortname = 1 if ($nextword eq '-useshortname');
+    $contig_name_mode = 'projectprefix' if ($nextword eq '-projectprefix');
+
+    $contig_name_mode = 'short' if ($nextword eq '-useshortname');
 
     $ascaf = 1 if ($nextword eq '-ascaf');
 
@@ -98,6 +107,21 @@ unless (defined($organism) &&
     print STDERR "One or more mandatory parameters are missing.\n\n";
     &showUsage();
     exit(1);
+}
+
+if (defined($fofn) && -f $fofn) {
+    my $fh = new FileHandle($fofn, "r");
+
+    while (my $line = <$fh>) {
+	
+	my ($cid) = $line =~ /^\s*(\d+)\s*/;
+
+	push @contigids, $cid if defined($cid);
+    }
+
+    $fh->close();
+
+    print STDERR "Got ",scalar(@contigids)," contig IDs from $fofn.\n";
 }
 
 my $ds = new DataSource(-instance => $instance, -organism => $organism);
@@ -150,70 +174,93 @@ while (my ($projid,$projname) = $sth->fetchrow_array()) {
 
 $sth->finish();
 
-$pinclude = &getProjectIDs($pinclude, $projectname2id) if defined($pinclude);
-$pexclude = &getProjectIDs($pexclude, $projectname2id) if defined($pexclude);
+if (scalar(@contigids) == 0) {
+    $pinclude = &getProjectIDs($pinclude, $projectname2id) if defined($pinclude);
+    $pexclude = &getProjectIDs($pexclude, $projectname2id) if defined($pexclude);
 
-$minlen = 1000 unless (defined($minlen) || defined($contigids));
+    my $table = ($allcontigs ? "CONTIG" : "CURRENTCONTIGS");
 
-my $fields = "gap4name,project_id,C.contig_id,C.length,sequence" . ($ascaf ? ",quality" : "");
-my $tables = (defined($contigids) || $allcontigs ? "CONTIG" : "CURRENTCONTIGS") .
-    " C left join CONSENSUS CS using(contig_id)";
+    my @conds;
 
-my @conds;
+    if ($allcontigs) {
+	push @conds, "length > $minlen" if defined($minlen);
+    } else {
+	push @conds, "length > $minlen" if defined($minlen);
+	
+	push @conds, "project_id in ($pinclude)" if defined($pinclude);
+	
+	push @conds, "project_id not in ($pexclude)" if defined($pexclude);
+    }
+    
+    my $query = "select contig_id from $table";
+    $query .= " where " . join(" and ",@conds) if (@conds);
+    $query .= " order by contig_id asc";
+    
+    print STDERR $query,"\n";
+    
+    $sth = $dbh->prepare($query);
+    &db_die("prepare($query) failed");
+    
+    $sth->execute();
+    &db_die("execute($query) failed");
 
-if (defined($contigids)) {
-    push @conds, "C.contig_id in ($contigids)";
-} elsif ($allcontigs) {
-    push @conds, "C.length > $minlen" if defined($minlen);
-} else {
-    push @conds, "C.length > $minlen" if defined($minlen);
+    while (my ($cid) = $sth->fetchrow_array()) {
+	push @contigids, $cid;
+    }
 
-    push @conds, "project_id in ($pinclude)" if defined($pinclude);
+    $sth->finish();
 
-    push @conds, "project_id not in ($pexclude)" if defined($pexclude);
+    print STDERR  "Got ",scalar(@contigids)," contig IDs from database.\n";
 }
 
-my $query = "select $fields from $tables";
-$query .= " where " . join(" and ",@conds) if (@conds);
+my $fields = "gap4name,project_id,C.length,sequence" . ($ascaf ? ",quality" : "");
 
-print STDERR $query,"\n";
+$query = "select $fields from CONTIG C left join CONSENSUS CS using (contig_id) where C.contig_id = ?";
 
 $sth = $dbh->prepare($query);
-&db_die("prepare($query) failed");
-
-$sth->execute();
-&db_die("execute($query) failed");
 
 $totseqlen = 0;
 
-while(my @ary = $sth->fetchrow_array()) {
-    my ($gap4name, $projectid, $contigid, $contiglength,$compressedsequence, $compressedquality) = @ary;
+my $counter = 0;
+
+foreach my $contigid (@contigids) {
+    $sth->execute($contigid);
+
+    my ($gap4name, $projectid, $contiglength,$compressedsequence, $compressedquality) = $sth->fetchrow_array();
 
     my $projectname = $projectid2name->{$projectid};
 
     unless (defined($compressedsequence)) {
-	print STDERR "WARNING: Some contigs have no consensus sequence.\n";
-	print STDERR "Please run the calculateconsensus script first, then re-run this command\n";
-
-	$sth->finish();
-	$dbh->disconnect();
-
-	exit(2);
+	print STDERR "\nWARNING: Contig $contigid has no consensus and will be skipped.\n";
+	next;
     }
+
+    $counter++;
+
+    print STDERR '.' if (($counter%1000)==0);
 
     my $sequence = uncompress($compressedsequence);
 
     my $quality = $ascaf ? uncompress($compressedquality) : undef;
 
     if ($contiglength != length($sequence)) {
-	print STDERR "Sequence length mismatch for contig $contigid: $contiglength vs ",
+	print STDERR "\nSequence length mismatch for contig $contigid: $contiglength vs ",
 	length($sequence),"\n";
     }
 
-    my $contigname = $projectprefix ? $projectname . "_contig_" . $contigid : 
-	($useshortname ? "ctg$contigid" : $instance . "_" . $organism . "_contig_" . $contigid);
+    my $contigname;
 
-    $contigname = $gap4name if ($usegapname && defined($gap4name));
+    if ($contig_name_mode eq 'projectprefix') {
+	$contigname = $projectname . "_contig_" . $contigid;
+    } elsif ($contig_name_mode eq 'gap4' && defined($gap4name)) {
+	$contigname = $gap4name;
+    } elsif ($contig_name_mode eq 'short') {
+	$contigname = 'contig_' . $contigid;
+    } elsif ($contig_name_mode eq 'id') {
+	$contigname = "$contigid";
+    } else {
+	$contigname = $instance . "_" . $organism . "_contig_" . $contigid;
+    }
 
     if (defined($padfh)) {
 	my $mappings = &padMap($sequence, '*');
@@ -294,6 +341,8 @@ while(my @ary = $sth->fetchrow_array()) {
 	undef $fastafh;
     }
 }
+
+print STDERR "\n";
 
 $sth->finish();
 
