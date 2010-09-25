@@ -152,6 +152,16 @@ sub getAssemblyID {
     return $this->{assembly};
 }
 
+sub getAssembly {
+    my $this = shift;
+
+    return undef unless (defined($this->{ADB}) && defined($this->{assembly}));
+
+    my $assembly = $this->{ADB}->getAssembly(assembly_id => $this->{assembly});
+
+    return $assembly;
+}
+
 sub addContigID {
 # import a contig ID
     my $this = shift;
