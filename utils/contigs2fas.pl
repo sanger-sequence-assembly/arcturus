@@ -248,6 +248,9 @@ foreach my $contigid (@contigids) {
 	length($sequence),"\n";
     }
 
+    # convert all - into n 
+	  $sequence =~ s/\-/n/g	;
+
     my $contigname;
 
     if ($contig_name_mode eq 'projectprefix') {
