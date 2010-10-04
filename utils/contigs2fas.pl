@@ -276,8 +276,8 @@ foreach my $contigid (@contigids) {
     }
 
     if ($paddingmode == DEPAD) {
-	# Depad
-	$sequence =~ s/[NnXx\*\-]//g;
+	# Depad Xx *  only
+	$sequence =~ s/[Xx\*]//g;
     } elsif ($paddingmode == PAD_IS_N) {
 	# Convert pads to N ...
 	$sequence =~ s/[\*\-]/N/g;
