@@ -10,8 +10,8 @@ import java.text.DecimalFormat;
 // definitive version.
 
 public class Gap4BayesianConsensus implements ConsensusAlgorithm {
-	private static int[] dependent_table = { 0, 0, 7, 14, 21, 28, 35, 41, 45, 58, 49 };
-	private static String basecodes = "ACGT*N";
+	private static int[] DEPENDENT_TABLE = { 0, 0, 7, 14, 21, 28, 35, 41, 45, 58, 49 };
+	private static String BASECODES = "ACGT*-";
 
 	private static final int BASE_A = 0;
 	private static final int BASE_C = 1;
@@ -19,14 +19,6 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	private static final int BASE_T = 3;
 	private static final int BASE_PAD = 4;
 	private static final int BASE_DASH = 5;
-
-	public static final int MODE_PAD_IS_N = 0;
-	public static final int MODE_PAD_IS_STAR = 1;
-	public static final int MODE_NO_PAD = 2;
-	public static final int MODE_PAD_IS_DASH = 3;
-
-	private int mode = MODE_PAD_IS_STAR;
-	private char defaultPadCharacter = '*';
 
 	private boolean pad_present = false;
 	private boolean best_is_current = true;
@@ -38,52 +30,19 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	private double probs[] = new double[6];
 	private int scores[] = new int[6];
 	private int nEvents = 0;
-	private PrintStream debugps = null;
-	private DecimalFormat decimal = null;
+	private DecimalFormat decimal = new DecimalFormat("0.0000000000");
 	
 	private int forcedBestBase;
 	private boolean useForcedBestBase;
 
-	private final static double log10 = Math.log(10.0);
-
-	public void setDebugPrintStream(PrintStream debugps) {
-		this.debugps = debugps;
-		if (debugps != null && decimal == null) {
-			decimal = new DecimalFormat("0.0000000000");
-		}
-	}
-
-	public PrintStream getDebugPrintStream() {
-		return debugps;
-	}
-
-	public void setMode(int mode) {
-		this.mode = mode;
-		
-		switch (mode) {
-			case MODE_PAD_IS_N:
-				defaultPadCharacter = 'N';
-				break;
-				
-			case MODE_PAD_IS_DASH:
-				defaultPadCharacter = '-';
-				break;
-				
-			default:
-				defaultPadCharacter = '*';
-				break;
-		}
-	}
-
-	public int getMode() {
-		return mode;
-	}
+	private final static double LOG10 = Math.log(10.0);
+	
+	private boolean logging = Boolean.getBoolean("debug");
 
 	public boolean reset() {
-		if (debugps != null) {
-			debugps.println();
-			debugps.println("Gap4BayesianConsensus::reset");
-		}
+		if (logging)
+			logInfo("Gap4BayesianConsensus::reset");
+
 
 		bestbase = -1;
 		depth = 0;
@@ -106,11 +65,9 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	}
 
 	public boolean addBase(char base, int quality, int strand, int chemistry) {
-		if (debugps != null) {
-			debugps.println();
-			debugps.println("Gap4BayesianConsensus::addBase(" + base + ", "
+		if (logging)
+			logInfo("Gap4BayesianConsensus::addBase(" + base + ", "
 					+ quality + ", " + strand + ", " + chemistry + ")");
-		}
 
 		if (strand == ConsensusAlgorithm.UNKNOWN
 				|| chemistry == ConsensusAlgorithm.UNKNOWN)
@@ -125,37 +82,44 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 		// 4 -> *
 		// 5 -> -
 
-		int iBase = -1;
+		int iBase = BASE_DASH;
 
 		switch (base) {
 			case 'a':
 			case 'A':
 				iBase = BASE_A;
 				break;
+				
 			case 'c':
 			case 'C':
 				iBase = BASE_C;
 				break;
+				
 			case 'g':
 			case 'G':
 				iBase = BASE_G;
 				break;
+				
 			case 't':
 			case 'T':
 				iBase = BASE_T;
 				break;
+				
 			case '*':
 				iBase = BASE_PAD;
 				break;
+				
 			case '-':
 				iBase = BASE_DASH;
 				break;
+				
 			default:
-				return false;
+				iBase = BASE_DASH;
+				break;				
 		}
 
-		if (debugps != null)
-			debugps.println("  iBase = " + iBase);
+		if (logging)
+			logInfo("  iBase = " + iBase);
 
 		// iStrandAndChemistry is the second index into the arrays "qhighest"
 		// and "qcount"
@@ -169,8 +133,8 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 		iStrandAndChemistry |= (strand == ConsensusAlgorithm.FORWARD ? 0 : 1);
 		iStrandAndChemistry |= (chemistry == ConsensusAlgorithm.PRIMER ? 0 : 1) << 1;
 
-		if (debugps != null)
-			debugps.println("  iStrandAndChemistry = " + iStrandAndChemistry);
+		if (logging)
+			logInfo("  iStrandAndChemistry = " + iStrandAndChemistry);
 
 		// FROM qual.c:
 		//
@@ -207,14 +171,14 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 
 		depth++;
 
-		if (debugps != null) {
-			debugps.println("  qhighest[" + iBase + "][" + iStrandAndChemistry
+		if (logging) {
+			logInfo("  qhighest[" + iBase + "][" + iStrandAndChemistry
 					+ "] = " + qhighest[iBase][iStrandAndChemistry]);
-			debugps.println("  qCount[" + iBase + "][" + iStrandAndChemistry
+			logInfo("  qCount[" + iBase + "][" + iStrandAndChemistry
 					+ "] = " + qcount[iBase][iStrandAndChemistry]);
 		}
 
-		if (iBase == BASE_PAD || iBase == BASE_DASH)
+		if (iBase == BASE_PAD)
 			pad_present = true;
 
 		best_is_current = false;
@@ -226,10 +190,8 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 		if (best_is_current)
 			return;
 
-		if (debugps != null) {
-			debugps.println();
-			debugps.println("Gap4BayesianConsensus::findBestBase()");
-		}
+		if (logging)
+			logInfo("Gap4BayesianConsensus::findBestBase()");
 		
 		if (useForcedBestBase) {
 			bestbase = forcedBestBase;
@@ -238,27 +200,28 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 		}
 
 		int nbase_types = pad_present ? 5 : 4;
-		if (debugps != null)
-			debugps.println("  nbase_types = " + nbase_types);
+		
+		if (logging)
+			logInfo("  nbase_types = " + nbase_types);
 
 		for (int k = 0; k < 4; k++) {
 			if (qhighest[5][k] > 0) {
-				double tmp = (double) (qhighest[5][k] + dependent_table[Math
-						.min(qcount[5][k], 10)]);
-				double prob = Math.exp(-log10 * tmp / 10.0);
+				double tmp = (double) (qhighest[5][k] +
+						DEPENDENT_TABLE[Math.min(qcount[5][k], 10)]);
+				
+				double prob = 1.0 - Math.exp(-LOG10 * tmp / 10.0);
 
 				double sharedprob = prob / (double) nbase_types;
 
-				for (int i = 0; i < 5; i++)
+				for (int i = 0; i < nbase_types; i++)
 					bayesian[i][nEvents] = sharedprob;
 
-				if (debugps != null) {
-					debugps.println();
-					debugps.println("  qhighest[5][" + k + "] = "
+				if (logging) {
+					logInfo("  qhighest[5][" + k + "] = "
 							+ qhighest[5][k]);
-					debugps.println("  qcount[5][" + k + "] = " + qcount[5][k]);
-					debugps.println("  score = " + tmp);
-					debugps.println("  Sharing probability "
+					logInfo("  qcount[5][" + k + "] = " + qcount[5][k]);
+					logInfo("  score = " + tmp);
+					logInfo("  Sharing probability "
 							+ decimal.format(sharedprob) + " amongst "
 							+ nbase_types + " base types");
 				}
@@ -270,9 +233,10 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 		for (int j = 0; j < nbase_types; j++) {
 			for (int k = 0; k < 4; k++) {
 				if (qhighest[j][k] > 0) {
-					double tmp = (double) (qhighest[j][k] + dependent_table[Math
-							.min(qcount[j][k], 10)]);
-					double prob = Math.exp(-log10 * tmp / 10.0);
+					double tmp = (double) (qhighest[j][k] +
+							DEPENDENT_TABLE[Math.min(qcount[j][k], 10)]);
+					
+					double prob = Math.exp(-LOG10 * tmp / 10.0);
 
 					double sharedprob = prob / (double) (nbase_types - 1);
 
@@ -283,16 +247,15 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 
 					bayesian[j][nEvents] = prob;
 
-					if (debugps != null) {
-						debugps.println();
-						debugps.println("  qhighest[" + j + "][" + k + "] = "
+					if (logging) {
+						logInfo("  qhighest[" + j + "][" + k + "] = "
 								+ qhighest[j][k]);
-						debugps.println("  qcount[" + j + "][" + k + "] = "
+						logInfo("  qcount[" + j + "][" + k + "] = "
 								+ qcount[j][k]);
-						debugps.println("  score = " + tmp);
-						debugps.println("  Assigning probability "
+						logInfo("  score = " + tmp);
+						logInfo("  Assigning probability "
 								+ decimal.format(prob) + " to base " + j);
-						debugps.println("  Sharing probability "
+						logInfo("  Sharing probability "
 								+ decimal.format(sharedprob)
 								+ " amongst other bases");
 					}
@@ -306,32 +269,23 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 		double highest_product = 0.0;
 		bestbase = 5;
 
-		if (debugps != null) {
-			debugps.println();
+		if (logging) {
 			switch (nEvents) {
 				case 0:
-					debugps.print("There are NO independent events");
+					logInfo("There are NO independent events for the Bayesian calculation");
 					break;
 				case 1:
-					debugps.print("There is one independent event");
+					logInfo("There is one independent event for the Bayesian calculation");
 					break;
 				default:
-					debugps.print("There are " + nEvents
-							+ " independent events");
+					logInfo("There are " + nEvents
+							+ " independent events for the Bayesian calculation");
 					break;
 			}
-
-			debugps.println(" for the Bayesian calculation");
 		}
 
 		if (nEvents > 0) {
-			if (debugps != null)
-				debugps.println();
-
 			for (int j = 0; j < nbase_types; j++) {
-				if (mode == MODE_NO_PAD && (j == BASE_PAD || j == BASE_DASH))
-					continue;
-
 				double product = 1.0;
 
 				for (int k = 0; k < nEvents; k++)
@@ -350,16 +304,15 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 			for (int j = 0; j < nbase_types; j++) {
 				probs[j] /= qnorm;
 				if (probs[j] < 1.0) {
-					double log10probs = Math.log(1.0 - probs[j]) / log10;
+					double log10probs = Math.log(1.0 - probs[j]) / LOG10;
 					scores[j] = (int) Math.round(-10.0 * log10probs);
 					if (scores[j] > 99)
 						scores[j] = 99;
 				} else
 					scores[j] = 99;
 
-				if (debugps != null) {
-					debugps
-							.println("  Normalised probability and score for base "
+				if (logging) {
+					logInfo("  Normalised probability and score for base "
 									+ j
 									+ " = "
 									+ decimal.format(probs[j])
@@ -367,23 +320,19 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 				}
 			}
 		}
+		
+		if (bestbase < 4 && scores[bestbase] < 2) {		
+			bestbase = 5;
+			scores[bestbase] = 2;
+		}
 
 		best_is_current = true;
 	}
 
 	public char getBestBase() {
 		findBestBase();
-
-		if (bestbase < 0)
-			return defaultPadCharacter;
-		else {
-			char c = basecodes.charAt(bestbase);
-
-			if (c == '*' || c == 'N')
-				return defaultPadCharacter;
-			else
-				return c;
-		}
+		
+		return (bestbase < 0) ? '*' : BASECODES.charAt(bestbase);
 	}
 
 	public int getBestScore() {
@@ -429,5 +378,9 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	
 	public int getReadCount() {
 		return depth;
+	}
+	
+	private void logInfo(String message) {
+		System.err.println(message);
 	}
 }
