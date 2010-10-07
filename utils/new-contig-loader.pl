@@ -739,6 +739,9 @@ if ($frugal) { # this whole block should go to a contig "factory"
 #  	        $adb->disconnect();
 #	        exit 1;
 #            }
+        # KATE check that the read is not already in another project
+            &checkprojectforread($objectname);
+
             if ($rejectreadname && $objectname =~ /$rejectreadname/) {
 		$logger->warning("read $objectname was rejected");
                 next;
@@ -822,6 +825,14 @@ if ($frugal) { # this whole block should go to a contig "factory"
     @contiginventory = @contignames;
 
     $logger->monitor("after inventory",memory=>1,timing=>1) if $usage;
+}
+
+# if there are any reads found in another project, finish now
+# if (keys(%projectreadhash) > 0) {
+#		$logger->severe("Loading is aborted");
+#		$logger->severe(printprojectreadhash(%projectreadhash));
+#  	        $adb->disconnect();
+#	        exit 1;
 }
 
 $logger->flush();
@@ -1353,6 +1364,41 @@ exit 1; # no errors but no contigs loaded
 #------------------------------------------------------------------------
 # subroutines
 #------------------------------------------------------------------------
+
+sub checkprojectforread { 
+# if the project for the read is different, add it to the projectreadhash
+# to be printed out when the run is aborted
+    my $readname = shift; # readname from the import file currently being looked at
+    my $latestcontigid = 0;
+		my $projectname = "";
+
+# find the current project in the latest contig for this read already stored in Arcturus
+
+    unless ($projectname == ""){
+		    $projectreadhash{$projectname}{$readname} = $contigname;
+		}
+}
+
+#-------------------------------------------------------------------------------
+
+sub printprojectreadhash {
+# returns a message to warn the user before aborting the import
+    my $projectreadhash = @_;
+
+    $message = "The import has NOT been started because some reads already exist in other projects:\n";
+
+    while (($project, $reads) = each %projectreadhash) {
+    # each line has project -> (readname -> contig)*
+      $message = $message."\nproject $project already holds: \n";
+      while (($readname, $contigid) = each (%$reads)) {
+        $message = $message."\tread $readname in contig $contigid\n";
+      }
+    }
+
+	return $message;
+}
+
+#-------------------------------------------------------------------------------
 
 sub testreadsindatabase {
 # returns number of reads (still) ,missing after tries to load them
