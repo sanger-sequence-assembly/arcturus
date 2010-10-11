@@ -586,6 +586,10 @@ $scaffold = &scaffoldfileparser($scaffoldfile) if $scaffoldfile;
 # MAIN
 #----------------------------------------------------------------
 
+# hash for recording foreign reads
+ 
+my %projectreadhash;
+
 # set-up tag selection
 
 if (!$rtagtypeaccept || $rtagtypeaccept eq 'default') {
@@ -827,12 +831,12 @@ if ($frugal) { # this whole block should go to a contig "factory"
     $logger->monitor("after inventory",memory=>1,timing=>1) if $usage;
 }
 
-# if there are any reads found in another project, finish now
-# if (keys(%projectreadhash) > 0) {
-#		$logger->severe("Loading is aborted");
-#		$logger->severe(printprojectreadhash(%projectreadhash));
-#  	        $adb->disconnect();
-#	        exit 1;
+# KATE if there are any reads found in another project, finish now
+ if (keys(%projectreadhash) > 0) {
+		$logger->severe("Loading is aborted");
+		$logger->severe(printprojectreadhash(%projectreadhash));
+  	        $adb->disconnect();
+	        exit 1;
 }
 
 $logger->flush();
@@ -1366,31 +1370,51 @@ exit 1; # no errors but no contigs loaded
 #------------------------------------------------------------------------
 
 sub checkprojectforread { 
-# if the project for the read is different, add it to the projectreadhash
+# KATE if the project for the read is different, add it to the projectreadhash
 # to be printed out when the run is aborted
     my $readname = shift; # readname from the import file currently being looked at
-    my $latestcontigid = 0;
+    my $contigid = 0;
 		my $projectname = "";
 
 # find the current project in the latest contig for this read already stored in Arcturus
 
-    unless ($projectname == ""){
-		    $projectreadhash{$projectname}{$readname} = $contigname;
+    my $dbh = $adb->getConnection();
+    
+    print STDERR "Checking that read $readname does not already exist in another project\n" if ($loglevel == 0); 
+	    
+	  my $projectcontigsquery = "select PROJECT.name,  READINFO.read_id, CURRENTCONTIGS.contig_id from 
+						 PROJECT, CURRENTCONTIGS, MAPPING, SEQUENCE, SEQ2READ, READINFO where
+						 PROJECT.project_id = CURRENTCONTIGS.project_id and
+						 SEQ2READ.read_id = READINFO.read_id and
+						 SEQ2READ.`seq_id` = SEQUENCE.seq_id and
+						 MAPPING.seq_id = SEQUENCE.seq_id and
+						 MAPPING.contig_id = CURRENTCONTIGS.contig_id and 
+						 READINFO.readname = $readname";
+			    
+	  my $projectcontigs = $dbh->selectall_arrayref($projectcontigsquery);
+	  &db_die("Failed to create or execute query \"$projectcontigsquery\": $?");
+
+		foreach my $projectcontig (@{$projectcontigs}) {
+				$projectname = @$projectcontig[0];
+				$contigid = @$projectcontig[1];
+    		unless ($projectname == ""){
+        	print STDERR "Read $readname already exists in project $projectname\n" if ($loglevel == 0); 
+		    	$projectreadhash{$projectname}{$readname} = $contigid;
+					}
 		}
 }
 
 #-------------------------------------------------------------------------------
 
 sub printprojectreadhash {
-# returns a message to warn the user before aborting the import
-    my $projectreadhash = @_;
+# KATE returns a message to warn the user before aborting the import
 
-    $message = "The import has NOT been started because some reads already exist in other projects:\n";
+    my $message = "The import has NOT been started because some reads already exist in other projects:\n";
 
-    while (($project, $reads) = each %projectreadhash) {
+    while (my ($project, $reads) = each %projectreadhash) {
     # each line has project -> (readname -> contig)*
       $message = $message."\nproject $project already holds: \n";
-      while (($readname, $contigid) = each (%$reads)) {
+      while (my ($readname, $contigid) = each (%$reads)) {
         $message = $message."\tread $readname in contig $contigid\n";
       }
     }
