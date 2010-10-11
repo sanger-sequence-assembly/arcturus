@@ -1389,15 +1389,15 @@ sub checkprojectforread {
 						 SEQ2READ.`seq_id` = SEQUENCE.seq_id and
 						 MAPPING.seq_id = SEQUENCE.seq_id and
 						 MAPPING.contig_id = CURRENTCONTIGS.contig_id and 
-						 READINFO.readname = $readname";
+						 READINFO.readname = '$readname'";
 			    
-	  my $projectcontigs = $dbh->selectall_arrayref($projectcontigsquery);
-	  &db_die("Failed to create or execute query \"$projectcontigsquery\": $?");
+	  my $projectcontigs = $dbh->selectall_arrayref($projectcontigsquery)||
+	  	die("Failed to create or execute query \"$projectcontigsquery\": $?");
 
 		foreach my $projectcontig (@{$projectcontigs}) {
 				$projectname = @$projectcontig[0];
 				$contigid = @$projectcontig[1];
-    		unless ($projectname == ""){
+    		unless ($projectname eq ""){
         	print STDERR "Read $readname already exists in project $projectname\n" if ($loglevel == 0); 
 		    	$projectreadhash{$projectname}{$readname} = $contigid;
 					}
