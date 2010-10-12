@@ -5,7 +5,6 @@ import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.jdbc.ManagerEvent;
 import uk.ac.sanger.arcturus.jdbc.ManagerEventListener;
-import uk.ac.sanger.arcturus.utils.*;
 import uk.ac.sanger.arcturus.Arcturus;
 
 import java.util.Vector;
@@ -15,10 +14,6 @@ import java.io.*;
 import java.sql.*;
 
 public class CalculateConsensus {
-	private final int defaultPaddingMode = Gap4BayesianConsensus.MODE_PAD_IS_DASH;
-
-	private final int MAX_ALLOWED_PACKET = 8 * 1024 * 1024;
-
 	private final int MAX_NORMAL_READ_LENGTH = 8000;
 
 	private long lasttime;
@@ -40,8 +35,6 @@ public class CalculateConsensus {
 	private boolean progress = false;
 	private boolean allcontigs = false;
 	private boolean nostore = false;
-
-	private int mode = defaultPaddingMode;
 
 	private String projectname = null;
 
@@ -101,18 +94,6 @@ public class CalculateConsensus {
 			if (args[i].equalsIgnoreCase("-project"))
 				projectname = args[++i];
 
-			if (args[i].equalsIgnoreCase("-pad_is_n"))
-				mode = Gap4BayesianConsensus.MODE_PAD_IS_N;
-
-			if (args[i].equalsIgnoreCase("-pad_is_star"))
-				mode = Gap4BayesianConsensus.MODE_PAD_IS_STAR;
-
-			if (args[i].equalsIgnoreCase("-pad_is_dash"))
-				mode = Gap4BayesianConsensus.MODE_PAD_IS_DASH;
-
-			if (args[i].equalsIgnoreCase("-no_pad"))
-				mode = Gap4BayesianConsensus.MODE_NO_PAD;
-
 			if (args[i].equalsIgnoreCase("-maxnormalreadlength"))
 				maxNormalReadLength = Integer.parseInt(args[++i]);
 		}
@@ -156,15 +137,6 @@ public class CalculateConsensus {
 
 			Class algclass = Class.forName(algname);
 			algorithm = (ConsensusAlgorithm) algclass.newInstance();
-
-			if (algorithm instanceof Gap4BayesianConsensus) {
-				Gap4BayesianConsensus g4bc = (Gap4BayesianConsensus) algorithm;
-
-				if (debug)
-					g4bc.setDebugPrintStream(System.out);
-
-				g4bc.setMode(mode);
-			}
 
 			int nContigs = 0;
 
@@ -286,40 +258,6 @@ public class CalculateConsensus {
 
 		for (int i = 0; i < options.length; i++)
 			ps.println("\t" + options[i]);
-
-		ps.println();
-		ps.print("PADDING MODES");
-
-		ps.print(" (default mode is ");
-		switch (defaultPaddingMode) {
-			case Gap4BayesianConsensus.MODE_PAD_IS_N:
-				ps.print("-pad_is_n");
-				break;
-
-			case Gap4BayesianConsensus.MODE_PAD_IS_STAR:
-				ps.print("-pad_is_star");
-				break;
-
-			case Gap4BayesianConsensus.MODE_PAD_IS_DASH:
-				ps.print("-pad_is_dash");
-				break;
-
-			case Gap4BayesianConsensus.MODE_NO_PAD:
-				ps.print("-no_pad");
-				break;
-
-			default:
-				ps.print("unknown");
-				break;
-		}
-		ps.println(")");
-
-		String[] padmodes = { "-pad_is_n", "-pad_is_star", "-pad_is_dash",
-				"-no_pad" };
-
-		for (int i = 0; i < padmodes.length; i++)
-			ps.println("\t" + padmodes[i]);
-
 	}
 
 	public boolean calculateConsensus(Contig contig,
