@@ -68,7 +68,7 @@ public class OligoFinder {
 	private PreparedStatement pstmtPopulateCurrentContigsTable;
 	
 	private final String POPULATE_BUSY_READS_TABLE = "insert into " + BUSY_READS + "(read_id)" +
-		" select distinct read_id from (" + CURRENT_CONTIGS + " left join MAPPING using(contig_id)) left join SEQ2READ using (seq_id)";
+		" select distinct read_id from (" + CURRENT_CONTIGS + " left join SEQ2CONTIG using(contig_id)) left join SEQ2READ using (seq_id)";
 	private PreparedStatement pstmtPopulateBusyReadsTable;
 	
 	private final String POPULATE_FREE_READS_TABLE = "insert into " + FREE_READS + "(read_id,readname)" +
