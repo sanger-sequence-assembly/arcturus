@@ -30,11 +30,19 @@ public class OligoFinder {
 	private final int RETRY_INTERVAL = 10;
 	private final int MAX_RETRY_ATTEMPTS = 5;
 	
+	// The name of the temporary table for current contigs, to avoid locking 
+	// issues with C2CMAPPING
+	private final String CURRENT_CONTIGS = "tmpCURRENTCONTIGS";
+	
 	// The name of the temporary table for busy reads (reads which are in current contigs)
 	private final String BUSY_READS = "tmpBUSYREADS";
 	
 	// The name of the temporary table for free reads (reads which are not in current contigs)
 	private final String FREE_READS = "tmpFREEREADS";
+	
+	private final String CREATE_CURRENT_CONTIGS_TABLE =
+		"create temporary table if not exists " + CURRENT_CONTIGS +
+			" (contig_id int not null primary key) ENGINE=InnoDB";
 	
 	private final String CREATE_BUSY_READS_TABLE =
 		"create temporary table if not exists " + BUSY_READS +
@@ -46,14 +54,21 @@ public class OligoFinder {
 	
 	private final String GET_PASS_VALUE = "select status_id from STATUS where name = ?";
 	
+	private final String EMPTY_CURRENT_CONTIGS_TABLE = "delete from " + CURRENT_CONTIGS;
+	private PreparedStatement pstmtEmptyCurrentContigsTable;
+	
 	private final String EMPTY_BUSY_READS_TABLE = "delete from " + BUSY_READS;
 	private PreparedStatement pstmtEmptyBusyReadsTable;
 	
 	private final String EMPTY_FREE_READS_TABLE = "delete from " + FREE_READS;
 	private PreparedStatement pstmtEmptyFreeReadsTable;
 	
+	private final String POPULATE_CURRENT_CONTIGS_TABLE = "insert into " + CURRENT_CONTIGS + "(contig_id)" +
+		" select contig_id from CURRENTCONTIGS";
+	private PreparedStatement pstmtPopulateCurrentContigsTable;
+	
 	private final String POPULATE_BUSY_READS_TABLE = "insert into " + BUSY_READS + "(read_id)" +
-		" select distinct read_id from (CURRENTCONTIGS left join MAPPING using(contig_id)) left join SEQ2READ using (seq_id)";
+		" select distinct read_id from (" + CURRENT_CONTIGS + " left join MAPPING using(contig_id)) left join SEQ2READ using (seq_id)";
 	private PreparedStatement pstmtPopulateBusyReadsTable;
 	
 	private final String POPULATE_FREE_READS_TABLE = "insert into " + FREE_READS + "(read_id,readname)" +
@@ -118,12 +133,16 @@ public class OligoFinder {
 
 	private void createTemporaryTables() throws SQLException {
 		Statement stmt = conn.createStatement();
+		stmt.execute(CREATE_CURRENT_CONTIGS_TABLE);
 		stmt.execute(CREATE_BUSY_READS_TABLE);
 		stmt.execute(CREATE_FREE_READS_TABLE);
 		stmt.close();
 	}
 	
 	private void prepareStatements() throws SQLException {
+		pstmtEmptyCurrentContigsTable = conn.prepareStatement(EMPTY_CURRENT_CONTIGS_TABLE);
+		pstmtPopulateCurrentContigsTable = conn.prepareStatement(POPULATE_CURRENT_CONTIGS_TABLE);
+
 		pstmtEmptyBusyReadsTable = conn.prepareStatement(EMPTY_BUSY_READS_TABLE);
 		pstmtPopulateBusyReadsTable = conn.prepareStatement(POPULATE_BUSY_READS_TABLE);
 		
@@ -144,6 +163,9 @@ public class OligoFinder {
 	}
 	
 	private void closeStatements() throws SQLException {
+		pstmtEmptyCurrentContigsTable.close();
+		pstmtPopulateCurrentContigsTable.close();
+		
 		pstmtEmptyBusyReadsTable.close();
 		pstmtPopulateBusyReadsTable.close();
 		
@@ -340,6 +362,9 @@ public class OligoFinder {
 	}
 	
 	private int updateBusyReadsTable() throws SQLException {
+		logMessage("Updating current contigs table ...");
+		retryDatabaseOperation(pstmtEmptyCurrentContigsTable, pstmtPopulateCurrentContigsTable, RETRY_INTERVAL, MAX_RETRY_ATTEMPTS);
+		
 		logMessage("Updating busy reads table ...");
 		return retryDatabaseOperation(pstmtEmptyBusyReadsTable, pstmtPopulateBusyReadsTable, RETRY_INTERVAL, MAX_RETRY_ATTEMPTS);
 	}
