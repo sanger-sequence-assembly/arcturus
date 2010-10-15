@@ -9,7 +9,7 @@ endif
 
 set ARCTURUS=/software/arcturus
 set READLOADER=${ARCTURUS}/utils/read-loader
-set LOGFOLDER=`dirname $0`/logs
+set LOGFOLDER=${HOME}/readloader/logs
 set OPTIONS="-instance pathogen -source TraceServer -minreadid auto -info"
 
 set TODAY=`date '+%Y%m%d'`
