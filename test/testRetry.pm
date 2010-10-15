@@ -50,7 +50,7 @@ $max_retries = 4;
 		# to mimic that the insert succeeds
 		# until ({$counter > 4}) {
       print "\tAttempt $counter for the insert statement for $option mapping for contig $contig\n";
-      if ($contig eq "shisto2" && $counter == 3 && $option == "read") {return 1};
+      if ($contig eq "shisto2" && $counter == 3 && $option eq "read") {return 1};
       # Execute the statement
       $retry_in_secs = $retry_in_secs * $retry_counter;
 			if ($counter < $max_retries) {
