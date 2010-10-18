@@ -114,12 +114,6 @@ sub putMappingsForContig {
 	if ($@) {
 	 	$log->warning("Failed to create savepoint $contig_savepoint: ".$dbh->errstr);
 	}
-#####################################################
-# turn off commits (no eval should die if this fails) 
-####################################################
-
-  $log->debug("Beginning work so no commits from now on");
-  $dbh->begin_work;
 
 	eval {
     $sth->execute(@data);
