@@ -1381,7 +1381,7 @@ sub checkprojectforread {
 
     my $dbh = $adb->getConnection();
     
-    print STDERR "Checking that read $readname does not already exist in another project\n";
+    #print STDERR "Checking that read $readname does not already exist in another project\n";
 	    
 	  my $projectcontigsquery = "select PROJECT.name,  READINFO.read_id, CURRENTCONTIGS.contig_id from 
 						 PROJECT, CURRENTCONTIGS, MAPPING, SEQUENCE, SEQ2READ, READINFO where
