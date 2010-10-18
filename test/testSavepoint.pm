@@ -11,14 +11,16 @@ sub putMappingsForContig {
 # the savepoint is created and released within putMappingsForContig
 # until a way can be found to share it with the calling program that creates 
 # the larger transaction.
-# the savepoint is within an eval tried three times, with a 1,4,16 minute backoff
-# If all three tries fail, then an RT ticket is raised.
+# the savepoint is within an eval tried four times, with a 1,4,16 minute backoff
+# If all four tries fail, then an RT ticket is raised.
 
 # private method, write mapping contents to (C2C)MAPPING & (C2C)SEGMENT tables
     my $dbh = shift; # database handle
     my $contig = shift;
     my $log = shift;
     my %option = @_;
+
+ 		my $contig_savepoint = "BeforeMapping".$contig;
 
     &verifyPrivate($dbh,"putMappingsForContig");
 
@@ -57,7 +59,7 @@ sub putMappingsForContig {
     else {
         $option{type} = 'missing' unless $option{type};
         $log->severe("Missing or invalid 'type' parameter $option{type}");
-        return 0; # or die ?
+        return 0; 
     }
 
     $mquery .= "values (?,?,?,?,?)";
@@ -90,15 +92,26 @@ sub putMappingsForContig {
 # make the savepoint 
 ##############################
 
-# $log->debug("Creating savepoint "BeforeMapping");
-		$dbh->savepoint("BeforeMapping") or die $dbh->errstr;
+ 	$log->debug("Creating savepoint $contig_savepoint");
 
+	eval {
+		$dbh->savepoint($contig_savepoint);
+  };
+	if ($@) {
+	 	$log->warning("Failed to create savepoint $contig_savepoint: ".$dbh->errstr);
+	}
 ##############################
 # turn off commits 
 ##############################
 
-# $log->debug("Beginning work so no commits from now on");
-     $dbh->begin_work or die $dbh->errstr;
+  $log->debug("Beginning work so no commits from now on");
+	eval {
+     $dbh->begin_work;
+	};
+	if ($@) {
+	 	$log->warning("Failed to turn off commits to work on $contig: ".$dbh->errstr);
+		# But carry on anyway? KATE die here and put all other DBI statements in evals
+	}
 
         my $rc = $sth->execute(@data) || &queryFailed($mquery,@data);
 
@@ -175,11 +188,46 @@ sub putMappingsForContig {
 # once the commit is successful
 #####################################
 
-		$dbh->commit() or die "failed to commit mapping inserts";
-		# die -ing here is not a good idea as this would lose the savepoint:  rollback instead?  Eval scope ends here for retry back off
+	my $retry_in_secs = 0.01 * 60;
+	my $retry_counter = 0.25;
+	my $counter = 1;
+	my $max_retries = 4;
+ 
+  until ($counter > ($max_retries + 1)) {
+		eval {
+	  	$dbh->commit();
+		};
+		if ($@) {
+  		$retry_counter = $retry_counter * 4;
+   		$log->warning("\tAttempt $counter for the insert statement for $option{type} mapping for contig $contig\n");
+	 		$retry_in_secs = $retry_in_secs * $retry_counter;
+	 		if ($counter < $max_retries) {
+	   		$log->warning("\tStatement has failed so wait for $retry_in_secs seconds\n");
+	   		sleep($retry_in_secs);
+	 		}
+	 		$counter++;
+		}
+		else {
+			# the commit has succeeded so the savepoint can be released
+    	$log->debug("Commit is successful so releasing savepoint for contig $contig");
+			eval {
+				$dbh->release($contig_savepoint);
+			};
+			if ($@) {
+				$log->error ("Failed to release savepoint $contig_savepoint: ".$dbh->errstr);
+			}
+    	return $success;
+		}
+	} # end until finished re-trying
 
-# $log->debug("Releasing savepoint "BeforeMapping");
-		$dbh->release($dbh, "BeforeMapping") or die "failed to release savepoint BeforeMapping";
-
-    return $success;
-}
+	$log->error("\tStatement has failed $counter times so give up:  some other process has locked $contig or database error $dbh->errstr\n");
+  $log->error("Reverting to savepoint $contig_savepoint");
+	eval {
+		$dbh->rollback_to($contig_savepoint);
+	};
+	if ($@) {
+  	$log->error("Failed to revert to savepoint $contig_savepoint: ".$dbh->errstr);
+	}
+	return 0;
+		
+} # end 
