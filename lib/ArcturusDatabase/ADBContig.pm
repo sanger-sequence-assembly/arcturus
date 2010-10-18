@@ -1315,37 +1315,7 @@ sub putMappingsForContig {
 
     $mquery .= "values (?,?,?,?,?)";
 
-    eval {
-      $sth = $dbh->prepare_cached($mquery);
-    };
-		if ($@) {
-      $log->severe("Unable to prepare the query $mquery: ".$dbh->errstr);
-      return 0; 
-		}
-
-    my $contigid = $contig->getContigID();
-
-# 1) the overall mapping
-
-    my $mapping;
-    my $success = 1;
-    foreach $mapping (@$mappings) {
-
-# optionally scan against empty mappings
-
-    unless ($mapping->hasSegments()) {
-	    next if $option{notallowemptymapping};
-		}
-
-    my ($cstart, $cfinish) = $mapping->getContigRange();
-
-    @data = ($contigid,
-                    $mapping->getSequenceID(),
-                    $cstart,
-                    $cfinish,
-                    $mapping->getAlignmentDirection());
-		}
-
+KATE
 ##############################
 # make the savepoint 
 ##############################
@@ -1370,27 +1340,39 @@ sub putMappingsForContig {
  
   until ($counter > ($max_retries + 1)) {
 
+	#####################################
+	# start the eval block
+	#####################################
 	eval {
-    $sth->execute(@data);
-	};
-	if ($@) {
-    &queryFailed($mquery,@data);
-		$dbh->release($contig_savepoint);
-	  $dbh->{RaiseError} = 0;
-    return 0;
-	}
+    $sth = $dbh->prepare_cached($mquery);
 
-  eval {
+    my $contigid = $contig->getContigID();
+
+# 1) the overall mapping
+
+    my $mapping;
+    my $success = 1;
+    foreach $mapping (@$mappings) {
+
+# optionally scan against empty mappings
+
+    unless ($mapping->hasSegments()) {
+	    next if $option{notallowemptymapping};
+		}
+
+    my ($cstart, $cfinish) = $mapping->getContigRange();
+
+    @data = ($contigid,
+                    $mapping->getSequenceID(),
+                    $cstart,
+                    $cfinish,
+                    $mapping->getAlignmentDirection());
+		}
+
+    $sth->execute(@data);
+
     $mapping->setMappingID($dbh->{'mysql_insertid'});
     $sth->finish();
-	};
-	if ($@) {
-	  $log->severe("Failed to insert one or more sequence-to-contig mappings: ".$dbh->errstr);
-		$dbh->rollback_to($contig_savepoint);
-		$dbh->release($contig_savepoint);
-	  $dbh->{RaiseError} = 0;
-    return 0;
-	}
         
 # 2) the individual segments (in block mode)
 
@@ -1398,8 +1380,7 @@ sub putMappingsForContig {
   my $accumulated = 0;
   my $accumulatedQuery = $squery;
 
-eval {
-    foreach my $mapping (@$mappings) {
+	foreach my $mapping (@$mappings) {
 # test existence of segments
         next unless $mapping->hasSegments();
 # test existence of mappingID
@@ -1445,7 +1426,10 @@ eval {
 
    &updateMappingsForContig ($dbh,$mappings) if ($option{type} eq "contig");
 
-	}; # end eval block
+	}; 
+#####################################
+# End of the eval block
+#####################################
 
 		if ($@) {
   		$retry_counter = $retry_counter * 4;
