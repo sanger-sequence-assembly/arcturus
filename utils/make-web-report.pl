@@ -281,7 +281,8 @@ sub makeProjectStats {
 	"max(C.length) as maxlen";
 
     my $query = "select $fields from CURRENTCONTIGS C left join PROJECT P using(project_id)" .
-	" where length >= ? and nreads >= ? and P.name is not null" .
+	" where length >= ? and nreads >= ? and P.name is not null
+	 and P.name not in ('BIN','FREEASSEMBLY','TRASH')" .
 	" group by C.project_id order by name asc";
 
     my $sth = $dbh->prepare($query);
