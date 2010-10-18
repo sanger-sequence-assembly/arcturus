@@ -1,5 +1,6 @@
 package uk.ac.sanger.arcturus.jdbc;
 
+import java.awt.GraphicsEnvironment;
 import java.io.IOException;
 
 import javax.swing.JOptionPane;
@@ -1240,8 +1241,16 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 
 		defaultConnection = null;
 		
-		JOptionPane.showMessageDialog(null,
-				"The application has lost its connection to the database.\nIt will try to re-connect.\nPlease refresh your display by pressing F5.",
+		boolean headless = GraphicsEnvironment.isHeadless();
+		
+		String message = "The application has lost its connection to the database.\n" +
+			"It will try to re-connect.";
+		
+		if (headless)
+			System.err.println(message);
+		else	
+			JOptionPane.showMessageDialog(null,
+				message + "\nPlease refresh your display by pressing F5.",
 				"Trying to re-connect to the database", JOptionPane.WARNING_MESSAGE);
 		
 		try {
