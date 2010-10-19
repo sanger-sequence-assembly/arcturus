@@ -693,7 +693,7 @@ sub putContig {
     };
 
     if ($@) {
-	$message = "Failed to store contig $contig for in database: " . $@;
+	$message = "Failed to store contig $contigid: " . $@;
 
 	eval {
 	    $dbh->rollback;
@@ -1270,7 +1270,8 @@ sub putMappingsForContig {
  
     $log->setPrefix("putMappingsForContig $option{type}");
 
- 		my $contig_savepoint = "BeforeMapping".$contig;
+    my $contigid = $contig->getContigID();
+ 		my $contig_savepoint = "BeforeMapping".$contigid;
 
 	  $dbh->{RaiseError} = 1;
 	  eval {
@@ -1326,7 +1327,9 @@ sub putMappingsForContig {
  	$log->debug("Creating savepoint $contig_savepoint");
 
 	eval {
-		$dbh->savepoint($contig_savepoint);
+		my $savepoint_handle = $dbh->prepare("SAVEPOINT ".$contig_savepoint);
+    $savepoint_handle->execute();
+		#$dbh->savepoint($contig_savepoint);
   };
 	if ($@) {
 	 	$log->warning("Failed to create savepoint $contig_savepoint: ".$dbh->errstr);
@@ -1336,7 +1339,7 @@ sub putMappingsForContig {
 	# start the retry 
 	###########################
 
-  until ($counter > ($max_retries + 1)) {
+  until ($counter > ($max_retries )) {
 
 	#####################################
 	# start the eval block
@@ -1345,12 +1348,9 @@ sub putMappingsForContig {
 	eval {
     $sth = $dbh->prepare_cached($mquery);
 
-    my $contigid = $contig->getContigID();
-
 # 1) the overall mapping
 
     my $mapping;
-    my $success = 1;
     foreach $mapping (@$mappings) {
 
 # optionally scan against empty mappings
@@ -1408,7 +1408,7 @@ sub putMappingsForContig {
         else {
             $log->severe("Mapping ".$mapping->getMappingName().
 		        " unexpectedly has no mapping_id");
-            $success = 0;
+            return 0;
         }
     } # end foreach mapping
 # dump any remaining accumulated query after the last mapping has been processed
@@ -1431,7 +1431,7 @@ sub putMappingsForContig {
 
 		if ($@) {
   		$retry_counter = $retry_counter * 4;
-   		$log->warning("\tAttempt $counter for the insert statement for $option{type} mapping for contig $contig\n");
+   		$log->warning("\tAttempt $counter for the insert statement for $option{type} mapping for contig $contigid\n");
 	 		$retry_in_secs = $retry_in_secs * $retry_counter;
 	 		if ($counter < $max_retries) {
 	   		$log->warning("\tStatement has failed so wait for $retry_in_secs seconds\n");
@@ -1444,9 +1444,11 @@ sub putMappingsForContig {
 		# the savepoint can be released here 
 		# once the insert is successful
 		#####################################
-    	$log->debug("Insert is successful so releasing savepoint for contig $contig");
+    	$log->debug("Insert is successful so releasing savepoint for contig $contigid");
 			eval {
-				$dbh->release($contig_savepoint);
+				my $savepoint_handle = $dbh->prepare("RELEASE SAVEPOINT ".$contig_savepoint);
+    		$savepoint_handle->execute();
+				#$dbh->release($contig_savepoint);
 			};
 			if ($@) {
 				$log->error ("Failed to release savepoint $contig_savepoint: ".$dbh->errstr);
@@ -1459,18 +1461,19 @@ sub putMappingsForContig {
 #####################################
 
 	if ($@) {
-    $log->severe("Error occurred preparing or executing $accumulatedQuery: ".$dbh->errstr);
-		$log->error("\tStatement(s) failed $counter times so give up:  some other process has locked contig $contig and/or database error $dbh->errstr\n");
-  	$log->error("Rolling back to savepoint $contig_savepoint");
-		$dbh->rollback_to($contig_savepoint);
-	 	$dbh->{RaiseError} = 0;
+    $log->severe("Error occurred preparing or executing the query $accumulatedQuery: \n".$dbh->errstr);
+		$log->error("\tStatement(s) failed $counter times so give up:  some other process has locked contig $contig_id and/or database error $dbh->errstr\n");
+  	$log->error("Rolling back to savepoint $contig_savepoint\n");
 		eval {
-			$dbh->rollback_to($contig_savepoint);
-			$dbh->release($contig_savepoint);
-	  	$dbh->{RaiseError} = 0;
+			#$dbh->rollback_to($contig_savepoint);
+			my $savepoint_handle = $dbh->prepare("ROLLBACK TO SAVEPOINT ".$contig_savepoint);
+    	$savepoint_handle->execute();
+			#$dbh->release($contig_savepoint);
+		  $savepoint_handle = $dbh->prepare("RELEASE SAVEPOINT ".$contig_savepoint);
+    	$savepoint_handle->execute();
 		};
 		if ($@) {
-  		$log->error("Failed to revert to savepoint $contig_savepoint: ".$dbh->errstr);
+  		$log->error("Failed to rollback to savepoint $contig_savepoint: ".$dbh->errstr);
 		}
  		$dbh->{RaiseError} = 0;
 		return 0;
