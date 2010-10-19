@@ -1462,20 +1462,24 @@ sub putMappingsForContig {
 
 	if ($@) {
     $log->severe("Error occurred preparing or executing the insert: \n".$DBI::errstr);
-		$log->error("\tStatement(s) failed $counter times so give up:  some other process has locked contig $contigid and/or database error: $DBI::errstr\n");
-  	$log->error("Rolling back to savepoint $contig_savepoint\n");
-		eval {
-			#$dbh->rollback_to($contig_savepoint);
-			my $savepoint_handle = $dbh->prepare("ROLLBACK TO SAVEPOINT ".$contig_savepoint);
-    	$savepoint_handle->execute();
-			#$dbh->release($contig_savepoint);
-		  $savepoint_handle = $dbh->prepare("RELEASE SAVEPOINT ".$contig_savepoint);
-    	$savepoint_handle->execute();
-		};
-		if ($@) {
-  		$log->error("Failed to rollback to savepoint $contig_savepoint: ".$DBI::errstr);
+		if ($DBI::err == 1205) {
+			$log->error("\tStatement(s) failed $counter times so some other process has locked contig $contigid");
+  		$log->error("\tRolling back to savepoint $contig_savepoint");
+			eval {
+				#$dbh->rollback_to($contig_savepoint);
+				my $savepoint_handle = $dbh->prepare("ROLLBACK TO SAVEPOINT ".$contig_savepoint);
+    		$savepoint_handle->execute();
+				#$dbh->release($contig_savepoint);
+		  	$savepoint_handle = $dbh->prepare("RELEASE SAVEPOINT ".$contig_savepoint);
+    		$savepoint_handle->execute();
+			};
+			if ($@) {
+  			$log->error("Failed to rollback to savepoint $contig_savepoint: ".$DBI::errstr);
+			}
 		}
- 		$dbh->{RaiseError} = 0;
+		else {
+			die $DBI::errstr;
+		}
 		return 0;
 	}
 	else { # the inserts have been done with no errors
