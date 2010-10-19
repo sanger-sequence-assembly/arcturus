@@ -55,7 +55,7 @@ my $from_where_clause =
     " from CONTIG as C where C.contig_id in " .
     " (select distinct CA.contig_id from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)" .
     " on (CA.contig_id = C2CMAPPING.parent_id and C2CMAPPING.contig_id = CB.contig_id)" .
-    " where CA.created < ?  and CA.nreads > 1 and CA.length >= ? and (C2CMAPPING.parent_id is null or CB.created > ?))";
+    " where CA.created < ?  and CA.nreads > 1 and CA.length >= ? and (C2CMAPPING.parent_id is null and P.name not in ('BIN','FREEASSEMBLY','TRASH') or CB.created > ?))";
 
 my $sql = "select count(*) as contigs,sum(C.nreads),sum(C.length),round(avg(C.length)),round(std(C.length)),max(C.length)" .
     $from_where_clause;
@@ -357,8 +357,8 @@ sub makeProjectStats {
 
     $sth_contig_lengths->finish();
 
-    $sql = "select length from CURRENTCONTIGS" .
-	" where nreads > 1 and length > ? order by length desc";
+    $sql = "select length from CURRENTCONTIGS C, PROJECT P" .
+	" where nreads > 1 and length > ? AND C.PROJECT_ID = P.PROJECT_ID and P.name not in ('BIN','FREEASSEMBLY','TRASH') order by length desc";
 
     $sth_contig_lengths = $dbh->prepare($sql);
 
