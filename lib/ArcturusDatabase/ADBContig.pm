@@ -665,7 +665,7 @@ sub putContig {
 
 # then load the overall mappings (and put the mapping ID's in the instances)
 
-	return 0, "Failed to insert contig-to-read mappings for $contgname"
+	return 0, "Failed to insert contig-to-read mappings for $contigname"
 	    unless &putMappingsForContig($dbh,$contig,$log,type=>'read');
 
 # the CONTIG2CONTIG mappings
@@ -1253,18 +1253,21 @@ sub putMappingsForContig {
 # if $option = "read" there can be several million rows spread across a number of mappings
 # if option is "contig" then there are tens of inserts instead.
 # the savepoint is created and released within putMappingsForContig
-# until a way can be found to share it with the calling program that creates 
-# the larger transaction.
 # the savepoint is within an eval tried four times, with a 1,4,16 minute backoff
 # If all four tries fail, then an RT ticket is raised.
 
 # private method, write mapping contents to (C2C)MAPPING & (C2C)SEGMENT tables
+
     my $dbh = shift; # database handle
     my $contig = shift;
     my $log = shift;
     my %option = @_;
 
-           
+	my $retry_in_secs = 0.01 * 60;
+	my $retry_counter = 0.25;
+	my $counter = 1;
+	my $max_retries = 4;
+ 
     $log->setPrefix("putMappingsForContig $option{type}");
 
  		my $contig_savepoint = "BeforeMapping".$contig;
@@ -1285,6 +1288,7 @@ sub putMappingsForContig {
 
     my $mquery; # for insert on the (C2C)MAPPING table 
     my $squery; # for insert on the (C2C)SEGMENT table
+    my $accumulatedQuery;
     my $mappings; # for the array of Mapping instances
 		my $sth; # the statement handle, re-used for several queries
 		my @data; # for the data array
@@ -1315,7 +1319,6 @@ sub putMappingsForContig {
 
     $mquery .= "values (?,?,?,?,?)";
 
-KATE
 ##############################
 # make the savepoint 
 ##############################
@@ -1333,16 +1336,12 @@ KATE
 	# start the retry 
 	###########################
 
-	my $retry_in_secs = 0.01 * 60;
-	my $retry_counter = 0.25;
-	my $counter = 1;
-	my $max_retries = 4;
- 
   until ($counter > ($max_retries + 1)) {
 
 	#####################################
 	# start the eval block
 	#####################################
+
 	eval {
     $sth = $dbh->prepare_cached($mquery);
 
@@ -1356,18 +1355,18 @@ KATE
 
 # optionally scan against empty mappings
 
-    unless ($mapping->hasSegments()) {
-	    next if $option{notallowemptymapping};
-		}
+    	unless ($mapping->hasSegments()) {
+	    	next if $option{notallowemptymapping};
+			}	
 
-    my ($cstart, $cfinish) = $mapping->getContigRange();
+    	my ($cstart, $cfinish) = $mapping->getContigRange();
 
-    @data = ($contigid,
+    	@data = ($contigid,
                     $mapping->getSequenceID(),
                     $cstart,
                     $cfinish,
                     $mapping->getAlignmentDirection());
-		}
+		} # end foreach mapping
 
     $sth->execute(@data);
 
@@ -1378,7 +1377,7 @@ KATE
 
   my $block = 100;
   my $accumulated = 0;
-  my $accumulatedQuery = $squery;
+  $accumulatedQuery = $squery;
 
 	foreach my $mapping (@$mappings) {
 # test existence of segments
@@ -1404,8 +1403,7 @@ KATE
                     	$accumulatedQuery = $squery;
                     	$accumulated = 0;
 										}
-								}
-            } # end foreach segment
+            	} # end foreach segment
         }
         else {
             $log->severe("Mapping ".$mapping->getMappingName().
