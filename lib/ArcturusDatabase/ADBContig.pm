@@ -652,59 +652,56 @@ sub putContig {
     my $contigid = 0;
 
     eval {
-	$dbh->begin_work;
+			$dbh->begin_work;
+			$contigid = &putMetaDataForContig($dbh,$log,$contig,$checksum,$user_id,$problems_project_id);
+			$this->{lastinsertedcontigid} = $contigid;
 
-	$contigid = &putMetaDataForContig($dbh,$contig,$checksum,$user_id,$problems_project_id);
-
-	$this->{lastinsertedcontigid} = $contigid;
-
-	return 0, "Failed to insert metadata for $contigname" 
+			return 0, "Failed to insert metadata for $contigname" 
 			unless $contigid;
 
-	$contig->setContigID($contigid);
+			$contig->setContigID($contigid);
 
 # then load the overall mappings (and put the mapping ID's in the instances)
 
-	return 0, "Failed to insert contig-to-read mappings for $contigname"
+			return 0, "Failed to insert contig-to-read mappings for $contigname"
 	    unless &putMappingsForContig($dbh,$contig,$log,type=>'read');
 
 # the CONTIG2CONTIG mappings
 
-	return 0, "Failed to insert contig-to-contig mappings for $contigname"
+			return 0, "Failed to insert contig-to-contig mappings for $contigname"
 	    unless &putMappingsForContig($dbh,$contig,$log,type=>'contig');
 
 # and contig tags?
 
-	my %ctoptions = (notestexisting => 1); # it's a new contig
+			my %ctoptions = (notestexisting => 1); # it's a new contig
 
 # TODO ? add tagtype selection ? register number opf tags added in Project object
-	return 0, "Failed to insert tags for $contigname"
+			return 0, "Failed to insert tags for $contigname"
 	    unless $this->putTagsForContig($contig,%ctoptions);
 
 # update the age counter in C2CMAPPING table (at very end of this insert)
 
-	$this->buildHistoryTreeForContig($contigid);
+			$this->buildHistoryTreeForContig($contigid);
 
 # and assign the contig to the specified project (if possible)
 
-	$message .= "; ".$this->allocateContigToProject($contig,$project) if $project;
+			$message .= "; ".$this->allocateContigToProject($contig,$project) if $project;
 
-	$dbh->commit;
+			$dbh->commit;
     };
 
     if ($@) {
-	$message = "Failed to store contig $contigid: " . $@;
+			$message = "Failed to store contig $contigid: " . $@;
 
-	eval {
-	    $dbh->rollback;
-	};
-	if ($@) {
-	    $message .= "; ***** ROLLBACK FAILED: " . $@ . " *****";
-	}
+			eval {
+	    	$dbh->rollback;
+			};
+			if ($@) {
+	    	$message .= "; ***** ROLLBACK FAILED: " . $@ . " *****";
+			}
 
-        $contig->setContigID(0);
-
-        $contigid = 0;
+      $contig->setContigID(0);
+      $contigid = 0;
     }
 
     $dbh->{RaiseError} = 0;
@@ -918,6 +915,7 @@ sub allocateContigToProject {
 sub putMetaDataForContig {
 # private method only
     my $dbh = shift; # database handle
+		my $log = shift;
     my $contig = shift; # Contig instance
     my $readhash = shift;
     my $creator = shift;
@@ -929,6 +927,8 @@ sub putMetaDataForContig {
               . "(gap4name,length,ncntgs,nreads,newreads,cover,creator"
               . ",origin,created,readnamehash,project_id) "
               . "VALUES (?,?,?,?,?,?,?,?,now(),?,?)";
+
+		eval {
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -946,10 +946,20 @@ sub putMetaDataForContig {
     my $rc = $sth->execute(@data) || &queryFailed($query,@data); 
 
     $sth->finish();
+		};
 
-    return 0 unless ($rc == 1);
-    
-    return $dbh->{'mysql_insertid'}; # the contig_id
+		if ($@) {
+			if ($DBI::err == 1205) {
+				$log->severe("Some other process has locked CONTIG table so unable to insert metadata");
+			}
+			else {
+				$log->severe("Unable to insert metadata: ".$DBI::errstr);
+			}
+			return 0;
+		}
+		else {
+    	return $dbh->{'mysql_insertid'}; # the contig_id
+		}
 }
 
 #----------------------------------------
