@@ -1278,7 +1278,7 @@ sub putMappingsForContig {
     	&verifyPrivate($dbh,"putMappingsForContig");
     };
 		if ($@) {
-      $log->severe("Unable to verify mappings: ".$dbh->errstr);
+      $log->severe("Unable to verify mappings: ".$DBI::errstr);
 		}
 # this is a dual-purpose method writing mappings to the MAPPING and SEGMENT
 # tables (read-to-contig mappings) or the C2CMAPPING and CSCSEGMENT tables 
@@ -1332,7 +1332,7 @@ sub putMappingsForContig {
 		#$dbh->savepoint($contig_savepoint);
   };
 	if ($@) {
-	 	$log->warning("Failed to create savepoint $contig_savepoint: ".$dbh->errstr);
+	 	$log->warning("Failed to create savepoint $contig_savepoint: ".$DBI::errstr);
 	}
 
 	############################
@@ -1451,7 +1451,7 @@ sub putMappingsForContig {
 				#$dbh->release($contig_savepoint);
 			};
 			if ($@) {
-				$log->error ("Failed to release savepoint $contig_savepoint: ".$dbh->errstr);
+				$log->error ("Failed to release savepoint $contig_savepoint: ".$DBI::errstr);
 			}
     	return 1;
 		}
@@ -1461,8 +1461,8 @@ sub putMappingsForContig {
 #####################################
 
 	if ($@) {
-    $log->severe("Error occurred preparing or executing the query $accumulatedQuery: \n".$dbh->errstr);
-		$log->error("\tStatement(s) failed $counter times so give up:  some other process has locked contig $contig_id and/or database error $dbh->errstr\n");
+    $log->severe("Error occurred preparing or executing the insert: \n".$DBI::errstr);
+		$log->error("\tStatement(s) failed $counter times so give up:  some other process has locked contig $contigid and/or database error: $DBI::errstr\n");
   	$log->error("Rolling back to savepoint $contig_savepoint\n");
 		eval {
 			#$dbh->rollback_to($contig_savepoint);
@@ -1473,7 +1473,7 @@ sub putMappingsForContig {
     	$savepoint_handle->execute();
 		};
 		if ($@) {
-  		$log->error("Failed to rollback to savepoint $contig_savepoint: ".$dbh->errstr);
+  		$log->error("Failed to rollback to savepoint $contig_savepoint: ".$DBI::errstr);
 		}
  		$dbh->{RaiseError} = 0;
 		return 0;
