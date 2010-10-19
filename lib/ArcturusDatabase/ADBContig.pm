@@ -654,6 +654,9 @@ sub putContig {
     eval {
 			$dbh->begin_work;
 			$contigid = &putMetaDataForContig($dbh,$log,$contig,$checksum,$user_id,$problems_project_id);
+
+# KATE: need a check for a 0 contigid. 
+
 			$this->{lastinsertedcontigid} = $contigid;
 
 			return 0, "Failed to insert metadata for $contigname" 
@@ -1441,10 +1444,10 @@ sub putMappingsForContig {
 
 		if ($@) {
   		$retry_counter = $retry_counter * 4;
-   		$log->warning("\tAttempt $counter for the insert statement for $option{type} mapping for contig $contigid\n");
+   		$log->warning("\tAttempt $counter for the insert statement for $option{type} mapping for contig $contigid: $@");
 	 		$retry_in_secs = $retry_in_secs * $retry_counter;
 	 		if ($counter < $max_retries) {
-	   		$log->warning("\tStatement has failed so wait for $retry_in_secs seconds\n");
+	   		$log->warning("\tStatement has failed so wait for $retry_in_secs seconds");
 	   		sleep($retry_in_secs);
 	 		}
 	 		$counter++;
