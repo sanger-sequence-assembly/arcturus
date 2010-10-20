@@ -1379,12 +1379,12 @@ sub putMappingsForContig {
                     $cstart,
                     $cfinish,
                     $mapping->getAlignmentDirection());
-		} # end foreach mapping
-
     $sth->execute(@data);
 
     $mapping->setMappingID($dbh->{'mysql_insertid'});
     $sth->finish();
+		} # end foreach mapping
+
         
 # 2) the individual segments (in block mode)
 
