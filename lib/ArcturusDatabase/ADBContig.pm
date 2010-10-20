@@ -1495,9 +1495,6 @@ sub putMappingsForContig {
   			$log->error("Failed to rollback to savepoint $contig_savepoint: ".$DBI::errstr);
 			}
 		}
-		else {
-			die $DBI::errstr;
-		}
 		return 0;
 	}
 	else { # the inserts have been done with no errors
