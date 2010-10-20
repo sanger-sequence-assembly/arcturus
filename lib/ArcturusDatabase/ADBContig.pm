@@ -1284,6 +1284,7 @@ sub putMappingsForContig {
     $log->setPrefix("putMappingsForContig $option{type}");
 
     my $contigid = $contig->getContigID();
+    my $contigname = $contig->getGap4Name();
  		my $contig_savepoint = "BeforeMapping".$contigid;
 
 	  $dbh->{RaiseError} = 1;
@@ -1419,9 +1420,8 @@ sub putMappingsForContig {
             	} # end foreach segment
         }
         else {
-            $log->severe("Mapping ".$mapping->getMappingName().
-		        " unexpectedly has no mapping_id");
-            return 0;
+            die "Mapping ".$mapping->getMappingName().
+		        " unexpectedly has no mapping_id";
         }
     } # end foreach mapping
 # dump any remaining accumulated query after the last mapping has been processed
@@ -1443,14 +1443,19 @@ sub putMappingsForContig {
 #####################################
 
 		if ($@) {
-  		$retry_counter = $retry_counter * 4;
-   		$log->warning("\tAttempt $counter for the insert statement for $option{type} mapping for contig $contigid: $@");
-	 		$retry_in_secs = $retry_in_secs * $retry_counter;
-	 		if ($counter < $max_retries) {
-	   		$log->warning("\tStatement has failed so wait for $retry_in_secs seconds");
-	   		sleep($retry_in_secs);
-	 		}
-	 		$counter++;
+   		$log->warning("\tAttempt $counter for the insert statement for $option{type} mapping for contig $contigname: $@");
+			if ($DBI::err == 1205) {
+  			$retry_counter = $retry_counter * 4;
+	 			$retry_in_secs = $retry_in_secs * $retry_counter;
+	 			if ($counter < $max_retries) {
+	   			$log->warning("\tContig $contigname is locked by another process so wait for $retry_in_secs seconds");
+	   			sleep($retry_in_secs);
+	 			}
+	 			$counter++;
+			}
+			else {
+				die $DBI::errstr;
+			}
 		}
 		else {
 		#####################################
@@ -1459,9 +1464,7 @@ sub putMappingsForContig {
 		#####################################
     	$log->debug("Insert is successful so releasing savepoint for contig $contigid");
 			eval {
-				my $savepoint_handle = $dbh->prepare("RELEASE SAVEPOINT ".$contig_savepoint);
-    		$savepoint_handle->execute();
-				#$dbh->release($contig_savepoint);
+				my $savepoint_handle = $dbh->do("RELEASE SAVEPOINT ".$contig_savepoint);
 			};
 			if ($@) {
 				$log->error ("Failed to release savepoint $contig_savepoint: ".$DBI::errstr);
@@ -1476,15 +1479,11 @@ sub putMappingsForContig {
 	if ($@) {
     $log->severe("Error occurred preparing or executing the insert: \n".$DBI::errstr);
 		if ($DBI::err == 1205) {
-			$log->error("\tStatement(s) failed $counter times so some other process has locked contig $contigid");
+			$log->error("\tStatement(s) failed $counter times so some other process has locked contig $contigname");
   		$log->error("\tRolling back to savepoint $contig_savepoint");
 			eval {
-				#$dbh->rollback_to($contig_savepoint);
-				my $savepoint_handle = $dbh->prepare("ROLLBACK TO SAVEPOINT ".$contig_savepoint);
-    		$savepoint_handle->execute();
-				#$dbh->release($contig_savepoint);
-		  	$savepoint_handle = $dbh->prepare("RELEASE SAVEPOINT ".$contig_savepoint);
-    		$savepoint_handle->execute();
+				my $savepoint_handle = $dbh->do("ROLLBACK TO SAVEPOINT ".$contig_savepoint);
+		  	$savepoint_handle = $dbh->do("RELEASE SAVEPOINT ".$contig_savepoint);
 			};
 			if ($@) {
   			$log->error("Failed to rollback to savepoint $contig_savepoint: ".$DBI::errstr);
