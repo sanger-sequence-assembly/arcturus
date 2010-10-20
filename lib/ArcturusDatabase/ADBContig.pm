@@ -655,32 +655,38 @@ sub putContig {
 			$dbh->begin_work;
 			$contigid = &putMetaDataForContig($dbh,$log,$contig,$checksum,$user_id,$problems_project_id);
 
-# KATE: need a check for a 0 contigid. 
-
 			$this->{lastinsertedcontigid} = $contigid;
 
-			return 0, "Failed to insert metadata for $contigname" 
-			unless $contigid;
+			unless ($contigid) {
+				$dbh->rollback;
+				return 0, "Failed to insert metadata for $contigname";
+			}
 
 			$contig->setContigID($contigid);
 
 # then load the overall mappings (and put the mapping ID's in the instances)
 
-			return 0, "Failed to insert contig-to-read mappings for $contigname"
-	    unless &putMappingsForContig($dbh,$contig,$log,type=>'read');
+	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'read')) {
+				$dbh->rollback;
+				return 0, "Failed to insert contig-to-read mappings for $contigname";
+			}
 
 # the CONTIG2CONTIG mappings
 
-			return 0, "Failed to insert contig-to-contig mappings for $contigname"
-	    unless &putMappingsForContig($dbh,$contig,$log,type=>'contig');
+	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'contig')) {
+				$dbh->rollback;
+				return 0, "Failed to insert contig-to-contig mappings for $contigname";
+			}
 
 # and contig tags?
 
 			my %ctoptions = (notestexisting => 1); # it's a new contig
 
 # TODO ? add tagtype selection ? register number opf tags added in Project object
-			return 0, "Failed to insert tags for $contigname"
-	    unless $this->putTagsForContig($contig,%ctoptions);
+	    unless ($this->putTagsForContig($contig,%ctoptions)){
+				$dbh->rollback;
+				return 0, "Failed to insert tags for $contigname";
+			}
 
 # update the age counter in C2CMAPPING table (at very end of this insert)
 
@@ -1454,7 +1460,7 @@ sub putMappingsForContig {
 	 			$counter++;
 			}
 			else {
-				die $DBI::errstr;
+			  return 0;
 			}
 		}
 		else {
@@ -1479,7 +1485,7 @@ sub putMappingsForContig {
 	if ($@) {
     $log->severe("Error occurred preparing or executing the insert: \n".$DBI::errstr);
 		if ($DBI::err == 1205) {
-			$log->error("\tStatement(s) failed $counter times so some other process has locked contig $contigname");
+			$log->error("\tStatement(s) failed $counter times as some other process has locked contig $contigname");
   		$log->error("\tRolling back to savepoint $contig_savepoint");
 			eval {
 				my $savepoint_handle = $dbh->do("ROLLBACK TO SAVEPOINT ".$contig_savepoint);
