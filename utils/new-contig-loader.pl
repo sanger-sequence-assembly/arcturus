@@ -1096,6 +1096,9 @@ print STDOUT " end no frugal scan\n";
 
 # &testeditedconsensusreads($contig); 
 
+# hash for recording contis that did not load for the RT ticket
+my %missedcontighash;
+
         if ($contigload) {
 
 	    $logger->info("Loading contig into database");
@@ -1182,6 +1185,10 @@ print STDOUT " end no frugal scan\n";
 	        }
 
 # FAILED to insert a contig for whatever reason; default ABORT the whole session and remove inserted contigs
+
+								# KATE: put this contig in the hash ready for the RT ticket: there are $missed of these
+								# which can be added by re-running the import once the locks are released or other errors fixed
+		    	      $missedcontighash{$contigname}= $msg;
 
                 next if $noabort;
 
@@ -1361,6 +1368,10 @@ foreach my $user (@$addressees) {
 # Close the CAF contig name to Arcturus ID map file, if it was opened
 $fhMapfile->close() if defined($fhMapfile);
 
+		$missedcontigmessage = &printmissedcontighash(%missedcontighash);
+		$logger->severe($missedcontigmessage);
+		&sendMessage($user,$missedcontigmessage, $instance); 
+
 exit 0 if $loaded;  # no errors and contigs loaded
 
 exit 1; # no errors but no contigs loaded
@@ -1382,7 +1393,7 @@ sub checkprojectforread {
     my $dbh = $adb->getConnection();
     
     #print STDERR "Checking that read $readname does not already exist in another project\n";
-	    
+
 	  my $projectcontigsquery = "select PROJECT.name,  READINFO.read_id, CURRENTCONTIGS.contig_id from 
 						 PROJECT, CURRENTCONTIGS, MAPPING, SEQUENCE, SEQ2READ, READINFO where
 						 PROJECT.project_id = CURRENTCONTIGS.project_id and
@@ -1420,6 +1431,19 @@ sub printprojectreadhash {
       while (my ($readname, $contigid) = each (%$reads)) {
         $message = $message."\tread $readname in contig $contigid\n";
       }
+    }
+
+	return $message;
+}
+
+#-------------------------------------------------------------------------------
+sub printmissedcontighash {
+# returns a message to warn the user before aborting the import
+
+    my $message = "This is to let you know that the import will need to be run again as some contigs have not been loaded:\n";
+
+    while (my ($contig, $reason) = each %missedcontighash) {
+      $message = $message."\n $contig failed to load because $reason\n";
     }
 
 	return $message;
