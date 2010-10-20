@@ -587,8 +587,10 @@ $scaffold = &scaffoldfileparser($scaffoldfile) if $scaffoldfile;
 #----------------------------------------------------------------
 
 # hash for recording foreign reads
- 
 my %projectreadhash;
+
+# hash for recording contigs that did not load for the RT ticket
+my %missedcontighash;
 
 # set-up tag selection
 
@@ -1096,8 +1098,6 @@ print STDOUT " end no frugal scan\n";
 
 # &testeditedconsensusreads($contig); 
 
-# hash for recording contis that did not load for the RT ticket
-my %missedcontighash;
 
         if ($contigload) {
 
@@ -1359,18 +1359,23 @@ $adb->disconnect();
 # send messages to users, if any
 
 my $addressees = $adb->getMessageAddresses(1);
+my $missedcontigmessage = "";
 
 foreach my $user (@$addressees) {
     my $message = $adb->getMessageForUser($user);
     &sendMessage($user, $message, $instance) if $message;
 }
 
+if ($missed > 0) {
+	$missedcontigmessage = &printmissedcontighash(%missedcontighash);
+	$logger->severe($missedcontigmessage);
+	foreach my $user (@$addressees) {
+		&sendMessage($user,$missedcontigmessage, $instance); 
+	}
+}
+
 # Close the CAF contig name to Arcturus ID map file, if it was opened
 $fhMapfile->close() if defined($fhMapfile);
-
-		$missedcontigmessage = &printmissedcontighash(%missedcontighash);
-		$logger->severe($missedcontigmessage);
-		&sendMessage($user,$missedcontigmessage, $instance); 
 
 exit 0 if $loaded;  # no errors and contigs loaded
 
