@@ -1133,7 +1133,7 @@ print STDOUT " end no frugal scan\n";
 # replace the input rank by the scaffold ranking, or, if absent by the nextrank count
                 if ($scaffold) {
                     $rank = $scaffold->{$rank} || $nextrank++;
-		}
+								}
                 push @scaffoldlist,[($added,$rank,'forward')] unless $noscaffold;
 # here : putScaffoldInfo; if 
 # does this require an extra state method? Or just add to Scaffold instance?
@@ -1154,6 +1154,11 @@ print STDOUT " end no frugal scan\n";
                 $logger->warning("WARNING! Contig $identifier with $nr reads was NOT ADDED :"
                                 ."\n$msg",preskip=>1);
                 $missed++;
+
+								# KATE: put this contig in the hash ready for the RT ticket: there are $missed of these
+								# which can be added by re-running the import once the locks are released or other errors fixed
+		    	      $missedcontighash{$contigname}= $msg;
+
 # for discontinuous contigs: try break
                 if ($msg =~ /discontinuity/i) {
 
@@ -1185,10 +1190,6 @@ print STDOUT " end no frugal scan\n";
 	        }
 
 # FAILED to insert a contig for whatever reason; default ABORT the whole session and remove inserted contigs
-
-								# KATE: put this contig in the hash ready for the RT ticket: there are $missed of these
-								# which can be added by re-running the import once the locks are released or other errors fixed
-		    	      $missedcontighash{$contigname}= $msg;
 
                 next if $noabort;
 
@@ -1319,6 +1320,9 @@ if ($loaded && $project) {
         chomp $gap4dbname;
     }
     $project->setGap4Name($gap4dbname);
+		
+		# KATE: make sure that the missed contigs are not included in this scaffold list
+		#
     my $Scaffold = \@scaffoldlist; # to be replaced by a new Class ?
     $project->markImport($Scaffold,type=>'finisher project'
 		        	  ,source=>"Arcturus contig-loader");
