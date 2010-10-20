@@ -667,6 +667,7 @@ sub putContig {
 # then load the overall mappings (and put the mapping ID's in the instances)
 
 	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'read')) {
+			  $log->severe("Failed to insert contig-to-read mappings for $contigname: rolling back database");
 				$dbh->rollback;
 				return 0, "Failed to insert contig-to-read mappings for $contigname";
 			}
@@ -674,6 +675,7 @@ sub putContig {
 # the CONTIG2CONTIG mappings
 
 	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'contig')) {
+			  $log->severe("Failed to insert contig-to-contig mappings for $contigname: rolling back database");
 				$dbh->rollback;
 				return 0, "Failed to insert contig-to-contig mappings for $contigname";
 			}
@@ -1492,9 +1494,10 @@ sub putMappingsForContig {
 		  	$savepoint_handle = $dbh->do("RELEASE SAVEPOINT ".$contig_savepoint);
 			};
 			if ($@) {
-  			$log->error("Failed to rollback to savepoint $contig_savepoint: ".$DBI::errstr);
+  			$log->severe("Failed to rollback to savepoint $contig_savepoint: ".$DBI::errstr);
 			}
 		}
+		$dbh->{RaiseError} = 0;
 		return 0;
 	}
 	else { # the inserts have been done with no errors
