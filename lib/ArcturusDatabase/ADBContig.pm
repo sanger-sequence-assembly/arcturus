@@ -658,7 +658,7 @@ sub putContig {
 			$this->{lastinsertedcontigid} = $contigid;
 
 			unless ($contigid) {
-				$dbh->rollback;
+				#$dbh->rollback;
 				return 0, "Failed to insert metadata for $contigname";
 			}
 
@@ -668,7 +668,7 @@ sub putContig {
 
 	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'read')) {
 			  $log->severe("Failed to insert contig-to-read mappings for $contigname: rolling back database");
-				$dbh->rollback;
+				#$dbh->rollback;
 				return 0, "Failed to insert contig-to-read mappings for $contigname";
 			}
 
@@ -676,7 +676,7 @@ sub putContig {
 
 	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'contig')) {
 			  $log->severe("Failed to insert contig-to-contig mappings for $contigname: rolling back database");
-				$dbh->rollback;
+				#$dbh->rollback;
 				return 0, "Failed to insert contig-to-contig mappings for $contigname";
 			}
 
@@ -686,7 +686,7 @@ sub putContig {
 
 # TODO ? add tagtype selection ? register number opf tags added in Project object
 	    unless ($this->putTagsForContig($contig,%ctoptions)){
-				$dbh->rollback;
+				#$dbh->rollback;
 				return 0, "Failed to insert tags for $contigname";
 			}
 
@@ -1497,7 +1497,8 @@ sub putMappingsForContig {
   			$log->severe("Failed to rollback to savepoint $contig_savepoint: ".$DBI::errstr);
 			}
 		}
-		$dbh->{RaiseError} = 0;
+		# try commenting this out to get the error logging back
+		# $dbh->{RaiseError} = 0;
 		return 0;
 	}
 	else { # the inserts have been done with no errors
