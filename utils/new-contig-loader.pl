@@ -1393,7 +1393,7 @@ sub checkprojectforread {
 # if the project for the read is different, add it to the projectreadhash
 # to be printed out when the run is aborted
     my ($readname, $projectnametoload) = @_ ;   # readname and projectname from the import file currently being looked at
-    my $contigid = 0;
+    my $contigname = "";
 		my $projectname = "";
 
 # find the current project in the latest contig for this read already stored in Arcturus
@@ -1403,7 +1403,7 @@ sub checkprojectforread {
     
     #print STDERR "Checking that read $readname does not already exist in another project\n";
 
-	  my $projectcontigsquery = "select PROJECT.name,  READINFO.read_id, CURRENTCONTIGS.contig_id from 
+	  my $projectcontigsquery = "select PROJECT.name,  READINFO.read_id, CURRENTCONTIGS.gap4name from 
 						 PROJECT, CURRENTCONTIGS, MAPPING, SEQUENCE, SEQ2READ, READINFO where
 						 PROJECT.project_id = CURRENTCONTIGS.project_id and
 						 SEQ2READ.read_id = READINFO.read_id and
@@ -1417,11 +1417,11 @@ sub checkprojectforread {
 
 		foreach my $projectcontig (@{$projectcontigs}) {
 				$projectname = @$projectcontig[0];
-				$contigid = @$projectcontig[1];
+				$contigname = @$projectcontig[1];
     		unless ($projectname eq ""){
 				  if (uc ($projectnametoload) ne uc($projectname) ) {
         	  print STDERR "Read $readname being loaded from $projectnametoload already exists in project $projectname\n" ;
-		    	  $projectreadhash{$projectname}{$readname} = $contigid;
+		    	  $projectreadhash{$projectname}{$readname} = $contigname;
 					}
 				}
 		}
