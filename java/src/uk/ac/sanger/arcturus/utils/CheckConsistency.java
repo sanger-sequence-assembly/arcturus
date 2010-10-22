@@ -180,6 +180,9 @@ public class CheckConsistency {
 		ps.println("MANDATORY PARAMETERS:");
 		ps.println("\t-instance\tName of instance");
 		ps.println("\t-organism\tName of organism");
+		ps.println();
+		ps.println("MANDATORY PARAMETERS:");
+		ps.println("\t-critical\tOnly run the critical tests");
 	}
 
 	public static void main(String args[]) {
@@ -199,18 +202,6 @@ public class CheckConsistency {
 		}
 
 		if (instance == null || organism == null) {
-			OrganismChooserPanel orgpanel = new OrganismChooserPanel();
-
-			int result = orgpanel.showDialog(null);
-
-			if (result == JOptionPane.OK_OPTION) {
-				instance = orgpanel.getInstance();
-				organism = orgpanel.getOrganism();
-			}
-		}
-
-		if (instance == null || instance.length() == 0 || organism == null
-				|| organism.length() == 0) {
 			printUsage(System.err);
 			System.exit(1);
 		}
