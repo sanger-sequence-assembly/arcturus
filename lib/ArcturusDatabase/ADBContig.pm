@@ -657,9 +657,8 @@ sub putContig {
 
 			unless ($contigid > 0) {
 				$dbh->rollback;
-				print STDERR "returning having failed to insert metadata\n";
-				my $msg = "Failed to insert metadata for $contigname";
-				return (0, $msg);
+				$message = "failed to insert metadata for $contigname";
+				return (0, $message);
 			}
 
 			$this->{lastinsertedcontigid} = $contigid;
@@ -668,19 +667,19 @@ sub putContig {
 # then load the overall mappings (and put the mapping ID's in the instances)
 
 	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'read') == 1) {
-			  $log->severe("Failed to insert contig-to-read mappings for $contigname: rolling back database");
+			  $log->severe("failed to insert contig-to-read mappings for $contigname: rolling back database");
 				$dbh->rollback;
-				my $msg = "Failed to insert contig-to-read mappings for $contigname";
-				return (0, $msg);
+				$message = "failed to insert contig-to-read mappings for $contigname";
+				return (0, $message);
 			}
 
 # the CONTIG2CONTIG mappings
 
 	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'contig') == 1) {
-			  $log->severe("Failed to insert contig-to-contig mappings for $contigname: rolling back database");
+			  $log->severe("failed to insert contig-to-contig mappings for $contigname: rolling back database");
 				$dbh->rollback;
-				my $msg = "Failed to insert contig-to-contig mappings for $contigname";
-				return (0, $msg);
+				$message = "failed to insert contig-to-contig mappings for $contigname";
+				return (0, $message);
 			}
 
 # and contig tags?
@@ -690,7 +689,8 @@ sub putContig {
 # TODO ? add tagtype selection ? register number opf tags added in Project object
 	    unless ($this->putTagsForContig($contig,%ctoptions)){
 				$dbh->rollback;
-				return 0, "Failed to insert tags for $contigname";
+				$message = "Failed to insert tags for $contigname";
+				return 0, $message;
 			}
 
 # update the age counter in C2CMAPPING table (at very end of this insert)
@@ -1287,6 +1287,8 @@ sub putMappingsForContig {
     my $log = shift;
     my %option = @_;
 
+	# my $retry_in_secs = 60;
+	# for testing 
 	my $retry_in_secs = 0.01 * 60;
 	my $retry_counter = 0.25;
 	my $counter = 1;

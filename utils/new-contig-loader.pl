@@ -1117,7 +1117,7 @@ print STDOUT " end no frugal scan\n";
             $logger->monitor("before loading ($nr) ",memory=>1,timing=>1) if $usage;
             my ($added,$msg) = $adb->putContig($contig, $project,%loptions);
             $logger->monitor("after loading ($nr) ",memory=>1,timing=>1) if $usage;
-						$logger->warning("putContig has returned ($added, $msg)");
+						#$logger->warning("putContig has returned ($added, $msg)");
 
             if ($added) {
                 $loaded++;
@@ -1362,7 +1362,7 @@ $adb->disconnect();
 
 # send messages to users, if any
 
-my $addressees = $adb->getMessageAddresses(1);
+my $addressees = ['kt6@sanger.ac.uk'];
 my $missedcontigmessage = "";
 
 foreach my $user (@$addressees) {
