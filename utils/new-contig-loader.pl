@@ -1117,6 +1117,7 @@ print STDOUT " end no frugal scan\n";
             $logger->monitor("before loading ($nr) ",memory=>1,timing=>1) if $usage;
             my ($added,$msg) = $adb->putContig($contig, $project,%loptions);
             $logger->monitor("after loading ($nr) ",memory=>1,timing=>1) if $usage;
+						$logger->warning("putContig has returned ($added, $msg)");
 
             if ($added) {
                 $loaded++;
@@ -1452,7 +1453,7 @@ sub printmissedcontighash {
     my $message = "This is to let you know that the import will need to be run again as some contigs have not been loaded:\n";
 
     while (my ($contig, $reason) = each %missedcontighash) {
-      $message = $message."\n $contig failed to load because $reason\n";
+      $message = $message."\n Contig $contig failed to load because $reason\n";
     }
 
 	return $message;
