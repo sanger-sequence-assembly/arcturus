@@ -1190,20 +1190,19 @@ print STDOUT " end no frugal scan\n";
                     $contig->writeToCaf(*STDOUT);
 	        }
 
+# Now we are catching the timeouts, the default is to go on to the next contig 
+			next;
+
 # FAILED to insert a contig for whatever reason; default ABORT the whole session and remove inserted contigs
-
-                next if $noabort;
-
-                # ABORT TO BE COMPLETED
-
-                foreach my $contig_id (@insertedcontigids) {
+# ABORT TO BE COMPLETED
+# next if $noabort;
+#               foreach my $contig_id (@insertedcontigids) {
 #                   $adb->deleteContig($contig_id);
-		}
-
-                exit 2;
-            }
+#	}
+#               exit 2;
+           }
 #$logger->monitor("memory usage after loading contig ".$contig->getContigName(),memory=>1);
-        }
+        } # END while contig KATE
 
         elsif ($contigtest || $loadcontigtags || $testcontigtags) {
 

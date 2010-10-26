@@ -577,7 +577,7 @@ sub putContig {
 # okay, the contig is new; find out if it is connected to existing contigs
 # search based on the read_ids (not seq_id) in (initial) current contigs  
 # NOTE: this may be done outside this method .... ?
-
+#KATE
     $message .= "$contigname is new ";
     if ($this->getParentContigsForContig($contig,usereads=>1)) {
         my @parentids = $contig->getParentContigIDs();
@@ -655,29 +655,32 @@ sub putContig {
 			$dbh->begin_work;
 			$contigid = &putMetaDataForContig($dbh,$log,$contig,$checksum,$user_id,$problems_project_id);
 
-			$this->{lastinsertedcontigid} = $contigid;
-
-			unless ($contigid) {
+			unless ($contigid > 0) {
 				$dbh->rollback;
-				return 0, "Failed to insert metadata for $contigname";
+				print STDERR "returning having failed to insert metadata\n";
+				my $msg = "Failed to insert metadata for $contigname";
+				return (0, $msg);
 			}
 
+			$this->{lastinsertedcontigid} = $contigid;
 			$contig->setContigID($contigid);
 
 # then load the overall mappings (and put the mapping ID's in the instances)
 
-	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'read')) {
+	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'read') == 1) {
 			  $log->severe("Failed to insert contig-to-read mappings for $contigname: rolling back database");
 				$dbh->rollback;
-				return 0, "Failed to insert contig-to-read mappings for $contigname";
+				my $msg = "Failed to insert contig-to-read mappings for $contigname";
+				return (0, $msg);
 			}
 
 # the CONTIG2CONTIG mappings
 
-	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'contig')) {
+	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'contig') == 1) {
 			  $log->severe("Failed to insert contig-to-contig mappings for $contigname: rolling back database");
 				$dbh->rollback;
-				return 0, "Failed to insert contig-to-contig mappings for $contigname";
+				my $msg = "Failed to insert contig-to-contig mappings for $contigname";
+				return (0, $msg);
 			}
 
 # and contig tags?
