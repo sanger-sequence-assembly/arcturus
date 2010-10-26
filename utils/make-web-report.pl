@@ -52,14 +52,16 @@ unless (defined($dbh)) {
 }
 
 my $from_where_clause =
-    " from CONTIG as C where C.contig_id in " .
+    " from CONTIG as C,PROJECT as P  where C.contig_id in " .
     " (select distinct CA.contig_id from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)" .
     " on (CA.contig_id = C2CMAPPING.parent_id and C2CMAPPING.contig_id = CB.contig_id)" .
-    " where CA.created < ?  and CA.nreads > 1 and CA.length >= ? and (C2CMAPPING.parent_id is null and P.name not in ('BIN','FREEASSEMBLY','TRASH') or CB.created > ?))";
+    " where CA.created < ?  and CA.nreads > 1 and CA.length >= ? and (C2CMAPPING.parent_id is null  or CB.created > ?))".
+    "and P.name not in ('BIN','FREEASSEMBLY','TRASH')".
+    "and P.project_id = C.project_id";
 
 my $sql = "select count(*) as contigs,sum(C.nreads),sum(C.length),round(avg(C.length)),round(std(C.length)),max(C.length)" .
     $from_where_clause;
-
+print STDERR "$sql\n\n\n";
 my $sth_contig_stats = $dbh->prepare($sql);
 
 my $prefix = lc($organism);
@@ -583,6 +585,8 @@ sub makeWeeklyContigStats {
 	$sth->execute($days, $days);
 
 	my ($date, $datestr) = $sth->fetchrow_array();
+
+
 
 	$sth_contig_stats->execute($date, $minlen, $date);
 
