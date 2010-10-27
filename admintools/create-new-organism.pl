@@ -10,6 +10,7 @@ use Net::LDAP;
 use Term::ReadKey;
 
 use DataSource;
+use RepositoryManager;
 
 # LDAP error code returned when we try to create an entry which already exists
 use constant ALREADY_EXISTS => 68;
@@ -85,10 +86,12 @@ unless (defined($instance) && defined($organism) && defined($dbnode)
 }
 
 unless (defined($dbname)) {
-    $dbname = $organism;
+    $dbname = uc($organism);
     $dbname =~ tr/\-/_/;
-    print STDERR "WARNING: No database name specified, using $organism as the default.\n\n";
+    print STDERR "WARNING: No database name specified, using $dbname as the default.\n\n";
 }
+
+my $repository_manager = new RepositoryManager();
 
 my $dsa = new DataSource(-url => $ldapurl,
 			 -base => $rootdn,
@@ -133,9 +136,12 @@ if (defined($projectsfile) && -f $projectsfile) {
 
 	my ($projectname,$directory) = split(/,/, $line);
 
-	$directory = $repository . '/split/' . $projectname unless defined($directory);
-
-        $projects{$projectname} = $directory;
+	if (defined($directory)) {
+	    $projects{$projectname} = $directory;
+	} else {
+	    $projects{$projectname} = defined($repository_manager->getOnlinePath($projectname)) ?
+		':PROJECT:' : $repository . '/split/' . $projectname;
+	}
     }
 
     close(PROJECTS);
@@ -143,7 +149,8 @@ if (defined($projectsfile) && -f $projectsfile) {
 
 if (defined($projects)) {
     foreach my $projectname (split(/,/,$projects)) {
-	$projects{$projectname} = $repository . '/split/' . $projectname;
+	$projects{$projectname} = defined($repository_manager->getOnlinePath($projectname)) ?
+	    ':PROJECT:' : $repository . '/split/' . $projectname;
     }
 }
 
@@ -560,7 +567,7 @@ sub getUsersAndRoles {
 	die "DBI->connect failed";
     }
 
-    my $query = "select username,default_role from SESSION";
+    my $query = "select username,role from USER";
 
     my $sth = $dbh->prepare($query);
     &db_die("prepare($query) failed");
