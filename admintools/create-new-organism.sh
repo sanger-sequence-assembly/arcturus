@@ -8,9 +8,9 @@ LDAP_ROOT_DN="cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk"
 LDAP_USER="uid=${USER},ou=people,dc=sanger,dc=ac,dc=uk"
 
 ARCTURUS_INSTANCES=pathogen,vertebrates,test
-MYSQL_INSTANCES=arcp,hlmp,arct
+MYSQL_INSTANCES=arcp,hlmp,zebp,arct
 
-ACTIVE_ORGANISMS_LIST=~arcturus/active-organisms.list
+LIVE_ACTIVE_ORGANISMS_LIST=~arcturus/active-organisms.list
 #########################################################################
 ###              End of Sanger-specific settings                      ###
 #########################################################################
@@ -40,6 +40,8 @@ then
 	echo "Unable to proceed because $organism is not in the repository"
 	exit 1
     fi
+
+    reposdir=":ASSEMBLY:"
 fi
 
 echo -n "Enter MySQL instance [${MYSQL_INSTANCES}] > "
@@ -97,6 +99,21 @@ then
     exit 1
 fi
 
+###
+### Avoid adding test organisms to the live active organisms list
+###
+
+if [ "$instance" == "test" ]
+then
+    active_organisms_list=/dev/null
+else
+    active_organisms_list=$LIVE_ACTIVE_ORGANISMS_LIST
+fi
+
+###
+### Now run the script which actually does the work.
+###
+
 ${SCRIPT_HOME}/create-new-organism.pl \
     -instance $instance \
     -organism $organism \
@@ -108,5 +125,5 @@ ${SCRIPT_HOME}/create-new-organism.pl \
     -subdir $subdir \
     -description "$description" \
     -repository $reposdir \
-    -appendtofile $ACTIVE_ORGANISMS_LIST \
+    -appendtofile $active_organisms_list \
     $projects
