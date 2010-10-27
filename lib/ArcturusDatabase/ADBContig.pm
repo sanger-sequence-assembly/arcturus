@@ -657,8 +657,9 @@ sub putContig {
 
 			unless ($contigid > 0) {
 				$dbh->rollback;
-				$message = "failed to insert metadata for $contigname";
-				return (0, $message);
+				$@ = "failed to insert metadata for $contigname";
+				#$message = "failed to insert metadata for $contigname";
+				#return (0, $message);
 			}
 
 			$this->{lastinsertedcontigid} = $contigid;
@@ -666,20 +667,22 @@ sub putContig {
 
 # then load the overall mappings (and put the mapping ID's in the instances)
 
-	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'read') == 1) {
+	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'read') ) {
 			  $log->severe("failed to insert contig-to-read mappings for $contigname: rolling back database");
 				$dbh->rollback;
-				$message = "failed to insert contig-to-read mappings for $contigname";
-				return (0, $message);
+				$@ = "failed to insert contig-to-read mappings for $contigname";
+				#$message = "failed to insert contig-to-read mappings for $contigname";
+				#return (0, $message);
 			}
 
 # the CONTIG2CONTIG mappings
 
-	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'contig') == 1) {
+	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'contig')) {
 			  $log->severe("failed to insert contig-to-contig mappings for $contigname: rolling back database");
 				$dbh->rollback;
-				$message = "failed to insert contig-to-contig mappings for $contigname";
-				return (0, $message);
+				$@ = "failed to insert contig-to-contig mappings for $contigname";
+				#$message = "failed to insert contig-to-contig mappings for $contigname";
+				#return (0, $message);
 			}
 
 # and contig tags?
@@ -687,10 +690,11 @@ sub putContig {
 			my %ctoptions = (notestexisting => 1); # it's a new contig
 
 # TODO ? add tagtype selection ? register number opf tags added in Project object
-	    unless ($this->putTagsForContig($contig,%ctoptions)){
+	    unless ($this->putTagsForContig($contig,%ctoptions) ){
 				$dbh->rollback;
-				$message = "Failed to insert tags for $contigname";
-				return 0, $message;
+				$@ = "Failed to insert tags for $contigname";
+				#$message = "Failed to insert tags for $contigname";
+				#return 0, $message;
 			}
 
 # update the age counter in C2CMAPPING table (at very end of this insert)

@@ -6,6 +6,8 @@
 
 use strict; # Constraint variables declaration before using them
 
+use constant DEFAULT_HELPDESK_EMAIL => 'arcturus-help@sanger.ac.uk';
+
 use ContigFactory::ContigFactory;
 use ReadFactory::TraceServerReadFactory;
 
@@ -592,6 +594,10 @@ my %projectreadhash;
 # hash for recording contigs that did not load for the RT ticket
 my %missedcontighash;
 
+# user to email, in addition to arcturus-help.  If this is a test instance, the email is sent to the user ONLY.
+ 
+my $user = getlogin();
+
 # set-up tag selection
 
 if (!$rtagtypeaccept || $rtagtypeaccept eq 'default') {
@@ -836,9 +842,11 @@ if ($frugal) { # this whole block should go to a contig "factory"
 # if there are any reads found in another project, finish now
  if (keys(%projectreadhash) > 0) {
 		$logger->severe("Loading is aborted");
-		$logger->severe(printprojectreadhash(%projectreadhash));
-  	        $adb->disconnect();
-	        exit 1;
+		my $projectreadmessage = &printprojectreadhash(%projectreadhash);
+		$logger->severe($projectreadmessage);
+		&sendMessage($user,$projectreadmessage, $instance); 
+		$adb->disconnect();
+		exit 1;
 }
 
 $logger->flush();
@@ -1361,21 +1369,15 @@ unless ($lockstatusfound && $autolockmode) {
 $adb->disconnect();
 
 # send messages to users, if any
-
-my $addressees = ['kt6@sanger.ac.uk'];
 my $missedcontigmessage = "";
 
-foreach my $user (@$addressees) {
-    my $message = $adb->getMessageForUser($user);
-    &sendMessage($user, $message, $instance) if $message;
-}
+my $message = $adb->getMessageForUser($user);
+&sendMessage($user, $message, $instance) if $message;
 
 if ($missed > 0) {
 	$missedcontigmessage = &printmissedcontighash(%missedcontighash);
 	$logger->severe($missedcontigmessage);
-	foreach my $user (@$addressees) {
-		&sendMessage($user,$missedcontigmessage, $instance); 
-	}
+	&sendMessage($user,$missedcontigmessage, $instance); 
 }
 
 # Close the CAF contig name to Arcturus ID map file, if it was opened
@@ -1807,19 +1809,12 @@ sub scaffoldfileparser { # TO BE TESTED
 sub sendMessage {
     my ($user,$message,$instance) = @_;
 
+		my $to = DEFAULT_HELPDESK_EMAIL;
+		$to .= ',' . $user if defined($user);
+
     if ($instance eq 'test') {
-	print STDOUT "TEST MODE -- This message would be mailed user $user:\n$message\n\n";
-	return;
+				$to = $user;
     }
-
-    print STDOUT "message to be emailed to user $user:\n$message\n\n";
-
-#    This does not work the way Ed thinks it does, because arcturus-help is
-#    a key in the mail.aliases NIS map and the +suffix trick cannot be used.
-#
-#    my $helpdesk = "'arcturus-help'";
-#    $user="$helpdesk+$user";
-#    $user="$helpdesk+ejz"; # temporary redirect
 
     my $mail = new Mail::Send;
     $mail->to($user);
