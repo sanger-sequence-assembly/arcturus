@@ -18,9 +18,9 @@ and a file named assembly_contig.caf or assembly_contig.caf.gz
 
 MANDATORY PARAMETERS
 
-    -instance         Arcturus instance name [pathogen,test,...]
+    -instance         Arcturus instance name [pathogen,vertebrates,test,...]
     -pool             Name of pooled assembly
-    -mysql-instance   Arcturus MySQL instance [arcp,hlmp,arct,...]
+    -mysql-instance   Arcturus MySQL instance [arcp,hlmp,zebp,arct,...]
 EOF
 }
 
@@ -101,7 +101,7 @@ fi
 
 if [ "x" == "x$instance" ]
 then
-    echo -n "Enter Arcturus instance [pathogen,test,...] > "
+    echo -n "Enter Arcturus instance [pathogen,vertebrates,test,...] > "
     read instance
 fi
 
@@ -109,7 +109,7 @@ if [ "$createdb" -ne "0" ]
 then
     if [ "x" == "x$node" ]
 	then
-	echo -n "Enter MySQL instance [arcp,hlmp,arct,...] > "
+	echo -n "Enter MySQL instance [arcp,hlmp,zebp,arct,...] > "
 	read node
     fi
 
@@ -236,12 +236,12 @@ CLONE_LIST_WITH_DIRS=${TMP}/CloneListWithDirectories.txt
 
 for clone in `cat ${CLONE_LIST_FILE}`
 do
-  echo $clone,`pfind -q -u $clone` >> ${CLONE_LIST_WITH_DIRS}
+  echo $clone,:PROJECT: >> ${CLONE_LIST_WITH_DIRS}
 done
 
 for clone in BIN POOL
 do
-  echo $clone,`pwd` >> ${CLONE_LIST_WITH_DIRS}
+  echo $clone,:ASSEMBLY: >> ${CLONE_LIST_WITH_DIRS}
 done
 
 projects=${CLONE_LIST_WITH_DIRS}
