@@ -587,10 +587,8 @@ $scaffold = &scaffoldfileparser($scaffoldfile) if $scaffoldfile;
 #----------------------------------------------------------------
 
 # hash for recording foreign reads
+ 
 my %projectreadhash;
-
-# hash for recording contigs that did not load for the RT ticket
-my %missedcontighash;
 
 # set-up tag selection
 
@@ -1098,7 +1096,6 @@ print STDOUT " end no frugal scan\n";
 
 # &testeditedconsensusreads($contig); 
 
-
         if ($contigload) {
 
 	    $logger->info("Loading contig into database");
@@ -1117,7 +1114,6 @@ print STDOUT " end no frugal scan\n";
             $logger->monitor("before loading ($nr) ",memory=>1,timing=>1) if $usage;
             my ($added,$msg) = $adb->putContig($contig, $project,%loptions);
             $logger->monitor("after loading ($nr) ",memory=>1,timing=>1) if $usage;
-						#$logger->warning("putContig has returned ($added, $msg)");
 
             if ($added) {
                 $loaded++;
@@ -1134,7 +1130,7 @@ print STDOUT " end no frugal scan\n";
 # replace the input rank by the scaffold ranking, or, if absent by the nextrank count
                 if ($scaffold) {
                     $rank = $scaffold->{$rank} || $nextrank++;
-								}
+		}
                 push @scaffoldlist,[($added,$rank,'forward')] unless $noscaffold;
 # here : putScaffoldInfo; if 
 # does this require an extra state method? Or just add to Scaffold instance?
@@ -1155,11 +1151,6 @@ print STDOUT " end no frugal scan\n";
                 $logger->warning("WARNING! Contig $identifier with $nr reads was NOT ADDED :"
                                 ."\n$msg",preskip=>1);
                 $missed++;
-
-								# KATE: put this contig in the hash ready for the RT ticket: there are $missed of these
-								# which can be added by re-running the import once the locks are released or other errors fixed
-		    	      $missedcontighash{$contigname}= $msg;
-
 # for discontinuous contigs: try break
                 if ($msg =~ /discontinuity/i) {
 
@@ -1190,19 +1181,20 @@ print STDOUT " end no frugal scan\n";
                     $contig->writeToCaf(*STDOUT);
 	        }
 
-# Now we are catching the timeouts, the default is to go on to the next contig 
-			next;
-
 # FAILED to insert a contig for whatever reason; default ABORT the whole session and remove inserted contigs
-# ABORT TO BE COMPLETED
-# next if $noabort;
-#               foreach my $contig_id (@insertedcontigids) {
+
+                next if $noabort;
+
+                # ABORT TO BE COMPLETED
+
+                foreach my $contig_id (@insertedcontigids) {
 #                   $adb->deleteContig($contig_id);
-#	}
-#               exit 2;
-           }
+		}
+
+                exit 2;
+            }
 #$logger->monitor("memory usage after loading contig ".$contig->getContigName(),memory=>1);
-        } # END while contig KATE
+        }
 
         elsif ($contigtest || $loadcontigtags || $testcontigtags) {
 
@@ -1320,9 +1312,6 @@ if ($loaded && $project) {
         chomp $gap4dbname;
     }
     $project->setGap4Name($gap4dbname);
-		
-		# KATE: make sure that the missed contigs are not included in this scaffold list
-		#
     my $Scaffold = \@scaffoldlist; # to be replaced by a new Class ?
     $project->markImport($Scaffold,type=>'finisher project'
 		        	  ,source=>"Arcturus contig-loader");
@@ -1362,20 +1351,11 @@ $adb->disconnect();
 
 # send messages to users, if any
 
-my $addressees = ['kt6@sanger.ac.uk'];
-my $missedcontigmessage = "";
+my $addressees = $adb->getMessageAddresses(1);
 
 foreach my $user (@$addressees) {
     my $message = $adb->getMessageForUser($user);
     &sendMessage($user, $message, $instance) if $message;
-}
-
-if ($missed > 0) {
-	$missedcontigmessage = &printmissedcontighash(%missedcontighash);
-	$logger->severe($missedcontigmessage);
-	foreach my $user (@$addressees) {
-		&sendMessage($user,$missedcontigmessage, $instance); 
-	}
 }
 
 # Close the CAF contig name to Arcturus ID map file, if it was opened
@@ -1393,7 +1373,7 @@ sub checkprojectforread {
 # if the project for the read is different, add it to the projectreadhash
 # to be printed out when the run is aborted
     my ($readname, $projectnametoload) = @_ ;   # readname and projectname from the import file currently being looked at
-    my $contigname = "";
+    my $contigid = 0;
 		my $projectname = "";
 
 # find the current project in the latest contig for this read already stored in Arcturus
@@ -1402,8 +1382,8 @@ sub checkprojectforread {
     my $dbh = $adb->getConnection();
     
     #print STDERR "Checking that read $readname does not already exist in another project\n";
-
-	  my $projectcontigsquery = "select PROJECT.name,  READINFO.read_id, CURRENTCONTIGS.gap4name from 
+	    
+	  my $projectcontigsquery = "select PROJECT.name,  READINFO.read_id, CURRENTCONTIGS.contig_id from 
 						 PROJECT, CURRENTCONTIGS, MAPPING, SEQUENCE, SEQ2READ, READINFO where
 						 PROJECT.project_id = CURRENTCONTIGS.project_id and
 						 SEQ2READ.read_id = READINFO.read_id and
@@ -1417,11 +1397,11 @@ sub checkprojectforread {
 
 		foreach my $projectcontig (@{$projectcontigs}) {
 				$projectname = @$projectcontig[0];
-				$contigname = @$projectcontig[1];
+				$contigid = @$projectcontig[1];
     		unless ($projectname eq ""){
 				  if (uc ($projectnametoload) ne uc($projectname) ) {
         	  print STDERR "Read $readname being loaded from $projectnametoload already exists in project $projectname\n" ;
-		    	  $projectreadhash{$projectname}{$readname} = $contigname;
+		    	  $projectreadhash{$projectname}{$readname} = $contigid;
 					}
 				}
 		}
@@ -1440,19 +1420,6 @@ sub printprojectreadhash {
       while (my ($readname, $contigid) = each (%$reads)) {
         $message = $message."\tread $readname in contig $contigid\n";
       }
-    }
-
-	return $message;
-}
-
-#-------------------------------------------------------------------------------
-sub printmissedcontighash {
-# returns a message to warn the user before aborting the import
-
-    my $message = "This is to let you know that the import will need to be run again as some contigs have not been loaded:\n";
-
-    while (my ($contig, $reason) = each %missedcontighash) {
-      $message = $message."\n Contig $contig failed to load because $reason\n";
     }
 
 	return $message;

@@ -20,30 +20,23 @@ sub putMappingsForContig {
     my $log = shift;
     my %option = @_;
 
-           
-    $log->setPrefix("putMappingsForContig $option{type}");
-
  		my $contig_savepoint = "BeforeMapping".$contig;
 
-	  $dbh->{RaiseError} = 1;
-	  eval {
-    	&verifyPrivate($dbh,"putMappingsForContig");
-    };
-		if ($@) {
-      $log->severe("Unable to verify mappings: ".$dbh->errstr);
-		}
+    &verifyPrivate($dbh,"putMappingsForContig");
+
 # this is a dual-purpose method writing mappings to the MAPPING and SEGMENT
 # tables (read-to-contig mappings) or the C2CMAPPING and CSCSEGMENT tables 
 # (contig-to-contig mapping) depending on the parameters option specified
 
 # this method inserts mapping segments in blocks of 100
+           
+    $log->setPrefix("putMappingsForContig $option{type}");
+
 # define the queries and the mapping source
 
     my $mquery; # for insert on the (C2C)MAPPING table 
     my $squery; # for insert on the (C2C)SEGMENT table
     my $mappings; # for the array of Mapping instances
-		my $sth; # the statement handle, re-used for several queries
-		my @data; # for the data array
 
     if ($option{type} eq "read") {
 # for read-to-contig mappings
@@ -71,13 +64,7 @@ sub putMappingsForContig {
 
     $mquery .= "values (?,?,?,?,?)";
 
-    eval {
-      $sth = $dbh->prepare_cached($mquery);
-    };
-		if ($@) {
-      $log->severe("Unable to prepare the query $mquery: ".$dbh->errstr);
-      return 0; 
-		}
+    my $sth = $dbh->prepare_cached($mquery);
 
     my $contigid = $contig->getContigID();
 
@@ -89,18 +76,17 @@ sub putMappingsForContig {
 
 # optionally scan against empty mappings
 
-    unless ($mapping->hasSegments()) {
+        unless ($mapping->hasSegments()) {
 	    next if $option{notallowemptymapping};
-		}
+	}
 
-    my ($cstart, $cfinish) = $mapping->getContigRange();
+        my ($cstart, $cfinish) = $mapping->getContigRange();
 
-    @data = ($contigid,
+        my @data = ($contigid,
                     $mapping->getSequenceID(),
                     $cstart,
                     $cfinish,
                     $mapping->getAlignmentDirection());
-		}
 
 ##############################
 # make the savepoint 
@@ -114,29 +100,36 @@ sub putMappingsForContig {
 	if ($@) {
 	 	$log->warning("Failed to create savepoint $contig_savepoint: ".$dbh->errstr);
 	}
+##############################
+# turn off commits 
+##############################
 
+  $log->debug("Beginning work so no commits from now on");
 	eval {
-    $sth->execute(@data);
+     $dbh->begin_work;
 	};
 	if ($@) {
-    &queryFailed($mquery,@data);
-		$dbh->release($contig_savepoint);
-	  $dbh->{RaiseError} = 0;
-    return 0;
+	 	$log->warning("Failed to turn off commits to work on $contig: ".$dbh->errstr);
+		# But carry on anyway? KATE die here and put all other DBI statements in evals
 	}
 
-  eval {
-    $mapping->setMappingID($dbh->{'mysql_insertid'});
-    $sth->finish();
-	};
-	if ($@) {
-	  $log->severe("Failed to insert one or more sequence-to-contig mappings: ".$dbh->errstr);
-		$dbh->rollback_to($contig_savepoint);
-		$dbh->release($contig_savepoint);
-	  $dbh->{RaiseError} = 0;
-    return 0;
+        my $rc = $sth->execute(@data) || &queryFailed($mquery,@data);
+
+        if ($rc == 1) {
+            $mapping->setMappingID($dbh->{'mysql_insertid'});
+	}
+        else {
+	    $success = 0;
 	}
         
+    }
+    $sth->finish();
+
+    unless ($success) {
+	$log->severe("Failed to insert one or more sequence-to-contig mappings");
+        return 0;
+    }
+
 # 2) the individual segments (in block mode)
 
     my $block = 100;
@@ -160,57 +153,41 @@ sub putMappingsForContig {
 # dump the accumulated query if a number of inserts has been reached
 # $log->debug("Insert mapping block (mapping loop) $accumulated\n($block)");
                 if ($accumulated >= $block) {
-								    eval {
-                    	$sth = $dbh->prepare($accumulatedQuery); 
-                    	my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
-                    	$sth->finish();
-                    	$accumulatedQuery = $squery;
-                    	$accumulated = 0;
-										};
-										if ($@) {
-            					$log->severe("Error occurred preparing or executing $accumulatedQuery: ".$dbh->errstr);
-											$dbh->rollback_to($contig_savepoint);
-	  									$dbh->{RaiseError} = 0;
-    									return 0;
-										}
-								}
-            } # end foreach segment
+                    $sth = $dbh->prepare($accumulatedQuery); 
+                    my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
+                    $sth->finish();
+                    $success = 0 unless $rc;
+                    $accumulatedQuery = $squery;
+                    $accumulated = 0;
+		}
+            }
         }
         else {
             $log->severe("Mapping ".$mapping->getMappingName().
 		        " unexpectedly has no mapping_id");
             $success = 0;
         }
-    } # end foreach mapping
+    }
 # dump any remaining accumulated query after the last mapping has been processed
     if ($accumulated) {
 # $log->debug("Insert mapping block (mapping loop) $accumulated\n($block)");
-      eval {
         $sth = $dbh->prepare($accumulatedQuery); 
         my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
         $sth->finish();
-			};
-			if ($@) {
-       	$log->severe("Error occurred preparing or executing $accumulatedQuery: ".$dbh->errstr);
-				$dbh->rollback_to($contig_savepoint);
-	  		$dbh->{RaiseError} = 0;
-    		return 0;
-			}
+        $success = 0 unless $rc;
     }
 
 # we now update the contig-to-contig mappings by adding the parent range
 # this is kept separate from the basic inserts because this is derived data
 # which may or may not be transparently defined, hence may be missing (undef)
 
-    eval {
-    	&updateMappingsForContig ($dbh,$mappings) if ($option{type} eq "contig");
-		};
-		if ($@) {
-      $log->severe("Error occurred in updateMappingsForContig: ".$dbh->errstr);
-			$dbh->rollback_to($contig_savepoint);
-	  	$dbh->{RaiseError} = 0;
-    	return 0;
-		}
+    &updateMappingsForContig ($dbh,$mappings) if ($option{type} eq "contig");
+
+#####################################
+# the savepoint can be released here 
+# once the commit is successful
+#####################################
+
 	my $retry_in_secs = 0.01 * 60;
 	my $retry_counter = 0.25;
 	my $counter = 1;
@@ -231,10 +208,7 @@ sub putMappingsForContig {
 	 		$counter++;
 		}
 		else {
-#####################################
-# the savepoint can be released here 
-# once the commit is successful
-#####################################
+			# the commit has succeeded so the savepoint can be released
     	$log->debug("Commit is successful so releasing savepoint for contig $contig");
 			eval {
 				$dbh->release($contig_savepoint);
@@ -250,13 +224,10 @@ sub putMappingsForContig {
   $log->error("Reverting to savepoint $contig_savepoint");
 	eval {
 		$dbh->rollback_to($contig_savepoint);
-		$dbh->release($contig_savepoint);
-	  $dbh->{RaiseError} = 0;
 	};
 	if ($@) {
   	$log->error("Failed to revert to savepoint $contig_savepoint: ".$dbh->errstr);
 	}
- 	$dbh->{RaiseError} = 0;
 	return 0;
 		
 } # end 
