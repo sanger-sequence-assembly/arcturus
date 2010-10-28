@@ -577,7 +577,6 @@ sub putContig {
 # okay, the contig is new; find out if it is connected to existing contigs
 # search based on the read_ids (not seq_id) in (initial) current contigs  
 # NOTE: this may be done outside this method .... ?
-#KATE
     $message .= "$contigname is new ";
     if ($this->getParentContigsForContig($contig,usereads=>1)) {
         my @parentids = $contig->getParentContigIDs();
@@ -657,7 +656,7 @@ sub putContig {
 
 			unless ($contigid > 0) {
 				$log->severe("putContig failed to insert metadata for $contigname");
-				die "failed to insert metadata for $contigname";
+				die "failed to insert metadata for $contigname\n\n";
 				#$message = "failed to insert metadata for $contigname";
 				#return (0, $message);
 			}
@@ -669,7 +668,7 @@ sub putContig {
 
 	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'read') ) {
 			  $log->severe("putContig failed to insert contig-to-read mappings for $contigname: rolling back database");
-				die "failed to insert contig-to-read mappings for $contigname";
+				die "failed to insert contig-to-read mappings for $contigname\n\n";
 				#$message = "failed to insert contig-to-read mappings for $contigname";
 				#return (0, $message);
 			}
@@ -678,7 +677,7 @@ sub putContig {
 
 	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'contig')) {
 			  $log->severe("failed to insert contig-to-contig mappings for $contigname: rolling back database");
-				die "failed to insert contig-to-contig mappings for $contigname";
+				die "failed to insert contig-to-contig mappings for $contigname\n\n";
 				#$message = "failed to insert contig-to-contig mappings for $contigname";
 				#return (0, $message);
 			}
@@ -690,7 +689,7 @@ sub putContig {
 # TODO ? add tagtype selection ? register number opf tags added in Project object
 	    unless ($this->putTagsForContig($contig,%ctoptions) ){
 			  $log->severe("failed to insert tags for $contigname: rolling back database");
-				die "failed to insert tags for $contigname";
+				die "failed to insert tags for $contigname\n\n";
 				#$message = "Failed to insert tags for $contigname";
 				#return 0, $message;
 			}
@@ -707,7 +706,7 @@ sub putContig {
     };
 
     if ($@) {
-			$message = "putContig failed to store contig $contigid: " . $@;
+			$message = "putContig failed to store contig $contigname: " . $@;
 
 			eval {
 	    	$dbh->rollback;
@@ -718,7 +717,6 @@ sub putContig {
 
       $contig->setContigID(0);
       $contigid = 0;
-			$message = $@;
     }
 
     $dbh->{RaiseError} = 0;
@@ -945,6 +943,41 @@ sub putMetaDataForContig {
               . ",origin,created,readnamehash,project_id) "
               . "VALUES (?,?,?,?,?,?,?,?,now(),?,?)";
 
+	# my $retry_in_secs = 60;
+	# for testing 
+	my $retry_in_secs = 0.0001 * 60;
+	my $retry_counter = 0.25;
+	my $counter = 1;
+	my $max_retries = 4;
+
+  my $contigid = $contig->getContigID();
+  my $contigname = $contig->getGap4Name();
+ 	my $contig_savepoint = "BeforeMetaData".$contigid;
+ 
+##############################
+# make the savepoint 
+##############################
+
+ 	$log->debug("Creating savepoint $contig_savepoint");
+
+	eval {
+		my $savepoint_handle = $dbh->prepare("SAVEPOINT ".$contig_savepoint);
+    $savepoint_handle->execute();
+		#$dbh->savepoint($contig_savepoint);
+  };
+	if ($@) {
+	 	$log->warning("Failed to create savepoint $contig_savepoint: ".$DBI::errstr);
+	}
+
+	############################
+	# start the retry 
+	###########################
+
+  until ($counter > ($max_retries )) {
+
+	#####################################
+	# start the eval block
+	#####################################
 		eval {
 
     my $sth = $dbh->prepare_cached($query);
@@ -968,15 +1001,44 @@ sub putMetaDataForContig {
 		if ($@) {
 			if ($DBI::err == 1205) {
 				$log->severe("Some other process has locked CONTIG table so unable to insert metadata");
+				$log->special("Some other process has locked CONTIG table so unable to insert metadata");
+  			$retry_counter = $retry_counter * 4;
+	 			$retry_in_secs = $retry_in_secs * $retry_counter;
+	 			if ($counter < $max_retries) {
+	   			$log->warning("\tContig $contigname is locked by another process so wait for $retry_in_secs seconds");
+	   			sleep($retry_in_secs);
+	 				$counter++;
+				}
+				else { #retry has ended so report the timeout
+					$log->severe("\tStatement(s) failed $counter times as some other process has locked contig $contigname");
+  				$log->error("\tRolling back to savepoint $contig_savepoint");
+					eval {
+						my $savepoint_handle = $dbh->do("ROLLBACK TO SAVEPOINT ".$contig_savepoint);
+		  			$savepoint_handle = $dbh->do("RELEASE SAVEPOINT ".$contig_savepoint);
+					};
+					if ($@) {
+  					$log->severe("Failed to rollback to savepoint $contig_savepoint: ".$DBI::errstr);
+					}
+			  	return 0;
+				}
 			}
-			else {
-				$log->severe("Unable to insert metadata: ".$DBI::errstr);
+			else { # some other database error has occurred
+    		$log->severe("Error occurred preparing or executing the insert: \n".$DBI::errstr);
+  			$log->special("\tRolling back to savepoint $contig_savepoint because $DBI::errstr");
+				eval {
+					my $savepoint_handle = $dbh->do("ROLLBACK TO SAVEPOINT ".$contig_savepoint);
+		  		$savepoint_handle = $dbh->do("RELEASE SAVEPOINT ".$contig_savepoint);
+				};
+				if ($@) {
+  				$log->severe("Failed to rollback to savepoint $contig_savepoint: ".$DBI::errstr);
+				}
+			  return 0;
 			}
-			return 0;
 		}
 		else {
     	return $dbh->{'mysql_insertid'}; # the contig_id
 		}
+} # end retry
 }
 
 #----------------------------------------
@@ -1301,7 +1363,7 @@ sub putMappingsForContig {
 
     my $contigid = $contig->getContigID();
     my $contigname = $contig->getGap4Name();
- 		my $contig_savepoint = "BeforeMapping".$contigid;
+ 		my $contig_savepoint = "BeforeMapping".$option{type}.$contigid;
 
 	  $dbh->{RaiseError} = 1;
 	  eval {
