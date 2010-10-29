@@ -1429,7 +1429,7 @@ sub checkprojectforread {
 sub printprojectreadhash {
 # returns a message to warn the user before aborting the import
 
-    my $message = "The import has NOT been started because some reads already exist in other projects:\n";
+    my $message = "The import has NOT been started because some reads in the import file you are using already exist in other projects:\n";
 
     while (my ($project, $reads) = each %projectreadhash) {
     # each line has project -> (readname -> contig)*
@@ -1438,6 +1438,15 @@ sub printprojectreadhash {
         $message = $message."\tread $readname in contig $contigid\n";
       }
     }
+
+    $message .= "\nThe import has NOT been started because some reads in the input file you are using already exist in these projects:\n";
+
+    while (my ($project, $reads) = each %projectreadhash) {
+			my $readcount = scalar keys(%$reads);
+			$message .= "\tproject $project has $readcount reads\n";
+		}
+
+    $message .= "\nThe import has NOT been started because some reads in the input file you are using already exist in the above projects\n";
 
 	return $message;
 }
@@ -1813,8 +1822,8 @@ sub sendMessage {
 
     my $mail = new Mail::Send;
     $mail->to($user);
-    $mail->subject("Arcturus contig transfer requests");
-    $mail->add("X-Arcturus", "contig-transfer-manager");
+    $mail->subject("Arcturus project import FAILED");
+    #$mail->add("X-Arcturus", "contig-transfer-manager");
     my $handle = $mail->open;
     print $handle "$message\n";
     $handle->close;
