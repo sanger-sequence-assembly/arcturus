@@ -10,6 +10,8 @@ our @ISA = qw(ArcturusDatabase::ADBProject);
 
 use ArcturusDatabase::ADBRoot qw(queryFailed);
 
+use constant RETRY_IN_SECS => 0.0001 * 60;
+
 # ----------------------------------------------------------------------------
 # constructor and initialisation
 #-----------------------------------------------------------------------------
@@ -210,10 +212,11 @@ sub putScaffoldForImportID {
     my $scaffold = shift;
     my %options = @_; # type,source,comment
 
+		my $logger = $this->verifyLogger('putScaffoldForImportID');
+
     unless (ref($scaffold) eq 'ARRAY') { # or later Scaffold ?
-	my $logger = $this->verifyLogger('putScaffoldForImportID');
-        $logger->error("invalid parameter scaffold $scaffold");  
-	return undef;
+      $logger->error("invalid parameter scaffold $scaffold");  
+			return undef;
     }
 
     return unless @$scaffold;
@@ -256,56 +259,115 @@ sub putScaffoldForImportID {
     $dbh->{RaiseError} = 1;
 
     my $status = 0;
+		     
+		my $retry_in_secs = RETRY_IN_SECS;
+		my $retry_counter = 0.25;
+		my $counter = 1;
+		my $max_retries = 4;
+		 
+		my $scaffold_savepoint = "ScaffoldEntry";
+		 
+		##############################
+		# make the savepoint 
+		##############################
+		 
+		$logger->debug("Creating savepoint $scaffold_savepoint");
+		 
+		eval {
+		    my $savepoint_handle = $dbh->prepare("SAVEPOINT ".$scaffold_savepoint);
+		    $savepoint_handle->execute();
+		    #$dbh->savepoint($scaffold_savepoint);
+		};
+		if ($@) {
+		   $logger->warning("Failed to create savepoint $scaffold_savepoint: ".$DBI::errstr);
+		}
+		 
+		############################
+		# start the retry 
+		############################
+    until ($counter > ($max_retries )) {
+		   #####################################
+		   # start the eval block
+		   #####################################
 
-    eval {
-	$dbh->begin_work;
+    	eval {
+				$dbh->begin_work;
 
-	my $sinsert = "insert into SCAFFOLD (creator,created,import_id,type_id,source,comment) "
+				my $sinsert = "insert into SCAFFOLD (creator,created,import_id,type_id,source,comment) "
 	    . "values (?,now(),?,?,?,?)";
     
-	my $isth = $dbh->prepare_cached($sinsert);
+				my $isth = $dbh->prepare_cached($sinsert);
 
-	my $rc = $isth->execute(@binddata) || &queryFailed($sinsert,@binddata);
+				my $rc = $isth->execute(@binddata) || &queryFailed($sinsert,@binddata);
 
-	$scaffold_id = $dbh->{'mysql_insertid'} if ($rc+0);
+				$scaffold_id = $dbh->{'mysql_insertid'} if ($rc+0);
 
-	$isth->finish();
+				$isth->finish();
     
 # insert the CONTIGORDER data
 
-	my $cinsert = "insert into CONTIGORDER (scaffold_id,contig_id,position,direction,following_gap_size) "
+				my $cinsert = "insert into CONTIGORDER (scaffold_id,contig_id,position,direction,following_gap_size) "
 	    . "values (?,?,?,?,?)";
 
-	my $csth = $dbh->prepare_cached($cinsert);
+				my $csth = $dbh->prepare_cached($cinsert);
 
-	foreach my $member (@$scaffold) {
-	    next unless ($member->[1] > 0); # protection against undefined contig_id
-	    my @idata = @$member; # length 3
-	    push @idata,'forward' unless (scalar(@idata) >= 3); # should be caught by Scaffold class
-	    push @idata,undef unless (scalar(@idata) >= 4); # should be caught by Scaffold class
-	    my $crc = $csth->execute($scaffold_id,@idata) || &queryFailed($cinsert,$scaffold_id,@idata);
+				foreach my $member (@$scaffold) {
+	    		next unless ($member->[1] > 0); # protection against undefined contig_id
+	    		my @idata = @$member; # length 3
+	    		push @idata,'forward' unless (scalar(@idata) >= 3); # should be caught by Scaffold class
+	    		push @idata,undef unless (scalar(@idata) >= 4); # should be caught by Scaffold class
+	    		my $crc = $csth->execute($scaffold_id,@idata) || &queryFailed($cinsert,$scaffold_id,@idata);
 	    $status++ if ($crc+0);
-	}
+				}
 	
-	$dbh->commit;
+			$dbh->commit;
 
-	$csth->finish();
-    };
-
-    if ($@) {
-	print STDERR "putScaffoldForImportID: Failed to store scaffold in database: " . $@ . "\n";
-	
-	eval {
-	    $dbh->rollback;
-	};
-	if ($@) {
-	    print STDERR "putScaffoldForImportID: ***** ROLLBACK FAILED: " . $@ . " *****\n";
-	}
-    }
-
-    $dbh->{RaiseError} = 0;
-
-    return $status;
+			$csth->finish();
+    	};
+			if ($@) {
+				if ($DBI::err == 1205) {
+					print STDERR "putScaffoldForImportID: Failed to store scaffold in database: " . $@ . "\n";
+					$logger->severe("Some other process has locked CONTIG table so failed to store scaffold in database");
+					$logger->special("Some other process has locked CONTIG table so failed to store scaffold in database");
+					$retry_counter = $retry_counter * 4;
+					$retry_in_secs = $retry_in_secs * $retry_counter;
+					if ($counter < $max_retries) {
+						$logger->warning("\tCONTIG table is locked by another process so wait for $retry_in_secs seconds");
+						sleep($retry_in_secs);
+						$counter++;
+					}
+					else { #retry has ended so report the timeout
+						$logger->severe("\tStatement(s) failed $counter times as some other process has locked CONTIG table");
+						$logger->error("\tRolling back to savepoint $scaffold_savepoint");
+						eval {
+					     my $savepoint_handle = $dbh->do("ROLLBACK TO SAVEPOINT ".$scaffold_savepoint);
+							$savepoint_handle = $dbh->do("RELEASE SAVEPOINT ".$scaffold_savepoint);
+					   };
+					   if ($@) {
+					     	$logger->severe("Failed to rollback to savepoint $scaffold_savepoint: ".$DBI::errstr);
+	    					print STDERR "putScaffoldForImportID: ***** ROLLBACK FAILED: " . $@ . " *****\n";
+					    }
+					    return 0;
+						}
+					} # end 1205 error
+					else { # some other database error has occurred
+						$logger->severe("Error occurred preparing or executing the insert: \n".$DBI::errstr);
+						$logger->special("\tRolling back to savepoint $scaffold_savepoint because $DBI::errstr");
+						eval {
+							my $savepoint_handle = $dbh->do("ROLLBACK TO SAVEPOINT ".$scaffold_savepoint);
+							$savepoint_handle = $dbh->do("RELEASE SAVEPOINT ".$scaffold_savepoint);
+						};
+						if ($@) {
+							$logger->severe("Failed to rollback to savepoint $scaffold_savepoint: ".$DBI::errstr);
+		         }
+			       return 0;
+		      }
+		   } # end if errors
+		  else {
+    		$dbh->{RaiseError} = 0;
+    		return $status;
+			}
+		} # end retry
 }
 
 sub getScaffoldForProject {

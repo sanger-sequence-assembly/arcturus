@@ -20,6 +20,7 @@ our @EXPORT = qw(getCurrentContigs); # DEPRECATE when view can be used
 
 use ArcturusDatabase::ADBRoot qw(queryFailed);
 
+use constant RETRY_IN_SECS => 0.0001 * 60;
 #-----------------------------------------------------------------------------
 # constructor and initialisation via constructor of superclass
 #-----------------------------------------------------------------------------
@@ -943,9 +944,7 @@ sub putMetaDataForContig {
               . ",origin,created,readnamehash,project_id) "
               . "VALUES (?,?,?,?,?,?,?,?,now(),?,?)";
 
-	# my $retry_in_secs = 60;
-	# for testing 
-	my $retry_in_secs = 0.0001 * 60;
+	my $retry_in_secs = RETRY_IN_SECS;
 	my $retry_counter = 0.25;
 	my $counter = 1;
 	my $max_retries = 4;
@@ -1352,9 +1351,7 @@ sub putMappingsForContig {
     my $log = shift;
     my %option = @_;
 
-	# my $retry_in_secs = 60;
-	# for testing 
-	my $retry_in_secs = 0.0001 * 60;
+	my $retry_in_secs = RETRY_IN_SECS;
 	my $retry_counter = 0.25;
 	my $counter = 1;
 	my $max_retries = 4;

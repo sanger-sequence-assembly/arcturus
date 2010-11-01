@@ -1324,7 +1324,6 @@ if ($loaded && $project) {
     }
     $project->setGap4Name($gap4dbname);
 		
-		# KATE: make sure that the missed contigs are not included in this scaffold list
 		#
     my $Scaffold = \@scaffoldlist; # to be replaced by a new Class ?
     $project->markImport($Scaffold,type=>'finisher project'
