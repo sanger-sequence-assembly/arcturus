@@ -32,9 +32,17 @@ public class ScaffoldManagerPanel extends MinervaPanel
 	implements ProjectChangeEventListener, ContigTransferSource {
 	public enum FastaMode { SEPARATE_CONTIGS, CONCATENATE_CONTIGS }
 	
-	private JTree tree= new JTree();
+	private JTree tree= new JTree((TreeModel)null);
+	private JScrollPane treepane = new JScrollPane(tree);
+	
+	private final String WELCOME = "Welcome to the scaffold tree view";
+	private final String PLEASE_WAIT = "Please wait whilst the scaffold tree is retrieved";
+	private final String NO_SCAFFOLD = "No scaffold could be found ... sorry!";
+	private final String LOADED = "New scaffold loaded";
+	
+	private Color GREEN = new Color(0x00, 0x66, 0x33);
 
-	private JLabel lblWait = new JLabel("Please wait whilst the scaffold tree is retrieved");
+	private JLabel lblWait = new JLabel(WELCOME);
 	
 	private JButton btnSearch = new JButton("Search");
 	
@@ -65,9 +73,12 @@ public class ScaffoldManagerPanel extends MinervaPanel
 	}
 	
 	private void loadScaffoldData() {
-		removeAll();
+		tree.setModel(null);
 		
-		add(lblWait, BorderLayout.CENTER);
+		lblWait.setForeground(Color.BLUE);
+		lblWait.setText(PLEASE_WAIT);
+		
+		actionReadScaffoldData.setEnabled(false);
 		
 		ScaffoldManagerWorker worker = new ScaffoldManagerWorker(this, adb);
 		
@@ -95,9 +106,21 @@ public class ScaffoldManagerPanel extends MinervaPanel
 		lblWait.setForeground(Color.RED);
 		lblWait.setHorizontalAlignment(SwingConstants.CENTER);
 		lblWait.setVerticalAlignment(SwingConstants.CENTER);
-		lblWait.setFont(new Font("SansSerif", Font.BOLD, 24));
+		lblWait.setFont(new Font("SansSerif", Font.BOLD, 12));
 		
-		add(lblWait, BorderLayout.CENTER);
+		JPanel buttonPanel = new JPanel(new FlowLayout());
+		
+		JLabel label = new JLabel("Search for contig: ");
+		
+		buttonPanel.add(label);
+		buttonPanel.add(txtContig);
+		buttonPanel.add(btnSearch);
+		
+		add(buttonPanel, BorderLayout.NORTH);
+		
+		add(treepane, BorderLayout.CENTER);
+		
+		add(lblWait, BorderLayout.SOUTH);
 	}
 	
 	void updateActions() {
@@ -206,25 +229,16 @@ public class ScaffoldManagerPanel extends MinervaPanel
 
 	public void setModel(TreeModel model) {
 		if (model == null || model.getRoot() == null || model.getChildCount(model.getRoot()) == 0) {
-			lblWait.setText("No scaffold could be found ... sorry!");
+			tree.setModel(null);
+			lblWait.setForeground(Color.RED);
+			lblWait.setText(NO_SCAFFOLD);
 		} else {
-			tree.setModel(model);		
-			JScrollPane treepane = new JScrollPane(tree);
-			removeAll();
-			add(treepane, BorderLayout.CENTER);
-			
-			JPanel buttonPanel = new JPanel(new FlowLayout());
-			
-			JLabel label = new JLabel("Search for contig: ");
-			
-			buttonPanel.add(label);
-			buttonPanel.add(txtContig);
-			buttonPanel.add(btnSearch);
-			
-			add(buttonPanel, BorderLayout.NORTH);
-			
-			revalidate();
+			tree.setModel(model);
+			lblWait.setForeground(GREEN);
+			lblWait.setText(LOADED);
 		}
+		
+		actionReadScaffoldData.setEnabled(true);
 	}
 	
 	private void doContigSearch() {
@@ -262,9 +276,9 @@ public class ScaffoldManagerPanel extends MinervaPanel
 			}
 		};
 		
-		actionReadScaffoldData = new MinervaAbstractAction("Load new scaffold data",
-				null, "Load new scaffold data", new Integer(KeyEvent.VK_L),
-				KeyStroke.getKeyStroke(KeyEvent.VK_L, ActionEvent.ALT_MASK)) {
+		actionReadScaffoldData = new MinervaAbstractAction("Update the scaffold tree",
+				null, "Update the scaffold tree with new data from the database", new Integer(KeyEvent.VK_U),
+				KeyStroke.getKeyStroke(KeyEvent.VK_U, ActionEvent.ALT_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				loadScaffoldData();
 			}
