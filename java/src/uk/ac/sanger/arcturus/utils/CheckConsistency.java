@@ -5,11 +5,14 @@ import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.gui.OrganismChooserPanel;
+import uk.ac.sanger.arcturus.logging.MailHandler;
 
 import java.sql.*;
 import java.io.*;
 import java.util.List;
 import java.util.Vector;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
 import java.text.MessageFormat;
 
 import org.xml.sax.Attributes;
@@ -196,11 +199,13 @@ public class CheckConsistency {
 	}
 
 	public static void main(String args[]) {
+		final boolean testing = true;
+		
 		String instance = null;
 		String organism = null;
 		String log_full_path = null;
 		boolean criticalOnly = false;
-
+		
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equalsIgnoreCase("-instance"))
 				instance = args[++i];
@@ -246,8 +251,17 @@ public class CheckConsistency {
 				}
 				
 				public void sendEmail(String message){
-					/* find out the latest class to send email */
-					/* sort out the actual client to use, based on the PERl importer */
+					
+					String recipient;
+					if (testing)
+						recipient = "kt6@sanger.ac.uk";
+					else
+						recipient = "arcturus-help@sanger.ac.uk";
+					
+					MailHandler handler = new MailHandler(recipient);
+					LogRecord record = new LogRecord(Level.SEVERE, message);
+					handler.publish(record);
+					handler.close();
 				}
 				
 			};
