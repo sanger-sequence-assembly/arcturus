@@ -20,7 +20,8 @@ our @EXPORT = qw(getCurrentContigs); # DEPRECATE when view can be used
 
 use ArcturusDatabase::ADBRoot qw(queryFailed);
 
-use constant RETRY_IN_SECS => 0.0001 * 60;
+use constant RETRY_IN_SECS => 60;
+
 #-----------------------------------------------------------------------------
 # constructor and initialisation via constructor of superclass
 #-----------------------------------------------------------------------------
