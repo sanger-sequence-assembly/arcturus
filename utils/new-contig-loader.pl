@@ -1037,7 +1037,7 @@ print STDOUT " end no frugal scan\n";
 
         my $nr = $contig->getNumberOfReads();
 
-        $logger->warning("Processing contig $identifier with $nr reads ... ") if ($nr > 1);
+        $logger->warning("\n\nProcessing contig $identifier with $nr reads ... ") if ($nr > 1);
 
         if ($nr < $minnrofreads) {
             $logger->warning("$identifier has less than $minnrofreads reads");
@@ -1131,10 +1131,12 @@ print STDOUT " end no frugal scan\n";
                 $loaded++;
                 $lastinsertedcontig = $added;
                 push @insertedcontigids, $added;
-                $logger->info("Contig $identifier with $nr reads :"
-                             ." status $added, $msg");
-                $logger->special("Contig $identifier with $nr reads :"
-                                ." status $added, $msg");
+
+		my $logmessage = "Contig $identifier with $nr reads : status $added, $msg";
+
+                $logger->info($logmessage);
+		$logger->warning($logmessage);
+                $logger->special($logmessage);
             # Record the mapping from CAF contig name to Arcturus ID, if 
             # the user specified a map file
 		print $fhMapfile "$identifier $added\n" if defined($fhMapfile);
