@@ -32,9 +32,17 @@ public class ScaffoldManagerPanel extends MinervaPanel
 	implements ProjectChangeEventListener, ContigTransferSource {
 	public enum FastaMode { SEPARATE_CONTIGS, CONCATENATE_CONTIGS }
 	
-	private JTree tree= new JTree();
+	private JTree tree= new JTree((TreeModel)null);
+	private JScrollPane treepane = new JScrollPane(tree);
+	
+	private final String WELCOME = "Welcome to the scaffold tree view";
+	private final String PLEASE_WAIT = "Please wait whilst the scaffold tree is retrieved";
+	private final String NO_SCAFFOLD = "No scaffold could be found ... sorry!";
+	private final String LOADED = "New scaffold loaded";
+	
+	private Color GREEN = new Color(0x00, 0x66, 0x33);
 
-	private JLabel lblWait = new JLabel("Please wait whilst the scaffold tree is retrieved");
+	private JLabel lblWait = new JLabel(WELCOME);
 	
 	private JButton btnSearch = new JButton("Search");
 	
@@ -44,6 +52,7 @@ public class ScaffoldManagerPanel extends MinervaPanel
 
 	protected MinervaAbstractAction actionExportAsSeparateFasta;
 	protected MinervaAbstractAction actionExportAsConcatenatedFasta;
+	protected MinervaAbstractAction actionReadScaffoldData;
 
 	public ScaffoldManagerPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
 		super(parent, adb);
@@ -56,13 +65,24 @@ public class ScaffoldManagerPanel extends MinervaPanel
 
 		getPrintAction().setEnabled(false);
 		
-		ScaffoldManagerWorker worker = new ScaffoldManagerWorker(this, adb);
-		
 		createUI();
-	
-		worker.execute();
 
 		adb.addProjectChangeEventListener(this);
+		
+		loadScaffoldData();
+	}
+	
+	private void loadScaffoldData() {
+		tree.setModel(null);
+		
+		lblWait.setForeground(Color.BLUE);
+		lblWait.setText(PLEASE_WAIT);
+		
+		actionReadScaffoldData.setEnabled(false);
+		
+		ScaffoldManagerWorker worker = new ScaffoldManagerWorker(this, adb);
+		
+		worker.execute();
 	}
 	
 	private void createUI() {
@@ -86,9 +106,21 @@ public class ScaffoldManagerPanel extends MinervaPanel
 		lblWait.setForeground(Color.RED);
 		lblWait.setHorizontalAlignment(SwingConstants.CENTER);
 		lblWait.setVerticalAlignment(SwingConstants.CENTER);
-		lblWait.setFont(new Font("SansSerif", Font.BOLD, 24));
+		lblWait.setFont(new Font("SansSerif", Font.BOLD, 12));
 		
-		add(lblWait, BorderLayout.CENTER);
+		JPanel buttonPanel = new JPanel(new FlowLayout());
+		
+		JLabel label = new JLabel("Search for contig: ");
+		
+		buttonPanel.add(label);
+		buttonPanel.add(txtContig);
+		buttonPanel.add(btnSearch);
+		
+		add(buttonPanel, BorderLayout.NORTH);
+		
+		add(treepane, BorderLayout.CENTER);
+		
+		add(lblWait, BorderLayout.SOUTH);
 	}
 	
 	void updateActions() {
@@ -197,25 +229,16 @@ public class ScaffoldManagerPanel extends MinervaPanel
 
 	public void setModel(TreeModel model) {
 		if (model == null || model.getRoot() == null || model.getChildCount(model.getRoot()) == 0) {
-			lblWait.setText("No scaffold could be found ... sorry!");
+			tree.setModel(null);
+			lblWait.setForeground(Color.RED);
+			lblWait.setText(NO_SCAFFOLD);
 		} else {
-			tree.setModel(model);		
-			JScrollPane treepane = new JScrollPane(tree);
-			removeAll();
-			add(treepane, BorderLayout.CENTER);
-			
-			JPanel buttonPanel = new JPanel(new FlowLayout());
-			
-			JLabel label = new JLabel("Search for contig: ");
-			
-			buttonPanel.add(label);
-			buttonPanel.add(txtContig);
-			buttonPanel.add(btnSearch);
-			
-			add(buttonPanel, BorderLayout.NORTH);
-			
-			revalidate();
+			tree.setModel(model);
+			lblWait.setForeground(GREEN);
+			lblWait.setText(LOADED);
 		}
+		
+		actionReadScaffoldData.setEnabled(true);
 	}
 	
 	private void doContigSearch() {
@@ -250,6 +273,14 @@ public class ScaffoldManagerPanel extends MinervaPanel
 				KeyStroke.getKeyStroke(KeyEvent.VK_N, ActionEvent.CTRL_MASK | ActionEvent.ALT_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				exportAsFasta(FastaMode.CONCATENATE_CONTIGS);
+			}
+		};
+		
+		actionReadScaffoldData = new MinervaAbstractAction("Update the scaffold tree",
+				null, "Update the scaffold tree with new data from the database", new Integer(KeyEvent.VK_U),
+				KeyStroke.getKeyStroke(KeyEvent.VK_U, ActionEvent.ALT_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				loadScaffoldData();
 			}
 		};
 	}
@@ -308,6 +339,10 @@ public class ScaffoldManagerPanel extends MinervaPanel
 	protected void createScaffoldMenu() {
 		JMenu scaffoldMenu = createMenu("Scaffolds", KeyEvent.VK_S, "Operations on scaffolds");
 		menubar.add(scaffoldMenu);
+		
+		scaffoldMenu.add(actionReadScaffoldData);
+		
+		scaffoldMenu.addSeparator();
 		
 		JMenu exportMenu = new JMenu("Export as FASTA"); 
 		scaffoldMenu.add(exportMenu);

@@ -19,6 +19,8 @@ public class AssemblyNode extends DefaultMutableTreeNode {
 				super.add((MutableTreeNode)(ssnode.getFirstChild()));
 			else
 				super.add(ssnode);
+		} else if (node instanceof UnscaffoldedContigsNode) {
+			super.add(node);
 		} else
 			throw new IllegalArgumentException("Cannot add a " + node.getClass().getName() + " to this node.");
 	}

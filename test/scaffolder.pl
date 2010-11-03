@@ -687,6 +687,8 @@ my $scaffoldtosuperscaffold = {};
 
 my $newproject = 0;
 
+my $unscaffolded_contigs = [];
+
 for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid++) {
     next if defined($scaffoldtosuperscaffold->{$seedscaffoldid});
 
@@ -799,6 +801,17 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 	}
 
 	print "Saved as project $newproject\n\n";
+    }
+
+    if ($xmldata && $contigcount == 1) {
+	my $scaffoldandsense = $superscaffold->[0];
+	my $scaffoldid = $scaffoldandsense->[0];
+	my $scaffold = $scaffoldfromid{$scaffoldid};
+
+	my $contigandsense = $scaffold->[0];
+	my $contigid = $contigandsense->[0];
+
+	push @{$unscaffolded_contigs}, $contigid;
     }
 
     if ($xmldata && $totbp >= $minprojectsize && $contigcount > 1) {
@@ -921,6 +934,25 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 $sth_templates->finish();
 
 if ($xmldata) {
+    push @{$xmldata}, "\t<unallocated-contigs>\n";
+
+    foreach my $contigid (sort @{$unscaffolded_contigs}) {
+	my $ctglen = $contiglength->{$contigid};
+
+	my $projid = $updateproject ? $newproject : $project->{$contigid};
+
+	$projid = 0 unless defined($projid);
+
+	my $contigname = $shownames ? "name=\"$contigname->{$contigid}\"" : "";
+
+	$projid = $projectid2name->{$projid} if $shownames;
+
+	push @{$xmldata}, "\t\t<contig id=\"$contigid\" $contigname size=\"$ctglen\"" .
+	    " project=\"$projid\" sense=\"F\" />\n";
+    }
+
+    push @{$xmldata}, "\t</unallocated-contigs>\n";
+
     push @{$xmldata}, "</assembly>\n";
 
     my $xmltext = join("", @{$xmldata});
@@ -954,7 +986,9 @@ sub generateDTD {
 
     push @{$fdata}, <<END_OF_DTD;
 <!DOCTYPE assembly [
-<!ELEMENT assembly (superscaffold*) >
+<!ELEMENT assembly (superscaffold*,unallocated-contigs) >
+
+<!ELEMENT unallocated-contigs (contig*) >
 
 <!ATTLIST assembly
             instance    CDATA       #REQUIRED
