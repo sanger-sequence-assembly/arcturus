@@ -19,22 +19,18 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.gui.scaffoldmanager.node.*;
 
 public class ScaffoldHandler extends DefaultHandler {
-	public static final int UNKNOWN = -1; 
-	public static final int ASSEMBLY = 1;
-	public static final int SUPERSCAFFOLD = 2;
-	public static final int SCAFFOLD = 3;
-	public static final int CONTIG = 4;
-	public static final int GAP = 5;
-	public static final int BRIDGE = 6;
-	public static final int SUPERBRIDGE = 7;
-	public static final int LINK = 8;
-	
+	protected enum Type {
+		UNKNOWN, ASSEMBLY, SUPERSCAFFOLD, 
+		SCAFFOLD, CONTIG, GAP, BRIDGE, SUPERBRIDGE,
+		LINK, UNSCAFFOLDED_CONTIGS };
+		
 	private DefaultTreeModel model = null;
 	private ArcturusDatabase adb;
 	
 	private AssemblyNode assemblyNode;
 	private SuperscaffoldNode superscaffoldNode;
 	private ScaffoldNode scaffoldNode;
+	private UnscaffoldedContigsNode unscaffoldedContigsNode;
 	
 	private List<SuperscaffoldNode> ssnList = new Vector<SuperscaffoldNode>();
 	
@@ -56,6 +52,9 @@ public class ScaffoldHandler extends DefaultHandler {
 		
 		for (int i = 0; i < ssnArray.length; i++)
 			assemblyNode.add(ssnArray[i]);
+		
+		if (unscaffoldedContigsNode != null)
+			assemblyNode.add(unscaffoldedContigsNode);
 	}
 	
 	private class SuperscaffoldNodeComparator implements Comparator<SuperscaffoldNode> {
@@ -64,48 +63,51 @@ public class ScaffoldHandler extends DefaultHandler {
 		}		
 	}
 
-	private int getTypeCode(String lName, String qName) {
+	private Type getTypeCode(String lName, String qName) {
 		if (lName != null && lName.length() > 0)
 			return getTypeCode(lName);
 		else if (qName != null && qName.length() > 0)
 			return getTypeCode(qName);
 		else
-			return UNKNOWN;
+			return Type.UNKNOWN;
 	}
 
-	private int getTypeCode(String name) {
+	private Type getTypeCode(String name) {
 		if (name.equals("contig"))
-			return CONTIG;
+			return Type.CONTIG;
 
 		if (name.equals("gap"))
-			return GAP;
+			return Type.GAP;
 
 		if (name.equals("bridge"))
-			return BRIDGE;
+			return Type.BRIDGE;
 
 		if (name.equals("link"))
-			return LINK;
+			return Type.LINK;
 
 		if (name.equals("scaffold"))
-			return SCAFFOLD;
+			return Type.SCAFFOLD;
 
 		if (name.equals("superscaffold"))
-			return SUPERSCAFFOLD;
+			return Type.SUPERSCAFFOLD;
 
 		if (name.equals("superbridge"))
-			return SUPERBRIDGE;
+			return Type.SUPERBRIDGE;
 
 		if (name.equals("assembly"))
-			return ASSEMBLY;
+			return Type.ASSEMBLY;
+		
+		if (name.equals("unallocated-contigs"))
+			return Type.UNSCAFFOLDED_CONTIGS;
 
-		return UNKNOWN;
+		return Type.UNKNOWN;
 	}
 	
 	private GapNode gNode = null;
 
 	public void startElement(String namespaceURI, String lName,
 			String qName, Attributes attrs) throws SAXException {
-		int type = getTypeCode(lName, qName);
+		Type type = getTypeCode(lName, qName);
 
 		switch (type) {
 			case ASSEMBLY:
@@ -116,6 +118,10 @@ public class ScaffoldHandler extends DefaultHandler {
 
 			case SUPERSCAFFOLD:
 				superscaffoldNode = new SuperscaffoldNode();
+				break;
+				
+			case UNSCAFFOLDED_CONTIGS:
+				unscaffoldedContigsNode = new UnscaffoldedContigsNode();
 				break;
 
 			case SCAFFOLD:
@@ -139,7 +145,12 @@ public class ScaffoldHandler extends DefaultHandler {
 				String cSense = attrs.getValue("sense");
 				boolean cForward = cSense.equalsIgnoreCase("F");
 				ContigNode cNode = new ContigNode(contig, cForward, current);
-				scaffoldNode.add(cNode);
+				
+				if (scaffoldNode != null)
+					scaffoldNode.add(cNode);
+				else if (unscaffoldedContigsNode != null)
+					unscaffoldedContigsNode.add(cNode);
+				
 				break;
 
 			case GAP:
@@ -160,7 +171,7 @@ public class ScaffoldHandler extends DefaultHandler {
 
 	public void endElement(String namespaceURI, String lName,
 			String qName) throws SAXException {
-		int type = getTypeCode(lName, qName);
+		Type type = getTypeCode(lName, qName);
 
 		switch (type) {
 			case ASSEMBLY:
@@ -172,6 +183,7 @@ public class ScaffoldHandler extends DefaultHandler {
 				
 			case SCAFFOLD:
 				superscaffoldNode.add(scaffoldNode);
+				scaffoldNode = null;
 				break;
 				
 			case CONTIG:
