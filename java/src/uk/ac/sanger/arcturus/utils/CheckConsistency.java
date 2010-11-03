@@ -34,6 +34,8 @@ public class CheckConsistency {
 	
 	protected Statement stmt = null;
 	
+	protected String failedTestMessage = "";
+	
 	public CheckConsistency(InputStream is) throws SAXException, IOException, ParserConfigurationException {
 		tests = parseXML(is);
 	}
@@ -58,14 +60,16 @@ public class CheckConsistency {
 		throws ArcturusDatabaseException {
 		this.listener = listener;
 		Connection conn = adb.getPooledConnection(this);
+		String message = "";
 		
 		try {
-			checkConsistency(conn,criticalOnly);
+			message = checkConsistency(conn,criticalOnly);
 		}
 		catch (SQLException e) {
 			adb.handleSQLException(e, "An error occurred when checking the database consistency", conn, this);
 		}
 		finally {
+			this.listener.sendEmail(message);
 			this.listener = null;
 			
 			try {
@@ -76,9 +80,10 @@ public class CheckConsistency {
 		}
 	}
 
-	protected void checkConsistency(Connection conn, boolean criticalOnly) throws SQLException {
+	protected String checkConsistency(Connection conn, boolean criticalOnly) throws SQLException {
 		cancelled = false;
 		
+		String email_message = "";
 		stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
 	              java.sql.ResultSet.CONCUR_READ_ONLY);
 		
@@ -104,7 +109,7 @@ public class CheckConsistency {
 			
 			long dt = System.currentTimeMillis() - t0;
 
-			String message;
+			String message = "";
 
 			switch (rows) {
 				case 0:
@@ -113,10 +118,12 @@ public class CheckConsistency {
 
 				case 1:
 					message = "\n*** FAILED : 1 inconsistency ***";
+					email_message.concat("\n*** FAILED : 1 inconsistency ***");
 					break;
 
 				default:
 					message = "\n*** FAILED : " + rows + " inconsistencies ***";
+					email_message.concat("\n*** FAILED : " + rows + " inconsistencies ***");
 					break;
 			}
 
@@ -131,6 +138,7 @@ public class CheckConsistency {
 		stmt = null;
 		
 		notifyListener("\n\n+++++ ALL TESTS COMPLETED +++++");
+		return(email_message);
 	}
 	
 	public void cancel() {
@@ -174,20 +182,23 @@ public class CheckConsistency {
 	
 	public interface CheckConsistencyListener {
 		public void report(String message);
+		public void sendEmail(String message);
 	}
 
 	public static void printUsage(PrintStream ps) {
 		ps.println("MANDATORY PARAMETERS:");
 		ps.println("\t-instance\tName of instance");
 		ps.println("\t-organism\tName of organism");
+		ps.println("\t-log_full_path\tFull directory path to place the logs in");
 		ps.println();
-		ps.println("MANDATORY PARAMETERS:");
+		ps.println("OPTIONAL PARAMETERS:");
 		ps.println("\t-critical\tOnly run the critical tests");
 	}
 
 	public static void main(String args[]) {
 		String instance = null;
 		String organism = null;
+		String log_full_path = null;
 		boolean criticalOnly = false;
 
 		for (int i = 0; i < args.length; i++) {
@@ -197,23 +208,25 @@ public class CheckConsistency {
 			if (args[i].equalsIgnoreCase("-organism"))
 				organism = args[++i];
 			
+			if (args[i].equalsIgnoreCase("-log_full_path"))
+				log_full_path = args[++i];
+			
 			if (args[i].equalsIgnoreCase("-critical"))
 				criticalOnly = true;
 		}
 
-		if (instance == null || organism == null) {
+		if (instance == null || organism == null || log_full_path == null) {
 			printUsage(System.err);
 			System.exit(1);
 		}
 
 		try {
-			System.err.println("Creating an ArcturusInstance for " + instance);
-			System.err.println();
+			System.out.println();
 
 			ArcturusInstance ai = ArcturusInstance.getInstance(instance);
 
-			System.err.println("Creating an ArcturusDatabase for " + organism);
-			System.err.println();
+			System.out.println("Creating an ArcturusDatabase for " + organism);
+			System.out.println();
 
 			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 
@@ -225,13 +238,23 @@ public class CheckConsistency {
 
 			CheckConsistencyListener listener = new CheckConsistencyListener() {
 				public void report(String message) {
-					System.out.println(message);
+					
+					if (message.startsWith("PASSED"))
+						System.out.println(message);
+					else
+						System.err.println(message);
+				}
+				
+				public void sendEmail(String message){
+					/* find out the latest class to send email */
+					/* sort out the actual client to use, based on the PERl importer */
 				}
 				
 			};
 			
 			cc.checkConsistency(adb, listener, criticalOnly);
-
+			
+			System.out.println("Consistency check completed successfully");
 			System.exit(0);
 		} catch (Exception e) {
 			Arcturus.logSevere(e);
