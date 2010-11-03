@@ -486,8 +486,6 @@ if ($gap_version == 4 && $project->hasNewContigs()) {
     my $allocation_script = "${arcturus_home}/utils/read-allocation-test";
 
     my $username = $ENV{'USER'};
-# if script is run in test mode add .pl to bypass the wrapper
-    $allocation_script .= ".pl" if (defined($username) && $basedir =~ /$username/);
 
 # first we test between projects, then inside, because inside test may reallocate
 
