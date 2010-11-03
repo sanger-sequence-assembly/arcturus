@@ -44,6 +44,7 @@ public class ScaffoldManagerPanel extends MinervaPanel
 
 	protected MinervaAbstractAction actionExportAsSeparateFasta;
 	protected MinervaAbstractAction actionExportAsConcatenatedFasta;
+	protected MinervaAbstractAction actionReadScaffoldData;
 
 	public ScaffoldManagerPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
 		super(parent, adb);
@@ -56,13 +57,21 @@ public class ScaffoldManagerPanel extends MinervaPanel
 
 		getPrintAction().setEnabled(false);
 		
-		ScaffoldManagerWorker worker = new ScaffoldManagerWorker(this, adb);
-		
 		createUI();
-	
-		worker.execute();
 
 		adb.addProjectChangeEventListener(this);
+		
+		loadScaffoldData();
+	}
+	
+	private void loadScaffoldData() {
+		removeAll();
+		
+		add(lblWait, BorderLayout.CENTER);
+		
+		ScaffoldManagerWorker worker = new ScaffoldManagerWorker(this, adb);
+		
+		worker.execute();
 	}
 	
 	private void createUI() {
@@ -252,6 +261,14 @@ public class ScaffoldManagerPanel extends MinervaPanel
 				exportAsFasta(FastaMode.CONCATENATE_CONTIGS);
 			}
 		};
+		
+		actionReadScaffoldData = new MinervaAbstractAction("Load new scaffold data",
+				null, "Load new scaffold data", new Integer(KeyEvent.VK_L),
+				KeyStroke.getKeyStroke(KeyEvent.VK_L, ActionEvent.ALT_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				loadScaffoldData();
+			}
+		};
 	}
 
 	private void exportAsFasta(FastaMode mode) {
@@ -308,6 +325,10 @@ public class ScaffoldManagerPanel extends MinervaPanel
 	protected void createScaffoldMenu() {
 		JMenu scaffoldMenu = createMenu("Scaffolds", KeyEvent.VK_S, "Operations on scaffolds");
 		menubar.add(scaffoldMenu);
+		
+		scaffoldMenu.add(actionReadScaffoldData);
+		
+		scaffoldMenu.addSeparator();
 		
 		JMenu exportMenu = new JMenu("Export as FASTA"); 
 		scaffoldMenu.add(exportMenu);
