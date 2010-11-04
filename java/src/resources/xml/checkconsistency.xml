@@ -24,8 +24,8 @@
 		</description>
 
 		<query>
-            select C.contig_id,nreads,count(distinct mapping_id) as mapping_count
-            from CONTIG C left join MAPPING M using(contig_id)
+            select C.contig_id,nreads,count(distinct seq_id) as mapping_count
+            from CONTIG C left join SEQ2CONTIG M using(contig_id)
             group by contig_id having nreads != mapping_count
 		</query>
 		
@@ -57,7 +57,7 @@
 		
 		<query>
 		        select R.readname,DR.hits,CC.contig_id,P.name,CC.length,CC.nreads,CC.created,M.cstart,M.cfinish,M.direction
-		        from DUPLICATEREADS DR left join (READNAME R,SEQ2READ SR,MAPPING M,CURRENTCONTIGS CC,PROJECT P)
+		        from DUPLICATEREADS DR left join (READNAME R,SEQ2READ SR,SEQ2CONTIG M,CURRENTCONTIGS CC,PROJECT P)
 		        on (DR.read_id=R.read_id)
 		        where R.read_id=SR.read_id and SR.seq_id=M.seq_id and M.contig_id=CC.contig_id and CC.project_id=P.project_id
 		        order by DR.read_id asc,CC.contig_id asc
@@ -77,8 +77,8 @@
 				select CCA.contig_id,CCA.length,CCA.nreads,CCA.created,PA.name,
 					CCB.contig_id,CCB.length,CCB.nreads,CCB.created,PB.name,
        				count(*) as `links`
-				from CURRENTCONTIGS CCA,PROJECT PA,MAPPING MA,SEQ2READ SRA,
-					 CURRENTCONTIGS CCB,PROJECT PB,MAPPING MB,SEQ2READ SRB
+				from CURRENTCONTIGS CCA,PROJECT PA,SEQ2CONTIG MA,SEQ2READ SRA,
+					 CURRENTCONTIGS CCB,PROJECT PB,SEQ2CONTIG MB,SEQ2READ SRB
 				where CCA.contig_id=MA.contig_id and MA.seq_id=SRA.seq_id
 				and SRA.read_id=SRB.read_id
 				and SRB.seq_id=MB.seq_id and MB.contig_id=CCB.contig_id
@@ -99,8 +99,8 @@
 		</description>
 		
 		<query>
-			select mapping_id,seq_id,MAPPING.contig_id
-			from MAPPING left join CONTIG using(contig_id)
+			select mapping_id,seq_id,SEQ2CONTIG.contig_id
+			from SEQ2CONTIG left join CONTIG using(contig_id)
 			where CONTIG.contig_id is null
 		</query>
 		
@@ -115,8 +115,8 @@
 		</description>
 
 		<query>
-			select contig_id,mapping_id,MAPPING.seq_id
-			from MAPPING left join SEQUENCE using(seq_id)
+			select contig_id,mapping_id,SEQ2CONTIG.seq_id
+			from SEQ2CONTIG left join SEQUENCE using(seq_id)
 			where sequence is null or quality is null
 		</query>
 		
@@ -131,8 +131,8 @@
 		</description>
 
 		<query>
-			select contig_id,mapping_id,MAPPING.seq_id from MAPPING left join (SEQ2READ,READNAME)
-			on (MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READNAME.read_id)
+			select contig_id,mapping_id,SEQ2CONTIG.seq_id from SEQ2CONTIG left join (SEQ2READ,READNAME)
+			on (SEQ2CONTIG.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READNAME.read_id)
 			where readname is null
 		</query>
 		
