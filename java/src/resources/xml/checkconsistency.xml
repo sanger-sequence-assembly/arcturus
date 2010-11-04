@@ -24,9 +24,9 @@
 		</description>
 
 		<query>
-			select C.contig_id,nreads,count(*) as mapping_count
-			from CONTIG C, MAPPING M where C.contig_id=M.contig_id
-			group by contig_id having nreads != mapping_count
+            select C.contig_id,nreads,count(distinct mapping_id) as mapping_count
+            from CONTIG C left join MAPPING M using(contig_id)
+            group by contig_id having nreads != mapping_count
 		</query>
 		
 		<format>
