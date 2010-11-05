@@ -16,26 +16,19 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 public class ScaffoldXMLDataParser {
+	private static final String SCAFFOLD_TREE_TYPE = "scaffold";
+	private static final String SCAFFOLD_TREE_FORMAT = "text/xml";
+	
 	public TreeModel buildTreeModel(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		TreeModel model = null;
 		Connection conn = null;
 		
 		try {
 			conn = adb.getPooledConnection(this);
-
-			String query = "select content from NOTE where type = 'scaffold' order by created desc limit 1";
-
-			Statement stmt = conn.createStatement();
-
-			ResultSet rs = stmt.executeQuery(query);
-
-			InputStream is = rs.next() ? rs.getBinaryStream(1) : null;
-
-			model = parseXMLStream(is, adb);
-
-			is.close();
-			rs.close();
-			stmt.close();
+			
+			int id = findIDForLatestScaffold(conn);
+			
+			model = createTreeModel(conn, id, adb);
 		}
 		catch (SQLException e) {
 			adb.handleSQLException(e, "A database error occurred when building the scaffold tree model", conn, this);
@@ -54,6 +47,46 @@ public class ScaffoldXMLDataParser {
 			}
 		}
 		
+		return model;
+	}
+	
+	private int findIDForLatestScaffold(Connection conn) throws SQLException {
+		String query = "select id from NOTE where type = ? and format = ? order by created desc limit 1";
+		
+		PreparedStatement pstmt = conn.prepareStatement(query);
+		
+		pstmt.setString(1, SCAFFOLD_TREE_TYPE);
+		pstmt.setString(2, SCAFFOLD_TREE_FORMAT);
+
+		ResultSet rs = pstmt.executeQuery();
+
+		int id = rs.next() ? rs.getInt(1) : -1;
+		
+		rs.close();
+		
+		pstmt.close();
+
+		return id;
+	}
+	
+	private TreeModel createTreeModel(Connection conn, int id, ArcturusDatabase adb)
+		throws SQLException, ParserConfigurationException, SAXException, IOException {
+		String query = "select content from NOTE where id = ?";
+
+		PreparedStatement pstmt = conn.prepareStatement(query);
+		
+		pstmt.setInt(1, id);
+
+		ResultSet rs = pstmt.executeQuery();
+
+		InputStream is = rs.next() ? rs.getBinaryStream(1) : null;
+
+		TreeModel model = parseXMLStream(is, adb);
+
+		is.close();
+		rs.close();
+		pstmt.close();
+	
 		return model;
 	}
 	
