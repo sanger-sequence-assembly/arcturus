@@ -66,7 +66,7 @@ public class CheckConsistency {
 		String message = "";
 		
 		try {
-			message = checkConsistency(conn,criticalOnly);
+			 checkConsistency(conn,criticalOnly);
 		}
 		catch (SQLException e) {
 			adb.handleSQLException(e, "An error occurred when checking the database consistency", conn, this);
@@ -83,7 +83,7 @@ public class CheckConsistency {
 		}
 	}
 
-	protected String checkConsistency(Connection conn, boolean criticalOnly) throws SQLException {
+	protected void checkConsistency(Connection conn, boolean criticalOnly) throws SQLException {
 		cancelled = false;
 		
 		String email_message = "";
@@ -94,15 +94,15 @@ public class CheckConsistency {
 		
 		for (Test test : tests) {
 			if (cancelled) {
-				notifyListener("\n\n***** TASK WAS CANCELLED *****\n");
+				notifyListener("\n\n***** TASK WAS CANCELLED *****\n", true);
 				break;
 			}
 			
 			if (criticalOnly && !test.isCritical())
 				continue;
 			
-			notifyListener(test.getDescription());
-			notifyListener("");
+			notifyListener(test.getDescription(), true);
+			notifyListener("", true);
 
 			MessageFormat format = new MessageFormat(test.getFormat());
 			
@@ -130,18 +130,18 @@ public class CheckConsistency {
 					break;
 			}
 
-			notifyListener(message);
-			notifyListener("");
-			notifyListener("Time elapsed: " + dt + " ms");
-			notifyListener("--------------------------------------------------------------------------------");
+			notifyListener(message, false);
+			notifyListener("", false);
+			notifyListener("Time elapsed: " + dt + " ms", false);
+			notifyListener("--------------------------------------------------------------------------------", false);
 		}
 		
 		stmt.close();
 		
 		stmt = null;
 		
-		notifyListener("\n\n+++++ ALL TESTS COMPLETED +++++");
-		return(email_message);
+		notifyListener("\n\n+++++ ALL TESTS COMPLETED +++++", false);
+	
 	}
 	
 	public void cancel() {
@@ -170,7 +170,7 @@ public class CheckConsistency {
 			for (int col = 1; col <= cols; col++)
 				args[col - 1] = rs.getObject(col);
 
-			notifyListener(format.format(args));
+			notifyListener(format.format(args), false);
 
 			rows++;
 		}
@@ -178,13 +178,13 @@ public class CheckConsistency {
 		return rows;
 	}
 
-	protected void notifyListener(String message) {
+	protected void notifyListener(String message, Boolean isError) {
 		if (listener != null)
-			listener.report(message);
+			listener.report(message, isError);
 	}
 	
 	public interface CheckConsistencyListener {
-		public void report(String message);
+		public void report(String message, Boolean isError);
 		public void sendEmail(String message);
 	}
 
@@ -241,31 +241,64 @@ public class CheckConsistency {
 			
 			is.close();
 
-			CheckConsistencyListener listener = new CheckConsistencyListener() {
-				public void report(String message) {
-					
-					if (message.startsWith("PASSED"))
-						System.out.println(message);
-					else
-						System.err.println(message);
+			class MyCheckConsistencyListener implements CheckConsistencyListener {
+				public static final int STATUS = 1;
+
+				private String allErrorMessagesForEmail;
+				private String thisErrorMessageForEmail;
+	
+				public MyCheckConsistencyListener() {
+					allErrorMessagesForEmail = "";
+					thisErrorMessageForEmail ="";
 				}
-				
+
+				public void report(String message, Boolean isError) {
+						if (message.startsWith("PASSED"))
+							System.out.println(message);
+						else
+							System.err.println(message);
+							setErrorMessagesForEmail(message);
+				}
+					
 				public void sendEmail(String message){
+						String recipient;
+		
+						if (testing)
+							recipient = "kt6@sanger.ac.uk";
+						else
+							recipient = "arcturus-help@sanger.ac.uk";
+						
+						if (testing)
+							System.err.println("about to email " + message  + " to " + recipient);
+						
+						MailHandler handler = new MailHandler(recipient);
+						LogRecord record = new LogRecord(Level.INFO, message);
+						handler.publish(record);
+						handler.close();
+						
+					}
 					
-					String recipient;
-					if (testing)
-						recipient = "kt6@sanger.ac.uk";
-					else
-						recipient = "arcturus-help@sanger.ac.uk";
-					
-					MailHandler handler = new MailHandler(recipient);
-					LogRecord record = new LogRecord(Level.SEVERE, message);
-					handler.publish(record);
-					handler.close();
+				private String getAllErrorMessagesForEmail() {
+					return allErrorMessagesForEmail;
+				}
+
+				private String getThisErrorMessageForEmail() {
+					return thisErrorMessageForEmail;
 				}
 				
+				private void setErrorMessagesForEmail(
+						String thisErrorMessage) {
+					allErrorMessagesForEmail = allErrorMessagesForEmail + "\n" + thisErrorMessage;
+					thisErrorMessageForEmail = thisErrorMessage;
+					
+					if (testing)
+						System.err.println("entire email: " + allErrorMessagesForEmail);
+	
+				}
 			};
-			
+		
+		MyCheckConsistencyListener listener = new MyCheckConsistencyListener(); 
+		
 			cc.checkConsistency(adb, listener, criticalOnly);
 			
 			System.out.println("Consistency check completed successfully");
@@ -460,5 +493,10 @@ public class CheckConsistency {
 				", critical=" + (critical ? "YES" : "NO") +
 				"]";
 		}
+	
 	}
 }
+
+
+
+
