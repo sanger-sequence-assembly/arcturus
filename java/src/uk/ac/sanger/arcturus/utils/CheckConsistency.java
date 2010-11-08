@@ -64,6 +64,7 @@ public class CheckConsistency {
 		this.listener = listener;
 		Connection conn = adb.getPooledConnection(this);
 		String message = "";
+		String organism = "Pass in the organism name";
 		
 		try {
 			 checkConsistency(conn,criticalOnly);
@@ -72,7 +73,7 @@ public class CheckConsistency {
 			adb.handleSQLException(e, "An error occurred when checking the database consistency", conn, this);
 		}
 		finally {
-			this.listener.sendEmail(message);
+			this.listener.sendEmail(organism);
 			this.listener = null;
 			
 			try {
@@ -85,8 +86,9 @@ public class CheckConsistency {
 
 	protected void checkConsistency(Connection conn, boolean criticalOnly) throws SQLException {
 		cancelled = false;
-		
-		String email_message = "";
+		String message = "";
+		Boolean isError = false;
+
 		stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
 	              java.sql.ResultSet.CONCUR_READ_ONLY);
 		
@@ -101,8 +103,8 @@ public class CheckConsistency {
 			if (criticalOnly && !test.isCritical())
 				continue;
 			
-			notifyListener(test.getDescription(), true);
-			notifyListener("", true);
+			notifyListener(test.getDescription(), isError);
+			notifyListener("", isError);
 
 			MessageFormat format = new MessageFormat(test.getFormat());
 			
@@ -112,8 +114,6 @@ public class CheckConsistency {
 			
 			long dt = System.currentTimeMillis() - t0;
 
-			String message = "";
-
 			switch (rows) {
 				case 0:
 					message = "PASSED";
@@ -121,26 +121,28 @@ public class CheckConsistency {
 
 				case 1:
 					message = "\n*** FAILED : 1 inconsistency ***";
-					email_message.concat("\n*** FAILED : 1 inconsistency ***");
+					isError = true;
 					break;
 
 				default:
 					message = "\n*** FAILED : " + rows + " inconsistencies ***";
-					email_message.concat("\n*** FAILED : " + rows + " inconsistencies ***");
+					isError = true;
 					break;
 			}
 
-			notifyListener(message, false);
-			notifyListener("", false);
-			notifyListener("Time elapsed: " + dt + " ms", false);
-			notifyListener("--------------------------------------------------------------------------------", false);
+			notifyListener(message, isError);
+			isError = false;
+			notifyListener("", isError);
+			notifyListener("Time elapsed: " + dt + " ms", isError);
+			notifyListener("--------------------------------------------------------------------------------", isError);
+			
 		}
 		
 		stmt.close();
 		
 		stmt = null;
 		
-		notifyListener("\n\n+++++ ALL TESTS COMPLETED +++++", false);
+		notifyListener("\n\n+++++ ALL TESTS COMPLETED +++++", true);
 	
 	}
 	
@@ -170,7 +172,7 @@ public class CheckConsistency {
 			for (int col = 1; col <= cols; col++)
 				args[col - 1] = rs.getObject(col);
 
-			notifyListener(format.format(args), false);
+			notifyListener(format.format(args), true);
 
 			rows++;
 		}
@@ -178,14 +180,14 @@ public class CheckConsistency {
 		return rows;
 	}
 
-	protected void notifyListener(String message, Boolean isError) {
+	protected void notifyListener(String message, boolean isError) {
 		if (listener != null)
 			listener.report(message, isError);
 	}
 	
 	public interface CheckConsistencyListener {
-		public void report(String message, Boolean isError);
-		public void sendEmail(String message);
+		public void report(String message, boolean isError);
+		public void sendEmail(String organism);
 	}
 
 	public static void printUsage(PrintStream ps) {
@@ -252,17 +254,20 @@ public class CheckConsistency {
 					thisErrorMessageForEmail ="";
 				}
 
-				public void report(String message, Boolean isError) {
-						if (message.startsWith("PASSED"))
+				public void report(String message, boolean isError) {
+						if (!isError)
 							System.out.println(message);
-						else
+						else {
 							System.err.println(message);
 							setErrorMessagesForEmail(message);
+						}
 				}
 					
-				public void sendEmail(String message){
+				public void sendEmail(String organism){
 						String recipient;
 		
+						String message = getAllErrorMessagesForEmail();
+						
 						if (testing)
 							recipient = "kt6@sanger.ac.uk";
 						else
@@ -271,10 +276,8 @@ public class CheckConsistency {
 						if (testing)
 							System.err.println("about to email " + message  + " to " + recipient);
 						
-						MailHandler handler = new MailHandler(recipient);
-						LogRecord record = new LogRecord(Level.INFO, message);
-						handler.publish(record);
-						handler.close();
+						/* email call goes here */
+						String subject = ("ARCTURUS database" + organism + " has FAILED the consistency check");
 						
 					}
 					
@@ -291,9 +294,6 @@ public class CheckConsistency {
 					allErrorMessagesForEmail = allErrorMessagesForEmail + "\n" + thisErrorMessage;
 					thisErrorMessageForEmail = thisErrorMessage;
 					
-					if (testing)
-						System.err.println("entire email: " + allErrorMessagesForEmail);
-	
 				}
 			};
 		
