@@ -1,30 +1,64 @@
 package uk.ac.sanger.arcturus.consistencychecker;
 
 	public class CronCheckConsistencyListener implements CheckConsistencyListener {
-		/* uncomment me when I am no longer a neseted class public enum MessageType {LOG, EMAIL, BOTH}
-*/
+		
 		private String allErrorMessagesForEmail;
 		private String thisErrorMessageForEmail;
-		private boolean testing;
+		private boolean testing = true;
 
 		public CronCheckConsistencyListener() {
 			allErrorMessagesForEmail = "";
 			thisErrorMessageForEmail ="";
 		}
 
-		public void report(String message, boolean isError) {
-				if (!isError)
+		public void report(CheckConsistencyEvent event) {
+			String message = event.getMessage();
+			CheckConsistencyEvent.Type type = event.getType();
+			
+			switch (type) {
+				case START_TEST_RUN:
 					System.out.println(message);
-				else {
+					break;
+				case START_TEST:
+					System.out.println(message);
+					break;
+				case TEST_PASSED:
+					System.out.println(message);
+					break;
+				case TEST_FAILED:
 					System.err.println(message);
 					setErrorMessagesForEmail(message);
-				}
+					break;
+				case INCONSISTENCY:
+					System.err.println(message);
+					setErrorMessagesForEmail(message);
+					break;
+				case EXCEPTION:
+					System.err.println(message);
+					setErrorMessagesForEmail(message);
+					break;
+				case ALL_TESTS_PASSED:
+					System.out.println(message);
+					break;
+				case SOME_TESTS_FAILED:
+					System.err.println(message);
+					setErrorMessagesForEmail(message);
+					break;
+				case UNKNOWN:
+					System.err.println(message);
+					setErrorMessagesForEmail(message);
+					break;
+			}
+			
 		}
 			
 		public void sendEmail(String organism){
 				String recipient;
+				
+				if (organism.startsWith("TEST")) testing = true;
 
 				String message = getAllErrorMessagesForEmail();
+				String subject = ("ARCTURUS database " + organism + " has FAILED the consistency check");
 				
 				if (testing)
 					recipient = "kt6@sanger.ac.uk";
@@ -32,11 +66,9 @@ package uk.ac.sanger.arcturus.consistencychecker;
 					recipient = "arcturus-help@sanger.ac.uk";
 				
 				if (testing)
-					System.err.println("about to email " + message  + " to " + recipient);
+					System.err.println("\n\nabout to email " +subject + message  + " to " + recipient);
 				
 				/* email call goes here */
-				String subject = ("ARCTURUS database" + organism + " has FAILED the consistency check");
-				
 			}
 			
 		private String getAllErrorMessagesForEmail() {

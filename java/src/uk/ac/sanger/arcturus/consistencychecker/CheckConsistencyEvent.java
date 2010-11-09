@@ -1,8 +1,8 @@
 package uk.ac.sanger.arcturus.consistencychecker;
 
-public class ConsistencyCheckEvent {
+public class CheckConsistencyEvent {
 	public enum Type { START_TEST_RUN, START_TEST, TEST_PASSED, TEST_FAILED, INCONSISTENCY, ALL_TESTS_PASSED,
-		SOME_TESTS_FAILED, EXCEPTION, UNKNOWN
+		SOME_TESTS_FAILED, EXCEPTION, UNKNOWN, CANCELLED
 	}
 /* START_TEST_RUN
  The set of tests is about to be run.
@@ -23,6 +23,8 @@ ALL_TESTS_PASSED
 SOME_TESTS_FAILED
  The set of tests has been run, but some tests failed.
 The last three events are terminal events i.e. they signal to the listener that no further events will follow. 
+CANCELLED
+  The tests were cancelled by the user
 */
 	
 	private CheckConsistency source;
@@ -30,7 +32,7 @@ The last three events are terminal events i.e. they signal to the listener that 
 	private Type type = Type.UNKNOWN;
 	private Exception exception;
 	
-	public ConsistencyCheckEvent(CheckConsistency source) {
+	public CheckConsistencyEvent(CheckConsistency source) {
 		this.source = source;
 	}
 	

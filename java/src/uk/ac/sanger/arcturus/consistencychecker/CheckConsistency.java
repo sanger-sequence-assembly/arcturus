@@ -60,7 +60,7 @@ public class CheckConsistency {
 		this.listener = listener;
 		Connection conn = adb.getPooledConnection(this);
 		String message = "";
-		String organism = "Pass in the organism name";
+		String organism = adb.getName();
 		
 		try {
 			 checkConsistency(conn,criticalOnly);
@@ -82,8 +82,11 @@ public class CheckConsistency {
 
 	protected void checkConsistency(Connection conn, boolean criticalOnly) throws SQLException {
 		cancelled = false;
+		boolean all_tests_passed = true;
+		
 		String message = "";
-		Boolean isError = false;
+		CheckConsistencyEvent.Type type = CheckConsistencyEvent.Type.UNKNOWN;
+		CheckConsistencyEvent event = new CheckConsistencyEvent(this);
 
 		stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
 	              java.sql.ResultSet.CONCUR_READ_ONLY);
@@ -92,54 +95,49 @@ public class CheckConsistency {
 		
 		for (Test test : tests) {
 			if (cancelled) {
-				notifyListener("\n\n***** TASK WAS CANCELLED *****\n", true);
+				event.setEvent("\n\n***** TASK WAS CANCELLED *****\n", CheckConsistencyEvent.Type.CANCELLED);
+				notifyListener(event);
 				break;
 			}
 			
-			if (criticalOnly && !test.isCritical())
-				continue;
+			if (criticalOnly && !test.isCritical()) continue;
 			
-			notifyListener(test.getDescription(), isError);
-			notifyListener("", isError);
+			event.setEvent( test.getDescription(),CheckConsistencyEvent.Type.START_TEST);
+			notifyListener(event);
 
 			MessageFormat format = new MessageFormat(test.getFormat());
 			
 			long t0 = System.currentTimeMillis();
-
 			int rows = doQuery(stmt, test.getQuery(), format);
-			
 			long dt = System.currentTimeMillis() - t0;
 
 			switch (rows) {
 				case 0:
-					message = "PASSED";
+					event.setEvent("PASSED Time elapsed: " + dt + " ms\n--------------------------------------------------------------------------------", 
+							CheckConsistencyEvent.Type.TEST_PASSED);
 					break;
-
 				case 1:
-					message = "\n*** FAILED : 1 inconsistency ***";
-					isError = true;
+					event.setEvent("\n*** FAILED : 1 inconsistency Time elapsed: " + dt + " ms***\n--------------------------------------------------------------------------------", 
+							CheckConsistencyEvent.Type.TEST_FAILED);
+					all_tests_passed = false;
 					break;
-
 				default:
-					message = "\n*** FAILED : " + rows + " inconsistencies ***";
-					isError = true;
+					event.setEvent("\n*** FAILED : " + rows + " inconsistencies Time elapsed: " + dt + " ms***\n--------------------------------------------------------------------------------", 
+							CheckConsistencyEvent.Type.TEST_FAILED);
+					all_tests_passed = false;
 					break;
 			}
-
-			notifyListener(message, isError);
-			isError = false;
-			notifyListener("", isError);
-			notifyListener("Time elapsed: " + dt + " ms", isError);
-			notifyListener("--------------------------------------------------------------------------------", isError);
-			
+			notifyListener(event);
 		}
-		
 		stmt.close();
-		
 		stmt = null;
 		
-		notifyListener("\n\n+++++ ALL TESTS COMPLETED +++++", true);
-	
+		if (all_tests_passed)
+			event.setEvent("\n\n+++++ ALL TESTS COMPLETED AND PASSED +++++", CheckConsistencyEvent.Type.ALL_TESTS_PASSED);
+		else
+			event.setEvent("\n\n+++++ ALL TESTS COMPLETED BUT WITH SOME INCONSISTENCIES +++++", CheckConsistencyEvent.Type.SOME_TESTS_FAILED);
+		
+		notifyListener(event);
 	}
 	
 	public void cancel() {
@@ -156,8 +154,8 @@ public class CheckConsistency {
 	protected int doQuery(Statement stmt, String query, MessageFormat format)
 			throws SQLException {
 		ResultSet rs = stmt.executeQuery(query);
-
 		ResultSetMetaData rsmd = rs.getMetaData();
+		CheckConsistencyEvent event = new CheckConsistencyEvent(this);
 
 		int rows = 0;
 		int cols = rsmd.getColumnCount();
@@ -167,18 +165,17 @@ public class CheckConsistency {
 		while (rs.next()  && !cancelled) {
 			for (int col = 1; col <= cols; col++)
 				args[col - 1] = rs.getObject(col);
-
-			notifyListener(format.format(args), true);
-
+			event.setEvent(format.format(args), CheckConsistencyEvent.Type.INCONSISTENCY);
+			notifyListener(event);
 			rows++;
 		}
 
 		return rows;
 	}
 
-	protected void notifyListener(String message, boolean isError) {
+	protected void notifyListener(CheckConsistencyEvent event) {
 		if (listener != null)
-			listener.report(message, isError);
+			listener.report(event);
 	}
 	
 	public static void printUsage(PrintStream ps) {
@@ -192,7 +189,7 @@ public class CheckConsistency {
 	}
 
 	public static void main(String args[]) {
-		final boolean testing = true;
+		boolean testing = false;
 		
 		String instance = null;
 		String organism = null;
@@ -217,7 +214,10 @@ public class CheckConsistency {
 			printUsage(System.err);
 			System.exit(1);
 		}
-
+		
+		if (instance == "TESTSCHISTO")
+			testing = true;
+		
 		try {
 			System.out.println();
 
@@ -229,13 +229,10 @@ public class CheckConsistency {
 			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 
 			InputStream is = CheckConsistency.class.getResourceAsStream("/resources/xml/checkconsistency.xml");
-			
 			CheckConsistency cc = new CheckConsistency(is);
-			
 			is.close();
 
-		CronCheckConsistencyListener listener = new CronCheckConsistencyListener(); 
-		
+			CronCheckConsistencyListener listener = new CronCheckConsistencyListener(); 
 			cc.checkConsistency(adb, listener, criticalOnly);
 			
 			System.out.println("Consistency check completed successfully");
