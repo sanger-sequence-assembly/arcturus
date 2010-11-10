@@ -117,6 +117,9 @@ public class ScaffoldHandler extends DefaultHandler {
 				break;
 
 			case SUPERSCAFFOLD:
+				if (unscaffoldedContigsNode != null)
+					break;
+				
 				superscaffoldNode = new SuperscaffoldNode();
 				break;
 				
@@ -125,6 +128,9 @@ public class ScaffoldHandler extends DefaultHandler {
 				break;
 
 			case SCAFFOLD:
+				if (unscaffoldedContigsNode != null)
+					break;
+				
 				int scaffoldID = getIntegerAttribute(attrs, "id", -1);
 				String sSense = attrs.getValue("sense");
 				boolean sForward = sSense.equalsIgnoreCase("F");
@@ -178,10 +184,16 @@ public class ScaffoldHandler extends DefaultHandler {
 				break;
 				
 			case SUPERSCAFFOLD:
+				if (unscaffoldedContigsNode != null)
+					break;
+				
 				ssnList.add(superscaffoldNode);
 				break;
 				
 			case SCAFFOLD:
+				if (unscaffoldedContigsNode != null)
+					break;
+				
 				superscaffoldNode.add(scaffoldNode);
 				scaffoldNode = null;
 				break;
