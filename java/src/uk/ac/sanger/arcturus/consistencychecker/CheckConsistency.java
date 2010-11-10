@@ -87,6 +87,7 @@ public class CheckConsistency {
 		String message = "";
 		CheckConsistencyEvent.Type type = CheckConsistencyEvent.Type.UNKNOWN;
 		CheckConsistencyEvent event = new CheckConsistencyEvent(this);
+		event.setEvent("", CheckConsistencyEvent.Type.START_TEST_RUN);
 
 		stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
 	              java.sql.ResultSet.CONCUR_READ_ONLY);

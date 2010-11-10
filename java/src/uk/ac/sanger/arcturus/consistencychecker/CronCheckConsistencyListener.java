@@ -2,18 +2,24 @@ package uk.ac.sanger.arcturus.consistencychecker;
 
 import java.io.BufferedWriter;
 import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.Date;
+
 
 	public class CronCheckConsistencyListener implements CheckConsistencyListener {
 		protected BufferedWriter outputStream;
 		
 		private String allErrorMessagesForEmail;
 		private String thisErrorMessageForEmail;
+		private String logIntro;
 
 		private String dateString;
+		private String logName;
 		private Date date;
 		private boolean testing;
 
@@ -28,14 +34,24 @@ import java.util.Date;
 
 			this.instance = instance;
 			this.organism = organism;
-			
-			date = new Date();
-			dateString = DateFormat.getDateInstance().format(date);
-			
+		
 			/* use log_full_path from command line then consistencycheck201111101238.log */
-			filePath = logFullPath + dateString + ".log";
+			Locale currentLocale = new Locale("en","UK");
+			SimpleDateFormat logNameFormatter = new SimpleDateFormat("yyyyMMddHHmm", currentLocale);
+			date = new Date();
+			logName = logNameFormatter.format(date);
 			
-			System.out.println("About to add the file handler for " + filePath);
+			SimpleDateFormat startTimeFormatter = new SimpleDateFormat("HH:MM dd/MM/yyyy", currentLocale);
+			dateString = startTimeFormatter.format(date);
+			
+			filePath = logFullPath + "consistencycheck" + logName + ".log";
+			logIntro = "This is the log for a consistency check run for organism " +
+								organism + " in database " +
+								instance + " on " + 
+								dateString + " stored at " +
+								filePath + "\n";
+			
+			if (testing) System.out.println("About to add the file handler for " + filePath);
 		
 			try {
 					outputStream = new BufferedWriter(new FileWriter(filePath));
@@ -43,6 +59,8 @@ import java.util.Date;
 			catch (IOException ioe) {
 				System.err.println("Unable to create a FileHandler for logging: " +ioe);
 			}
+			
+			if (testing) System.err.println(logIntro);
 		}
 
 		public void report(CheckConsistencyEvent event){
@@ -52,6 +70,7 @@ import java.util.Date;
 			switch (type) {
 				case START_TEST_RUN:
 					try {
+						message = logIntro;						
 						outputStream.write(message);
 						outputStream.write("\n");
 					} catch (IOException e) {
