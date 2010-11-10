@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.consistencychecker;
 
 import java.io.BufferedWriter;
+import java.text.DateFormat;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -29,23 +30,17 @@ import java.util.Date;
 			this.organism = organism;
 			
 			date = new Date();
-			dateString = date.toString();
-			/* use log_full_path command line then Java.util.date for date time format plus user login
-			 * consistencycheck201111101238.log  Java.text.dateformat
-			 */
+			dateString = DateFormat.getDateInstance().format(date);
+			
+			/* use log_full_path from command line then consistencycheck201111101238.log */
 			filePath = logFullPath + dateString + ".log";
 			
-			System.out.println("About to add the file handler");
+			System.out.println("About to add the file handler for " + filePath);
+		
 			try {
-				File homedir = new File(System.getProperty("user.home"));
-				File dotarcturus = new File(homedir, ".arcturus");
-
-				if (dotarcturus.exists() || dotarcturus.mkdir()) {
 					outputStream = new BufferedWriter(new FileWriter(filePath));
-				} else
-					throw new IOException(
-							".arcturus directory <" + filePath + "> could not be created");
-			} catch (IOException ioe) {
+			} 
+			catch (IOException ioe) {
 				System.err.println("Unable to create a FileHandler for logging: " +ioe);
 			}
 		}
@@ -58,16 +53,16 @@ import java.util.Date;
 				case START_TEST_RUN:
 					try {
 						outputStream.write(message);
+						outputStream.write("\n");
 					} catch (IOException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 					break;
 				case START_TEST:
 					try {
 						outputStream.write(message);
+						outputStream.write("\n\n");
 					} catch (IOException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 					setErrorMessagesForEmail(message);
@@ -75,16 +70,16 @@ import java.util.Date;
 				case TEST_PASSED:
 					try {
 						outputStream.write(message);
+						outputStream.write("\n");
 					} catch (IOException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 					break;
 				case TEST_FAILED:
 					try {
 						outputStream.write(message);
+						outputStream.write("\n");
 					} catch (IOException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 					setErrorMessagesForEmail(message);
@@ -92,8 +87,8 @@ import java.util.Date;
 				case INCONSISTENCY:
 					try {
 						outputStream.write(message);
+						outputStream.write("\n");
 					} catch (IOException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 					setErrorMessagesForEmail(message);
@@ -101,8 +96,8 @@ import java.util.Date;
 				case EXCEPTION:
 					try {
 						outputStream.write(message);
+						outputStream.write("\n");
 					} catch (IOException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 					setErrorMessagesForEmail(message);
@@ -110,14 +105,15 @@ import java.util.Date;
 				case ALL_TESTS_PASSED:
 					try {
 						outputStream.write(message);
+						outputStream.close();
 					} catch (IOException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 					break;
 				case SOME_TESTS_FAILED:
 					try {
 						outputStream.write(message);
+						outputStream.close();
 					} catch (IOException e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();
