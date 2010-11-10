@@ -69,7 +69,7 @@ public class CheckConsistency {
 			adb.handleSQLException(e, "An error occurred when checking the database consistency", conn, this);
 		}
 		finally {
-			this.listener.sendEmail(organism);
+			this.listener.sendEmail();
 			this.listener = null;
 			
 			try {
@@ -102,7 +102,8 @@ public class CheckConsistency {
 			
 			if (criticalOnly && !test.isCritical()) continue;
 			
-			event.setEvent( test.getDescription(),CheckConsistencyEvent.Type.START_TEST);
+			event.setEvent( "\n--------------------------------------------------------------------------------\n" + 
+					test.getDescription(),CheckConsistencyEvent.Type.START_TEST);
 			notifyListener(event);
 
 			MessageFormat format = new MessageFormat(test.getFormat());
@@ -113,16 +114,16 @@ public class CheckConsistency {
 
 			switch (rows) {
 				case 0:
-					event.setEvent("PASSED Time elapsed: " + dt + " ms\n--------------------------------------------------------------------------------", 
+					event.setEvent("PASSED Time elapsed: " + dt + " ms", 
 							CheckConsistencyEvent.Type.TEST_PASSED);
 					break;
 				case 1:
-					event.setEvent("\n*** FAILED : 1 inconsistency Time elapsed: " + dt + " ms***\n--------------------------------------------------------------------------------", 
+					event.setEvent("\n*** FAILED : 1 inconsistency Time elapsed: " + dt + " ms***", 
 							CheckConsistencyEvent.Type.TEST_FAILED);
 					all_tests_passed = false;
 					break;
 				default:
-					event.setEvent("\n*** FAILED : " + rows + " inconsistencies Time elapsed: " + dt + " ms***\n--------------------------------------------------------------------------------", 
+					event.setEvent("\n*** FAILED : " + rows + " inconsistencies Time elapsed: " + dt + " ms***", 
 							CheckConsistencyEvent.Type.TEST_FAILED);
 					all_tests_passed = false;
 					break;
@@ -193,7 +194,7 @@ public class CheckConsistency {
 		
 		String instance = null;
 		String organism = null;
-		String log_full_path = null;
+		String logFullPath = null;
 		boolean criticalOnly = false;
 		
 		for (int i = 0; i < args.length; i++) {
@@ -204,13 +205,13 @@ public class CheckConsistency {
 				organism = args[++i];
 			
 			if (args[i].equalsIgnoreCase("-log_full_path"))
-				log_full_path = args[++i];
+				logFullPath = args[++i];
 			
 			if (args[i].equalsIgnoreCase("-critical"))
 				criticalOnly = true;
 		}
 
-		if (instance == null || organism == null || log_full_path == null) {
+		if (instance == null || organism == null || logFullPath == null) {
 			printUsage(System.err);
 			System.exit(1);
 		}
@@ -232,7 +233,7 @@ public class CheckConsistency {
 			CheckConsistency cc = new CheckConsistency(is);
 			is.close();
 
-			CronCheckConsistencyListener listener = new CronCheckConsistencyListener(); 
+			CronCheckConsistencyListener listener = new CronCheckConsistencyListener(instance,organism,logFullPath); 
 			cc.checkConsistency(adb, listener, criticalOnly);
 			
 			System.out.println("Consistency check completed successfully");
