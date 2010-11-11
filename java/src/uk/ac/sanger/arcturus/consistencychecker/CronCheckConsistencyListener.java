@@ -10,6 +10,9 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 
+import uk.ac.sanger.arcturus.Arcturus;
+import uk.ac.sanger.arcturus.ArcturusEmailer;
+
 
 	public class CronCheckConsistencyListener implements CheckConsistencyListener {
 		protected BufferedWriter outputStream;
@@ -73,18 +76,14 @@ import java.io.IOException;
 			
 			if (testing) System.err.println(logIntro);
 		
-			/* get the sender's name from the environment */
-			/* jmxdb.username=arcturus
-			 * getProperty user.name in System class NOT from shell environment */
-			
-			sender = "arcturus@sanger.ac.uk";
+			sender = System.getProperty("user.name") + "@" + Arcturus.getProperty("mailhandler.domain");
 			
 			if (testing) 
-				recipient = "kt6@sanger.ac.uk";
+				recipient = Arcturus.getProperty("checkconsistency.testrecipient");
 			else 
-				recipient = "arcturus-help@sanger.ac.uk, helga@sanger.ac.uk";
+				recipient =  Arcturus.getProperty("checkconsistency.testrecipient");
 			
-			emailer = new ArcturusEmailer("mail.sanger.ac.uk", recipient, sender);
+			emailer = new ArcturusEmailer(recipient, sender);
 		}
 
 		public void report(CheckConsistencyEvent event){
@@ -181,7 +180,7 @@ import java.io.IOException;
 				
 				closeLog();
 			
-				if (message != "" ) emailer.send(emailer.smtpServer, recipient, sender, subject, message);
+				if (message.length() > 0 ) emailer.send(subject, message);
 			}
 			
 		private String getAllErrorMessagesForEmail() {
