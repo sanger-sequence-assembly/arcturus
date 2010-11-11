@@ -18,6 +18,7 @@ import java.io.IOException;
 		private String allErrorMessagesForEmail;
 		private String thisErrorMessageForEmail;
 		private String logIntro;
+		private String emailIntro;
 
 		private String dateString;
 		private String logName;
@@ -50,10 +51,16 @@ import java.io.IOException;
 			
 			filePath = logFullPath + "consistencycheck" + logName + ".log";
 			logIntro = "This is the log for a consistency check run for organism " +
-								organism + " in database " +
+								organism + "\nin database " +
 								instance + " on " + 
-								dateString + " stored at " +
+								dateString + " stored at \n" +
 								filePath + "\n";
+			
+			emailIntro = "The consistency check run for organism " +
+			organism + "\nin database " +
+			instance + " on " + dateString + "\n has found some inconsistencies.  The full log is stored at \n " +
+			filePath + "\nA summary of the problem(s) is given below. \n\n" +
+			"A Help Desk ticket has been raised and the problem(s) will be fixed as soon as possible";
 			
 			if (testing) System.out.println("About to add the file handler for " + filePath);
 		
@@ -86,50 +93,45 @@ import java.io.IOException;
 					try {
 						message = logIntro;						
 						outputStream.write(message);
-						outputStream.write("\n");
+						setErrorMessagesForEmail(emailIntro);
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
 					break;
 				case START_TEST:
 					try {
-						outputStream.write(message);
-						outputStream.write("\n\n");
+						outputStream.write(message + "\n\n");
+						setErrorMessagesForEmail(message);
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
-					setErrorMessagesForEmail(message);
 					break;
 				case TEST_PASSED:
 					try {
-						outputStream.write(message);
-						outputStream.write("\n");
+						outputStream.write(message + "\n");
+						setErrorMessagesForEmail(message);
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
 					break;
 				case TEST_FAILED:
 					try {
-						outputStream.write(message);
-						outputStream.write("\n");
+						outputStream.write(message + "\n");
+						setErrorMessagesForEmail(message);
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
-					setErrorMessagesForEmail(message);
 					break;
 				case INCONSISTENCY:
 					try {
-						outputStream.write(message);
-						outputStream.write("\n");
+						outputStream.write(message + "\n");
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
-					setErrorMessagesForEmail(message);
 					break;
 				case EXCEPTION:
 					try {
-						outputStream.write(message);
-						outputStream.write("\n");
+						outputStream.write(message + "\n");
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
@@ -173,9 +175,6 @@ import java.io.IOException;
 					recipient = "kt6@sanger.ac.uk";
 				else
 					recipient = "arcturus-help@sanger.ac.uk";
-				
-				if (testing)
-					System.err.println("\n\nabout to email " +subject + message  + " to " + recipient);
 				
 				/* email call goes here: get user name from environment */
 				emailer.send(emailer.smtpServer, recipient, sender, subject, message);

@@ -48,7 +48,7 @@ public class ArcturusEmailer {
 			msg.setSentDate(new Date());
 			// -- Send the message --
 			Transport.send(msg);
-			System.out.println("Message sent OK.");
+			System.out.println("Email message to notify inconsistencies sent OK.");
 		}
 		catch (Exception ex)
 		{

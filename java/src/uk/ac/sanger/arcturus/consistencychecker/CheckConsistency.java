@@ -87,8 +87,10 @@ public class CheckConsistency {
 		String message = "";
 		CheckConsistencyEvent.Type type = CheckConsistencyEvent.Type.UNKNOWN;
 		CheckConsistencyEvent event = new CheckConsistencyEvent(this);
+		
 		event.setEvent("", CheckConsistencyEvent.Type.START_TEST_RUN);
-
+		notifyListener(event);
+		
 		stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
 	              java.sql.ResultSet.CONCUR_READ_ONLY);
 		
@@ -106,7 +108,7 @@ public class CheckConsistency {
 			event.setEvent( "\n--------------------------------------------------------------------------------\n" + 
 					test.getDescription(),CheckConsistencyEvent.Type.START_TEST);
 			notifyListener(event);
-
+			
 			MessageFormat format = new MessageFormat(test.getFormat());
 			
 			long t0 = System.currentTimeMillis();
