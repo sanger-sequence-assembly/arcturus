@@ -1,7 +1,9 @@
 package uk.ac.sanger.arcturus.gui.checkconsistency;
 
 import uk.ac.sanger.arcturus.gui.*;
-import uk.ac.sanger.arcturus.utils.CheckConsistency;
+import uk.ac.sanger.arcturus.consistencychecker.CheckConsistency;
+import uk.ac.sanger.arcturus.consistencychecker.CheckConsistencyEvent;
+import uk.ac.sanger.arcturus.consistencychecker.CheckConsistencyListener;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.Arcturus;
@@ -106,7 +108,7 @@ public class CheckConsistencyPanel extends MinervaPanel {
 	}
 
 	class Worker extends SwingWorker<Void, String> implements
-			CheckConsistency.CheckConsistencyListener {
+			CheckConsistencyListener {
 		protected Void doInBackground() throws Exception {
 			try {
 				checker.checkConsistency(adb, this, true);
@@ -132,8 +134,11 @@ public class CheckConsistencyPanel extends MinervaPanel {
 			}
 		}
 
-		public void report(String message) {
-			publish(message);
+		public void report(CheckConsistencyEvent event ) {
+			publish(event.getMessage());
+		}
+		
+		public void sendEmail() {
 		}
 	}
 }
