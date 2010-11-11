@@ -9,6 +9,9 @@ arcturus.default.instance=pathogen,vertebrates
 
 arcturus.update.url=http://intweb.sanger.ac.uk/Software/Arcturus/arcturus.zip
 
+checkconsistency.recipient = arcturus-help@sanger.ac.uk,helga@sanger.ac.uk
+checkconsistency.testrecipient = kt6
+
 jdbcloghandler.host=mcs6
 jdbcloghandler.port=15003
 jdbcloghandler.database=arcturus
