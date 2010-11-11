@@ -60,7 +60,7 @@ import java.io.IOException;
 			organism + "\nin database " +
 			instance + " on " + dateString + "\n has found some inconsistencies.  The full log is stored at \n " +
 			filePath + "\nA summary of the problem(s) is given below. \n\n" +
-			"A Help Desk ticket has been raised and the problem(s) will be fixed as soon as possible";
+			"A Help Desk ticket has been raised and the problem(s) will be fixed as soon as possible.";
 			
 			if (testing) System.out.println("About to add the file handler for " + filePath);
 		
@@ -74,12 +74,15 @@ import java.io.IOException;
 			if (testing) System.err.println(logIntro);
 		
 			/* get the sender's name from the environment */
-			sender = "kt6@sanger.ac.uk";
+			/* jmxdb.username=arcturus
+			 * getProperty user.name in System class NOT from shell environment */
+			
+			sender = "arcturus@sanger.ac.uk";
 			
 			if (testing) 
 				recipient = "kt6@sanger.ac.uk";
 			else 
-				recipient = "arcturus-help@sanger.ac.uk";
+				recipient = "arcturus-help@sanger.ac.uk, helga@sanger.ac.uk";
 			
 			emailer = new ArcturusEmailer("mail.sanger.ac.uk", recipient, sender);
 		}
@@ -176,8 +179,9 @@ import java.io.IOException;
 				else
 					recipient = "arcturus-help@sanger.ac.uk";
 				
-				/* email call goes here: get user name from environment */
-				emailer.send(emailer.smtpServer, recipient, sender, subject, message);
+				closeLog();
+			
+				if (message != "" ) emailer.send(emailer.smtpServer, recipient, sender, subject, message);
 			}
 			
 		private String getAllErrorMessagesForEmail() {
@@ -195,16 +199,13 @@ import java.io.IOException;
 			
 		}
 		
-		public int openLog(String filename){
-			return 1;
-		}
-		
-		public int writeLog(int fileHandle, String message) {
-			return 1;
-		}
-		
-		public int closeLog(int fileHandle) {
-			return 1;
+		private void closeLog(){
+			try {
+				outputStream.close();
+			}
+			catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 
 }

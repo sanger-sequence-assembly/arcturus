@@ -68,6 +68,11 @@ public class CheckConsistency {
 		catch (SQLException e) {
 			adb.handleSQLException(e, "An error occurred when checking the database consistency", conn, this);
 		}
+		catch (Exception e) {
+			this.listener.sendEmail();
+			this.listener = null;
+			Arcturus.logSevere(e);
+		}
 		finally {
 			this.listener.sendEmail();
 			this.listener = null;
@@ -117,7 +122,7 @@ public class CheckConsistency {
 
 			switch (rows) {
 				case 0:
-					event.setEvent("PASSED Time elapsed: " + dt + " ms", 
+					event.setEvent("\nPASSED Time elapsed: " + dt + " ms", 
 							CheckConsistencyEvent.Type.TEST_PASSED);
 					break;
 				case 1:
