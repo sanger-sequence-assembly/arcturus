@@ -5,30 +5,24 @@ import javax.mail.internet.*;
 import java.util.*;
 
 public class ArcturusEmailer {
-
-	public static void main(String[] args) {
-
-		try
-		{
-			String smtpServer=args[0];
-			String to=args[1];
-			String from=args[2];
-			String subject=args[3];
-			String body=args[4];
-			send(smtpServer, to, from, subject, body);
-		}
-		catch (Exception ex)
-		{
-			System.out.println("Exception raised from "+ ex.getCause() + " is: \n");
-			ex.printStackTrace();
-			System.out.println("\nUsage: java uk.ac.sanger.arcturus.consistencychecker.ArcturusEmailer"
-					+" smtpServer toAddress fromAddress subjectText bodyText");
-		}
-		System.exit(0);
+	
+	protected String smtpServer;
+	protected String recipient;
+	protected String sender;
+	
+	public ArcturusEmailer (String smtpServer, String recipient, String sender)
+	{
+		this.smtpServer = smtpServer;
+		this.recipient = recipient;
+		this.sender = sender;
 	}
-
-	public static void send(String smtpServer, String to, String from
-			, String subject, String body)
+	
+	public void send(String subject, String body)
+	{
+		send(this.smtpServer, this.recipient, this.sender, subject, body);
+	}
+	
+	static void send(String smtpServer, String to, String from, String subject, String body)
 	{
 		try
 		{
@@ -61,4 +55,26 @@ public class ArcturusEmailer {
 			ex.printStackTrace();
 		}
 	}
+	
+	public static void main(String[] args) {
+
+		try
+		{
+			String smtpServer=args[0];
+			String to=args[1];
+			String from=args[2];
+			String subject=args[3];
+			String body=args[4];
+			send(smtpServer, to, from, subject, body);
+		}
+		catch (Exception ex)
+		{
+			System.out.println("Exception raised from "+ ex.getCause() + " is: \n");
+			ex.printStackTrace();
+			System.out.println("\nUsage: java uk.ac.sanger.arcturus.consistencychecker.ArcturusEmailer"
+					+" smtpServer toAddress fromAddress subjectText bodyText");
+		}
+		System.exit(0);
+	}
+
 }

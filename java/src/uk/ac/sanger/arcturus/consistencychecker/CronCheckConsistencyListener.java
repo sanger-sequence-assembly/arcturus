@@ -13,6 +13,7 @@ import java.io.IOException;
 
 	public class CronCheckConsistencyListener implements CheckConsistencyListener {
 		protected BufferedWriter outputStream;
+		protected ArcturusEmailer emailer;
 		
 		private String allErrorMessagesForEmail;
 		private String thisErrorMessageForEmail;
@@ -26,6 +27,9 @@ import java.io.IOException;
 		private String filePath;
 		private String instance;
 		private String organism;
+		
+		private String recipient;
+		private String sender;
 		
 		public CronCheckConsistencyListener(String instance,  String organism, String logFullPath) {
 			allErrorMessagesForEmail = "";
@@ -61,6 +65,16 @@ import java.io.IOException;
 			}
 			
 			if (testing) System.err.println(logIntro);
+		
+			/* get the sender's name from the environment */
+			sender = "kt6@sanger.ac.uk";
+			
+			if (testing) 
+				recipient = "kt6@sanger.ac.uk";
+			else 
+				recipient = "arcturus-help@sanger.ac.uk";
+			
+			emailer = new ArcturusEmailer("mail.sanger.ac.uk", recipient, sender);
 		}
 
 		public void report(CheckConsistencyEvent event){
@@ -134,7 +148,6 @@ import java.io.IOException;
 						outputStream.write(message);
 						outputStream.close();
 					} catch (IOException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 					setErrorMessagesForEmail(message);
@@ -143,7 +156,6 @@ import java.io.IOException;
 					try {
 						outputStream.write(message);
 					} catch (IOException e) {
-						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 					setErrorMessagesForEmail(message);
@@ -154,8 +166,6 @@ import java.io.IOException;
 			
 		public void sendEmail(){
 				String recipient;
-				
-				
 				String message = getAllErrorMessagesForEmail();
 				String subject = ("ARCTURUS database " + organism + " has FAILED the consistency check");
 				
@@ -167,7 +177,8 @@ import java.io.IOException;
 				if (testing)
 					System.err.println("\n\nabout to email " +subject + message  + " to " + recipient);
 				
-				/* email call goes here */
+				/* email call goes here: get user name from environment */
+				emailer.send(emailer.smtpServer, recipient, sender, subject, message);
 			}
 			
 		private String getAllErrorMessagesForEmail() {
