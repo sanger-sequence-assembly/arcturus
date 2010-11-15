@@ -27,8 +27,10 @@ my $javabasedir   = "${arcturus_home}/utils";
 
 my $badgerbin = "$ENV{BADGER}/bin";
 
-my $gaptoSam = "$badgerbin/gap5_export -test "; # test to be disabled later
-my $gapconsensus = "$badgerbin/gap5_consensus ";
+my $gap5_test_mode = "-test";
+
+my $gaptoSam = "$badgerbin/gap5_export $gap5_test_mode ";
+my $gapconsensus = "$badgerbin/gap5_consensus $gap5_test_mode ";
 
 
 my $samtools = "/software/solexa/bin/aligners/samtools/current/samtools";
