@@ -74,7 +74,7 @@ public class ContigTransferRequestManager extends AbstractManager {
 		
 		String tables = "CONTIGTRANSFERREQUEST CTR left join PROJECT P";
 		
-		String omitInactiveRequests = " and CTR.status not in ('closed','cancelled')";
+		String omitInactiveRequests = " and CTR.status not in ('cancelled')";
 
 		query = "select "
 				+ columns
