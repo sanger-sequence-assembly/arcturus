@@ -32,6 +32,9 @@ public class ContigTransferAction extends AbstractAction {
 		
 		if (contigs == null)
 			return;
+		
+		Arcturus.logInfo("Preparing transfer requests for " + contigs.size() +
+				" contigs to " + targetProject.getName());
 	
 		for (Contig contig : contigs) {
 			try {
