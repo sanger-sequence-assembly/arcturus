@@ -149,7 +149,7 @@ public class ContigTransferTablePanel extends MinervaPanel {
 	}
 	
 	void setBusyCursor(boolean busy) {
-		getTopLevelAncestor().setCursor(busy ? busyCursor : defaultCursor);
+		setCursor(busy ? busyCursor : defaultCursor);
 	}
 
 	protected boolean addClassSpecificFileMenuItems(JMenu menu) {
