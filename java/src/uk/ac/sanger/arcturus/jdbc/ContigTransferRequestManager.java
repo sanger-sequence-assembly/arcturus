@@ -68,31 +68,35 @@ public class ContigTransferRequestManager extends AbstractManager {
 
 	protected void prepareConnection() throws SQLException {
 		String columns = "request_id,contig_id,old_project_id,new_project_id,requester,"
-				+ "requester_comment,opened,reviewer,reviewer_comment,reviewed,CONTIGTRANSFERREQUEST.status,closed";
+				+ "requester_comment,opened,reviewer,reviewer_comment,reviewed,CTR.status,closed";
 
 		String query;
+		
+		String tables = "CONTIGTRANSFERREQUEST CTR left join PROJECT P";
+		
+		String omitInactiveRequests = " and CTR.status not in ('closed','cancelled')";
 
 		query = "select "
 				+ columns
-				+ " from CONTIGTRANSFERREQUEST left join PROJECT on new_project_id=project_id"
-				+ " where (requester = ? or owner = ?)";
+				+ " from " + tables + " on new_project_id=project_id"
+				+ " where (requester = ? or owner = ?)" + omitInactiveRequests;
 
 		pstmtByRequester = conn.prepareStatement(query);
 
 		query = "select "
 				+ columns
-				+ " from CONTIGTRANSFERREQUEST left join PROJECT on old_project_id=project_id"
-				+ " where owner = ? and requester != owner";
+				+ " from " + tables + " on old_project_id=project_id"
+				+ " where owner = ? and requester != owner" + omitInactiveRequests;
 
 		pstmtByContigOwner = conn.prepareStatement(query);
 
-		query = "select " + columns + " from CONTIGTRANSFERREQUEST left join PROJECT on old_project_id=project_id";
+		query = "select " + columns + " from " + tables + " on old_project_id=project_id";
 
 		pstmtAllRequests = conn.prepareStatement(query);
 
 		query = "select "
 				+ columns
-				+ " from CONTIGTRANSFERREQUEST left join PROJECT on old_project_id=project_id"
+				+ " from " + tables + " on old_project_id=project_id"
 				+ " where request_id = ?";
 
 		pstmtByID = conn.prepareStatement(query);
