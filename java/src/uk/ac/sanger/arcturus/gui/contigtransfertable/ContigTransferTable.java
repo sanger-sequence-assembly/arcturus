@@ -280,6 +280,8 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 		if (rc == JOptionPane.YES_OPTION) {
 			int[] rows = getSelectedRows();
 			
+			Arcturus.logInfo("Preparing to " + verb + " " + rows.length + " contig transfer requests");
+			
 			ContigTransferRequest[] requests = new ContigTransferRequest[rows.length];
 			
 			ContigTransferTableModel model = (ContigTransferTableModel) getModel();
