@@ -52,7 +52,7 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 
 		comparator = new RequestComparator(COLUMN_OPENED_DATE, false);
 
-		refresh();
+		//refresh();
 	}
 
 	public void refresh() throws ArcturusDatabaseException {
@@ -60,6 +60,22 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 
 		applyFilters();
 		resort();
+	}
+	
+	public String getModeAsString() {
+		switch (mode) {
+			case ArcturusDatabase.USER_IS_ADMINISTRATOR:
+				return "User is administrator";
+				
+			case ArcturusDatabase.USER_IS_CONTIG_OWNER:
+				return "User is contig owner";
+				
+			case ArcturusDatabase.USER_IS_REQUESTER:
+				return "User is requester";
+				
+			default:
+				return "Unknown mode (" + mode + ")";
+		}
 	}
 
 	public String getColumnName(int col) {
@@ -123,7 +139,7 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 	}
 
 	public int getRowCount() {
-		return requests.length;
+		return requests == null ? 0 : requests.length;
 	}
 
 	public int getColumnCount() {
@@ -131,6 +147,9 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 	}
 
 	public Object getValueAt(int row, int col) {
+		if (requests == null)
+			return null;
+		
 		ContigTransferRequest request = requests[row];
 
 		switch (col) {
@@ -168,20 +187,6 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 			default:
 				return null;
 		}
-	}
-
-	private String getContigOwnerName(ContigTransferRequest request) {
-		if (request == null)
-			return null;
-
-		Project project = request.getOldProject();
-
-		if (project == null)
-			return null;
-
-		Person owner = project.getOwner();
-
-		return (owner == null) ? null : owner.getName();
 	}
 
 	private String getRequesterName(ContigTransferRequest request) {
@@ -234,9 +239,11 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 
 		lastSortColumn = col;
 
-		Arrays.sort(requests, comparator);
+		if (requests != null) {
+			Arrays.sort(requests, comparator);
 
-		fireTableDataChanged();
+			fireTableDataChanged();
+		}
 	}
 
 	private void resort() {
@@ -263,11 +270,13 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 		java.util.Date then = dateCutoff == 0 ? null : new Date(now.getTime()
 				- 86400000 * (long) dateCutoff);
 
-		for (int i = 0; i < allRequests.length; i++)
-			if (include(allRequests[i], then))
-				filtered.add(allRequests[i]);
+		if (allRequests != null) {
+			for (int i = 0; i < allRequests.length; i++)
+				if (include(allRequests[i], then))
+					filtered.add(allRequests[i]);
 
-		requests = filtered.toArray(new ContigTransferRequest[0]);
+			requests = filtered.toArray(new ContigTransferRequest[0]);
+		}
 	}
 
 	protected boolean include(ContigTransferRequest request, java.util.Date then) {

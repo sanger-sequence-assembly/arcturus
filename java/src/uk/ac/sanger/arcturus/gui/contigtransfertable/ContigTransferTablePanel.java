@@ -1,14 +1,18 @@
 package uk.ac.sanger.arcturus.gui.contigtransfertable;
 
 import java.awt.BorderLayout;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 
 import javax.swing.*;
 import javax.swing.border.*;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.people.Person;
 import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequest;
@@ -26,6 +30,11 @@ public class ContigTransferTablePanel extends MinervaPanel {
 
 	private ContigTransferTable tableAdmin = null;
 	private ContigTransferTableModel modelAdmin = null;
+	
+	private boolean firstRefresh = false;
+	
+	private static final Cursor defaultCursor = Cursor.getDefaultCursor();
+	private static final Cursor busyCursor = Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR);
 	
 	public ContigTransferTablePanel(MinervaTabbedPane mtp, ArcturusDatabase adb) throws ArcturusDatabaseException {
 		this(mtp, adb, false);
@@ -93,6 +102,20 @@ public class ContigTransferTablePanel extends MinervaPanel {
 		createMenus();
 
 		getPrintAction().setEnabled(false);
+		
+		addComponentListener(new ComponentAdapter() {
+			public void componentShown(ComponentEvent e) {
+				if (!firstRefresh) {
+					try {
+						Arcturus.logInfo("ContigTransferTablePanel initial refresh");
+						refresh();
+					} catch (ArcturusDatabaseException adbe) {
+						Arcturus.logWarning("ContigTransferTablePanel initial refresh failed", adbe);
+					}
+					firstRefresh = true;
+				}
+			}
+		});
 	}
 
 	protected void createActions() {
@@ -103,14 +126,30 @@ public class ContigTransferTablePanel extends MinervaPanel {
 	}
 
 	public void refresh() throws ArcturusDatabaseException {
-		if (tableRequester != null)
-			tableRequester.refresh();
+		refreshTablesInBackground();
+	}
+	
+	public void refreshTablesInBackground() {
+		ContigTransferTablePanelRefreshWorker worker = new ContigTransferTablePanelRefreshWorker(this);
 		
-		if (tableContigOwner != null)
-			tableContigOwner.refresh();
+		setBusyCursor(true);
 		
-		if (tableAdmin != null)
-			tableAdmin.refresh();
+		worker.execute();
+	}
+	
+	void refreshAllTables() throws ArcturusDatabaseException {
+		refreshTable(tableRequester);
+		refreshTable(tableContigOwner);
+		refreshTable(tableAdmin);
+	}
+	
+	private void refreshTable(ContigTransferTable table) throws ArcturusDatabaseException {
+		if (table != null) 
+			table.refresh();
+	}
+	
+	void setBusyCursor(boolean busy) {
+		setCursor(busy ? busyCursor : defaultCursor);
 	}
 
 	protected boolean addClassSpecificFileMenuItems(JMenu menu) {
