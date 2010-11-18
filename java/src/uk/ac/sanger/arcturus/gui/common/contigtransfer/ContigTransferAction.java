@@ -38,8 +38,12 @@ public class ContigTransferAction extends AbstractAction {
 	
 		for (Contig contig : contigs) {
 			try {
-				if (!targetProject.equals(contig.getProject()))
+				if (targetProject.equals(contig.getProject())) {
+					Arcturus.logInfo("\tContig #" + contig.getID() + " is ALREADY in the target project!");
+				} else {
+					Arcturus.logInfo("\tCreating transfer request for contig #" + contig.getID());
 					adb.createContigTransferRequest(contig, targetProject);
+				}
 			} catch (ContigTransferRequestException e) {
 				String message = "Failed to create a request to transfer contig " + contig.getID()
 					+ " to project " + targetProject.getName() + ".\n"

@@ -286,8 +286,10 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 			
 			ContigTransferTableModel model = (ContigTransferTableModel) getModel();
 			
-			for (int i = 0; i < rows.length; i++)
+			for (int i = 0; i < rows.length; i++) {
 				requests[i] = model.getRequestForRow(rows[i]);
+				Arcturus.logInfo("\t" + requests[i]);
+			}
 			
 			ProgressMonitor monitor = new ProgressMonitor(window,
 					"Processing contig transfer requests",
