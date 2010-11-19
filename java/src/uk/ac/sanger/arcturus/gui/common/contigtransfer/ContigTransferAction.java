@@ -26,6 +26,8 @@ public class ContigTransferAction extends AbstractAction {
 	}
 	
 	public void actionPerformed(ActionEvent event) {
+		Arcturus.logInfo("Entered ContigTransferAction.actionPerformed from source " + source);
+		
 		ArcturusDatabase adb = targetProject.getArcturusDatabase();
 		
 		List<Contig> contigs = source.getSelectedContigs();
@@ -48,6 +50,8 @@ public class ContigTransferAction extends AbstractAction {
 				String message = "Failed to create a request to transfer contig " + contig.getID()
 					+ " to project " + targetProject.getName() + ".\n"
 					+ "Reason: " + e.getTypeAsString();
+				
+				Arcturus.logInfo(message);
 				
 				Component parent = (source instanceof Component) ? (Component)source : null;
 				
