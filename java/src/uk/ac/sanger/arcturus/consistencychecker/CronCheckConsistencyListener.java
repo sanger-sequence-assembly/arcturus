@@ -1,10 +1,16 @@
 package uk.ac.sanger.arcturus.consistencychecker;
 
 import java.io.BufferedWriter;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.text.DateFormat;
+import java.text.MessageFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.Vector;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -35,7 +41,7 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 		private String recipient;
 		private String sender;
 		
-		public CronCheckConsistencyListener(String instance,  String organism, String logFullPath) {
+		public CronCheckConsistencyListener(String instance,  String organism, String logFullPath, Vector<String> emailNames) {
 			allErrorMessagesForEmail = "";
 			thisErrorMessageForEmail ="";
 			if (organism.startsWith("TEST")) testing = true;
@@ -75,14 +81,35 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 			}
 			
 			if (testing) System.err.println(logIntro);
-		
-			sender = System.getProperty("user.name") + "@" + Arcturus.getProperty("mailhandler.domain");
 			
-			if (testing) 
-				recipient = Arcturus.getProperty("checkconsistency.testrecipient");
-			else 
-				recipient =  Arcturus.getProperty("checkconsistency.testrecipient");
+			int emailNamesSize = emailNames.size();
+			String restOfEmailAddress = "@" + Arcturus.getProperty("mailhandler.domain");
 			
+			// if no user can be found, use the person who is running the consistency check
+			// this is usually the case for the test databases
+			
+			if ((testing) || (emailNamesSize == 0)) {
+				sender = System.getProperty("user.name") + restOfEmailAddress;
+				recipient = sender;
+			}
+			else {
+				// first name is the sender of the email
+				// others are the cc recipients
+				// arcturus-help will be the recipient
+				boolean first = true;
+				for(int i=0;i<emailNamesSize;i++)
+		        {
+					if (first) {
+						sender = emailNames.get(i);
+						first = false;
+					}
+					else {
+						recipient = recipient + "," + emailNames.get(i) + restOfEmailAddress;
+					}
+		        }
+				recipient = recipient + "arcturus-help" + restOfEmailAddress;
+			}
+						
 			emailer = new ArcturusEmailer(recipient, sender);
 		}
 
@@ -207,4 +234,5 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 			}
 		}
 
+		
 }

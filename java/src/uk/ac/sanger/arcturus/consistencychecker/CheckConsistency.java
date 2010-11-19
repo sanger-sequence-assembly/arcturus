@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.text.MessageFormat;
+import java.util.Vector;
 
 import org.xml.sax.SAXException;
 
@@ -34,6 +35,8 @@ public class CheckConsistency {
 	protected Statement stmt = null;
 	
 	protected String failedTestMessage = "";
+	
+	protected static Vector <String> emailRecipients = new Vector<String> ();
 	
 	public CheckConsistency(InputStream is) throws SAXException, IOException, ParserConfigurationException {
 		tests = parseXML(is);
@@ -181,6 +184,34 @@ public class CheckConsistency {
 
 		return rows;
 	}
+	
+	protected Vector<String> findSenderAndRecipients(ArcturusDatabase adb)
+	throws ArcturusDatabaseException, SQLException {
+
+		Connection conn = adb.getPooledConnection(this);
+		stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
+	              java.sql.ResultSet.CONCUR_READ_ONLY);
+		
+		stmt.setFetchSize(Integer.MIN_VALUE);
+		
+		String query = "select distinct username from USER where role = 'coordinator' order by username";
+	
+		ResultSet rs = stmt.executeQuery(query);
+		ResultSetMetaData rsmd = rs.getMetaData();
+		int cols = rsmd.getColumnCount();
+
+		Vector<String> emailNames = new Vector<String>();
+		// first name is the sender of the email
+		// others are the cc recipients
+		// arcturus-help will be the recipient
+
+		while (rs.next()) {
+			for (int col = 1; col <= cols; col++) {
+			emailNames.add((String) rs.getObject(col));
+			}
+		}
+		return emailNames;
+	}
 
 	protected void notifyListener(CheckConsistencyEvent event) {
 		if (listener != null)
@@ -241,7 +272,9 @@ public class CheckConsistency {
 			CheckConsistency cc = new CheckConsistency(is);
 			is.close();
 
-			CronCheckConsistencyListener listener = new CronCheckConsistencyListener(instance,organism,logFullPath); 
+			emailRecipients = cc.findSenderAndRecipients(adb);
+			
+			CronCheckConsistencyListener listener = new CronCheckConsistencyListener(instance,organism,logFullPath, emailRecipients); 
 			cc.checkConsistency(adb, listener, criticalOnly);
 			
 			System.out.println("Consistency check completed successfully");
