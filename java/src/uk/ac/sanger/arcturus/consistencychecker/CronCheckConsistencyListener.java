@@ -38,8 +38,9 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 		private String instance;
 		private String organism;
 		
-		private String recipient;
-		private String sender;
+		private String recipient = "";
+		private String ccRecipient = "";
+		private String sender = "";
 		
 		public CronCheckConsistencyListener(String instance,  String organism, String logFullPath, Vector<String> emailNames) {
 			allErrorMessagesForEmail = "";
@@ -90,7 +91,7 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 			
 			if ((testing) || (emailNamesSize == 0)) {
 				sender = System.getProperty("user.name") + restOfEmailAddress;
-				recipient = sender;
+				ccRecipient = "none";
 			}
 			else {
 				// first name is the sender of the email
@@ -104,13 +105,22 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 						first = false;
 					}
 					else {
-						recipient = recipient + "," + emailNames.get(i) + restOfEmailAddress;
+						ccRecipient = ccRecipient + "," + emailNames.get(i) + restOfEmailAddress;
 					}
 		        }
-				recipient = recipient + "arcturus-help" + restOfEmailAddress;
+				if (testing) {
+					recipient = sender;
+					System.err.println("Sending email to " + recipient + " from " + sender + "\n");
+				}
+				else {
+					recipient = "arcturus-help" + restOfEmailAddress;
+				}
 			}
 						
-			emailer = new ArcturusEmailer(recipient, sender);
+			if (ccRecipient == "none")
+				emailer = new ArcturusEmailer(recipient, sender);
+			else
+				emailer = new ArcturusEmailer(recipient, ccRecipient, sender);
 		}
 
 		public void report(CheckConsistencyEvent event){
