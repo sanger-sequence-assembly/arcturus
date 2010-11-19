@@ -8,12 +8,22 @@ public class ArcturusEmailer {
 	
 	protected String smtpServer;
 	protected String recipient;
+	protected String ccRecipient;
 	protected String sender;
 	
 	public ArcturusEmailer (String recipient, String sender)
 	{
 		this.smtpServer = Arcturus.getProperty("mail.smtp.host");
 		this.recipient = recipient;
+		this.sender = sender;
+	}
+	
+
+	public ArcturusEmailer (String recipient, String ccRecipient, String sender)
+	{
+		this.smtpServer = Arcturus.getProperty("mail.smtp.host");
+		this.recipient = recipient;
+		this.ccRecipient = ccRecipient;
 		this.sender = sender;
 	}
 	
@@ -36,10 +46,6 @@ public class ArcturusEmailer {
 			msg.setFrom(new InternetAddress(from));
 			msg.setRecipients(Message.RecipientType.TO,
 					InternetAddress.parse(to, false));
-			// -- We could include CC recipients too --
-			// if (cc != null)
-			// msg.setRecipients(Message.RecipientType.CC
-			// ,InternetAddress.parse(cc, false));
 			// -- Set the subject and body text --
 			msg.setSubject(subject);
 			msg.setText(body);
