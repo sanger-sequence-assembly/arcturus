@@ -288,7 +288,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 			
 			for (int i = 0; i < rows.length; i++) {
 				requests[i] = model.getRequestForRow(rows[i]);
-				Arcturus.logInfo("\t" + requests[i]);
+				Arcturus.logInfo("\t" + verb + " : " + requests[i]);
 			}
 			
 			ProgressMonitor monitor = new ProgressMonitor(window,
