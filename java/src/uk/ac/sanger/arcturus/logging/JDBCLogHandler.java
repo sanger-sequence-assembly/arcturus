@@ -3,11 +3,16 @@ package uk.ac.sanger.arcturus.logging;
 import java.util.logging.*;
 import java.sql.*;
 import java.io.*;
+import java.lang.management.ManagementFactory;
 import java.util.*;
+
+import javax.management.MBeanServer;
+import javax.management.MalformedObjectNameException;
+import javax.management.ObjectName;
 
 import uk.ac.sanger.arcturus.Arcturus;
 
-public class JDBCLogHandler extends Handler {
+public class JDBCLogHandler extends Handler implements JDBCLogHandlerMBean {
 	protected Connection conn;
 	protected PreparedStatement pstmtInsertRecord;
 	protected PreparedStatement pstmtInsertStackTrace;
@@ -15,17 +20,17 @@ public class JDBCLogHandler extends Handler {
 	
 	public JDBCLogHandler(String propsfile) throws SQLException, IOException, ClassNotFoundException {
 		conn = getConnection(propsfile);		
-		prepareStatements();
+		initialise();
 	}
 	
 	public JDBCLogHandler(Connection conn) throws SQLException {
 		this.conn = conn;	
-		prepareStatements();
+		initialise();
 	}
 	
 	public JDBCLogHandler(Properties props) throws SQLException, ClassNotFoundException {
 		conn = getConnection(props);
-		prepareStatements();
+		initialise();
 	}
 
 	protected Connection getConnection(String propsfile)
@@ -61,6 +66,11 @@ public class JDBCLogHandler extends Handler {
 		stmt.execute(sql);
 		stmt.close();
 	}
+	
+	protected void initialise() throws SQLException {
+		prepareStatements();
+		registerAsMBean();
+	}
 
 	protected void prepareStatements() throws SQLException {
 		setWaitTimeout(5*24*3600);
@@ -75,11 +85,31 @@ public class JDBCLogHandler extends Handler {
 		
 		pstmtInsertStackTrace = conn.prepareStatement(query);
 	}
+	
+	protected int getConnectionID() throws SQLException {
+		int connectionID = -1;
+		
+		String sql = "SELECT CONNECTION_ID()";
+	
+		Statement stmt = conn.createStatement();
+		
+		ResultSet rs = stmt.executeQuery(sql);
+		
+		if (rs.next())
+			connectionID = rs.getInt(1);
+		
+		rs.close();
+		stmt.close();
+		
+		return connectionID;
+	}
 
 	public void close() throws SecurityException {
 		try {
 			if (conn != null)
 				conn.close();
+			
+			unregisterAsMBean();
 		}
 		catch (SQLException sqle) {
 			sqle.printStackTrace();
@@ -185,5 +215,60 @@ public class JDBCLogHandler extends Handler {
 			return id;
 		} else
 			return 0;
+	}
+
+	private Level oldLevel;
+	private final Level infoLevel = Level.INFO;
+	
+	public boolean isDebugging() {
+		return getLevel().intValue() <= infoLevel.intValue();
+	}
+
+	public void setDebugging(boolean debugging) {
+		if (debugging) {
+			oldLevel = getLevel();
+			
+			if (!isDebugging())
+				setLevel(infoLevel);
+		} else {
+			if (oldLevel != null)
+				setLevel(oldLevel);
+		}
+	}
+
+	protected ObjectName mbeanName = null;
+	
+	protected void registerAsMBean() {
+		try {
+			int connectionID = getConnectionID();
+			mbeanName = new ObjectName("JDBCLogHandler:connid=" + connectionID);
+		} catch (MalformedObjectNameException e) {
+			Arcturus.logWarning("Failed to create ObjectName", e);
+		} catch (SQLException e) {
+			Arcturus.logWarning("Failed to get the connection ID when registering JDBCLogHandler as MBean", e);
+		}
+
+		MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+
+		try {
+			mbs.registerMBean(this, mbeanName);
+		} catch (Exception e) {
+			Arcturus.logWarning(
+					"Failed to register JDBCLogHandler as MBean", e);
+		}
+	}
+
+	protected void unregisterAsMBean() {
+		if (mbeanName != null) {
+			MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+
+			try {
+				mbs.unregisterMBean(mbeanName);
+				mbeanName = null;
+			} catch (Exception e) {
+				Arcturus.logWarning(
+						"Failed to unregister pooled connection as MBean", e);
+			}
+		}
 	}
 }
