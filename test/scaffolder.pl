@@ -692,7 +692,7 @@ my $scaffoldtosuperscaffold = {};
 
 my $newproject = 0;
 
-my $unscaffolded_contigs = [];
+my $scaffolded_contigs = {};
 
 for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid++) {
     next if defined($scaffoldtosuperscaffold->{$seedscaffoldid});
@@ -808,17 +808,6 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 	print "Saved as project $newproject\n\n";
     }
 
-    if ($xmldata && $contigcount == 1) {
-	my $scaffoldandsense = $superscaffold->[0];
-	my $scaffoldid = $scaffoldandsense->[0];
-	my $scaffold = $scaffoldfromid{$scaffoldid};
-
-	my $contigandsense = $scaffold->[0];
-	my $contigid = $contigandsense->[0];
-
-	push @{$unscaffolded_contigs}, $contigid;
-    }
-
     if ($xmldata && $totbp >= $minprojectsize && $contigcount > 1) {
 	push @{$xmldata}, "\t<superscaffold id=\"$seedscaffoldid\" size=\"$totbp\" >\n";
 
@@ -837,6 +826,9 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 		foreach my $entry (@{$scaffold}) {
 		    if ($isContig) {
 			my ($contigid, $sense) = @{$entry};
+
+			$scaffolded_contigs->{$contigid} = 1;
+
 			my $ctglen = $contiglength->{$contigid};
 			my $ctgreads = $contigreads->{$contigid};
 
@@ -942,7 +934,9 @@ $sth_templates->finish();
 if ($xmldata) {
     push @{$xmldata}, "\t<unallocated-contigs>\n";
 
-    foreach my $contigid (sort @{$unscaffolded_contigs}) {
+    foreach my $contigid (sort @contiglist) {
+	next if defined($scaffolded_contigs->{$contigid});
+
 	my $ctglen = $contiglength->{$contigid};
 	my $ctgreads = $contigreads->{$contigid};
 
