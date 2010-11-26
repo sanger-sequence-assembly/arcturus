@@ -55,8 +55,6 @@ public class Arcturus {
 	protected static final boolean LINUX; 
 	
 	protected static boolean testing = Boolean.getBoolean("testing");
-	
-	protected static boolean debugging = Boolean.getBoolean("debugging"); 
 
 	static {
 		setJarFileTimestamp();
@@ -76,10 +74,6 @@ public class Arcturus {
 	
 	public static boolean isTesting() {
 		return testing;
-	}
-	
-	public static boolean isDebugging() {
-		return debugging;
 	}
 
 	private static void setJarFileTimestamp() {
@@ -307,14 +301,14 @@ public class Arcturus {
 
 		logger.setUseParentHandlers(false);
 		
-		logger.setLevel(debugging ? Level.FINE : Level.WARNING);
+		logger.setLevel(testing ? Level.INFO : Level.WARNING);
 		
 		boolean headless = GraphicsEnvironment.isHeadless();
 
-		if (headless || testing || debugging || Boolean.getBoolean("useConsoleLogHandler")) {
+		if (headless || testing || Boolean.getBoolean("useConsoleLogHandler")) {
 			Handler consoleHandler = new ConsoleHandler();
 			
-			consoleHandler.setLevel(debugging ? Level.FINE : Level.INFO);
+			consoleHandler.setLevel(Level.INFO);
 			
 			consoleHandler.setFormatter(new ShortMessageFormatter());
 
@@ -337,7 +331,7 @@ public class Arcturus {
 				FileHandler filehandler = new FileHandler(
 						"%h/.arcturus/arcturus%u.%g.log", 10000000, 10, true);
 				
-				filehandler.setLevel(debugging ? Level.FINE : Level.INFO);
+				filehandler.setLevel(Level.INFO);
 				
 				filehandler.setFormatter(new LongMessageFormatter());
 				
