@@ -353,7 +353,7 @@ public class Arcturus {
 		try {
 			Properties props = Arcturus.getProperties();
 			JDBCLogHandler jdbcloghandler = new JDBCLogHandler(props);
-			jdbcloghandler.setLevel(Level.WARNING);
+			jdbcloghandler.setLevel(testing ? Level.INFO : Level.WARNING);
 			logger.addHandler(jdbcloghandler);
 		} catch (Exception e) {
 			logger.log(Level.WARNING,

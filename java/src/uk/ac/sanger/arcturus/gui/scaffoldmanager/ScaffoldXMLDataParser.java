@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.gui.scaffoldmanager;
 
 import java.io.*;
 import java.sql.*;
+import java.util.zip.InflaterInputStream;
 
 import org.xml.sax.*;
 
@@ -16,26 +17,19 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 public class ScaffoldXMLDataParser {
+	private static final String SCAFFOLD_TREE_TYPE = "scaffold";
+	private static final String COMPRESSED_FORMAT = "application/deflate"; 
+	
 	public TreeModel buildTreeModel(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		TreeModel model = null;
 		Connection conn = null;
 		
 		try {
 			conn = adb.getPooledConnection(this);
-
-			String query = "select content from NOTE where type = 'scaffold' order by created desc limit 1";
-
-			Statement stmt = conn.createStatement();
-
-			ResultSet rs = stmt.executeQuery(query);
-
-			InputStream is = rs.next() ? rs.getBinaryStream(1) : null;
-
-			model = parseXMLStream(is, adb);
-
-			is.close();
-			rs.close();
-			stmt.close();
+			
+			int id = findIDForLatestScaffold(conn);
+			
+			model = createTreeModel(conn, id, adb);
 		}
 		catch (SQLException e) {
 			adb.handleSQLException(e, "A database error occurred when building the scaffold tree model", conn, this);
@@ -54,6 +48,54 @@ public class ScaffoldXMLDataParser {
 			}
 		}
 		
+		return model;
+	}
+	
+	private int findIDForLatestScaffold(Connection conn) throws SQLException {
+		String query = "select id from NOTE where type = ? order by created desc limit 1";
+		
+		PreparedStatement pstmt = conn.prepareStatement(query);
+		
+		pstmt.setString(1, SCAFFOLD_TREE_TYPE);
+
+		ResultSet rs = pstmt.executeQuery();
+
+		int id = rs.next() ? rs.getInt(1) : -1;
+		
+		rs.close();
+		
+		pstmt.close();
+
+		return id;
+	}
+	
+	private TreeModel createTreeModel(Connection conn, int id, ArcturusDatabase adb)
+		throws SQLException, ParserConfigurationException, SAXException, IOException {
+		TreeModel model = null;
+		
+		String query = "select content,format from NOTE where id = ?";
+
+		PreparedStatement pstmt = conn.prepareStatement(query);
+		
+		pstmt.setInt(1, id);
+
+		ResultSet rs = pstmt.executeQuery();
+
+		if (rs.next()) {
+			InputStream is = rs.getBinaryStream(1);
+			String format = rs.getString(2);
+			
+			if (format != null && format.equalsIgnoreCase(COMPRESSED_FORMAT))
+				is = new InflaterInputStream(is);
+
+			model = parseXMLStream(is, adb);
+
+			is.close();
+		}
+		
+		rs.close();
+		pstmt.close();
+	
 		return model;
 	}
 	
