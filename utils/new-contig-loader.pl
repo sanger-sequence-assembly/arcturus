@@ -1822,7 +1822,7 @@ sub sendMessage {
     }
 
     my $mail = new Mail::Send;
-    $mail->to($user);
+    $mail->to($to);
     $mail->subject("Arcturus project import FAILED");
     #$mail->add("X-Arcturus", "contig-transfer-manager");
     my $handle = $mail->open;
