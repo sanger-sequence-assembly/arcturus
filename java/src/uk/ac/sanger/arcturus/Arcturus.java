@@ -31,6 +31,7 @@ import uk.ac.sanger.arcturus.logging.JDBCLogHandler;
 import uk.ac.sanger.arcturus.logging.LongMessageFormatter;
 import uk.ac.sanger.arcturus.logging.MailHandler;
 import uk.ac.sanger.arcturus.logging.MessageDialogHandler;
+import uk.ac.sanger.arcturus.logging.ShortMessageFormatter;
 import uk.ac.sanger.arcturus.repository.RepositoryManager;
 import uk.ac.sanger.arcturus.repository.RepositoryManagerFactory;
 
@@ -52,6 +53,8 @@ public class Arcturus {
 	protected static long jarFileTimestamp = 0L;
 	
 	protected static final boolean LINUX; 
+	
+	protected static boolean testing = Boolean.getBoolean("testing");
 
 	static {
 		setJarFileTimestamp();
@@ -67,6 +70,10 @@ public class Arcturus {
 	
 	public static boolean isLinux() {
 		return LINUX;
+	}
+	
+	public static boolean isTesting() {
+		return testing;
 	}
 
 	private static void setJarFileTimestamp() {
@@ -294,15 +301,16 @@ public class Arcturus {
 
 		logger.setUseParentHandlers(false);
 		
-		boolean testing = Boolean.getBoolean("testing");
-		
 		logger.setLevel(testing ? Level.INFO : Level.WARNING);
 		
 		boolean headless = GraphicsEnvironment.isHeadless();
 
 		if (headless || testing || Boolean.getBoolean("useConsoleLogHandler")) {
 			Handler consoleHandler = new ConsoleHandler();
+
 			consoleHandler.setLevel(Level.INFO);
+			
+			consoleHandler.setFormatter(new ShortMessageFormatter());
 
 			logger.addHandler(consoleHandler);
 		} 
@@ -322,8 +330,11 @@ public class Arcturus {
 			if (dotarcturus.exists() || dotarcturus.mkdir()) {
 				FileHandler filehandler = new FileHandler(
 						"%h/.arcturus/arcturus%u.%g.log", 10000000, 10, true);
+				
 				filehandler.setLevel(Level.INFO);
+				
 				filehandler.setFormatter(new LongMessageFormatter());
+				
 				logger.addHandler(filehandler);
 			} else
 				throw new IOException(
@@ -363,6 +374,22 @@ public class Arcturus {
 
 	public static void log(Level level, String message) {
 		logger.log(level, message);
+	}
+
+	public static void logConfig(String message) {
+		logger.log(Level.CONFIG, message);
+	}
+
+	public static void logFine(String message) {
+		logger.log(Level.FINE, message);
+	}
+
+	public static void logFiner(String message) {
+		logger.log(Level.FINER, message);
+	}
+
+	public static void logFinest(String message) {
+		logger.log(Level.FINEST, message);
 	}
 
 	public static void logInfo(String message) {
