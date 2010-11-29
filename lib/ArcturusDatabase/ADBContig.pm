@@ -679,6 +679,14 @@ sub putContig {
 	
 	unless (&putMappingsForContig($dbh,$contig,$log,type=>'contig')) {
 	    $log->severe("failed to insert contig-to-contig mappings for $contigname: rolling back database");
+
+	    # Dump the mappings for inspection
+	    my $mappings = $contig->getContigToContigMappings();
+
+	    foreach my $mapping (@{$mappings}) {
+		$log->severe("\n\nMAPPING: parent_id " . $mapping->getSequenceID() . "\n" . $mapping->writeToString());
+	    }
+
 	    die "failed to insert contig-to-contig mappings for $contigname\n\n";
 	    #$message = "failed to insert contig-to-contig mappings for $contigname";
 	    #return (0, $message);
@@ -1397,6 +1405,7 @@ sub putMappingsForContig {
 # for contig-to-contig mappings
         $mappings = $contig->getContigToContigMappings();
         return 1 unless $mappings; # MAY have contig-to-contig mappings
+
         $mquery = "insert into C2CMAPPING " .
 	          "(contig_id,parent_id,cstart,cfinish,direction) ";
         $squery = "insert into C2CSEGMENT " .
@@ -1449,6 +1458,8 @@ sub putMappingsForContig {
 	    	next if $option{notallowemptymapping};
 			}	
 
+	$mapping->removeInvalidSegments();
+
     	my ($cstart, $cfinish) = $mapping->getContigRange();
 
     	@data = ($contigid,
@@ -1482,6 +1493,9 @@ sub putMappingsForContig {
                 my $length = $segment->getSegmentLength();
                 my $cstart = $segment->getXstart();
                 my $rstart = $segment->getYstart();
+
+		next if ($cstart < 0 || $rstart < 0);
+
                 $accumulatedQuery .= "," if $accumulated++;
                 $accumulatedQuery .= "($mappingid,$cstart,$rstart,$length)";
 # dump the accumulated query if a number of inserts has been reached
