@@ -1812,23 +1812,37 @@ sub scaffoldfileparser { # TO BE TESTED
 #------------------------------------------------------------------------
 
 sub sendMessage {
-    my ($user,$message,$instance) = @_;
+    my ($user, $message, $instance, $organism, $project, $junk) = @_;
 
-		my $to = DEFAULT_HELPDESK_EMAIL;
-		$to .= ',' . $user if defined($user);
+    die "No user specified in sendMessage" unless defined($user);
+
+    my $to = DEFAULT_HELPDESK_EMAIL;
 
     if ($instance eq 'test') {
-				$to = $user;
+	$to = $user;
+    } else {
+	$to .= ",$user";
     }
 
     my $mail = new Mail::Send;
+
     $mail->to($to);
-    $mail->subject("Arcturus project import FAILED");
-    #$mail->add("X-Arcturus", "contig-transfer-manager");
+
+    my $descriptor = "instance=$instance organism=$organism project=$project";
+
+    my $subject = "Arcturus project import FAILED for $descriptor";
+
+    $mail->subject($subject);
+
+    $mail->add("X-Arcturus", "new-contig-loader");
+
     my $handle = $mail->open;
+
+    print $handle "$subject\n\n";
+
     print $handle "$message\n";
-    $handle->close;
-    
+
+    $handle->close;    
 }
 
 #------------------------------------------------------------------------
