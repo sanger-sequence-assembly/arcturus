@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.apps;
 
 import java.io.*;
+import java.util.Map;
 
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.samtools.BAMContigLoader;
@@ -77,6 +78,7 @@ public class ContigLoader extends AbstractLoader {
   			    project = adb.getProjectByName(assembly,projectName);
  			}
 
+ 			Map<String, Integer> nameToID = null;
  
  			if (bamFile != null) {
 				SAMFileReader
@@ -95,12 +97,12 @@ public class ContigLoader extends AbstractLoader {
 
 				BAMContigLoader bcl = new BAMContigLoader(adb, brl);
 
-				bcl.processFile(reader, project, contigName);
+				nameToID = bcl.processFile(reader, project, contigName);
  			}
  			
  			if (consensusFile != null) {
  				if (consensusFile.exists() && consensusFile.canRead()) {
-					ConsensusFileProcessor processor = new ConsensusFileProcessor(adb);
+					ConsensusFileProcessor processor = new ConsensusFileProcessor(adb, nameToID);
 
 					FastqFileReader reader = new FastqFileReader();
 					
@@ -121,9 +123,11 @@ public class ContigLoader extends AbstractLoader {
 	
 	class ConsensusFileProcessor implements SequenceProcessor {
 		private ArcturusDatabase adb;
+		private Map<String, Integer> nameToID;
 		
-		public ConsensusFileProcessor(ArcturusDatabase adb) {
+		public ConsensusFileProcessor(ArcturusDatabase adb, Map<String, Integer> nameToID) {
 			this.adb = adb;
+			this.nameToID = nameToID;
 		}
 		
 		public void processSequence(String name, byte[] dna, byte[] quality) {
@@ -133,7 +137,15 @@ public class ContigLoader extends AbstractLoader {
 			System.out.println("\nContig " + name + " : consensus length is " + dna.length + " bp");
 			
 			try {
-				Contig contig = adb.getContigByName(name);
+				Contig contig;
+				
+				if (nameToID != null && nameToID.containsKey(name)) {
+					int id = nameToID.get(name);
+					System.out.println("\tMAPPED contig name " + name + " to ID " + id);
+					contig = adb.getContigByID(id);
+				} else {
+					contig = adb.getContigByName(name);
+				}
 				
 				if (contig == null) {
 					System.out.println("\tIGNORED consensus, because no matching contig was found in the database.");

@@ -35,8 +35,10 @@ public class BAMContigLoader {
 	    contigComparator = new ContigComparator(adb);
      }
 
-	public void processFile(SAMFileReader reader, Project project, String contigName) throws ArcturusDatabaseException {
+	public Map<String, Integer> processFile(SAMFileReader reader, Project project, String contigName) throws ArcturusDatabaseException {
 	    Set<Contig> contigs;
+	    
+	    Map<String, Integer> nameToID = new HashMap<String, Integer>();
 	    
 	    if (contigName == null)
 	    	contigs = getContigs(reader);
@@ -123,13 +125,15 @@ public class BAMContigLoader {
 				reportProgress("\nPreparing to import any new child contigs.");
 
 				for (SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> subgraph : subGraphs)
-					importChildContigs(subgraph, reader);
+					importChildContigs(subgraph, reader, nameToID);
 			}
 	    }
 	    
 	    Arcturus.logFine("===== " + getClass().getName() + " FINISHED =====");
 	    
 	    reportProgress("\n===== THE ARCTURUS 2 CONTIG LOADER HAS FINISHED =====");
+	    
+	    return nameToID;
     }
 	
 	protected void reportProgress(String message) {
@@ -165,7 +169,7 @@ public class BAMContigLoader {
   
     private void importChildContigs(
 			SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph,
-			SAMFileReader reader) throws ArcturusDatabaseException {
+			SAMFileReader reader, Map<String, Integer> nameToID) throws ArcturusDatabaseException {
     	Set<Contig> vertices = graph.vertexSet();
     	
     	Set<Contig> children = new HashSet<Contig>();
@@ -191,6 +195,8 @@ public class BAMContigLoader {
  			if (!doImport) {
  				child.setSequenceToContigMappings(null);
  				
+ 				nameToID.put(child.getName(), parent.getID());
+ 				
  				reportProgress("\nChild contig " + child.getName() + 
  						" (" + child.getLength() + " bp, " + child.getReadCount() + " reads)" + 
  						" is identical to parent contig " + parent.getName() +
@@ -200,7 +206,7 @@ public class BAMContigLoader {
     	}
     	
     	if (doImport) {
-    		storeChildContigs(children, reader);
+    		storeChildContigs(children, reader, nameToID);
     		
     		Set<DefaultWeightedEdge> edges = graph.edgeSet();
     		
@@ -229,7 +235,7 @@ public class BAMContigLoader {
     		return null;
     }
 
-    private void storeChildContigs(Set<Contig> contigs, SAMFileReader reader)
+    private void storeChildContigs(Set<Contig> contigs, SAMFileReader reader, Map<String, Integer> nameToID)
     	throws ArcturusDatabaseException {	
     	for (Contig contig : contigs) {
     		String message = "Contig " + contig.getName() + 
@@ -244,7 +250,9 @@ public class BAMContigLoader {
     	    
     	    adb.putContig(contig);
     	    
-    	    message = "Stored with Arcturus ID " + contig.getID();
+    	    nameToID.put(contig.getName(), contig.getID());
+    	    
+    	    message = "Stored contig " + contig.getName() + " with Arcturus ID " + contig.getID();
     	    
     	    Utility.reportMemory(message);
     	    
