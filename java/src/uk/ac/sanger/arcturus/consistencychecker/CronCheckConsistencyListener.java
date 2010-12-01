@@ -45,7 +45,8 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 		public CronCheckConsistencyListener(String instance,  String organism, String logFullPath, Vector<String> emailNames) {
 			allErrorMessagesForEmail = "";
 			thisErrorMessageForEmail ="";
-			if (organism.startsWith("TEST")) testing = true;
+			//if (organism.startsWith("TEST")) testing = true;
+			testing = false;
 
 			this.instance = instance;
 			this.organism = organism;
