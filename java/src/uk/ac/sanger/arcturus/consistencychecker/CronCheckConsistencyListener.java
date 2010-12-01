@@ -194,7 +194,6 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 				case ALL_TESTS_PASSED:
 					try {
 						outputStream.write(message);
-						outputStream.close();
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
@@ -202,7 +201,6 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 				case SOME_TESTS_FAILED:
 					try {
 						outputStream.write(message);
-						outputStream.close();
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
