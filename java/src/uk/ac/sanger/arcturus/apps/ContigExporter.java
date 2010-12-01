@@ -28,6 +28,7 @@ public class ContigExporter implements SAMContigExporterEventListener {
 		String outputFileName = null;
 		String assemblyName = null;
 		String contigList = null;
+		boolean useGap4Name = false;
 		
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equalsIgnoreCase("-instance"))
@@ -42,6 +43,10 @@ public class ContigExporter implements SAMContigExporterEventListener {
 				contigList = args[++i];
 			else if (args[i].equalsIgnoreCase("-out"))
 				outputFileName = args[++i];
+			else if (args[i].equalsIgnoreCase("-usegap4name"))
+				useGap4Name = true;
+			else
+				System.err.println("Unrecognised option: " + args[i]);
 		}
 		
 		if (instanceName == null 
@@ -61,7 +66,7 @@ public class ContigExporter implements SAMContigExporterEventListener {
  	        ArcturusInstance ai = ArcturusInstance.getInstance(instanceName);
  			ArcturusDatabase adb = ai.findArcturusDatabase(organismName);
 			
-			SAMContigExporter exporter = new SAMContigExporter(adb);
+			SAMContigExporter exporter = new SAMContigExporter(adb, useGap4Name);
 			
 			PrintWriter pw = new PrintWriter(outputFileName);
 			
@@ -131,6 +136,7 @@ public class ContigExporter implements SAMContigExporterEventListener {
 		ps.println();
 		ps.println("OPTIONAL PARAMETERS");
 		ps.println("\t-assembly\tThe name of the assembly, to disambiguate projects");
+		ps.println("\t-usegap4name\tUse the stored name of the contig rather than \"Contig\"+ID");
 	}
 
 	public void contigExporterUpdate(SAMContigExporterEvent event) {

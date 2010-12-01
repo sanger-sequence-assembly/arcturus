@@ -19,6 +19,7 @@ import uk.ac.sanger.arcturus.samtools.SAMContigExporterEvent.Type;
 public class SAMContigExporter {
 	private ArcturusDatabase adb;
 	private Connection conn = null;
+	private boolean useGap4Name;
 	
 	private final int CONNECTION_VALIDATION_TIMEOUT = 10;
 	
@@ -40,8 +41,9 @@ public class SAMContigExporter {
 	
 	private SAMContigExporterEventListener listener = null;
 
-	public SAMContigExporter(ArcturusDatabase adb) {
+	public SAMContigExporter(ArcturusDatabase adb, boolean useGap4Name) {
 		this.adb = adb;
+		this.useGap4Name = useGap4Name;
 	}
 	
 	public void exportContigsForProject(Project project, PrintWriter pw) throws ArcturusDatabaseException {
@@ -53,13 +55,17 @@ public class SAMContigExporter {
 		exportContigSet(contigSet, pw);
 	}
 	
+	private String getNameForContig(Contig contig) {
+		return useGap4Name ? contig.getName() : "Contig" + contig.getID();
+	}
+	
 	public void exportContigSet(Set<Contig> contigSet, PrintWriter pw) throws ArcturusDatabaseException {
 		notifyEvent(Type.START_CONTIG_SET, 0);
 		
 		pw.println("@PG\tID:" + getClass().getName());
 		
 		for (Contig contig : contigSet)
-			pw.println("@SQ\tSN:Contig" + contig.getID() + "\tLN:" + contig.getLength());
+			pw.println("@SQ\tSN:" + getNameForContig(contig) + "\tLN:" + contig.getLength());
 		
 		int count = 0;
 		
@@ -83,7 +89,7 @@ public class SAMContigExporter {
 		if (contig.getID() <= 0)
 			throw new ArcturusDatabaseException("Cannot export a contig without a valid ID");
 			
-		String contigName = "Contig" + contig.getID();
+		String contigName = getNameForContig(contig);
 		
 		try {
 			checkConnection();
