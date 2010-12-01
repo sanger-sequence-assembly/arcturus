@@ -62,14 +62,13 @@ public class CheckConsistency {
 		throws ArcturusDatabaseException {
 		this.listener = listener;
 		Connection conn = adb.getPooledConnection(this);
-		String message = "";
 		String organism = adb.getName();
 		
 		try {
 			 checkConsistency(conn,criticalOnly);
 		}
 		catch (SQLException e) {
-			adb.handleSQLException(e, "An error occurred when checking the database consistency", conn, this);
+			adb.handleSQLException(e, "An error occurred when checking the database consistency for organism " + organism, conn, this);
 		}
 		catch (Exception e) {
 			this.listener.sendEmail();
@@ -207,7 +206,7 @@ public class CheckConsistency {
 
 		while (rs.next()) {
 			for (int col = 1; col <= cols; col++) {
-			emailNames.add((String) rs.getObject(col));
+				emailNames.add((String) rs.getObject(col));
 			}
 		}
 		return emailNames;
