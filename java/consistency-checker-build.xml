@@ -23,6 +23,7 @@
 	<path id="test.classpath">
 	  <pathelement location="./lib/junit.jar" />
 	  <pathelement location="./lib/mockito-all-1.8.4.jar" />
+	  <pathelement location="./lib/mysql-connector-java-5.1.6-bin.jar" />
 	  <pathelement location="./build/classes" />
 	</path>
 
@@ -110,5 +111,14 @@
 
 	<target name="all" depends="clean,jar,zip"
           description="Cleans, compiles, then builds the JAR file." />
+	
+	<target name="run" depends="jar">
+	        <java fork="true" classname="${main-class}">
+	            <classpath>
+	                <path refid="classpath"/>
+	                <path location="${lib.dir}/${jar.file.name}.jar"/>
+	            </classpath>
+	        </java>
+	    </target>
 
 </project>
