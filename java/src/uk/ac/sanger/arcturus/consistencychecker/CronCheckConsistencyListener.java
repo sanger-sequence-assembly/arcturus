@@ -90,14 +90,14 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 			// this is usually the case for the test databases
 			
 			if (testing) {
-				sender = System.getProperty("user.name") + restOfEmailAddress;
-				ccRecipient = "none";
-				recipient = sender;
+				this.sender = System.getProperty("user.name") + restOfEmailAddress;
+				this.ccRecipient = "none";
+				this.recipient = sender;
 			}
 			else {
 				if (emailNamesSize == 0) {
-					sender = System.getProperty("user.name") + restOfEmailAddress;
-					ccRecipient = "none";
+					this.sender = System.getProperty("user.name") + restOfEmailAddress;
+					this.ccRecipient = "none";
 				} 
 				else {
 					// first name is the sender of the email
@@ -109,22 +109,22 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 					for(int i=0;i<emailNamesSize;i++)
 		        	{
 						if (first) {
-							sender = emailNames.get(i);
+							this.sender = emailNames.get(i);
 							first = false;
 							firstcc = true;
 						}
 						else {
 							if (firstcc) {
-								ccRecipient = ccRecipient + emailNames.get(i) + restOfEmailAddress;
+								this.ccRecipient = this.ccRecipient + emailNames.get(i) + restOfEmailAddress;
 								firstcc = false;
 							}
 							else {
-								ccRecipient = ccRecipient + "," + emailNames.get(i) + restOfEmailAddress;
+								this.ccRecipient = this.ccRecipient + "," + emailNames.get(i) + restOfEmailAddress;
 							}
 						}
 		        	}
 				}
-				recipient = "arcturus-help" + restOfEmailAddress;
+				this.recipient = "arcturus-help" + restOfEmailAddress;
 			}
 			//if (testing) 
 				System.err.println("Sending email from "+ sender + " to "+ recipient + "\n");
@@ -142,7 +142,9 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 			switch (type) {
 				case START_TEST_RUN:
 					try {
-						message = logIntro;						
+						message = logIntro;	
+						outputStream.write("If there are any inconsistencies found, an email will be sent to " 
+								+ this.recipient + " from " + this.sender + " cc to " + this.ccRecipient + "\n");
 						outputStream.write(message);
 						setErrorMessagesForEmail(emailIntro);
 					} catch (IOException e) {
