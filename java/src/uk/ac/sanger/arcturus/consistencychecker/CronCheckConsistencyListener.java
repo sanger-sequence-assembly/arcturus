@@ -127,7 +127,8 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 				this.recipient = "arcturus-help" + restOfEmailAddress;
 			}
 			//if (testing) 
-				System.err.println("Sending email from "+ sender + " to "+ recipient + "\n");
+				System.err.println("IF an email needs to be sent later, it will come from "+ sender + " to "+ recipient + 
+						" cc to " + ccRecipient + "\n");
 			
 			if (ccRecipient == "none")
 				emailer = new ArcturusEmailer(recipient, sender);
