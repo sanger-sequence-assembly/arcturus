@@ -89,34 +89,46 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 			// if no user can be found, use the person who is running the consistency check
 			// this is usually the case for the test databases
 			
-			if ((testing) || (emailNamesSize == 0)) {
+			if (testing) {
 				sender = System.getProperty("user.name") + restOfEmailAddress;
 				ccRecipient = "none";
+				recipient = sender;
 			}
 			else {
-				// first name is the sender of the email
-				// others are the cc recipients
-				// arcturus-help will be the recipient
-				boolean first = true;
-				for(int i=0;i<emailNamesSize;i++)
-		        {
-					if (first) {
-						sender = emailNames.get(i);
-						first = false;
-					}
-					else {
-						ccRecipient = ccRecipient + "," + emailNames.get(i) + restOfEmailAddress;
-					}
-		        }
-				if (testing) {
-					recipient = sender;
-					System.err.println("Sending email to " + recipient + " from " + sender + "\n");
-				}
+				if (emailNamesSize == 0) {
+					sender = System.getProperty("user.name") + restOfEmailAddress;
+					ccRecipient = "none";
+				} 
 				else {
-					recipient = "arcturus-help" + restOfEmailAddress;
+					// first name is the sender of the email
+					// others are the cc recipients
+					// arcturus-help will be the recipient
+					boolean first = true;
+					boolean firstcc = false;
+					
+					for(int i=0;i<emailNamesSize;i++)
+		        	{
+						if (first) {
+							sender = emailNames.get(i);
+							first = false;
+							firstcc = true;
+						}
+						else {
+							if (firstcc) {
+								ccRecipient = ccRecipient + emailNames.get(i) + restOfEmailAddress;
+								firstcc = false;
+							}
+							else {
+								ccRecipient = ccRecipient + "," + emailNames.get(i) + restOfEmailAddress;
+							}
+						}
+		        	}
 				}
+				recipient = "arcturus-help" + restOfEmailAddress;
 			}
-						
+			//if (testing) 
+				System.err.println("Sending email from "+ sender + " to "+ recipient + "\n");
+			
 			if (ccRecipient == "none")
 				emailer = new ArcturusEmailer(recipient, sender);
 			else
@@ -206,18 +218,13 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 		}
 			
 		public void sendEmail(){
-				String recipient;
+
 				String message = getAllErrorMessagesForEmail();
 				String subject = ("ARCTURUS database " + organism + " has FAILED the consistency check");
 				
-				if (testing)
-					recipient = "kt6@sanger.ac.uk";
-				else
-					recipient = "arcturus-help@sanger.ac.uk";
-				
-				closeLog();
-			
 				if (message.length() > 0 ) emailer.send(subject, message);
+
+				closeLog();
 			}
 			
 		private String getAllErrorMessagesForEmail() {
