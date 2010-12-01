@@ -222,6 +222,11 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 				String message = getAllErrorMessagesForEmail();
 				String subject = ("ARCTURUS database " + organism + " has FAILED the consistency check");
 				
+				try {
+					outputStream.write("Here is the message to be emailed:*" + message + "*\n");
+				}catch (IOException e) {
+					e.printStackTrace();
+				}
 				if (message.length() > 0 ) emailer.send(subject, message);
 
 				closeLog();
