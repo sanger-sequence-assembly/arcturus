@@ -45,8 +45,7 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 		public CronCheckConsistencyListener(String instance,  String organism, String logFullPath, Vector<String> emailNames) {
 			allErrorMessagesForEmail = "";
 			thisErrorMessageForEmail ="";
-			//if (organism.startsWith("TEST")) testing = true;
-			testing = false;
+			if (organism.startsWith("TEST")) testing = true;
 
 			this.instance = instance;
 			this.organism = organism;
@@ -198,6 +197,7 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
+					closeLog();
 					break;
 				case SOME_TESTS_FAILED:
 					try {
@@ -206,6 +206,8 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 						e.printStackTrace();
 					}
 					setErrorMessagesForEmail(message);
+					sendEmail();
+					closeLog();
 					break;
 				case UNKNOWN:
 					try {
@@ -229,9 +231,9 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 				}catch (IOException e) {
 					e.printStackTrace();
 				}
-				if (message.length() > emailIntro.length()) emailer.send(subject, message);
+				
+				emailer.send(subject,message);
 
-				closeLog();
 			}
 			
 		private String getAllErrorMessagesForEmail() {

@@ -71,12 +71,10 @@ public class CheckConsistency {
 			adb.handleSQLException(e, "An error occurred when checking the database consistency for organism " + organism, conn, this);
 		}
 		catch (Exception e) {
-			this.listener.sendEmail();
 			this.listener = null;
 			Arcturus.logSevere(e);
 		}
 		finally {
-			this.listener.sendEmail();
 			this.listener = null;
 			
 			try {
