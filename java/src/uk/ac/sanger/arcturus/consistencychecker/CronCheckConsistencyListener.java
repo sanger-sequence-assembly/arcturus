@@ -229,7 +229,7 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 				}catch (IOException e) {
 					e.printStackTrace();
 				}
-				if (message.length() > 0 ) emailer.send(subject, message);
+				if (message.length() > emailIntro.length()) emailer.send(subject, message);
 
 				closeLog();
 			}
