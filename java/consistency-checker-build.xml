@@ -2,7 +2,7 @@
 
 <!-- consistency-checker-build.xml - kt6 24/11/10 simple Ant buildfile -->
 <project name="ArcturusConsistencyChecker" default="jar" basedir=".">
-	<property name="project.name" value="arcturus"/>
+	<property name="project.name" value="consistency-checker"/>
 	<property name="package.prefix" value="uk.ac.sanger"/>
 	<property name="jar.file" value="${project.name}.jar" />
 	<property name="zip.file" value="${project.name}.zip" />
@@ -98,7 +98,6 @@
 			<fileset dir="${src.dir}" includes="resources/icons/*.*,resources/images/*.*,resources/xml/*.*,resources/*.props"/>
 		</jar>
 
-		<symlink link="${jar.file}" resource="${jar.file.name}" overwrite="true" />
 	</target>
 
 	<target name="zip" depends="jar"
