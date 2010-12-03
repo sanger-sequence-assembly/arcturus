@@ -1,20 +1,34 @@
 #!/bin/csh -f
+# consistency-checks.sh
+
+if ( $# > 0 ) then
+  set INSTANCE=$1
+else
+  set INSTANCE=pathogen
+endif
 
 echo
 echo ------------------------------------------------------------
 echo
 echo Checking the consistency of the Arcturus databases
 
-#set ARCTURUS=/software/arcturus
-set ARCTURUS=/nfs/users/nfs_k/kt6/ARCTURUS/arcturus/branches/4595239_consistency_checks
-set ARCTURUSHOME=/nfs/users/nfs_k/kt6
+switch($INSTANCE)
+case test:
+	set ARCTURUS=/nfs/users/nfs_k/kt6/ARCTURUS/arcturus/branches/4595239_consistency_checks
+	breaksw
+default:
+	set ARCTURUS=/software/arcturus
+	breaksw
+endsw
+
+set ARCTURUSHOME=`dirname ~/whoami`
 set JARFILE=${ARCTURUS}/java/consistency-checker.jar
 set LOGFILE=consistency_checker.log
 set CONSISTENCYFOLDER=${ARCTURUSHOME}/consistency-checker
 
 cd ${CONSISTENCYFOLDER}
 
-foreach ORG (`cat ~/active-organisms.list`)
+foreach ORG (`cat ~/test_active_organisms.list`)
   set ORG=`echo $ORG | awk -F : '{print $1}'`
 
   echo Checking the consistency of the $ORG database
@@ -25,7 +39,7 @@ foreach ORG (`cat ~/active-organisms.list`)
 
   pushd $ORG
 
-  /software/jdk/bin/java -jar ${JARFILE} -instance pathogen -organism $ORG -log_full_path ${CONSISTENCYFOLDER}/$ORG/
+  /software/jdk/bin/java -jar ${JARFILE} -instance $INSTANCE -organism $ORG -log_full_path ${CONSISTENCYFOLDER}/$ORG/
 
   popd
 end
