@@ -467,7 +467,7 @@ sub makeMonthlyContigStats {
 
     $minlen *= 1000;
 
-    while ($year < $year_end || $month <= $month_end) {
+    while ($year < $year_end || ($year == $year_end && $month <= $month_end)) {
 	$bg = "BGCOLOR=\"#" . (($month%2 == 0) ? "FFFFEE" : "EEEEDD") . "\"";
 
 	my $date = sprintf("%04d-%02d-01", $year, $month);
