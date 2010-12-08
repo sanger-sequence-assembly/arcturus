@@ -49,12 +49,12 @@ my $url = "DBI:mysql:$dbname;host=$host;port=$port";
 
 my $dbh = DBI->connect($url, $username, $password, { RaiseError => 1 , PrintError => 0});
 
-my $query = 'select table_schema from information_schema.tables where table_name = ?'
+my $query = 'select table_schema from information_schema.columns where table_name = ? and column_name = ?'
     . ' order by table_schema asc';
 
 my $sth = $dbh->prepare($query);
 
-$sth->execute('READINFO');
+$sth->execute('READINFO', 'READNAME');
 
 my @dblist;
 
