@@ -39,7 +39,8 @@ foreach ORG (`cat ~/test_active_organisms.list`)
 
   pushd $ORG
 
-  /software/jdk/bin/java -jar ${JARFILE} -instance $INSTANCE -organism $ORG -log_full_path ${CONSISTENCYFOLDER}/$ORG/
+	echo Starting to check the consistency of the $ORG organism in the $INSTANCE database instance...
+  	/software/jdk/bin/java -jar ${JARFILE} -instance $INSTANCE -organism $ORG -log_full_path ${CONSISTENCYFOLDER}/$ORG/ -critical
 
   popd
 end
