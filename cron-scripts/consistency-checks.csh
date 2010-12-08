@@ -38,10 +38,8 @@ foreach ORG (`cat ~/test_active_organisms.list`)
   endif
 
   pushd $ORG
-
-	echo Starting to check the consistency of the $ORG organism in the $INSTANCE database instance...
-  	/software/jdk/bin/java -jar ${JARFILE} -instance $INSTANCE -organism $ORG -log_full_path ${CONSISTENCYFOLDER}/$ORG/ -critical
-
+		echo Submitting a batch job to  check the consistency of the $ORG organism in the $INSTANCE database instance...
+		bsub -q phrap -o ${CONSISTENCYFOLDER}/$ORG.log -J ${ORG}cc -N ${ARCTURUS}/cron-scripts/submit-consistency-checks.csh test $ORG
   popd
 end
 
