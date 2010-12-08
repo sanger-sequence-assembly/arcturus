@@ -35,17 +35,13 @@ sub new {
 
     die "No group specified" unless defined($group);
 
-    $this->{group} = $group;
+    $this->{groups} = $group;
 
     my $ts = TraceServer->new(TS_DIRECT, TS_READ_ONLY, "");
 
     die "Unable to connect to the trace server" unless defined($ts);
 
     $this->{traceserver} = $ts;
-
-    my $tsgroup = $ts->get_group($group, 'PASS');
-
-    die "Group $group not in trace server" unless defined($tsgroup);
 
     $this->{minreadid} = $minreadid;
 
@@ -65,29 +61,40 @@ sub getReadNamesToLoad {
 
     my $ts = $this->{traceserver};
 
-    my $group = $this->{group};
+    my $groups = $this->{groups};
 
-    my $tsgroup = $ts->get_group($group, $this->{'status'});
+    my %readnames;
+   
+    foreach my $group (split(/,/, $groups)) {
+	print STDERR "Examining group $group ...";
 
-    die "Group $group, $this->{'status'} not in trace server" unless defined($tsgroup);
+	my $tsgroup = $ts->get_group($group, $this->{'status'});
 
-    my $grit = $tsgroup->get_iterator(1);
+	if (defined($tsgroup)) {
+	    my $hits = 0;
 
-    my $minreadid = $this->{minreadid};
+	    my $grit = $tsgroup->get_iterator(1);
 
-    my $filter = $this->{filter};
+	    my $minreadid = $this->{minreadid};
 
-    $grit->set($minreadid) if defined($minreadid);
+	    my $filter = $this->{filter};
 
-    my $readnames = [];
+	    $grit->set($minreadid) if defined($minreadid);
 
-    while (my $seq_id = $grit->next()) {
-	my $read = $ts->get_read_by_seq_id($seq_id);
-        next if (defined($filter) && $read->get_name() !~ /$filter/);       
-	push @{$readnames}, $read->get_name();
+	    while (my $seq_id = $grit->next()) {
+		my $read = $ts->get_read_by_seq_id($seq_id);
+		next if (defined($filter) && $read->get_name() !~ /$filter/);       
+		$readnames{$read->get_name()} = 1;
+		$hits++;
+	    }
+
+	    print STDERR " found $hits reads.\n";
+	} else {
+	    print STDERR " NO SUCH GROUP.\n";
+	}
     }
 
-    return $readnames;
+    return [sort keys(%readnames)];
 }
 
 sub getReadByName {
