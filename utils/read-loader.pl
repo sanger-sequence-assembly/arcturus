@@ -320,6 +320,9 @@ elsif ($source eq 'expfiles') {
 }
 
 elsif ($source eq 'traceserver') {
+    $PARS{group} = $adb->getMetadata('traceservergroups')
+	unless (defined($PARS{group}));
+
     &showUsage("Missing group name for trace server") unless $PARS{group};
 
     my @valid = ('group','minreadid','maxreads','status','readnamelike');
@@ -350,6 +353,8 @@ elsif ($source eq 'traceserver') {
 	    undef $PARS{'minreadid'};
 	}
     }
+
+    $PARS{'group'} = &expandGroup($adb, $PARS{'group'}) if defined($PARS{'group'});
 
     $factory = new TraceServerReadFactory(%PARS);
 }
@@ -515,6 +520,68 @@ $logger->close();
 
 exit;
 
+#----------------------------------------------------------------------------------
+# convert special group name ASSEMBLIES or CLONES to a list of assemblies or clones
+#----------------------------------------------------------------------------------
+
+sub expandGroup {
+    my $adb = shift;
+    my $group_in = shift;
+
+    my @groupnames = split(/,/, $group_in);
+
+    my @groups_out;
+
+    foreach my $group (@groupnames) {
+	if ($group eq 'ASSEMBLIES') {
+	   my  @groups = &enumerateGroups($adb, 'ASSEMBLY');
+
+	    foreach my $new_group (@groups) {
+		push @groups_out, $new_group;
+	    }
+	} elsif ($group eq 'CLONES') {
+	    my @groups = &enumerateGroups($adb, 'CLONE');
+
+	    foreach my $new_group (@groups) {
+		push @groups_out, $new_group;
+	    }
+	} elsif ($group eq 'PROJECTS') {
+	    my @groups = &enumerateGroups($adb, "PROJECT where name not in ('BIN','POOL','PROBLEMS','TRASH')");
+
+	    foreach my $new_group (@groups) {
+		push @groups_out, $new_group;
+	    }
+	} else {
+	    push @groups_out, $group;
+	}
+    }
+
+    return join(',', @groups_out);
+}
+
+sub enumerateGroups {
+    my $adb = shift;
+    my $table = shift;
+
+    my @groups;
+
+    my $dbh = $adb->getConnection();
+
+    my $query = "select name from $table";
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute();
+
+    while (my ($name) = $sth->fetchrow_array()) {
+	push @groups, $name;
+    }
+
+    $sth->finish();
+
+    return @groups;
+}
+
 #------------------------------------------------------------------------
 # test routine to signal excess or incomplete input
 #------------------------------------------------------------------------
@@ -646,7 +713,9 @@ sub showUsage {
     if (!$source || $source eq 'traceserver') {
 	print STDERR "Parameters for TraceServer input:\n";
 	print STDERR "\n";
-	print STDERR "-group\t\tMANDATORY: name of trace server group to load\n";
+	print STDERR "-group\t\tMANDATORY: comma-separated list of trace server groups to load\n";
+	print STDERR "\t\t(can include ASSEMBLIES, PROJECTS or CLONES which are expanded\n";
+	print STDERR "\t\tto a list of the names of the respective objects).\n";
 	print STDERR "-minreadid\tminimum trace server read ID (use 'auto' to auto-detect)\n";
 	print STDERR "-status\t\tAsp processing status (default is PASS)\n";
 	print STDERR "\n";
