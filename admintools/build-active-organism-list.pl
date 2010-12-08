@@ -54,7 +54,7 @@ my $query = 'select table_schema from information_schema.tables where table_name
 
 my $sth = $dbh->prepare($query);
 
-$sth->execute('CONTIG');
+$sth->execute('READINFO');
 
 my @dblist;
 
@@ -67,7 +67,7 @@ $sth->finish();
 foreach my $schema (@dblist) {
 
     $query = "select count(*),sum(nreads),sum(length) from " . $schema . ".CONTIG" .
-	" where created > date_sub(now(), interval $since year)";
+	" where created > date_sub(now(), interval $since day)";
 
     $sth = $dbh->prepare($query);
     $sth->execute();
