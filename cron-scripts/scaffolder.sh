@@ -17,9 +17,20 @@ then
     NOTIFY_TO=arcturus-help@sanger.ac.uk
 fi
 
+if [ "x$ACTIVE_ORGANISMS_LIST" == "x" ]
+then
+    ACTIVE_ORGANISMS_LIST=${HOME}/active-organisms.list
+fi
+
+if [ ! -f $ACTIVE_ORGANISMS_LIST ]
+then
+    echo Cannot find active organisms list file $ACTIVE_ORGANISMS_LIST
+    exit 1
+fi
+
 let failed=0
 
-for ORG in `cat ~/active-organisms.list | awk -F : '{print $1}' | uniq`
+for ORG in `cat ${ACTIVE_ORGANISMS_LIST}`
 do
   PARAMS="-organism $ORG"
 

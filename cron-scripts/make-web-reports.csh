@@ -21,11 +21,20 @@ if ( ! $?WEBPUBLISH ) then
     set WEBPUBLISH=/software/bin/webpublish
 endif
 
+if ( ! $?ACTIVE_ORGANISMS_LIST ) then
+    set ACTIVE_ORGANISMS_LIST=${HOME}/active-organisms.list
+endif
+
+if ( ! -f $ACTIVE_ORGANISMS_LIST ) then
+    echo Cannot find active organisms list file $ACTIVE_ORGANISMS_LIST
+    exit 1
+endif
+
 set LOGFILE=reports.log
 
 cd ${WEBFOLDER}
 
-foreach ORG (`cat ~/active-organisms.list | awk -F : '{print $1}' | uniq`)
+foreach ORG (`cat ${ACTIVE_ORGANISMS_LIST}`)
   echo Making report for $ORG
 
   if  ( ! -d $ORG ) then
