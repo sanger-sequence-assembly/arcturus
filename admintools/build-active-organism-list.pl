@@ -9,7 +9,9 @@ my $port;
 my $username;
 my $password;
 my $since;
-my $hideidle = 0;
+
+# set this to 0 to check that all databases you are expecting are found
+my $hideidle = 1;
 
 while (my $nextword = shift @ARGV) {
     if ($nextword eq '-host') {
