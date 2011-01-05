@@ -111,22 +111,6 @@
 
 	<test critical="YES">
 		<description>
-			Do all contig-to-sequence mappings have valid sequence data?
-		</description>
-
-		<query>
-			select contig_id,mapping_id,MAPPING.seq_id
-			from MAPPING left join SEQUENCE using(seq_id)
-			where sequence is null or quality is null
-		</query>
-		
-		<format>
-			Mapping {1,number,#} in contig {0,number,#} has undefined sequence {2,number,#}
-		</format>
-	</test>
-
-	<test critical="YES">
-		<description>
 			Do all mappings have a corresponding read?
 		</description>
 
