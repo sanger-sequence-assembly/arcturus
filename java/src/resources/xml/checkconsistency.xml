@@ -26,6 +26,7 @@
 		<query>
             select C.contig_id,nreads,count(distinct mapping_id) as mapping_count
             from CONTIG C left join MAPPING M using(contig_id)
+						where C.updated > date_sub(curdate(), INTERVAL 1 MONTH) 
             group by contig_id having nreads != mapping_count
 		</query>
 		
@@ -43,6 +44,7 @@
 			select contig_id,C.created,length,name
 			from CONTIG C left join PROJECT P using(project_id)
 			where C.nreads = 0
+		  and C.updated > date_sub(curdate(), INTERVAL 1 MONTH) 
 		</query>
 		
 		<format>
@@ -102,6 +104,7 @@
 			select mapping_id,seq_id,MAPPING.contig_id
 			from MAPPING left join CONTIG using(contig_id)
 			where CONTIG.contig_id is null
+		  and CONTIG.updated > date_sub(curdate(), INTERVAL 1 MONTH) 
 		</query>
 		
 		<format>
