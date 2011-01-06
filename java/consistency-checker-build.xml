@@ -1,5 +1,9 @@
 <?xml version="1.0"?>
 
+
+<!-- remember to rebuild the jar if you make any changes to this file by deleting it first to force a complete ant rebuild -->
+
+
 <!-- consistency-checker-build.xml - kt6 24/11/10 simple Ant buildfile -->
 <project name="ArcturusConsistencyChecker" default="jar" basedir=".">
 	<property name="project.name" value="consistency-checker"/>
