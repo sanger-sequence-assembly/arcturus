@@ -1,5 +1,9 @@
 <?xml version='1.0' encoding='utf-8'?>
 
+
+<!-- remember to rebuild the jar if you make any changes to this file by deleting it first to force a complete ant rebuild -->
+
+
 <!DOCTYPE testset [
 	<!ELEMENT description (#PCDATA) >
 
