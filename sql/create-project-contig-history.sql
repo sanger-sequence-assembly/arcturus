@@ -2,6 +2,7 @@ DROP TABLE IF EXISTS `PROJECT_CONTIG_HISTORY`;
 CREATE TABLE IF NOT EXISTS `PROJECT_CONTIG_HISTORY` (
   `project_id` mediumint(8) unsigned NOT NULL default '0',
 	`statsdate` date not null , 
+	`name` varchar(40) not null,
 	`total_contigs` int(12) unsigned NOT NULL default 0,
 	`total_reads` int(12) unsigned NOT NULL default 0,
 	`free_reads` int(12) unsigned NOT NULL default 0,
