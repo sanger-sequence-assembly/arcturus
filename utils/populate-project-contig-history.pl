@@ -131,7 +131,6 @@ my $insert_query = " insert into PROJECT_CONTIG_HISTORY (
 		name,
 		total_contigs,
 	 total_reads,
-	free_reads,
 	total_contig_length,
 	mean_contig_length,
 	stddev_contig_length,
@@ -143,7 +142,6 @@ my $insert_query = " insert into PROJECT_CONTIG_HISTORY (
 	 P.name,
 	 count(*) as contigs,
 	 sum(C.nreads),
-	 99,
 	 sum(C.length),
 	 round(avg(C.length)),
 	 round(std(C.length)),
@@ -158,8 +156,12 @@ my $insert_query = " insert into PROJECT_CONTIG_HISTORY (
 	     and P.project_id = C.project_id; ";
 
 my $sth = $dbh->prepare_cached($query);
-my $nrw = $sth->execute() || &queryFailed($query);
+my $project_contig_insert_count = $sth->execute() || &queryFailed($query);
 $sth->finish();
+
+if ($test) {
+	$logger->warning("Data for $project_contig_insert_count projects collected");
+}
 
 my $project_query = "select project_id, name from PROJECT";
 
@@ -173,28 +175,21 @@ foreach my $project (@$projectids) {
 	my $project_id = @$project[0];
 	my $project_name = @$project[1];
 
-	my $readids = [];
+	# update the median read
 
-	# sort out options here to ensure the correct project
-	# or put into ORGANISM_HISTORY instead
- 	$readids = $adb->getIDsForUnassembledReads(%options);
-	my $free_reads = scalar(@$readids);
+  my $median_read = 9999;
 
-	# update the count of readids as free reads
-
-	my $free_read_update = "update PROJECT_CONTIG_HISTORY"
-	. " set free_reads = $free_reads"
+	my $median_read_update = "update PROJECT_CONTIG_HISTORY"
+	. " set median_read = $median_read"
 	. " where project_id = $project_id";
 
 	my $sth = $dbh->prepare_cached($query);
-	my $free_read_count = $sth->execute() || &queryFailed($query);
+	my $median_read_count = $sth->execute() || &queryFailed($query);
 	$sth->finish();
 
  	if ($test) {
-    $logger->warning("found ".scalar(@$readids)." reads");
+    $logger->warning("Median read for project $project_id is $medianread");
  	}
-
-	# update the median read
 
 	# create the CSV file
 
@@ -205,7 +200,6 @@ foreach my $project (@$projectids) {
 	my $csv_query = "select * "
 		. " from PROJECT_CONTIG_HISTORY"
 		. " where project_id = $project_id"
-		. " and statsdate = now()"
 		. " into OUTFILE '$project_directory/$project_name.csv'"
 		. " fields terminated by ','"
 		. "lines terminated by '\n'";
@@ -213,6 +207,10 @@ foreach my $project (@$projectids) {
 	my $sth = $dbh->prepare_cached($query);
 	my $csv_file_count = $sth->execute() || &queryFailed($query);
 	$sth->finish();
+
+ 	if ($test) {
+    $logger->warning("Data for project $project_name for the year so far has been exported to $project_directory/$project_name.csv");
+ 	}
 
 } # end foreach project 
 
@@ -223,18 +221,25 @@ exit 0;
 #------------------------------------------------------------------------
 # subroutines
 #------------------------------------------------------------------------
-
+sub queryFailed {
+   my $query = shift;
+ 
+   $query =~ s/\s+/ /g; # remove redundent white space
+ 
+   print STDERR "FAILED query:\n$query\n\n";
+	 print STDERR "MySQL error: $DBI::err ($DBI::errstr)\n\n" if ($DBI::err);
+	 return 0;
+}
 #------------------------------------------------------------------------
 # HELP
 #------------------------------------------------------------------------
 
 sub showUsage {
-# populate-project-contig-history.pl
-# runs each night to add a row for today
-# generates a csv of year so far to project directory/csv
 
     my $code = shift || 0;
 
+		print STDOUT "\n populate-project-contig-history.pl runs each night to add a row for today.";
+		print STDOUT "\n It generates a csv file for data for the year so far to project directory/csv\n";
     print STDOUT "\nParameter input ERROR: $code \n" if $code; 
     print STDOUT "\n";
     unless ($organism && $instance) {
