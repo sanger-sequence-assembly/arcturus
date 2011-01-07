@@ -12,7 +12,7 @@ total_contig_length,
 mean_contig_length, 
 stddev_contig_length, 
 max_contig_length, 
-median_contig_length)
+n50_contig_length)
 select 
 P.project_id, 
 now(),
