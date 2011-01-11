@@ -2,15 +2,12 @@
 # populate-project-contig-history.pl
 # runs each night to add a row for today
 # generates a csv of year so far to project directory/csv
-
+# called from make-web-report for the LIVE system whilst tested in this script
 
 use strict; # Constraint variables declaration before using them
-use ArcturusDatabase;
-use ArcturusDatabase::ADBRoot qw(queryFailed);
 
 use FileHandle;
-use Logging;
-use PathogenRepository;
+use DataSource;
 
 use DBI;
 
@@ -30,191 +27,41 @@ my $loglevel;           # default log warnings and errors only
 my $debug;
 my $test;
 
-my $validKeys  = "organism|o|instance|i|"
-               . "test|info|verbose|debug|log|help|h";
+my $validKeys  = "organism|o|instance|i|";
 
 while (my $nextword = shift @ARGV) {
 
-    if ($nextword !~ /\-($validKeys)\b/) {
-        &showUsage("Invalid keyword '$nextword'");
-    }
+	if ($nextword !~ /\-($validKeys)\b/) {
+		&showUsage("Invalid keyword '$nextword'");
+	}
 
-    if ($nextword eq '-instance' || $nextword eq '-i') {
-# the next statement prevents redefinition when used with e.g. a wrapper script
-        die "You can't re-define instance" if $instance;
-        $instance     = shift @ARGV;
-    }
-
-    if ($nextword eq '-organism' || $nextword eq '-o') {
-# the next statement prevents redefinition when used with e.g. a wrapper script
-        die "You can't re-define organism" if $organism;
-        $organism     = shift @ARGV;
-    }
-
-# selection on name or date
-
-    $loglevel         = 1            if ($nextword eq '-verbose'); 
-    $loglevel         = 2            if ($nextword eq '-info'); 
-    $loglevel         = 1            if ($nextword eq '-debug');
-
-    $debug            = 1            if ($nextword eq '-debug'); 
-
-    $test             = 2            if ($nextword eq '-test'); 
-
-    $number           = shift @ARGV  if ($nextword eq '-all');
-
-    $logfile          = shift @ARGV  if ($nextword eq '-log');
-
-
-    &showUsage(0) if ($nextword eq '-help' || $nextword eq '-h');
+	$instance = shift @ARGV if ($nextword eq '-instance');
+	$organism = shift @ARGV if ($nextword eq '-organism');
+	  
+	if ($nextword eq '-help') {
+		&showUsage();
+		exit(0);
+	}
 }
-
-#----------------------------------------------------------------
-# open file handle for output via a Reporter module
-#----------------------------------------------------------------
-
-my $logger = new Logging();
-
-$logger->setStandardFilter($loglevel) if defined $loglevel; # reporting level
-
-$logger->stderr2stdout() if defined $loglevel;
-
-$logger->setBlock('debug',unblock=>1) if $debug;
-
-$logger->setSpecialStream($logfile,list=>1) if $logfile;
 
 #----------------------------------------------------------------
 # get the database connection
 #----------------------------------------------------------------
 
-if ($organism && $organism eq 'default' || $instance && $instance eq 'default') {
-    undef $organism;
-    undef $instance;
+my $ds = new DataSource(-instance => $instance, -organism => $organism);
+
+my $dbh = $ds->getConnection();
+
+unless (defined($dbh)) {
+    print STDERR "Failed to connect to DataSource(instance=$instance, organism=$organism)\n";
+    print STDERR "DataSource URL is ", $ds->getURL(), "\n";
+    print STDERR "DBI error is $DBI::errstr\n";
+    die "getConnection failed";
 }
 
-my $adb = new ArcturusDatabase (-instance => $instance,
-                                -organism => $organism);
+&populateProjectContigHistory($dbh);
 
-if (!$adb || $adb->errorStatus()) {
-# abort with error message
-
-    &showUsage("Missing organism database") unless $organism;
-
-    &showUsage("Missing database instance") unless $instance;
-
-    &showUsage("Organism '$organism' not found on server '$instance'");
-}
-
-$organism = $adb->getOrganism(); # taken from the actual connection
-$instance = $adb->getInstance(); # taken from the actual connection
-
-my $URL = $adb->getURL;
-my $dbh = $adb->getConnection;
-
-$logger->info("Database $URL opened succesfully");
-
-$adb->setLogger($logger);
-
-#----------------------------------------------------------------
-# MAIN
-#----------------------------------------------------------------
-
-# add all rows to the history table for today
-# for each project
-# 	calculate the free reads
-# 	calculate the median value
-#
-
-my $insert_query = " insert into PROJECT_CONTIG_HISTORY (
-		project_id,
-		statsdate,
-		name,
-		total_contigs,
-	 total_reads,
-	total_contig_length,
-	mean_contig_length,
-	stddev_contig_length,
-	max_contig_length,
-	median_contig_length)
-	select
-	 P.project_id,
-	 now(),
-	 P.name,
-	 count(*) as contigs,
-	 sum(C.nreads),
-	 sum(C.length),
-	 round(avg(C.length)),
-	 round(std(C.length)),
-	 max(C.length),
-	 '0'
-	 from CONTIG as C,PROJECT as P
-	 where C.contig_id in
-	      (select distinct CA.contig_id from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)
-	      on (CA.contig_id = C2CMAPPING.parent_id and C2CMAPPING.contig_id = CB.contig_id)
-	      where CA.created < now()  and CA.nreads > 1 and CA.length >= 0 and (C2CMAPPING.parent_id is null  or CB.created > now()-1))
-	     and P.name not in ('BIN','FREEASSEMBLY','TRASH')
-	     and P.project_id = C.project_id; ";
-
-my $sth = $dbh->prepare_cached($query);
-my $project_contig_insert_count = $sth->execute() || &queryFailed($query);
-$sth->finish();
-
-if ($test) {
-	$logger->warning("Data for $project_contig_insert_count projects collected");
-}
-
-my $project_query = "select project_id, name from PROJECT";
-
-my $sth = $dbh->prepare($query);
-$sth->execute() || &queryFailed($query);
- 
-my $projectids = $sth->fetchall_arrayref();
-
-foreach my $project (@$projectids) {
-
-	my $project_id = @$project[0];
-	my $project_name = @$project[1];
-
-	# update the median read
-
-  my $median_read = 9999;
-
-	my $median_read_update = "update PROJECT_CONTIG_HISTORY"
-	. " set median_read = $median_read"
-	. " where project_id = $project_id";
-
-	my $sth = $dbh->prepare_cached($query);
-	my $median_read_count = $sth->execute() || &queryFailed($query);
-	$sth->finish();
-
- 	if ($test) {
-    $logger->warning("Median read for project $project_id is $medianread");
- 	}
-
-	# create the CSV file
-
-	if ($test) {
-		my $project_directory = '/tmp';
-	}
-
-	my $csv_query = "select * "
-		. " from PROJECT_CONTIG_HISTORY"
-		. " where project_id = $project_id"
-		. " into OUTFILE '$project_directory/$project_name.csv'"
-		. " fields terminated by ','"
-		. "lines terminated by '\n'";
-
-	my $sth = $dbh->prepare_cached($query);
-	my $csv_file_count = $sth->execute() || &queryFailed($query);
-	$sth->finish();
-
- 	if ($test) {
-    $logger->warning("Data for project $project_name for the year so far has been exported to $project_directory/$project_name.csv");
- 	}
-
-} # end foreach project 
-
-$adb->disconnect();
+$dbh->disconnect();
 
 exit 0;
 
@@ -230,6 +77,92 @@ sub queryFailed {
 	 print STDERR "MySQL error: $DBI::err ($DBI::errstr)\n\n" if ($DBI::err);
 	 return 0;
 }
+
+sub populateProjectContigHistory {
+   my $dbh = shift;
+
+	 my $test = 1;
+
+# add all rows to the history table for today
+# for each project
+# 	calculate the median value
+#
+
+	my $insert_query = " insert into PROJECT_CONTIG_HISTORY (
+		project_id,
+		statsdate,
+		name,
+		total_contigs,
+	 	total_reads,
+		total_contig_length,
+		mean_contig_length,
+		stddev_contig_length,
+		max_contig_length,
+		N50_contig_length)
+			select
+	 		P.project_id,
+	 		now(),
+	 		P.name,
+	 		count(*) as contigs,
+	 		sum(C.nreads),
+			sum(C.length),
+	 		round(avg(C.length)),
+	 		round(std(C.length)),
+	 		max(C.length),
+	 		'0'
+	 		from CONTIG as C,PROJECT as P
+	 		where C.contig_id in
+	      (select distinct CA.contig_id from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)
+	      on (CA.contig_id = C2CMAPPING.parent_id and C2CMAPPING.contig_id = CB.contig_id)
+	      where CA.created < now()  and CA.nreads > 1 and CA.length >= 0 and (C2CMAPPING.parent_id is null  or CB.created > now()-1))
+	     and P.name not in ('BIN','FREEASSEMBLY','TRASH')
+	     and P.project_id = C.project_id group by project_id; ";
+
+	my $isth = $dbh->prepare_cached($insert_query);
+	my $project_contig_insert_count = $isth->execute() || &queryFailed($insert_query);
+	$isth->finish();
+
+	if ($test) {
+		print STDERR"Data for $project_contig_insert_count projects collected";
+	}
+
+	my $project_query = "select project_id, name, now() from PROJECT";
+
+	my $ssth = $dbh->prepare($project_query);
+	$ssth->execute() || &queryFailed($project_query);
+ 
+	my $projectids = $ssth->fetchall_arrayref();
+
+	foreach my $project (@$projectids) {
+
+		my $project_id = @$project[0];
+		my $project_name = @$project[1];
+		my $date = @$project[2];
+
+if ($test) {
+   print STDERR "Creating median contig length for project $project_name\n";
+}
+
+		# update the N50 median read length
+
+		my $minlen = 3;
+  	my $N50_contig_length = &get_N50_for_date($date, $minlen);
+
+		my $N50_contig_length_update = "update PROJECT_CONTIG_HISTORY"
+		. " set N50_contig_length = $N50_contig_length"
+		. " where project_id = $project_id";
+
+		my $nsth = $dbh->prepare_cached($N50_contig_length_update);
+		my $N50_contig_length_count = $nsth->execute() || &queryFailed($N50_contig_length_update);
+		$nsth->finish();
+
+ 		if ($test) {
+    	print STDERR"Median read for project $project_id is $N50_contig_length";
+ 		}
+
+	} # end foreach project 
+}
+
 #------------------------------------------------------------------------
 # HELP
 #------------------------------------------------------------------------
@@ -239,8 +172,7 @@ sub showUsage {
     my $code = shift || 0;
 
 		print STDOUT "\n populate-project-contig-history.pl runs each night to add a row for today.";
-		print STDOUT "\n It generates a csv file for data for the year so far to project directory/csv\n";
-    print STDOUT "\nParameter input ERROR: $code \n" if $code; 
+    print STDOUT "\n\nParameter input ERROR: $code \n" if $code; 
     print STDOUT "\n";
     unless ($organism && $instance) {
         print STDOUT "MANDATORY PARAMETERS:\n";
@@ -252,3 +184,91 @@ sub showUsage {
 
     $code ? exit(1) : exit(0);
 }
+
+sub get_N50_for_date {
+    my $date = shift;
+    my $minlen = shift;
+
+    my $from_where_clause =
+	" from CONTIG as C where C.contig_id in " .
+	" (select distinct CA.contig_id from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)" .
+	" on (CA.contig_id = C2CMAPPING.parent_id and C2CMAPPING.contig_id = CB.contig_id)" .
+	" where CA.created < ?  and CA.nreads > 1 and CA.length >= ? and (C2CMAPPING.parent_id is null or CB.created > ?))";
+
+    my $sql = "select C.length " . $from_where_clause . " order by C.length desc";
+
+    my $sth_contig_lengths = $dbh->prepare($sql);
+
+    $sth_contig_lengths->execute($date, $minlen, $date);
+
+    my $n50 = &get_N50_from_resultset($sth_contig_lengths);
+
+    $sth_contig_lengths->finish();
+
+    return $n50;
+}
+
+sub get_N50_from_resultset {
+    my $sth = shift;
+
+    my $lengths = [];
+
+    while (my ($ctglen) = $sth->fetchrow_array()) {
+	push @{$lengths}, $ctglen;
+    }
+
+    return &get_N50_from_lengths($lengths);
+}
+
+sub get_N50_from_lengths {
+    my $lengths = shift;
+
+    my $sum_length = 0;
+
+    foreach my $ctglen (@{$lengths}) {
+	$sum_length += $ctglen;
+    }
+
+    my $target_length = int($sum_length/2);
+
+    #print STDERR "get_N50_from_lengths: list of length ", scalar(@{$lengths}), ", sum_length=$sum_length",
+    #", target_length=$target_length\n";
+
+    $sum_length = 0;
+
+     foreach my $ctglen (@{$lengths}) {
+	$sum_length += $ctglen;
+	#printf STDERR "%10d %8d\n",$sum_length,$ctglen;
+	return $ctglen if ($sum_length > $target_length);
+    }   
+
+    return 0;
+}
+
+sub printCSV {
+	my ($csvfile, $csvlines) = @_;
+
+	my $csvlinesref = ref($csvlines);
+	my $ret;
+
+	unless ($csvlinesref eq 'ARRAY') {
+		$ret = -1;
+	}
+
+	open(my $csvhandle, "> $csvfile") or die "Cannot open filehandle to $csvfile : $!";
+
+	my $i = 0;
+
+	foreach my $csvline (@{$csvlines}){
+		foreach my $csvitem (@{$csvline}){
+			print $csvhandle "$csvitem,";
+		}
+		$i++;
+		print $csvhandle "@$csvline[$i]\n";
+	}
+
+	$ret = close $csvhandle;
+	return $ret;
+	}
+
+	# end
