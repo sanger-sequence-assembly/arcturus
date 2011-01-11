@@ -25,11 +25,17 @@ my $validKeys  = "organism|o|instance|i|";
 
 while (my $nextword = shift @ARGV) {
 
-    if ($nextword !~ /\-($validKeys)\b/) {
-        &showUsage("Invalid keyword '$nextword'");
-    }
+	if ($nextword !~ /\-($validKeys)\b/) {
+		&showUsage("Invalid keyword '$nextword'");
+	}
 
-    &showUsage(0) if ($nextword eq '-help' || $nextword eq '-h');
+	$instance = shift @ARGV if ($nextword eq '-instance');
+	$organism = shift @ARGV if ($nextword eq '-organism');
+	  
+	if ($nextword eq '-help') {
+		&showUsage();
+		exit(0);
+	}
 }
 
 #----------------------------------------------------------------
@@ -71,49 +77,33 @@ where C.contig_id in
     and P.name not in ('BIN','FREEASSEMBLY','TRASH')
     and P.project_id = C.project_id";
 
-my $sth = $dbh->prepare_cached($insert_query);
-my $insert_count = $sth->execute() || &queryFailed($insert_query);
-$sth->finish();
+my $isth = $dbh->prepare_cached($insert_query);
+my $insert_count = $isth->execute() || &queryFailed($insert_query);
+$isth->finish();
 
--- update the total reads
+# update the total reads
 
 my $total_read_update = "update ORGANISM_HISTORY 
 set total_reads = (select count(*) from READINFO) 
 where free_reads = 9999";
 
-my $sth = $dbh->prepare_cached($total_read_update);
-my $total_read_update_count = $sth->execute() || &queryFailed($total_read_update);
-$sth->finish();
+my $usth = $dbh->prepare_cached($total_read_update);
+my $total_read_update_count = $usth->execute() || &queryFailed($total_read_update);
+$usth->finish();
 
--- update the free reads
+# update the free reads
 
 my $free_read_update = "update ORGANISM_HISTORY 
 set free_reads =  total_reads - reads_in_contigs
 where free_reads = 9999";
 
-my $sth = $dbh->prepare_cached($free_read_update);
-my $free_read_update_count = $sth->execute() || &queryFailed($free_read_update);
-$sth->finish();
+my $uusth = $dbh->prepare_cached($free_read_update);
+my $free_read_update_count = $uusth->execute() || &queryFailed($free_read_update);
+$uusth->finish();
 
 if ($test) {
-   $logger->warning("Successfully created organism read statistics");
+   print STDERR "Successfully created organism read statistics";
 }
-
-# create the CSV file
-
-if ($test) {
-	my $project_directory = '/tmp';
-}
-
-my $csv_query = "select * "
-		. " from ORGANISM_HISTORY"
-		. " into OUTFILE '$project_directory/$organism.csv'"
-		. " fields terminated by ','"
-		. "lines terminated by '\n'";
-
-my $sth = $dbh->prepare_cached($query);
-my $csv_file_count = $sth->execute() || &queryFailed($query);
-$sth->finish();
 
 $dbh->disconnect();
 
