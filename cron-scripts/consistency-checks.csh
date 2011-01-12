@@ -1,4 +1,4 @@
-#!/bin/csh -f
+#!/bin/csh 
 # consistency-checks.sh
 
 if ( $# > 0 ) then
@@ -22,9 +22,9 @@ default:
 endsw
 
 set ARCTURUSHOME=`dirname ~/whoami`
+set CONSISTENCYFOLDER=${ARCTURUSHOME}/consistency-checker
 set JARFILE=${ARCTURUS}/java/consistency-checker.jar
 set LOGFILE=consistency_checker.log
-set CONSISTENCYFOLDER=${ARCTURUSHOME}/consistency-checker
 
 cd ${CONSISTENCYFOLDER}
 

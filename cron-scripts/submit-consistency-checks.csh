@@ -1,4 +1,4 @@
-#!/bin/csh -f
+#!/bin/csh 
 # submit-consistency-checks.sh
 # uses just one organism to test bsub parameters
 
