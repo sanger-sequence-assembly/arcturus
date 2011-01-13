@@ -2,6 +2,9 @@
 # submit-consistency-checks.sh
 # uses just one organism to test bsub parameters
 
+set SCRIPT_HOME=`dirname $0`
+set SCRIPT_NAME=`basename $0`
+
 if ( $# > 0 ) then
   set INSTANCE=$1
   set ORG=$2
@@ -15,19 +18,13 @@ echo ------------------------------------------------------------
 echo
 echo Checking the consistency of the Arcturus databases
 
-switch($INSTANCE)
-case test:
-	set ARCTURUS=/nfs/users/nfs_k/kt6/ARCTURUS/arcturus/branches/4595239_consistency_checks
-	breaksw
-default:
-	set ARCTURUS=/software/arcturus
-	breaksw
-endsw
-
-set ARCTURUSHOME=`dirname ~/whoami`
-set JARFILE=${ARCTURUS}/java/consistency-checker.jar
+set JARFILE=${SCRIPT_HOME}/java/arcturus.jar
 set LOGFILE=consistency_checker.log
-set CONSISTENCYFOLDER=${ARCTURUSHOME}/consistency-checker
+set CONSISTENCYFOLDER=${SSCRIPT_HOME}/consistency-checker
+
+if  ( ! -d $CONSISTENCYFOLDER ) then
+  mkdir $CONSISTENCYFOLDER
+endif
 
 cd ${CONSISTENCYFOLDER}
 
@@ -40,7 +37,7 @@ cd ${CONSISTENCYFOLDER}
   pushd $ORG
 
 	echo Starting to check the consistency of the $ORG organism in the $INSTANCE database instance...
-  	/software/jdk/bin/java -jar ${JARFILE} -instance $INSTANCE -organism $ORG -log_full_path ${CONSISTENCYFOLDER}/$ORG/ -critical
+  	/software/jdk/bin/java -classpath ${JARFILE} uk.ac.sanger.arcturus.consistencychecker.CheckConsistency -instance $INSTANCE -organism $ORG -log_full_path ${CONSISTENCYFOLDER}/$ORG/ -critical
 
   popd
 
