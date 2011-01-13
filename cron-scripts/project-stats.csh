@@ -12,18 +12,17 @@ echo ------------------------------------------------------------
 echo
 echo Creating project statistics for the Arcturus databases
 
-switch($INSTANCE)
-case test:
-	set ARCTURUS=/nfs/users/nfs_k/kt6/ARCTURUS/arcturus/branches/6163487_warehouse
-	breaksw
-default:
-	set ARCTURUS=/software/arcturus
-	breaksw
-endsw
+set SCRIPT_HOME=`dirname $0`
+set SCRIPT_NAME=`basename $0`
 
-set ARCTURUSHOME=`dirname ~/whoami`
-set PROJECTSTATSFOLDER=${ARCTURUSHOME}/project-stats
+set PERL_SCRIPT_NAME=${SCRIPT_HOME}/${SCRIPT_NAME}.pl
+
+set PROJECTSTATSFOLDER=${SCRIPT_HOME}/../project-stats
 set LOGFILE=project-stats.log
+ 
+if  ( ! -d $PROJECTSTATSFOLDER ) then
+  mkdir $PROJECTSTATSFOLDER
+endif
 
 cd ${PROJECTSTATSFOLDER}
 
@@ -37,10 +36,10 @@ foreach ORG (`cat ~/test_active_organisms.list`)
   endif
 
   pushd $ORG
-		echo Submitting a batch job to calculate project statistics for the $ORG organism in the $INSTANCE database instance...
-		bsub -q phrap -o ${PROJECTSTATSFOLDER}/$ORG.log -J ${ORG}ps -N ${ARCTURUS}/populate-project-contig-history -instance $INSTANCE -organism $ORG
+		echo Submitting a batch job for ${SCRIPT_HOME}/${SCRIPT_NAME} to calculate project statistics for the $ORG organism in the $INSTANCE database instance...
+		bsub -q phrap -o ${PROJECTSTATSFOLDER}/$ORG.log -J ${ORG}ps -N ${SCRIPT_HOME}/../populate-project-contig-history -instance $INSTANCE -organism $ORG
 		echo Submitting a batch job to calculate free read statistics for the $ORG organism in the $INSTANCE database instance...
-		bsub -q phrap -o ${PROJECTSTATSFOLDER}/$ORG.log -J ${ORG}ps -N ${ARCTURUS}/populate-organism-history -instance $INSTANCE -organism $ORG
+		bsub -q phrap -o ${PROJECTSTATSFOLDER}/$ORG.log -J ${ORG}ps -N ${SCRIPT_HOME}/../populate-organism-history -instance $INSTANCE -organism $ORG
   popd
 end
 
