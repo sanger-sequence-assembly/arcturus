@@ -18,9 +18,8 @@ echo ------------------------------------------------------------
 echo
 echo Checking the consistency of the Arcturus databases
 
-set JARFILE=${SCRIPT_HOME}/java/arcturus.jar
-set LOGFILE=consistency_checker.log
-set CONSISTENCYFOLDER=${SSCRIPT_HOME}/consistency-checker
+set JARFILE=${SCRIPT_HOME}/../java/arcturus.jar
+set CONSISTENCYFOLDER=${SCRIPT_HOME}/../consistency-checker
 
 if  ( ! -d $CONSISTENCYFOLDER ) then
   mkdir $CONSISTENCYFOLDER
@@ -36,7 +35,7 @@ cd ${CONSISTENCYFOLDER}
 
   pushd $ORG
 
-	echo Starting to check the consistency of the $ORG organism in the $INSTANCE database instance...
+	echo Starting to check the consistency of the $ORG organism in the $INSTANCE database instance using the JAR ${JARFILE}...
   	/software/jdk/bin/java -classpath ${JARFILE} uk.ac.sanger.arcturus.consistencychecker.CheckConsistency -instance $INSTANCE -organism $ORG -log_full_path ${CONSISTENCYFOLDER}/$ORG/ -critical
 
   popd
