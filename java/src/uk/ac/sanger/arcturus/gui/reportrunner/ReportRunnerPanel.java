@@ -2,7 +2,6 @@ package uk.ac.sanger.arcturus.gui.reportrunner;
 
 import uk.ac.sanger.arcturus.gui.*;
 
-import uk.ac.sanger.arcturus.consistencychecker.ReportRunnerEvent;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.Arcturus;
@@ -35,7 +34,9 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	protected JButton btnSave;
 	protected JButton btnCancel;
 	
-	protected Worker worker;
+	protected JProgressBar pbarContigProgress = new JProgressBar();
+	
+	protected JFileChooser fileChooser = new JFileChooser();
 	
 	protected Statement stmt = null;
 	protected String query = "";
@@ -44,7 +45,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
     static String freeReadsString = "Save statistics about free reads";
     static String userString = "Save statistics about your work";
 
-	public ReportRunnerPanel(MinervaTabbedPane parent, ArcturusDatabase adb) 
+	public ReportRunnerPanel(MinervaTabbedPane parent, ArcturusDatabase adb)
 	{	
 		super(parent, adb);
 		
@@ -73,31 +74,37 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		btnSave.addActionListener(this);		
 	}
 	
-	public void actionPerformed(ActionEvent e) {
+	public void actionPerformed(ActionEvent event) {
 			
-			if (e.getActionCommand() == contigString) {
+			if (event.getActionCommand() == contigString) {
 				query = "contig query";
 			}
-			else if (e.getActionCommand() == freeReadsString) {
+			else if (event.getActionCommand() == freeReadsString) {
 				query = "free read query";
 			}
-			else if (e.getActionCommand() == userString) {
+			else if (event.getActionCommand() == userString) {
 				query = "user query";
 			}
-			else if (e.getSource() == btnSave) {		
-				Connection conn = adb.getPooledConnection(this);
-				stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
-		              java.sql.ResultSet.CONCUR_READ_ONLY);		
-				stmt.setFetchSize(Integer.MIN_VALUE);		
-			
+			else if (event.getSource() == btnSave) {		
+				Connection conn;
 				try {
-					 rs = stmt.executeQuery(query);
-					 ResultSetMetaData rsmd = rs.getMetaData();
-					 int cols = rsmd.getColumnCount();	
+					conn = adb.getPooledConnection(this);
+				
+					stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
+		              java.sql.ResultSet.CONCUR_READ_ONLY);		
+					stmt.setFetchSize(Integer.MIN_VALUE);		
+				} catch (ArcturusDatabaseException exception) {
+					Arcturus.logSevere("An error occurred when trying to find your report output from the Arcturus database", exception);
+					exception.printStackTrace();
+				} catch (SQLException exception) {
+					Arcturus.logSevere("An error occurred when trying to run the query to find your report output from the database", exception);
+				}
+				try {
+					 ResultSet rs = stmt.executeQuery(query);
 					 saveStatsToFile(rs);
 				}
-				catch (Exception e) {
-					Arcturus.logSevere("An error occurred when trying to save your report output to ", e);
+				catch (Exception exception) {
+					Arcturus.logSevere("An error occurred when trying to save your report output", exception);
 				}
 			}
 			else {
@@ -105,38 +112,85 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 			}
 	}
 	
-	protected void saveStatsToFile(ResultSet rs) {
-		int rc = fileChooser.showOpenDialog(this);
+	protected void saveStatsToFile(ResultSet rs) throws SQLException {
+		
+		final JFileChooser fc = new JFileChooser();
+		fc.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
 
-		if (rc == JFileChooser.APPROVE_OPTION) {
-			//Create a file chooser that can see files and directories to help user decide where to save
-			final JFileChooser fc = new JFileChooser();
-			fc.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
-			
-			int returnVal = fc.showSaveDialog(this);
-		    if (returnVal == JFileChooser.APPROVE_OPTION) {
-		        Arcturus.logWarning("Saving: " + file.getName() + "." + newline);
-		            
-		     try {
-		            File file = fc.getSelectedFile();
-		            BufferedWriter bw = new BufferedWriter(new FileWriter(file));
-
-		            while (rs.next()) {
-		            	for (int col = 1; col <= cols; col++) {
-		            		bw.write((String) rs.getObject(col));
-		            	}
-		            } 
-		            br.close();
+		int returnVal = fc.showSaveDialog(this);
+		File file = fc.getSelectedFile();
+		
+		if (returnVal == JFileChooser.APPROVE_OPTION) {
+			try {
+				Arcturus.logWarning("Saving: " + file.getName() + ".\n");
+				
+				BufferedWriter writer = new BufferedWriter(new FileWriter(file));
+				ResultSetMetaData rsmd = rs.getMetaData();
+				int cols = rsmd.getColumnCount();	
+				 
+				while (rs.next()) {
+					for (int col = 1; col <= cols; col++) {
+						writer.write((String) rs.getObject(col));
+					}
 				} 
-		        catch (IOException ioe) {
-					Arcturus.logWarning("Error encountered whilst reading file "
-								+ file.getPath(), ioe);
-		        }
-		      }
-			else {
-		          log.append("Save command cancelled by user." + newline);
-		    }
+				writer.close();
+			} 
+			catch (IOException ioe) {
+				Arcturus.logWarning("Error encountered whilst writing file "
+						+ file.getPath(), ioe);
+			}
 		}
+		else {
+			Arcturus.logWarning("Save command cancelled by user\n");
+		}
+	}
+
+	@Override
+	public void refresh() throws ArcturusDatabaseException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void closeResources() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	protected void createActions() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	protected void createClassSpecificMenus() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	protected boolean addClassSpecificFileMenuItems(JMenu menu) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	protected boolean isRefreshable() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	protected void addClassSpecificViewMenuItems(JMenu menu) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	protected void doPrint() {
+		// TODO Auto-generated method stub
+		
 	}
 
 }
