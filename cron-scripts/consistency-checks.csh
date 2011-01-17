@@ -7,7 +7,8 @@ set SCRIPT_NAME=`basename $0`
 if ( $# > 0 ) then
   set INSTANCE=$1
 else
-  set INSTANCE=pathogen
+	echo Consistency-check.sh expects the instance name to check (in lower case).
+  exit -1
 endif
 
 echo
@@ -23,7 +24,7 @@ endif
 
 cd ${CONSISTENCYFOLDER}
 
-foreach ORG (`cat ~/test_active_organisms.list`)
+foreach ORG (`cat ~/$INSTANCE_active_organisms.list`)
   set ORG=`echo $ORG | awk -F : '{print $1}'`
 
   echo Checking the consistency of the $ORG database using ${SCRIPT_HOME}/${SCRIPT_NAME}
