@@ -1,5 +1,9 @@
 <?xml version='1.0' encoding='utf-8'?>
 
+
+<!-- remember to rebuild the jar if you make any changes to this file by deleting it first to force a complete ant rebuild -->
+
+
 <!DOCTYPE testset [
 	<!ELEMENT description (#PCDATA) >
 
@@ -26,6 +30,7 @@
 		<query>
             select C.contig_id,nreads,count(distinct mapping_id) as mapping_count
             from CONTIG C left join MAPPING M using(contig_id)
+						where C.updated > date_sub(curdate(), INTERVAL 1 MONTH) 
             group by contig_id having nreads != mapping_count
 		</query>
 		
@@ -43,6 +48,7 @@
 			select contig_id,C.created,length,name
 			from CONTIG C left join PROJECT P using(project_id)
 			where C.nreads = 0
+		  and C.updated > date_sub(curdate(), INTERVAL 1 MONTH) 
 		</query>
 		
 		<format>
@@ -102,26 +108,11 @@
 			select mapping_id,seq_id,MAPPING.contig_id
 			from MAPPING left join CONTIG using(contig_id)
 			where CONTIG.contig_id is null
+		  and CONTIG.updated > date_sub(curdate(), INTERVAL 1 MONTH) 
 		</query>
 		
 		<format>
 			Mapping {0,number,#} for sequence {1,number,#} refers to non-existent contig {2,number,#}
-		</format>
-	</test>
-
-	<test critical="YES">
-		<description>
-			Do all contig-to-sequence mappings have valid sequence data?
-		</description>
-
-		<query>
-			select contig_id,mapping_id,MAPPING.seq_id
-			from MAPPING left join SEQUENCE using(seq_id)
-			where sequence is null or quality is null
-		</query>
-		
-		<format>
-			Mapping {1,number,#} in contig {0,number,#} has undefined sequence {2,number,#}
 		</format>
 	</test>
 
