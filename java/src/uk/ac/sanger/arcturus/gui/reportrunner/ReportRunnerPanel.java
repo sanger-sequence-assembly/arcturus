@@ -29,10 +29,16 @@ import java.io.InputStream;
 
 public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	
-	protected JTextArea textarea = new JTextArea();
-	protected JButton btnRefresh;
-	protected JButton btnSave;
-	protected JButton btnCancel;
+	static String contigString = "Save statistics about contigs";
+    static String freeReadsString = "Save statistics about free reads";
+    static String userString = "Save statistics about your work";
+    static String saveString = "Save statistics to a comma-separated file on your machine";
+
+    protected JButton btnSave = new JButton(saveString);
+	
+	final JCheckBox contigButton = new JCheckBox(contigString);
+	final JCheckBox freeReadsButton = new JCheckBox(freeReadsString);		
+	final JCheckBox userButton = new JCheckBox(userString);	
 	
 	protected JProgressBar pbarContigProgress = new JProgressBar();
 	
@@ -40,22 +46,15 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	
 	protected Statement stmt = null;
 	protected String query = "";
-
-	static String contigString = "Save statistics about contigs";
-    static String freeReadsString = "Save statistics about free reads";
-    static String userString = "Save statistics about your work";
+	protected String titleString = "";
 
 	public ReportRunnerPanel(MinervaTabbedPane parent, ArcturusDatabase adb)
 	{	
 		super(parent, adb);
 		
-	    final JCheckBox contigButton = new JCheckBox(contigString);
-		final JCheckBox freeReadsButton = new JCheckBox(freeReadsString);		
-		final JCheckBox userButton = new JCheckBox(userString);	
-		
 		contigButton.setEnabled(true);
-		freeReadsButton.setEnabled(false);
-		userButton.setEnabled(false);
+		freeReadsButton.setEnabled(true);
+		userButton.setEnabled(true);
 		
         JPanel radioPanel = new JPanel(new GridLayout(0, 1));
         radioPanel.add(contigButton);
@@ -63,29 +62,94 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
         radioPanel.add(userButton);
         
     	add(radioPanel, BorderLayout.NORTH);
-    	
-		btnSave = new JButton("Save data as CSV");
 
-		JPanel buttonPanel = new JPanel(new FlowLayout());
-		buttonPanel.add(btnSave);
+		JPanel buttonPanel = new JPanel(new GridLayout(0, 1));
+		radioPanel.add(btnSave);
 
 		add(buttonPanel, BorderLayout.SOUTH);
 
-		btnSave.addActionListener(this);		
+		contigButton.addActionListener(this);
+		freeReadsButton.addActionListener(this);
+		userButton.addActionListener(this);
+		btnSave.addActionListener(this);
+		
+		createMenus();
 	}
 	
 	public void actionPerformed(ActionEvent event) {
 			
-			if (event.getActionCommand() == contigString) {
-				query = "contig query";
+		Arcturus.logInfo("in actionPerformed because " +
+				event.getSource() + "" +
+				"has been pressed and query holds: " + query);
+		
+			//if (event.getActionCommand() == contigString) {
+			if (event.getSource() == contigButton) {
+				query = "select " +
+						"project_id, ','," +
+						"statsdate, ',', " +
+						"name, ',', " +
+						"total_contigs, ',', " +
+						"total_reads, ',', " +
+						"total_contig_length, ',', " +
+						"mean_contig_length, ',', " +
+						"stddev_contig_length, ',', " +
+						"max_contig_length, ',' ," +
+						"n50_contig_length " +
+						"from PROJECT_CONTIG_HISTORY order by project_id";
+				titleString =  
+				"project_id," +
+				"statsdate," +
+				"name," +
+				"total_contigs," +
+				"total_reads," +
+				"total_contig_length," +
+				"mean_contig_length," +
+				"stddev_contig_length," +
+				"max_contig_length," +
+				"n50_contig_length";
+				
+				contigButton.setSelected(true);
+				freeReadsButton.setSelected(false);
+				userButton.setSelected(false);
+				btnSave.setEnabled(true);
 			}
 			else if (event.getActionCommand() == freeReadsString) {
-				query = "free read query";
+				query = "select " +
+						"organism, ',', " +
+						"statsdate, ',', " +
+						"total_reads, ',', " +
+						"reads_in_contigs, ',', " +
+						"free_reads " +
+						"from ORGANISM_HISTORY " +
+						"order by statsdate ASC";
+				titleString = 
+				"organism," +
+				"statsdate," +
+				"total_reads," +
+				"reads_in_contigs," +
+				"free_reads";
+				
+				contigButton.setSelected(false);
+				freeReadsButton.setSelected(false);
+				userButton.setSelected(true);
+				btnSave.setEnabled(true);
 			}
 			else if (event.getActionCommand() == userString) {
-				query = "user query";
+				query = "select count(*) from USER";
+				titleString = "count";
+				
+				contigButton.setSelected(false);
+				freeReadsButton.setSelected(false);
+				userButton.setSelected(true);
+				btnSave.setEnabled(true);
 			}
 			else if (event.getSource() == btnSave) {		
+				
+				contigButton.setEnabled(false);
+				freeReadsButton.setEnabled(false);
+				userButton.setEnabled(true);
+				
+				Arcturus.logInfo("query being run is: " + query);
 				Connection conn;
 				try {
 					conn = adb.getPooledConnection(this);
@@ -93,17 +157,15 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 					stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
 		              java.sql.ResultSet.CONCUR_READ_ONLY);		
 					stmt.setFetchSize(Integer.MIN_VALUE);		
+					
+					ResultSet rs = stmt.executeQuery(query);
+					saveStatsToFile(rs);
 				} catch (ArcturusDatabaseException exception) {
 					Arcturus.logSevere("An error occurred when trying to find your report output from the Arcturus database", exception);
 					exception.printStackTrace();
 				} catch (SQLException exception) {
 					Arcturus.logSevere("An error occurred when trying to run the query to find your report output from the database", exception);
-				}
-				try {
-					 ResultSet rs = stmt.executeQuery(query);
-					 saveStatsToFile(rs);
-				}
-				catch (Exception exception) {
+				} catch (Exception exception) {
 					Arcturus.logSevere("An error occurred when trying to save your report output", exception);
 				}
 			}
@@ -122,18 +184,24 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		
 		if (returnVal == JFileChooser.APPROVE_OPTION) {
 			try {
-				Arcturus.logWarning("Saving: " + file.getName() + ".\n");
+				Arcturus.logInfo("Saving: " + file.getName() + ".\n");
 				
 				BufferedWriter writer = new BufferedWriter(new FileWriter(file));
 				ResultSetMetaData rsmd = rs.getMetaData();
 				int cols = rsmd.getColumnCount();	
-				 
+
+				Arcturus.logInfo("There are " + cols +" columns in the data set");
+				
+				//writer.newLine();
+				writer.write(titleString);
+				
 				while (rs.next()) {
 					for (int col = 1; col <= cols; col++) {
 						writer.write((String) rs.getObject(col));
 					}
 				} 
 				writer.close();
+				Arcturus.logInfo("File " + file.getName() + " saved successfully");
 			} 
 			catch (IOException ioe) {
 				Arcturus.logWarning("Error encountered whilst writing file "
