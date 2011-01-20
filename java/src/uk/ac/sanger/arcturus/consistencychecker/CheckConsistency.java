@@ -17,6 +17,8 @@ import javax.xml.parsers.SAXParserFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParser;
 
+import com.mysql.jdbc.exceptions.MySQLStatementCancelledException;
+
 public class CheckConsistency {
 	// This error code corresponds to the server error ER_QUERY_INTERRUPTED, but that
 	// symbol does not appear in the set of constants defined in com.mysql.jdbc.MysqlErrorCodes
@@ -121,7 +123,7 @@ public class CheckConsistency {
 				rows = doQuery(stmt, test.getQuery(), format);
 			}
 			catch (SQLException e) {
-				if (e.getErrorCode() == MYSQL_QUERY_INTERRUPTED) {
+				if (e instanceof MySQLStatementCancelledException || e.getErrorCode() == MYSQL_QUERY_INTERRUPTED) {
 					// Another thread has called our 'cancel' method.
 					cancelled = true;
 					break;
