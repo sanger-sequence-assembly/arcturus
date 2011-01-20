@@ -1,5 +1,13 @@
 #!/bin/bash
 
+ME=`whoami`
+
+if [ ${ME} != arcturus ]
+then
+  echo You must be logged in as arcturus to run this script
+  exit 1
+fi
+
 TARGET=.retired
 
 if [ ! -d ${TARGET} ]
