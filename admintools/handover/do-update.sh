@@ -47,8 +47,17 @@ then
   cp -f ${OLDJARS}/arcturus-*.jar java/
 fi
 
-cd java
+cd utils
+./makePerlWrappers
+./makeLSFWrappers
+cd ..
 
+cd test
+./makePerlWrappers
+cd ..
+
+cd java
 ant jar
+cd ..
 
 exit
