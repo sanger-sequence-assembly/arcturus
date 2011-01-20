@@ -4,28 +4,25 @@ import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
-import uk.ac.sanger.arcturus.gui.OrganismChooserPanel;
-import uk.ac.sanger.arcturus.logging.MailHandler;
 
 import java.sql.*;
 import java.io.*;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.LogRecord;
 import java.text.MessageFormat;
 import java.util.Vector;
 
 import org.xml.sax.SAXException;
 
-import com.mysql.jdbc.exceptions.MySQLStatementCancelledException;
-
 import javax.xml.parsers.SAXParserFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParser;
 
-import javax.swing.JOptionPane;
-
 public class CheckConsistency {
+	// This error code corresponds to the server error ER_QUERY_INTERRUPTED, but that
+	// symbol does not appear in the set of constants defined in com.mysql.jdbc.MysqlErrorCodes
+	// so we define it here.
+	private static final int MYSQL_QUERY_INTERRUPTED = 1317;
+	
 	protected CheckConsistencyListener listener = null;
 	
 	protected List<Test> tests;
@@ -65,7 +62,7 @@ public class CheckConsistency {
 		String organism = adb.getName();
 		
 		try {
-			 checkConsistency(conn,criticalOnly);
+			 checkConsistency(adb, conn, criticalOnly);
 		}
 		catch (SQLException e) {
 			adb.handleSQLException(e, "An error occurred when checking the database consistency for organism " + organism, conn, this);
@@ -85,15 +82,14 @@ public class CheckConsistency {
 		}
 	}
 
-	protected void checkConsistency(Connection conn, boolean criticalOnly) throws SQLException {
+	protected void checkConsistency(ArcturusDatabase adb, Connection conn, boolean criticalOnly)
+	throws SQLException, ArcturusDatabaseException {
 		cancelled = false;
 		boolean all_tests_passed = true;
 		
-		String message = "";
-		CheckConsistencyEvent.Type type = CheckConsistencyEvent.Type.UNKNOWN;
 		CheckConsistencyEvent event = new CheckConsistencyEvent(this);
 		
-		event.setEvent("", CheckConsistencyEvent.Type.START_TEST_RUN);
+		event.setEvent(null, CheckConsistencyEvent.Type.START_TEST_RUN);
 		notifyListener(event);
 		
 		stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
@@ -112,12 +108,29 @@ public class CheckConsistency {
 			
 			event.setEvent( "\n--------------------------------------------------------------------------------\n" + 
 					test.getDescription(),CheckConsistencyEvent.Type.START_TEST);
+			
 			notifyListener(event);
 			
 			MessageFormat format = new MessageFormat(test.getFormat());
 			
 			long t0 = System.currentTimeMillis();
-			int rows = doQuery(stmt, test.getQuery(), format);
+			
+			int rows = -1;
+			
+			try {
+				rows = doQuery(stmt, test.getQuery(), format);
+			}
+			catch (SQLException e) {
+				if (e.getErrorCode() == MYSQL_QUERY_INTERRUPTED) {
+					// Another thread has called our 'cancel' method.
+					cancelled = true;
+					break;
+				} else {
+					String organism = adb.getName();
+					adb.handleSQLException(e, "An error occurred when checking the database consistency for organism " + organism, conn, this);
+				}
+			}
+			
 			long dt = System.currentTimeMillis() - t0;
 
 			switch (rows) {
@@ -125,27 +138,31 @@ public class CheckConsistency {
 					event.setEvent("\nPASSED Time elapsed: " + dt + " ms", 
 							CheckConsistencyEvent.Type.TEST_PASSED);
 					break;
-				case 1:
-					event.setEvent("\n*** FAILED : 1 inconsistency Time elapsed: " + dt + " ms***", 
-							CheckConsistencyEvent.Type.TEST_FAILED);
-					all_tests_passed = false;
-					break;
+					
 				default:
-					event.setEvent("\n*** FAILED : " + rows + " inconsistencies Time elapsed: " + dt + " ms***", 
+					String word = rows > 1 ? " inconsistencies" : " inconsistency";
+					
+					event.setEvent("\n*** FAILED : " + rows + word + " Time elapsed: " + dt + " ms***", 
 							CheckConsistencyEvent.Type.TEST_FAILED);
+					
 					all_tests_passed = false;
 					break;
 			}
+			
 			notifyListener(event);
 		}
+		
 		stmt.close();
 		stmt = null;
 		
-		if (all_tests_passed)
-			event.setEvent("\n\n+++++ ALL TESTS COMPLETED AND PASSED +++++", CheckConsistencyEvent.Type.ALL_TESTS_PASSED);
-		else
-			event.setEvent("\n\n+++++ ALL TESTS COMPLETED BUT WITH SOME INCONSISTENCIES +++++", CheckConsistencyEvent.Type.SOME_TESTS_FAILED);
-		
+		if (cancelled) {
+			event.setEvent("\n\n+++++ SOME TESTS WERE NOT COMPLETED BECAUSE THE RUN WAS CANCELLED +++++", CheckConsistencyEvent.Type.CANCELLED);			
+		} else {
+			if (all_tests_passed)
+				event.setEvent("\n\n+++++ ALL TESTS COMPLETED AND PASSED +++++", CheckConsistencyEvent.Type.ALL_TESTS_PASSED);
+			else
+				event.setEvent("\n\n+++++ ALL TESTS COMPLETED BUT WITH SOME INCONSISTENCIES +++++", CheckConsistencyEvent.Type.SOME_TESTS_FAILED);
+		}
 		notifyListener(event);
 	}
 	
