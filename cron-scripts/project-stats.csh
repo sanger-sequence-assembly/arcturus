@@ -22,8 +22,8 @@ set PROJECTSTATSFOLDER=${HOME}/project-stats
 set LOGFILE=${HOME}/project-stats.log
 
 set UTILSFOLDER=${SCRIPT_HOME}/../utils
-set STATS_SCRIPT = ${UTILSFOLDER}/populate-project-contig-history.pl
-set READS_SCRIPT = ${UTILSFOLDER}/populate-organism-history.pl
+set STATS_SCRIPT = ${UTILSFOLDER}/populate-project-contig-history
+set READS_SCRIPT = ${UTILSFOLDER}/populate-organism-history
  
 if  ( ! -d $PROJECTSTATSFOLDER ) then
   mkdir $PROJECTSTATSFOLDER
@@ -42,10 +42,10 @@ foreach ORG (`cat ${HOME}/${INSTANCE}_active_organisms.list`)
 
   pushd $ORG
 		echo Submitting a batch job for ${STATS_SCRIPT} to calculate project statistics for the $ORG organism in the $INSTANCE database instance...
-		bsub -q phrap -o ${PROJECTSTATSFOLDER}/$ORG.log -J ${ORG}ps -N ${STATS_SCRIPT} -instance $INSTANCE -organism $ORG
+		bsub -q phrap -o ${PROJECTSTATSFOLDER}/${ORG}/${ORG}.log -J ${ORG}ps -N ${STATS_SCRIPT} -instance $INSTANCE -organism $ORG
 
 		echo Submitting a batch job for ${READS_SCRIPT} to calculate free read statistics for the $ORG organism in the $INSTANCE database instance...
-		bsub -q phrap -o ${PROJECTSTATSFOLDER}/$ORG.log -J ${ORG}ps -N ${READS_SCRIPT} -instance $INSTANCE -organism $ORG
+		bsub -q phrap -o ${PROJECTSTATSFOLDER}/${ORG}/${ORG}.log -J ${ORG}ps -N ${READS_SCRIPT} -instance $INSTANCE -organism $ORG
   popd
 end
 
