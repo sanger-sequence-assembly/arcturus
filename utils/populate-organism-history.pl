@@ -19,7 +19,6 @@ my $instance;
 my $organism;
 
 my $debug;
-my $test;
  
 my $validKeys  = "organism|o|instance|i|";
 
@@ -62,18 +61,23 @@ organism,
 statsdate, 
 total_reads,
 reads_in_contigs,
-free_reads)
+free_reads,
+asped_reads,
+next_gen_reads)
 select 
 'TESTRATTI',
-now(),
+date(now())-1,
 9999,
 sum(C.nreads),
+9999,
+9999,
 9999
 from CONTIG as C,PROJECT as P  
 where C.contig_id in 
      (select distinct CA.contig_id from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)
      on (CA.contig_id = C2CMAPPING.parent_id and C2CMAPPING.contig_id = CB.contig_id)
-     where CA.created < now()  and CA.nreads > 1 and CA.length >= 0 and (C2CMAPPING.parent_id is null  or CB.created > now()-1))
+     where date(CA.created) < date(now())-1 and CA.nreads > 1 and CA.length >= 0 
+		 and (C2CMAPPING.parent_id is null  or date(CB.created) > date(now())-2))
     and P.name not in ('BIN','FREEASSEMBLY','TRASH')
     and P.project_id = C.project_id";
 
@@ -85,7 +89,7 @@ $isth->finish();
 
 my $total_read_update = "update ORGANISM_HISTORY 
 set total_reads = (select count(*) from READINFO) 
-where free_reads = 9999";
+where statsdate = date(now())-1";
 
 my $usth = $dbh->prepare_cached($total_read_update);
 my $total_read_update_count = $usth->execute() || &queryFailed($total_read_update);
@@ -95,15 +99,31 @@ $usth->finish();
 
 my $free_read_update = "update ORGANISM_HISTORY 
 set free_reads =  total_reads - reads_in_contigs
-where free_reads = 9999";
+where statsdate = date(now())-1";
 
 my $uusth = $dbh->prepare_cached($free_read_update);
 my $free_read_update_count = $uusth->execute() || &queryFailed($free_read_update);
 $uusth->finish();
 
-if ($test) {
-   print STDERR "Successfully created organism read statistics";
-}
+# update the asped and next_gen_reads
+
+my $asped_read_update = "update ORGANISM_HISTORY
+set asped_reads =  (select count(*) from READINFO where asped is not null )
+where statsdate = date(now())-1";
+
+my $asth = $dbh->prepare_cached($asped_read_update);
+my $asped_read_update_count = $asth->execute() || &queryFailed($asped_read_update);
+$asth->finish();
+
+my $next_gen_read_update = "update ORGANISM_HISTORY
+set next_gen_reads = total_reads - asped_reads
+where statsdate = date(now())-1";
+
+my $nsth = $dbh->prepare_cached($next_gen_read_update);
+my $next_gen_read_update_count = $nsth->execute() || &queryFailed($next_gen_read_update);
+$nsth->finish();
+
+print STDERR "Successfully created organism read statistics for organism $organism in instance $instance \n";
 
 $dbh->disconnect();
 
