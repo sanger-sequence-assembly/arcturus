@@ -79,7 +79,11 @@ my $tempdate;
   
 $statsdate = $since;
 
-while ($statsdate != $until) { 
+print STDERR "Finding dates from $statsdate until $until:\n";
+print STDERR "Adding $statsdate to list of dates\n";
+push @datelist, $statsdate;
+
+while ($statsdate ne $until) { 
 	$duh->execute() or die "Cannot update the time_intervals table";
 
 	$dqh->execute() or die "Cannot find the maximum date";;
