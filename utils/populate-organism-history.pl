@@ -11,6 +11,7 @@ use PathogenRepository;
 use DBI;
 use DataSource;
 
+require Mail::Send;
 #----------------------------------------------------------------
 # ingest command line parameters
 #----------------------------------------------------------------
@@ -125,6 +126,61 @@ $nsth->finish();
 
 print STDERR "Successfully created organism read statistics for organism $organism in instance $instance \n";
 
+# COMMENTED OUT UNTIL BACK POPULATION ENSURES DATA IS THERE
+
+#$threshold = 100;
+
+# get the free_reads for stats_day
+# my $stasday_free_reads = 0;
+# my $statsday_query = "select total_reads from ORGANISM_HISTORY where statsdate = date(now())-1";
+
+#my $dsth = $dbh->prepare_cached($previous_query);
+#my $statsday_count = $dsth->execute() || &queryFailed($statsday_query);
+#$dsth->finish();
+#my $statsday_values = $dsth->fetchall_arrayref();
+#
+#foreach my $statsday_value (@$statsday_values) {
+		#$statsday_free_reads = @$statsday_value[0];
+
+#my $previous_values = $psth->fetchall_arrayref();
+# get the free_reads and asped reads for previous_day
+# my $previous_query = "select total_reads, asped_reads from ORGANISM_HISTORY where statsdate = date(now())-2";
+
+#my $psth = $dbh->prepare_cached($previous_query);
+#my $previous_count = $psth->execute() || &queryFailed($previous_query);
+#$psth->finish();
+
+#my $previous_values = $psth->fetchall_arrayref();
+#
+#foreach my $previous_value (@$previous_values) {
+		#$free_reads_previous_day = @$previous_value[0];
+		#my $asped_reads_previous_day = @$previous_value[0];
+		#
+# 	$read_difference =  $free_reads_previous_day - $free_reads_stats_day - $asped_reads_previous_day;
+#
+# if ($read_difference > $threshold) {
+#
+# my $msg = "This is to let you know that the difference between the free reads   
+# for the TESTSCHISTO database stats_day and previous_day is $free_read_difference, which is over  
+# the threshold of $threshold.
+#
+# Previous day  (yyyy/mm/dd)
+# total reads = a
+# asped reads  = b
+# free reads = c
+#
+# Stats day (yyyy/mm/dd)
+#
+# total reads = d
+# asped reads  = e
+# free reads = f"
+#
+# ******************
+#  send the email 
+#	&sendMessage($user, $message, $instance) if $message;
+#	}	
+#}
+#
 $dbh->disconnect();
 
 exit 0;
@@ -165,3 +221,24 @@ sub showUsage {
 
     $code ? exit(1) : exit(0);
 }
+
+sub sendMessage {
+    my ($user,$message,$instance) = @_;
+
+		my $to = "kt6";
+		$to .= ',' . $user if defined($user);
+
+    if ($instance eq 'test') {
+				$to = $user;
+    }
+
+    my $mail = new Mail::Send;
+    $mail->to($user);
+    $mail->subject("Arcturus project import FAILED");
+    #$mail->add("X-Arcturus", "contig-transfer-manager");
+    my $handle = $mail->open;
+    print $handle "$message\n";
+    $handle->close;
+    
+}
+
