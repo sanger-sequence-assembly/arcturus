@@ -80,7 +80,7 @@ my $tempdate;
 $statsdate = $since;
 
 print STDERR "Finding dates from $statsdate until $until:\n";
-print STDERR "Adding $statsdate to list of dates\n";
+#print STDERR "Adding $statsdate to list of dates\n";
 push @datelist, $statsdate;
 
 while ($statsdate ne $until) { 
@@ -89,7 +89,7 @@ while ($statsdate ne $until) {
 	$dqh->execute() or die "Cannot find the maximum date";;
 
 	($statsdate, $tempdate) = $dqh->fetchrow_array();
-	print STDERR "Adding $statsdate to list of dates\n";
+#	print STDERR "Adding $statsdate to list of dates\n";
   push @datelist, $statsdate;
 }
 
@@ -143,10 +143,10 @@ foreach my $date (@datelist) {
 
 	print STDERR"Data for $project_contig_insert_count projects collected\n";
 
-	my $project_query = "select project_id, name  from PROJECT_CONTIG_HISTORY";
+	my $project_query = "select project_id, name from PROJECT_CONTIG_HISTORY where statsdate = ?";
 
 	$ssth = $dbh->prepare($project_query);
-	$ssth->execute() || &queryFailed($project_query);
+	$ssth->execute($date) || &queryFailed($project_query);
  
 	my $projectids = $ssth->fetchall_arrayref();
 
@@ -158,7 +158,7 @@ foreach my $date (@datelist) {
 		# update the N50 read length
 
 		my $minlen = 0;
- 		my $N50_contig_length = &get_N50_for_date($date, $minlen);
+ 		my $N50_contig_length = &get_N50_for_date($date, $minlen, $project_id);
 
 		my $N50_contig_length_update = "update PROJECT_CONTIG_HISTORY"
 		. " set N50_contig_length = $N50_contig_length"
@@ -201,9 +201,10 @@ sub showHelp {
 sub get_N50_for_date {
     my $date = shift;
     my $minlen = shift;
+    my $project_id = shift;
 
     my $from_where_clause =
-	" from CONTIG as C where C.contig_id in " .
+	" from CONTIG as C where C.project_id = ? and C.contig_id in " .
 	" (select distinct CA.contig_id from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)" .
 	" on (CA.contig_id = C2CMAPPING.parent_id and C2CMAPPING.contig_id = CB.contig_id)" .
 	" where CA.created < ?  and CA.nreads > 1 and CA.length >= ? and (C2CMAPPING.parent_id is null or CB.created > ?))";
@@ -212,7 +213,7 @@ sub get_N50_for_date {
 
     my $sth_contig_lengths = $dbh->prepare($sql);
 
-    $sth_contig_lengths->execute($date, $minlen, $date);
+    $sth_contig_lengths->execute($project_id, $date, $minlen, $date);
 
     my $n50 = &get_N50_from_resultset($sth_contig_lengths);
 
