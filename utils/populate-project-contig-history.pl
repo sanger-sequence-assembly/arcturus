@@ -188,6 +188,7 @@ sub showUsage {
 sub get_N50_for_date {
     my $date = shift;
     my $minlen = shift;
+		my $project_id = shift;
 
     my $from_where_clause =
 	" from CONTIG as C where C.project_id = ? and C.contig_id in " .
