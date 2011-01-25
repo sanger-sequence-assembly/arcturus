@@ -29,7 +29,7 @@
   </resources>
   <application-desc main-class="uk.ac.sanger.arcturus.gui.Minerva">
     <argument>-instance</argument>
-    <argument>pathogen</argument>
+    <argument>illumina</argument>
   <application-desc/>
 </jnlp> 
 
