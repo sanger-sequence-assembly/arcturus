@@ -102,7 +102,7 @@ elsif (($since ne "") && ($until ne "")) {
 	}
 	else {
 	
-		my $date_create = "create table time_intervals( statsdate DATE NOT NULL, until_date DATE NOT NULL)";
+		my $date_create = "create temporary table time_intervals( statsdate DATE NOT NULL, until_date DATE NOT NULL)";
 		my $dch = $dbh->do($date_create) or die "Cannot create the time_intervals table";
 
 		my $date_insert = "insert into time_intervals values(date(?), date(?))";
@@ -283,8 +283,6 @@ sub showUsage {
 
     my $code = shift || 0;
 
-		print STDOUT "\n populate-organism-history.pl runs each night to add a row for today.";
-		print STDOUT "\n It generates a csv file for data for the year so far to project directory/csv\n";
 		print STDOUT "\n Please supply two dates for an inclusive period to populate the organism statistics,";
 		print STDOUT "\n or no dates to populate yesterday's data\n";
     print STDOUT "\n Parameter input ERROR: $code \n" if $code; 
