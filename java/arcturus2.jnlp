@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- JNLP File for Minerva WebStart -->
+<jnlp
+  spec="6.0+"
+  codebase="http://intweb/Software/Arcturus/webstart/"
+  href="arcturus2.jnlp">
+  <information>
+    <title>Minerva WebStart</title>
+    <vendor>Production Software</vendor>
+    <description>Minerva WebStart</description>
+    <offline-allowed/>
+  </information>
+  <security>
+      <all-permissions/>
+  </security>
+  <resources>
+    <j2se version="1.6+" java-vm-args="-esa -Xnoclassgc"/>
+    <jar href="arcturus2.jar"/>
+    <jar href="lib/jlfgr-1_0.jar" />
+    <jar href="lib/jmxremote_optional.jar" />
+    <jar href="lib/mysql-connector-java-5.1.12-bin.jar" />
+    <jar href="lib/oracle-jdbc.jar" />
+    <jar href="lib/postgresql-8.3-603.jdbc3.jar" />
+    <jar href="lib/trilead-ssh2-build213.jar" />
+    <jar href="lib/javamail.jar" />
+    <jar href="lib/sam-1.18.jar" />
+    <jar href="lib/jgrapht-jdk1.6.jar" />
+    <property name="testing" value="true" />
+  </resources>
+  <application-desc main-class="uk.ac.sanger.arcturus.gui.Minerva">
+    <argument>-instance</argument>
+    <argument>test</argument>
+  <application-desc/>
+</jnlp> 
+
