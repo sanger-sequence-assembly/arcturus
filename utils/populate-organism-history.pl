@@ -18,8 +18,8 @@ require Mail::Send;
 
 my $instance;
 my $organism;
-my $since;
-my $until;
+my $since="";
+my $until="";
 my $threshold;
 
 my $debug;
@@ -49,10 +49,9 @@ unless (defined($threshold)) {
 	exit(0);
 }
 
-unless (defined($since) && defined($until)) {
-	print STDERR "One or more dates undefined\n";
-	if (undef($since) || undef($until)) {
-		print STDERR "Only one date defined\n";
+unless (($since ne "") && ($until ne "")) {
+	if (($since ne "") || ($until ne "")) {
+		print STDERR "/n/tOnly one date defined\n";
 		&showUsage();
 		exit(0);
 	}
@@ -77,57 +76,66 @@ unless (defined($dbh)) {
 #----------------------------------------------------------------
 my @datelist;
 
-if ($since eq $until) {
-	push @datelist, $since;
-}
-elsif (undef($since) && undef($until)) {
+if (($since eq "") || ($until eq "")) {
 	# generate just yesterday
-	my $yesterday = "date(now())-1";
+	my $yesterday_query ="select date_sub(date(now()),interval 1 day)";
+
+	my $yqh = $dbh->prepare($yesterday_query);
+	$yqh->execute() or die "Cannot find yesterday's date";
+	my $yesterday = $yqh->fetchrow_array();
+
 	push @datelist, $yesterday;
+	print STDERR "Populating data for $yesterday only\n";
 }
-elsif (undef($since) && defined($until)) {
+elsif (($since eq "") && ($until ne "")) {
 	# a range of dates need to be generated from creation of database to $until inclusive
 	# to be implemented
 }
-elsif (undef($since) && defined($until)) {
+elsif (($since ne "") && ($until eq "")) {
 	# a range of dates need to be generated from $since to yesterday inclusive
 	# to be implemented
 }
-elsif (defined($since) && defined($until)) {
-	
-	my $date_create = "create table time_intervals( statsdate DATE NOT NULL, until_date DATE NOT NULL)";
-	my $dch = $dbh->do($date_create) or die "Cannot create the time_intervals table";
-
-	my $date_insert = "insert into time_intervals values(date(?), date(?))";
-	my $dih = $dbh->prepare($date_insert);
-	$dih->execute($since, $until) or die "Cannot set up the time_intervals table";
-
-	my $date_update = "update time_intervals set statsdate = timestampadd(DAY, 1, statsdate)";
-	my $duh = $dbh->prepare($date_update);
-
-	my $date_query = "select max(statsdate), until_date from time_intervals;";
-	my $dqh = $dbh->prepare($date_query);
-
-	my $date_drop = "drop table time_intervals";
-	my $statsdate;
-	my $tempdate;
-  
-	$statsdate = $since;
-
-	print STDERR "Finding dates from $statsdate until $until:\n";
-	#print STDERR "Adding $statsdate to list of dates\n";
-	push @datelist, $statsdate;
-
-	while ($statsdate ne $until) { 
-		$duh->execute() or die "Cannot update the time_intervals table";
-		$dqh->execute() or die "Cannot find the maximum date";
-		($statsdate, $tempdate) = $dqh->fetchrow_array();
-	#	print STDERR "Adding $statsdate to list of dates\n";
-  	push @datelist, $statsdate;
+elsif (($since ne "") && ($until ne "")) {
+	if ($since eq $until) {
+		print STDERR "Populating data for $since only\n";
+		push @datelist, $since;
 	}
-	$dih->finish();
-	$duh->finish();
-	$dqh->finish();
+	else {
+	
+		my $date_create = "create table time_intervals( statsdate DATE NOT NULL, until_date DATE NOT NULL)";
+		my $dch = $dbh->do($date_create) or die "Cannot create the time_intervals table";
+
+		my $date_insert = "insert into time_intervals values(date(?), date(?))";
+		my $dih = $dbh->prepare($date_insert);
+		$dih->execute($since, $until) or die "Cannot set up the time_intervals table";
+
+		my $date_update = "update time_intervals set statsdate = timestampadd(DAY, 1, statsdate)";
+		my $duh = $dbh->prepare($date_update);
+
+		my $date_query = "select max(statsdate), until_date from time_intervals;";
+		my $dqh = $dbh->prepare($date_query);
+
+		my $date_drop = "drop table time_intervals";
+		my $statsdate;
+		my $tempdate;
+  
+		$statsdate = $since;
+
+		print STDERR "Finding dates from $statsdate until $until:\n";
+		#print STDERR "Adding $statsdate to list of dates\n";
+		push @datelist, $statsdate;
+
+		while ($statsdate ne $until) { 
+			$duh->execute() or die "Cannot update the time_intervals table";
+			$dqh->execute() or die "Cannot find the maximum date";
+			($statsdate, $tempdate) = $dqh->fetchrow_array();
+			#	print STDERR "Adding $statsdate to list of dates\n";
+  		push @datelist, $statsdate;
+		}
+		$dih->finish();
+		$duh->finish();
+		$dqh->finish();
+	}
 }
 
 my $insert_query = "insert into ORGANISM_HISTORY (
@@ -150,7 +158,7 @@ my $insert_query = "insert into ORGANISM_HISTORY (
 	where C.contig_id in 
      (select distinct CA.contig_id from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)
      on (CA.contig_id = C2CMAPPING.parent_id and C2CMAPPING.contig_id = CB.contig_id)
-     where CA.created =? and CA.nreads > 1 and CA.length >= 0 
+     where CA.created < ? and CA.nreads > 1 and CA.length >= 0 
 		 and (C2CMAPPING.parent_id is null  or CB.created > ?))
     and P.name not in ('BIN','FREEASSEMBLY','TRASH')
     and P.project_id = C.project_id";
@@ -177,6 +185,7 @@ where statsdate = ?";
 my $nsth = $dbh->prepare_cached($next_gen_read_update);
 
 foreach my $date (@datelist) {
+	print STDERR "Inserting line for $date\n";
 	my $insert_count = $isth->execute($organism, $date, $date, $date) || &queryFailed($insert_query);
 	my $total_read_update_count = $usth->execute($date) || &queryFailed($total_read_update);
 	my $free_read_update_count = $uusth->execute($date) || &queryFailed($free_read_update);
