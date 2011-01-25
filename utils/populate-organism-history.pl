@@ -192,6 +192,8 @@ foreach my $date (@datelist) {
 	my $asped_read_update_count = $asth->execute($date) || &queryFailed($asped_read_update);
 	my $next_gen_read_update_count = $nsth->execute($date) || &queryFailed($next_gen_read_update);
 
+	print STDERR "Checking for free read variation over the allowed threshold of $threshold reads\n";
+	&checkFreeReadChange( $dbh, $date, $threshold);
 } # end foreach date to populate
 
 $isth->finish();
@@ -202,61 +204,6 @@ $nsth->finish();
 
 print STDERR "Successfully created organism read statistics for organism $organism in instance $instance \n";
 
-# COMMENTED OUT UNTIL BACK POPULATION ENSURES DATA IS THERE
-
-#$threshold = 100;
-
-# get the free_reads for stats_day
-# my $stasday_free_reads = 0;
-# my $statsday_query = "select total_reads from ORGANISM_HISTORY where statsdate = date(now())-1";
-
-#my $dsth = $dbh->prepare_cached($previous_query);
-#my $statsday_count = $dsth->execute() || &queryFailed($statsday_query);
-#$dsth->finish();
-#my $statsday_values = $dsth->fetchall_arrayref();
-#
-#foreach my $statsday_value (@$statsday_values) {
-		#$statsday_free_reads = @$statsday_value[0];
-
-#my $previous_values = $psth->fetchall_arrayref();
-# get the free_reads and asped reads for previous_day
-# my $previous_query = "select total_reads, asped_reads from ORGANISM_HISTORY where statsdate = date(now())-2";
-
-#my $psth = $dbh->prepare_cached($previous_query);
-#my $previous_count = $psth->execute() || &queryFailed($previous_query);
-#$psth->finish();
-
-#my $previous_values = $psth->fetchall_arrayref();
-#
-#foreach my $previous_value (@$previous_values) {
-		#$free_reads_previous_day = @$previous_value[0];
-		#my $asped_reads_previous_day = @$previous_value[0];
-		#
-# 	$read_difference =  $free_reads_previous_day - $free_reads_stats_day - $asped_reads_previous_day;
-#
-# if ($read_difference > $threshold) {
-#
-# my $msg = "This is to let you know that the difference between the free reads   
-# for the TESTSCHISTO database stats_day and previous_day is $free_read_difference, which is over  
-# the threshold of $threshold.
-#
-# Previous day  (yyyy/mm/dd)
-# total reads = a
-# asped reads  = b
-# free reads = c
-#
-# Stats day (yyyy/mm/dd)
-#
-# total reads = d
-# asped reads  = e
-# free reads = f"
-#
-# ******************
-#  send the email 
-#	&sendMessage($user, $message, $instance, $organism) if $message;
-#	}	
-#}
-#
 $dbh->disconnect();
 
 exit 0;
@@ -264,6 +211,73 @@ exit 0;
 #------------------------------------------------------------------------
 # subroutines
 #------------------------------------------------------------------------
+
+sub checkFreeReadChange {
+  my $dbh = shift;
+  my $date = shift;
+  my $threshold = shift;
+
+	print STDERR "\tChecking for free read variation over the allowed threshold of $threshold reads on $date\n";
+
+	# get the free_reads for stats_day
+	my $stasday_free_reads = 0;
+	my $statsday_query = "select statsdate, total_reads, free_reads, asped_reads 
+		from ORGANISM_HISTORY 
+ 		where statsdate = date_sub(?,interval 1 day)";
+	my $dsth = $dbh->prepare_cached($statsday_query);
+
+ 	my $previous_query = "select statsdate, total_reads, free_reads, asped_reads 
+ 		from ORGANISM_HISTORY 
+ 		where statsdate = date_sub(?,interval 2 day)";
+	my $psth = $dbh->prepare_cached($previous_query);
+
+	my $statsday_count = $dsth->execute($date) || &queryFailed($statsday_query);
+	my $statsday_values = $dsth->fetchall_arrayref();
+#
+	foreach my $statsday_value (@$statsday_values) {
+		my $statsdate = @$statsday_value[0];
+		my $total_reads_stats_day = @$statsday_value[1];
+		my $free_reads_stats_day = @$statsday_value[2];
+		my $asped_reads_stats_day = @$statsday_value[3];
+
+		print STDERR "\tChecking for free read variation over the allowed threshold of $threshold reads on $statsdate ";
+
+		my $previous_count = $psth->execute($date) || &queryFailed($previous_query);
+
+		my $previous_values = $psth->fetchall_arrayref();
+
+		foreach my $previous_value (@$previous_values) {
+			my $previous_date = @$previous_value[0];
+			my $total_reads_previous_day = @$previous_value[1];
+			my $free_reads_previous_day = @$previous_value[2];
+			my $asped_reads_previous_day = @$previous_value[3];
+
+			print STDERR "and $previous_date\n";
+ 			my $free_read_difference =  abs($free_reads_previous_day - $free_reads_stats_day);
+
+ 			if ($free_read_difference >= $threshold) {
+	 			my $msg = "This is to let you know that the difference between the free reads for the $organism database ";
+				$msg .= "on $statsdate and $previous_date is $free_read_difference.\n\n";
+ 				$msg .= "This is over the threshold of $threshold reads difference that has been set.\n\n";
+
+ 				$msg .= "\n $previous_date\n";
+				$msg .= "\t total reads = $total_reads_previous_day\n";
+				$msg .= "\t asped reads  = $asped_reads_previous_day\n";
+				$msg .= "\t free reads = $free_reads_previous_day\n";
+				$msg .= "\n";
+ 				$msg .= "\n $statsdate\n";
+				$msg .= "\t total reads = $total_reads_stats_day\n";
+				$msg .= "\t asped reads = $asped_reads_stats_day\n";
+				$msg .= "\t free reads = $free_reads_stats_day\n" ;
+
+				#&sendMessage($user, $message, $instance, $organism) if $message;
+				print STDOUT "Message to send is :\n\n$msg\n\n";
+			}
+		}# end foreach previous_values
+	}# end foreach statsday_values
+	$dsth->finish();
+	$psth->finish();
+}
 
 sub queryFailed {
    my $query = shift;
