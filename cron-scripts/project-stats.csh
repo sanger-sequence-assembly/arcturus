@@ -45,7 +45,7 @@ foreach ORG (`cat ${HOME}/${INSTANCE}_active_organisms.list`)
 		bsub -q phrap -o ${PROJECTSTATSFOLDER}/${ORG}/${ORG}.log -J ${ORG}ps -N ${STATS_SCRIPT} -instance $INSTANCE -organism $ORG
 
 		echo Submitting a batch job for ${READS_SCRIPT} to calculate free read statistics for the $ORG organism in the $INSTANCE database instance...
-		bsub -q phrap -o ${PROJECTSTATSFOLDER}/${ORG}/${ORG}.log -J ${ORG}ps -N ${READS_SCRIPT} -instance $INSTANCE -organism $ORG
+		bsub -q phrap -o ${PROJECTSTATSFOLDER}/${ORG}/${ORG}.log -J ${ORG}ps -N ${READS_SCRIPT} -instance $INSTANCE -organism $ORG -threshold 100
   popd
 end
 
