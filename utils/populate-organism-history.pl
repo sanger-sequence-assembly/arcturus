@@ -18,10 +18,13 @@ require Mail::Send;
 
 my $instance;
 my $organism;
+my $since;
+my $until;
+my $threshold;
 
 my $debug;
  
-my $validKeys  = "organism|o|instance|i|";
+my $validKeys  = "organism|o|instance|i|since|s|until|u|help|hi|threshold|t";
 
 while (my $nextword = shift @ARGV) {
 
@@ -31,6 +34,9 @@ while (my $nextword = shift @ARGV) {
 
 	$instance = shift @ARGV if ($nextword eq '-instance');
 	$organism = shift @ARGV if ($nextword eq '-organism');
+	$since = shift @ARGV if ($nextword eq '-since');
+	$until = shift @ARGV if ($nextword eq '-until');
+	$threshold = shift @ARGV if ($nextword eq '-threshold');
 	  
 	if ($nextword eq '-help') {
 		&showUsage();
@@ -38,6 +44,19 @@ while (my $nextword = shift @ARGV) {
 	}
 }
 
+unless (defined($threshold)) {
+	&showUsage();
+	exit(0);
+}
+
+unless (defined($since) && defined($until)) {
+	print STDERR "One or more dates undefined\n";
+	if (undef($since) || undef($until)) {
+		print STDERR "Only one date defined\n";
+		&showUsage();
+		exit(0);
+	}
+}
 #----------------------------------------------------------------
 # get the database connection
 #----------------------------------------------------------------
@@ -56,72 +75,120 @@ unless (defined($dbh)) {
 #----------------------------------------------------------------
 # MAIN
 #----------------------------------------------------------------
+my @datelist;
+
+if ($since eq $until) {
+	push @datelist, $since;
+}
+elsif (undef($since) && undef($until)) {
+	# generate just yesterday
+	my $yesterday = "date(now())-1";
+	push @datelist, $yesterday;
+}
+elsif (undef($since) && defined($until)) {
+	# a range of dates need to be generated from creation of database to $until inclusive
+	# to be implemented
+}
+elsif (undef($since) && defined($until)) {
+	# a range of dates need to be generated from $since to yesterday inclusive
+	# to be implemented
+}
+elsif (defined($since) && defined($until)) {
+	
+	my $date_create = "create table time_intervals( statsdate DATE NOT NULL, until_date DATE NOT NULL)";
+	my $dch = $dbh->do($date_create) or die "Cannot create the time_intervals table";
+
+	my $date_insert = "insert into time_intervals values(date(?), date(?))";
+	my $dih = $dbh->prepare($date_insert);
+	$dih->execute($since, $until) or die "Cannot set up the time_intervals table";
+
+	my $date_update = "update time_intervals set statsdate = timestampadd(DAY, 1, statsdate)";
+	my $duh = $dbh->prepare($date_update);
+
+	my $date_query = "select max(statsdate), until_date from time_intervals;";
+	my $dqh = $dbh->prepare($date_query);
+
+	my $date_drop = "drop table time_intervals";
+	my $statsdate;
+	my $tempdate;
+  
+	$statsdate = $since;
+
+	print STDERR "Finding dates from $statsdate until $until:\n";
+	#print STDERR "Adding $statsdate to list of dates\n";
+	push @datelist, $statsdate;
+
+	while ($statsdate ne $until) { 
+		$duh->execute() or die "Cannot update the time_intervals table";
+		$dqh->execute() or die "Cannot find the maximum date";
+		($statsdate, $tempdate) = $dqh->fetchrow_array();
+	#	print STDERR "Adding $statsdate to list of dates\n";
+  	push @datelist, $statsdate;
+	}
+	$dih->finish();
+	$duh->finish();
+	$dqh->finish();
+}
 
 my $insert_query = "insert into ORGANISM_HISTORY (
-organism,
-statsdate, 
-total_reads,
-reads_in_contigs,
-free_reads,
-asped_reads,
-next_gen_reads)
-select 
-'TESTRATTI',
-date(now())-1,
-9999,
-sum(C.nreads),
-9999,
-9999,
-9999
-from CONTIG as C,PROJECT as P  
-where C.contig_id in 
+	organism,
+	statsdate, 
+	total_reads,
+	reads_in_contigs,
+	free_reads,
+	asped_reads,
+	next_gen_reads)
+	select 
+	?,
+	?,
+	9999,
+	sum(C.nreads),
+	9999,
+	9999,
+	9999
+	from CONTIG as C,PROJECT as P  
+	where C.contig_id in 
      (select distinct CA.contig_id from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)
      on (CA.contig_id = C2CMAPPING.parent_id and C2CMAPPING.contig_id = CB.contig_id)
-     where date(CA.created) < date(now())-1 and CA.nreads > 1 and CA.length >= 0 
-		 and (C2CMAPPING.parent_id is null  or date(CB.created) > date(now())-2))
+     where CA.created =? and CA.nreads > 1 and CA.length >= 0 
+		 and (C2CMAPPING.parent_id is null  or CB.created > ?))
     and P.name not in ('BIN','FREEASSEMBLY','TRASH')
     and P.project_id = C.project_id";
-
 my $isth = $dbh->prepare_cached($insert_query);
-my $insert_count = $isth->execute() || &queryFailed($insert_query);
-$isth->finish();
-
-# update the total reads
 
 my $total_read_update = "update ORGANISM_HISTORY 
 set total_reads = (select count(*) from READINFO) 
-where statsdate = date(now())-1";
-
+where statsdate = ?";
 my $usth = $dbh->prepare_cached($total_read_update);
-my $total_read_update_count = $usth->execute() || &queryFailed($total_read_update);
-$usth->finish();
-
-# update the free reads
 
 my $free_read_update = "update ORGANISM_HISTORY 
 set free_reads =  total_reads - reads_in_contigs
-where statsdate = date(now())-1";
-
+where statsdate = ?";
 my $uusth = $dbh->prepare_cached($free_read_update);
-my $free_read_update_count = $uusth->execute() || &queryFailed($free_read_update);
-$uusth->finish();
-
-# update the asped and next_gen_reads
 
 my $asped_read_update = "update ORGANISM_HISTORY
 set asped_reads =  (select count(*) from READINFO where asped is not null )
-where statsdate = date(now())-1";
-
+where statsdate = ?";
 my $asth = $dbh->prepare_cached($asped_read_update);
-my $asped_read_update_count = $asth->execute() || &queryFailed($asped_read_update);
-$asth->finish();
 
 my $next_gen_read_update = "update ORGANISM_HISTORY
 set next_gen_reads = total_reads - asped_reads
-where statsdate = date(now())-1";
-
+where statsdate = ?";
 my $nsth = $dbh->prepare_cached($next_gen_read_update);
-my $next_gen_read_update_count = $nsth->execute() || &queryFailed($next_gen_read_update);
+
+foreach my $date (@datelist) {
+	my $insert_count = $isth->execute($organism, $date, $date, $date) || &queryFailed($insert_query);
+	my $total_read_update_count = $usth->execute($date) || &queryFailed($total_read_update);
+	my $free_read_update_count = $uusth->execute($date) || &queryFailed($free_read_update);
+	my $asped_read_update_count = $asth->execute($date) || &queryFailed($asped_read_update);
+	my $next_gen_read_update_count = $nsth->execute($date) || &queryFailed($next_gen_read_update);
+
+} # end foreach date to populate
+
+$isth->finish();
+$usth->finish();
+$uusth->finish();
+$asth->finish();
 $nsth->finish();
 
 print STDERR "Successfully created organism read statistics for organism $organism in instance $instance \n";
@@ -177,7 +244,7 @@ print STDERR "Successfully created organism read statistics for organism $organi
 #
 # ******************
 #  send the email 
-#	&sendMessage($user, $message, $instance) if $message;
+#	&sendMessage($user, $message, $instance, $organism) if $message;
 #	}	
 #}
 #
@@ -209,13 +276,18 @@ sub showUsage {
 
 		print STDOUT "\n populate-organism-history.pl runs each night to add a row for today.";
 		print STDOUT "\n It generates a csv file for data for the year so far to project directory/csv\n";
-    print STDOUT "\nParameter input ERROR: $code \n" if $code; 
+		print STDOUT "\n Please supply two dates for an inclusive period to populate the organism statistics,";
+		print STDOUT "\n or no dates to populate yesterday's data\n";
+    print STDOUT "\n Parameter input ERROR: $code \n" if $code; 
     print STDOUT "\n";
     unless ($organism && $instance) {
         print STDOUT "MANDATORY PARAMETERS:\n";
         print STDOUT "\n";
         print STDOUT "-organism\tArcturus organism database\n" unless $organism;
         print STDOUT "-instance\tArcturus database instance\n" unless $instance;
+        print STDOUT "-since\tArcturus database since\n";
+        print STDOUT "-until\tArcturus database until\n";
+        print STDOUT "-threshold\tThreshold of change in reads before an email is sent\n";
         print STDOUT "\n";
     }
 
@@ -223,7 +295,7 @@ sub showUsage {
 }
 
 sub sendMessage {
-    my ($user,$message,$instance) = @_;
+    my ($user,$message,$instance, $organism) = @_;
 
 		my $to = "kt6";
 		$to .= ',' . $user if defined($user);
@@ -234,7 +306,7 @@ sub sendMessage {
 
     my $mail = new Mail::Send;
     $mail->to($user);
-    $mail->subject("Arcturus project import FAILED");
+    $mail->subject("Unexpected change in the number of free reads for $organism");
     #$mail->add("X-Arcturus", "contig-transfer-manager");
     my $handle = $mail->open;
     print $handle "$message\n";
