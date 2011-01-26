@@ -66,8 +66,11 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		contigBox.setEnabled(true);
 		freeReadsBox.setEnabled(true);
 		userBox.setEnabled(true);
+		
 		allSplitsBox.setEnabled(true);
 		allSplitsBox.setSelected(true);
+		
+		btnSave.setEnabled(false);
 		
 		sinceField.setText(dateFormatString);
 		untilField.setText(dateFormatString);
@@ -130,8 +133,9 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	
 		if (event.getSource() == contigBox) {
 		
-			if ((since == dateFormatString) || (until == dateFormatString)) {
-				// display a message?
+			if ((since.equals(dateFormatString) )|| (until.equals(dateFormatString)) ){
+				// display a message to type in valid dates
+				// sort out the validation for FormattedField
 			}
 			else {
 				query = "select " +
@@ -163,8 +167,10 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				"n50_contig_length";
 				
 				contigBox.setSelected(true);
-				freeReadsBox.setSelected(false);
-				userBox.setSelected(false);
+				contigBox.setEnabled(false);
+				
+				freeReadsBox.setEnabled(false);
+				userBox.setEnabled(false);
 				btnSave.setEnabled(true);
 			}
 		}
@@ -184,18 +190,24 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				"reads_in_contigs," +
 				"free_reads";
 				
-				contigBox.setSelected(false);
-				freeReadsBox.setSelected(false);
-				userBox.setSelected(true);
+				contigBox.setEnabled(false);
+				
+				freeReadsBox.setSelected(true);
+				freeReadsBox.setEnabled(true);
+				
+				userBox.setEnabled(true);
 				btnSave.setEnabled(true);
 			}
 			else if (event.getSource() == userBox) {
 				query = "select count(*) from USER";
 				titleString = "count";
 				
-				contigBox.setSelected(false);
-				freeReadsBox.setSelected(false);
+				contigBox.setEnabled(false);
+				freeReadsBox.setEnabled(false);
+				
 				userBox.setSelected(true);
+				userBox.setEnabled(false);
+				
 				btnSave.setEnabled(true);
 			}
 			else if (event.getSource() == btnSave) {		
