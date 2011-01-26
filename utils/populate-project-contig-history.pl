@@ -88,6 +88,8 @@ sub populateProjectContigHistory {
 # 	calculate the N50 value
 #
 
+	my $minlen = 0;
+
 	my $insert_query = " insert into PROJECT_CONTIG_HISTORY (
 		project_id,
 		statsdate,
@@ -114,12 +116,12 @@ sub populateProjectContigHistory {
 	 		where C.contig_id in
 	      (select distinct CA.contig_id from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)
 	      on (CA.contig_id = C2CMAPPING.parent_id and C2CMAPPING.contig_id = CB.contig_id)
-	      where CA.created < now()  and CA.nreads > 1 and CA.length >= 0 and (C2CMAPPING.parent_id is null  or CB.created > now()-1))
+	      where CA.created < now()  and CA.nreads > 1 and CA.length >= ? and (C2CMAPPING.parent_id is null  or CB.created > now()))
 	     and P.name not in ('BIN','FREEASSEMBLY','TRASH')
 	     and P.project_id = C.project_id group by project_id; ";
 
 	my $isth = $dbh->prepare_cached($insert_query);
-	my $project_contig_insert_count = $isth->execute() || &queryFailed($insert_query);
+	my $project_contig_insert_count = $isth->execute($minlen) || &queryFailed($insert_query);
 	$isth->finish();
 
 	if ($test) {
@@ -145,15 +147,14 @@ if ($test) {
 
 		# update the N50 read length
 
-		my $minlen = 3;
   	my $N50_contig_length = &get_N50_for_date($date, $minlen, $project_id);
 
 		my $N50_contig_length_update = "update PROJECT_CONTIG_HISTORY"
-		. " set N50_contig_length = $N50_contig_length"
-		. " where project_id = $project_id";
+		. " set N50_contig_length = ?"
+		. " where project_id = ? and statsdate = ?";
 
 		my $nsth = $dbh->prepare_cached($N50_contig_length_update);
-		my $N50_contig_length_count = $nsth->execute() || &queryFailed($N50_contig_length_update);
+		my $N50_contig_length_count = $nsth->execute($N50_contig_length, $project_id, $date) || &queryFailed($N50_contig_length_update);
 		$nsth->finish();
 
  		if ($test) {

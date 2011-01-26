@@ -101,6 +101,7 @@ foreach my $date (@datelist) {
 # this query must match the one in weeklyStats in make-web-report
 # use of ? rather than direct $date substitution imperative
 
+	my $minlen = 0;
   my $insert_query = "insert into PROJECT_CONTIG_HISTORY (
 		 project_id,
 		 statsdate,
@@ -127,14 +128,14 @@ foreach my $date (@datelist) {
 		 where C.contig_id in
 		    (select distinct CA.contig_id from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)
 		     on (CA.contig_id = C2CMAPPING.parent_id and C2CMAPPING.contig_id = CB.contig_id)
-		    where CA.created <= date(?)  and CA.nreads > 1 and CA.length >= 0 and (C2CMAPPING.parent_id is null  or CB.created > date(?)))
+		    where CA.created < ?  and CA.nreads > 1 and CA.length >= ? and (C2CMAPPING.parent_id is null  or CB.created > ?))
 		    and P.name not in ('BIN','FREEASSEMBLY','TRASH')
 		    and P.project_id = C.project_id group by project_id";
 
 	print STDERR "Inserting data for $date into PROJECT_CONTIG_HISTORY\n";
 
 	$isth = $dbh->prepare_cached($insert_query);
-	my $project_contig_insert_count = $isth->execute($date, $date, $date) || &queryFailed($insert_query);
+	my $project_contig_insert_count = $isth->execute($date, $date, $minlen, $date) || &queryFailed($insert_query);
 
 	print STDERR"Data for $project_contig_insert_count projects collected\n";
 
@@ -152,17 +153,17 @@ foreach my $date (@datelist) {
 
 		# update the N50 read length
 
-		my $minlen = 0;
  		my $N50_contig_length = &get_N50_for_date($date, $minlen, $project_id);
 
-		my $N50_contig_length_update = "update PROJECT_CONTIG_HISTORY"
-		. " set N50_contig_length = $N50_contig_length"
-		. " where project_id = $project_id";
+		my $N50_contig_length_update = "update PROJECT_CONTIG_HISTORY
+		 set N50_contig_length = ?
+		 where project_id = ?
+		 and statsdate = ?";
 
 		$nsth = $dbh->prepare_cached($N50_contig_length_update);
-		my $N50_contig_length_count = $nsth->execute() || &queryFailed($N50_contig_length_update);
+		my $N50_contig_length_count = $nsth->execute($N50_contig_length, $project_id, $date) || &queryFailed($N50_contig_length_update);
 
-   	print STDERR"N50 read for project $project_id is $N50_contig_length\n";
+   	print STDERR "N50 read for project $project_id is $N50_contig_length\n";
 	} # end foreach project
   print STDERR"*************\n";
 } # end foreach date
@@ -193,6 +194,7 @@ sub showHelp {
     print STDERR "\t-since\t\tInclusive date to start from\n";
     print STDERR "\t-until\t\tInclusive date to finish at\n";
 }
+
 sub get_N50_for_date {
     my $date = shift;
     my $minlen = shift;
