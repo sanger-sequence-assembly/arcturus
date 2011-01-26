@@ -1,33 +1,28 @@
 #!/usr/local/bin/perl
-# populate-project-contig-history.pl
+# backpopulate-project-contig-history.pl
 
 use strict;
 
 use DBI;
+use DataSource;
 
-my $host;
-my $port;
-my $dbname;
-my $username;
-my $password;
+my $instance;
+my $organism;
 my $since;
 my $until;
 
+my $validKeys  = "organism|o|instance|i|since|s|until|u|help|h";
+ 
 while (my $nextword = shift @ARGV) {
-  if ($nextword eq '-host') {
-		$host = shift @ARGV;
+ 
+  if ($nextword !~ /\-($validKeys)\b/) {
+    &showHelp("Invalid keyword '$nextword'");
+	}
+  if ($nextword eq '-instance') {
+		$instance = shift @ARGV;
   } 
-	elsif ($nextword eq '-port') {
-		$port = shift @ARGV;
-  } 
-	elsif ($nextword eq '-dbname') {
-		$dbname = shift @ARGV;
-	} 
-	elsif ($nextword eq '-username') {
-		$username = shift @ARGV;
-  } 
-	elsif ($nextword eq '-password') {
-		$password = shift @ARGV;
+	elsif ($nextword eq '-organism') {
+		$organism = shift @ARGV;
   } 
 	elsif ($nextword eq '-since') {
 		$since = shift @ARGV;
@@ -39,28 +34,28 @@ while (my $nextword = shift @ARGV) {
 		&showHelp();
 		exit(0);
   } 
-	else {
-    &showHelp("Unknown option: $nextword");
-    }
 }
 
-$username = $ENV{'MYSQL_USERNAME'} unless defined($username);
-$password = $ENV{'MYSQL_PASSWORD'} unless defined($password);
-
-unless (defined($host) && defined($port) && defined($dbname) &&
-	defined($username) && defined($password) &&
+unless (defined($instance) && defined($organism) && 
 	defined($since) && defined ($until)){
     &showHelp("One or more mandatory options were missing");
-    exit(1);
+    exit(0);
 }
 
-my $url = "DBI:mysql:$dbname;host=$host;port=$port";
-
-my $dbh = DBI->connect($url, $username, $password, { RaiseError => 1 , PrintError => 0});
+my $ds = new DataSource(-instance => $instance, -organism => $organism);
+ 
+my $dbh = $ds->getConnection();
+ 
+unless (defined($dbh)) {
+     print STDERR "Failed to connect to DataSource(instance=$instance, organism=$organism)\n";
+     print STDERR "DataSource URL is ", $ds->getURL(), "\n";
+     print STDERR "DBI error is $DBI::errstr\n";
+     die "getConnection failed";
+}
 
 my @datelist;
 
-my $date_create = "create table time_intervals( statsdate DATE NOT NULL, until_date DATE NOT NULL)";
+my $date_create = "create temporary table time_intervals( statsdate DATE NOT NULL, until_date DATE NOT NULL)";
 my $dch = $dbh->do($date_create) or die "Cannot create the time_intervals table";
 
 my $date_insert = "insert into time_intervals values(date(?), date(?))";
@@ -73,7 +68,7 @@ my $duh = $dbh->prepare($date_update);
 my $date_query = "select max(statsdate), until_date from time_intervals;";
 my $dqh = $dbh->prepare($date_query);
 
-my $date_drop = "drop table time_intervals";
+my $date_drop = "drop temporary table time_intervals";
 my $statsdate;
 my $tempdate;
   
