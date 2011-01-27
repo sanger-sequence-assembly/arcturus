@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.gui.reportrunner;
 
 import uk.ac.sanger.arcturus.gui.*;
+import uk.ac.sanger.arcturus.utils.CheckConsistency;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
@@ -46,13 +47,11 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	final JCheckBox userBox = new JCheckBox(userString);	
 	final JCheckBox allSplitsBox = new JCheckBox(splitString);
 	final JLabel splitExplanation = new JLabel(splitExplanationString);
-	
+	final JLabel statusLine = new JLabel("");
 	
 	final JFormattedTextField sinceField = new JFormattedTextField(20);
 	final JFormattedTextField untilField = new JFormattedTextField(20);
-     
-	protected JProgressBar pbarContigProgress = new JProgressBar();
-	
+     	
 	protected JFileChooser fileChooser = new JFileChooser();
 	
 	protected Statement stmt = null;
@@ -70,7 +69,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		allSplitsBox.setEnabled(true);
 		allSplitsBox.setSelected(true);
 		
-		btnSave.setEnabled(false);
+		btnSave.setEnabled(true);
 		
 		sinceField.setText(dateFormatString);
 		untilField.setText(dateFormatString);
@@ -131,11 +130,29 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				event.getActionCommand() + 
 				" has been pressed and the dates entered are " + since + " and " + until);
 	
-		if (event.getSource() == contigBox) {
-		
-			if ((since.equals(dateFormatString) )|| (until.equals(dateFormatString)) ){
-				// display a message to type in valid dates
-				// sort out the validation for FormattedField
+		if (event.getSource()== contigBox) {		
+			if ((since.equals(dateFormatString) )|| (until.equals(dateFormatString)) )
+			{
+				if (allSplitsBox.isEnabled()) {
+					query = "select " +
+					"project_id, ','," +
+					"statsdate, ',', " +
+					"name, ',', " +
+					"total_contigs, ',', " +
+					"total_reads, ',', " +
+					"total_contig_length, ',', " +
+					"mean_contig_length, ',', " +
+					"stddev_contig_length, ',', " +
+					"max_contig_length, ',' ," +
+					"n50_contig_length " +
+					"from PROJECT_CONTIG_HISTORY " +
+					" order by project_id";
+				}
+				else {
+					// display a message to type in valid dates
+					statusLine.setText("Please enter valid dates for your report");
+					// sort out the validation for FormattedField
+				}
 			}
 			else {
 				query = "select " +
@@ -153,8 +170,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 						"where statsdate >= " +  since +
 						" and statsdate <= " + until +
 						" order by project_id";
-				
-				titleString =  
+			}
+			titleString =  
 				"project_id," +
 				"statsdate," +
 				"name," +
@@ -166,13 +183,12 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				"max_contig_length," +
 				"n50_contig_length";
 				
-				contigBox.setSelected(true);
-				contigBox.setEnabled(false);
-				
-				freeReadsBox.setEnabled(false);
-				userBox.setEnabled(false);
-				btnSave.setEnabled(true);
-			}
+			contigBox.setSelected(true);
+			contigBox.setEnabled(false);				
+			freeReadsBox.setEnabled(false);
+			userBox.setEnabled(false);
+			allSplitsBox.setEnabled(false);
+			btnSave.setEnabled(true);
 		}
 		else if (event.getSource() == freeReadsBox) {
 				query = "select " +
@@ -190,12 +206,11 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				"reads_in_contigs," +
 				"free_reads";
 				
-				contigBox.setEnabled(false);
-				
+				contigBox.setEnabled(false);		
 				freeReadsBox.setSelected(true);
-				freeReadsBox.setEnabled(true);
-				
-				userBox.setEnabled(true);
+				freeReadsBox.setEnabled(true);	
+				userBox.setEnabled(false);
+				allSplitsBox.setEnabled(false);
 				btnSave.setEnabled(true);
 			}
 			else if (event.getSource() == userBox) {
@@ -203,18 +218,18 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				titleString = "count";
 				
 				contigBox.setEnabled(false);
-				freeReadsBox.setEnabled(false);
-				
+				freeReadsBox.setEnabled(false);			
 				userBox.setSelected(true);
 				userBox.setEnabled(false);
-				
+				allSplitsBox.setEnabled(false);
 				btnSave.setEnabled(true);
 			}
 			else if (event.getSource() == btnSave) {		
 				
 				contigBox.setEnabled(false);
 				freeReadsBox.setEnabled(false);
-				userBox.setEnabled(true);
+				userBox.setEnabled(false);
+				allSplitsBox.setEnabled(true);
 				
 				Arcturus.logInfo("query being run is: " + query);
 				Connection conn;
@@ -238,9 +253,24 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 			}
 			else {
 				// Do nothing
-			}
-		
+			}	
 		Arcturus.logInfo("at the end of actionPerformed query holds: " + query);
+	}
+	
+	protected void resetAllBoxes() {
+		contigBox.setEnabled(true);
+		contigBox.setSelected(false);
+		
+		freeReadsBox.setEnabled(true);		
+		freeReadsBox.setSelected(false);
+		
+		userBox.setEnabled(true);
+		userBox.setSelected(false);
+		
+		allSplitsBox.setEnabled(true);
+		allSplitsBox.setSelected(false);
+		
+		btnSave.setEnabled(true);
 	}
 	
 	protected void saveStatsToFile(ResultSet rs) throws SQLException {
@@ -278,6 +308,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 			}
 		}
 		else {
+			// User has cancelled, so reset all the buttons to enabled and unchecked 
+			resetAllBoxes();
 			Arcturus.logWarning("Save command cancelled by user\n");
 		}
 	}
@@ -329,6 +361,38 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		// TODO Auto-generated method stub
 		
 	}
+	
+	class Worker extends SwingWorker<Void, String> {
+		protected Void doInBackground() throws Exception {
+			try {
+		//checker.checkConsistency(adb, this, true);
+			}
+			catch (Exception e) {
+				Arcturus.logWarning("An error occurred whilst checking the database", e);
+			}
+			return null;
+		}
+
+		protected void done() {
+			if (isCancelled())
+				//checker.cancel();
+	
+				actionRefresh.setEnabled(true);
+				//btnCancel.setEnabled(false);
+		}
+
+		protected void process(List<String> messages) {
+			for (String message : messages) {
+				//textarea.append(message);
+				//textarea.append("\n");
+			}
+		}
+
+		public void report(String message) {
+			publish(message);
+		}
+}
+
 
 }
 	
