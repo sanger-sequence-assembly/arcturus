@@ -9,6 +9,7 @@ import uk.ac.sanger.arcturus.Arcturus;
 
 import javax.swing.*;
 
+import java.lang.String;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
@@ -35,10 +36,11 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
     static String userString = "Save statistics about your work";
     static String saveString = "Save statistics to a comma-separated file on your machine";
     static String splitString = "Save statistics for all splits";
-    static String splitExplanationString ="Selecting 'Save statistics for all splits' will save only the data that you are authorised to see in Minerva";
+    static String splitExplanationString ="You can save only the data that you are authorised to see in Minerva";
     static String dateStartExplanationString ="Please enter the start date for the data you want to export";
     static String dateEndExplanationString ="Please enter the end date for the data you want to export";
     static String dateFormatString = "YYYY-MM-DD";
+    
     
     protected JButton btnSave = new JButton(saveString);
 	
@@ -57,7 +59,47 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	protected Statement stmt = null;
 	protected String query = "";
 	protected String titleString = "";
-
+	
+	protected String contigTitleString = 
+		"project_id," +
+		"statsdate," +
+		"name," +
+		"total_contigs," +
+		"total_reads," +
+		"total_contig_length," +
+		"mean_contig_length," +
+		"stddev_contig_length," +
+		"max_contig_length," +
+		"n50_contig_length\n";
+    protected String contigQueryStart = "select " +
+	"project_id, " +
+	"statsdate, " +
+	"name,  " +
+	"total_contigs,  " +
+	"total_reads,  " +
+	"total_contig_length,  " +
+	"mean_contig_length,  " +
+	"stddev_contig_length,  " +
+	"max_contig_length, " +
+	"n50_contig_length " +
+	"from PROJECT_CONTIG_HISTORY ";
+    protected String contigQueryEnd = " order by project_id";
+    
+    protected String freeReadsTitleString = 
+		"organism," +
+		"statsdate," +
+		"total_reads," +
+		"reads_in_contigs," +
+		"free_reads\n";
+    protected String freeReadsQueryStart = "select " +
+	"organism, " +
+	"statsdate,  " +
+	"total_reads,  " +
+	"reads_in_contigs,  " +
+	"free_reads " +
+	"from ORGANISM_HISTORY ";
+    protected String freeReadsQueryEnd = "order by statsdate ASC";
+	
 	public ReportRunnerPanel(MinervaTabbedPane parent, ArcturusDatabase adb)
 	{	
 		super(parent, adb);
@@ -105,6 +147,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
         mainPanel.add(splitExplanation);
 		mainPanel.add(btnSave);
 		mainPanel.add(new Label(" "));
+		
+		mainPanel.add(statusLine);
 
 		contigBox.addActionListener(this);
 		freeReadsBox.addActionListener(this);
@@ -126,111 +170,51 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		String since = this.sinceField.getText();
 		String until = this.untilField.getText();
 	
-		Arcturus.logInfo("in actionPerformed because " +
-				event.getActionCommand() + 
+		Arcturus.logInfo("in actionPerformed because " + event.getActionCommand() + 
 				" has been pressed and the dates entered are " + since + " and " + until);
 	
 		if (event.getSource()== contigBox) {		
 			if ((since.equals(dateFormatString) )|| (until.equals(dateFormatString)) )
 			{
-				if (allSplitsBox.isEnabled()) {
-					query = "select " +
-					"project_id, ','," +
-					"statsdate, ',', " +
-					"name, ',', " +
-					"total_contigs, ',', " +
-					"total_reads, ',', " +
-					"total_contig_length, ',', " +
-					"mean_contig_length, ',', " +
-					"stddev_contig_length, ',', " +
-					"max_contig_length, ',' ," +
-					"n50_contig_length " +
-					"from PROJECT_CONTIG_HISTORY " +
-					" order by project_id";
+				if (allSplitsBox.isSelected()) {
+					query = contigQueryStart + contigQueryEnd;
+					preventOtherSelection();
 				}
 				else {
-					// display a message to type in valid dates
-					statusLine.setText("Please enter valid dates for your report");
-					// sort out the validation for FormattedField
+					statusLine.setText("Please enter valid dates for your report or tick the 'All splits' box");
 				}
 			}
 			else {
-				query = "select " +
-						"project_id, ','," +
-						"statsdate, ',', " +
-						"name, ',', " +
-						"total_contigs, ',', " +
-						"total_reads, ',', " +
-						"total_contig_length, ',', " +
-						"mean_contig_length, ',', " +
-						"stddev_contig_length, ',', " +
-						"max_contig_length, ',' ," +
-						"n50_contig_length " +
-						"from PROJECT_CONTIG_HISTORY " +
-						"where statsdate >= " +  since +
-						" and statsdate <= " + until +
-						" order by project_id";
-			}
-			titleString =  
-				"project_id," +
-				"statsdate," +
-				"name," +
-				"total_contigs," +
-				"total_reads," +
-				"total_contig_length," +
-				"mean_contig_length," +
-				"stddev_contig_length," +
-				"max_contig_length," +
-				"n50_contig_length";
-				
-			contigBox.setSelected(true);
-			contigBox.setEnabled(false);				
-			freeReadsBox.setEnabled(false);
-			userBox.setEnabled(false);
-			allSplitsBox.setEnabled(false);
-			btnSave.setEnabled(true);
+				query = contigQueryStart + "where statsdate >= " +  since +
+				" and statsdate <= " + until + " order by project_id";
+				preventOtherSelection();
+			}	
+			titleString =  contigTitleString;					
 		}
 		else if (event.getSource() == freeReadsBox) {
-				query = "select " +
-						"organism, ',', " +
-						"statsdate, ',', " +
-						"total_reads, ',', " +
-						"reads_in_contigs, ',', " +
-						"free_reads " +
-						"from ORGANISM_HISTORY " +
-						"order by statsdate ASC";
-				titleString = 
-				"organism," +
-				"statsdate," +
-				"total_reads," +
-				"reads_in_contigs," +
-				"free_reads";
-				
-				contigBox.setEnabled(false);		
-				freeReadsBox.setSelected(true);
-				freeReadsBox.setEnabled(true);	
-				userBox.setEnabled(false);
-				allSplitsBox.setEnabled(false);
-				btnSave.setEnabled(true);
+			if ((since.equals(dateFormatString) )|| (until.equals(dateFormatString)) )
+			{
+				if (allSplitsBox.isSelected()) {
+					query = freeReadsQueryStart + freeReadsQueryEnd;	
+					preventOtherSelection();
+				}
+				else {
+					statusLine.setText("Please enter valid dates for your report or tick the 'All splits' box");
+				}
 			}
-			else if (event.getSource() == userBox) {
+			else {
+				query = freeReadsQueryStart + "where statsdate >= " +  since +
+					" and statsdate <= " + until + " order by statsdate ASC";
+				preventOtherSelection();
+			}
+			titleString =  freeReadsTitleString;
+		}
+		else if (event.getSource() == userBox) {
+			// add in checks as for other reports and David's SQL
 				query = "select count(*) from USER";
 				titleString = "count";
-				
-				contigBox.setEnabled(false);
-				freeReadsBox.setEnabled(false);			
-				userBox.setSelected(true);
-				userBox.setEnabled(false);
-				allSplitsBox.setEnabled(false);
-				btnSave.setEnabled(true);
-			}
-			else if (event.getSource() == btnSave) {		
-				
-				contigBox.setEnabled(false);
-				freeReadsBox.setEnabled(false);
-				userBox.setEnabled(false);
-				allSplitsBox.setEnabled(true);
-				
+		}
+		else if (event.getSource() == btnSave) {					
 				Arcturus.logInfo("query being run is: " + query);
 				Connection conn;
 				try {
@@ -249,12 +233,20 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 					Arcturus.logSevere("An error occurred when trying to run the query to find your report output from the database", exception);
 				} catch (Exception exception) {
 					Arcturus.logSevere("An error occurred when trying to save your report output", exception);
-				}
 			}
-			else {
+		}
+		else {
 				// Do nothing
-			}	
+		}	
 		Arcturus.logInfo("at the end of actionPerformed query holds: " + query);
+	}
+	
+	protected void preventOtherSelection() {
+		contigBox.setEnabled(false);				
+		freeReadsBox.setEnabled(false);
+		userBox.setEnabled(false);
+		allSplitsBox.setEnabled(false);
+		btnSave.setEnabled(true);
 	}
 	
 	protected void resetAllBoxes() {
@@ -270,7 +262,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		allSplitsBox.setEnabled(true);
 		allSplitsBox.setSelected(false);
 		
-		btnSave.setEnabled(true);
+		btnSave.setEnabled(false);
 	}
 	
 	protected void saveStatsToFile(ResultSet rs) throws SQLException {
@@ -294,23 +286,33 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				//writer.newLine();
 				writer.write(titleString);
 				
+				String colValue = "";
+				
 				while (rs.next()) {
 					for (int col = 1; col <= cols; col++) {
-						writer.write((String) rs.getObject(col));
+						if (col>1) {
+							writer.write(",");
+						}
+						colValue = String.valueOf(rs.getObject(col));
+						writer.write(colValue);			
 					}
+					writer.write("\n");
 				} 
 				writer.close();
 				Arcturus.logInfo("File " + file.getName() + " saved successfully");
+				statusLine.setText("Your data has been successfully saved to " + file.getName());
+				resetAllBoxes();
 			} 
 			catch (IOException ioe) {
 				Arcturus.logWarning("Error encountered whilst writing file "
 						+ file.getPath(), ioe);
+				resetAllBoxes();
 			}
 		}
 		else {
 			// User has cancelled, so reset all the buttons to enabled and unchecked 
-			resetAllBoxes();
 			Arcturus.logWarning("Save command cancelled by user\n");
+			resetAllBoxes();
 		}
 	}
 
