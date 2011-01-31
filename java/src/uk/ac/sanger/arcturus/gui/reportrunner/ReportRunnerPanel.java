@@ -1,11 +1,20 @@
 package uk.ac.sanger.arcturus.gui.reportrunner;
 
 import uk.ac.sanger.arcturus.gui.*;
+import java.util.Calendar.*;
+import java.util.Locale.*;
+
 import uk.ac.sanger.arcturus.utils.CheckConsistency;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.Arcturus;
+
+import com.toedter.calendar.*;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.EventListener;
+import java.util.Locale;
 
 import javax.swing.*;
 
@@ -40,7 +49,6 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
     static String dateStartExplanationString ="Please enter the start date for the data you want to export";
     static String dateEndExplanationString ="Please enter the end date for the data you want to export";
     static String dateFormatString = "YYYY-MM-DD";
-    
     
     protected JButton btnSave = new JButton(saveString);
 	
@@ -99,6 +107,13 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	"free_reads " +
 	"from ORGANISM_HISTORY ";
     protected String freeReadsQueryEnd = "order by statsdate ASC";
+    
+    protected String since = dateFormatString;
+    protected String until = dateFormatString;
+    
+    protected JCalendar calendarSince = new JCalendar();
+	protected JCalendar calendarUntil = new JCalendar();
+	
 	
 	public ReportRunnerPanel(MinervaTabbedPane parent, ArcturusDatabase adb)
 	{	
@@ -132,11 +147,34 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
         mainPanel.add(new Label(" "));
         mainPanel.add(new Label(" "));
 
-        mainPanel.add(sinceField);
+		// class ReportDateListener implements DateListener
+	      //{
+	    	//public void dateChanged(DateEvent event){
+	    		//Calendar c = event.getSelectedDate();
+	    		//JDate date = c.getDate();
+	    		
+	    		//if (c != null) {
+	    		//	statusLine.setText("Date " + date + " has been selected");
+	    		//}
+	    		//else {
+	    			//statusLine.setText("No time selected.");
+	    		//}
+	    		//if (event.getSource() == calendarSince) {
+	    			//since = date.toString();
+	    		//}
+	    		//else if (event.getSource()== calendarUntil) {
+	    			//until = date.toString();
+	    		//}
+	    	//}
+	     //}
+		 
+		 //mainPanel.add(sinceField);
+        mainPanel.add(calendarSince);
         mainPanel.add(new Label(dateStartExplanationString));
         mainPanel.add(new Label(" "));
         
-        mainPanel.add(untilField);
+        //mainPanel.add(untilField);
+        mainPanel.add(calendarUntil);
         mainPanel.add(new Label(dateEndExplanationString));
         mainPanel.add(new Label(" "));
         
@@ -154,22 +192,28 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		freeReadsBox.addActionListener(this);
 		userBox.addActionListener(this);
 		
-		sinceField.addActionListener(this);
+		//ReportDateListener listener = new ReportDateListener();
+	    //calendarSince.addDateListener(listener);
+	    //calendarSince.setBorder(compoundBorder);
+	    //calendarUntil.addDateListener(listener);
+	   // calendarUntil.setBorder(compoundBorder);
+	    
+	    sinceField.addActionListener(this);
 		untilField.addActionListener(this);
 		
 		allSplitsBox.addActionListener(this);
 		btnSave.addActionListener(this);
 		
+		
 		add(mainPanel, BorderLayout.NORTH);
-
 		createMenus();
 	}
 	
 	public void actionPerformed(ActionEvent event) {
 			
-		String since = this.sinceField.getText();
-		String until = this.untilField.getText();
-	
+		//String since = this.sinceField.getText();
+		//String until = this.untilField.getText();
+		
 		Arcturus.logInfo("in actionPerformed because " + event.getActionCommand() + 
 				" has been pressed and the dates entered are " + since + " and " + until);
 	
@@ -214,25 +258,39 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				query = "select count(*) from USER";
 				titleString = "count";
 		}
-		else if (event.getSource() == btnSave) {					
-				Arcturus.logInfo("query being run is: " + query);
-				Connection conn;
+		else if (event.getSource() == btnSave) {						
+			Date sinceDate = calendarSince.getDate();
+			since = sinceDate.toString();
+			Date untilDate = calendarUntil.getDate();
+			until = untilDate.toString();
+			Arcturus.logInfo("query being run is: " + query);
+			
+			if (sinceDate.before(untilDate)) {
+				Connection conn;	
 				try {
-					conn = adb.getPooledConnection(this);
-				
-					stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
-		              java.sql.ResultSet.CONCUR_READ_ONLY);		
-					stmt.setFetchSize(Integer.MIN_VALUE);		
+						conn = adb.getPooledConnection(this);
 					
-					ResultSet rs = stmt.executeQuery(query);
-					saveStatsToFile(rs);
-				} catch (ArcturusDatabaseException exception) {
-					Arcturus.logSevere("An error occurred when trying to find your report output from the Arcturus database", exception);
-					exception.printStackTrace();
-				} catch (SQLException exception) {
-					Arcturus.logSevere("An error occurred when trying to run the query to find your report output from the database", exception);
-				} catch (Exception exception) {
-					Arcturus.logSevere("An error occurred when trying to save your report output", exception);
+						stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
+			              java.sql.ResultSet.CONCUR_READ_ONLY);		
+						stmt.setFetchSize(Integer.MIN_VALUE);		
+						
+						ResultSet rs = stmt.executeQuery(query);
+						saveStatsToFile(rs);
+					} catch (ArcturusDatabaseException exception) {
+						statusLine.setText("An error occurred when trying to find your report output from the Arcturus database");
+						Arcturus.logSevere("An error occurred when trying to find your report output from the Arcturus database", exception);
+						exception.printStackTrace();
+					} catch (SQLException exception) {
+						statusLine.setText("An error occurred when trying to run the query to find your report output from the database");
+						Arcturus.logSevere("An error occurred when trying to run the query to find your report output from the database", exception);
+					} catch (Exception exception) {
+						statusLine.setText("An error occurred when trying to save your report output");
+						Arcturus.logSevere("An error occurred when trying to save your report output", exception);
+				}	
+			}
+			else {
+				statusLine.setText("Date" + since + " is not before date " + until);
+				Arcturus.logInfo("Date" + since + " is not before date " + until);					
 			}
 		}
 		else {
@@ -240,6 +298,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		}	
 		Arcturus.logInfo("at the end of actionPerformed query holds: " + query);
 	}
+	
 	
 	protected void preventOtherSelection() {
 		contigBox.setEnabled(false);				
@@ -266,7 +325,6 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	}
 	
 	protected void saveStatsToFile(ResultSet rs) throws SQLException {
-		
 		final JFileChooser fc = new JFileChooser();
 		fc.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
 
