@@ -44,7 +44,6 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
     static String freeReadsString = "Save statistics about free reads";
     static String userString = "Save statistics about your work";
     static String saveString = "Save statistics to a comma-separated file on your machine";
-    static String splitString = "Save statistics for all splits";
     static String splitExplanationString ="You can save only the data that you are authorised to see in Minerva";
     static String dateStartExplanationString ="Please enter the start date for the data you want to export";
     static String dateEndExplanationString ="Please enter the end date for the data you want to export";
@@ -55,12 +54,11 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	final JCheckBox contigBox = new JCheckBox(contigString);
 	final JCheckBox freeReadsBox = new JCheckBox(freeReadsString);		
 	final JCheckBox userBox = new JCheckBox(userString);	
-	final JCheckBox allSplitsBox = new JCheckBox(splitString);
 	final JLabel splitExplanation = new JLabel(splitExplanationString);
 	final JLabel statusLine = new JLabel("");
 	
-	final JFormattedTextField sinceField = new JFormattedTextField(20);
-	final JFormattedTextField untilField = new JFormattedTextField(20);
+	final JFormattedTextField sinceField = new JFormattedTextField(dateFormatString);
+	final JFormattedTextField untilField = new JFormattedTextField(dateFormatString);
      	
 	protected JFileChooser fileChooser = new JFileChooser();
 	
@@ -119,20 +117,10 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	{	
 		super(parent, adb);
 		
-		contigBox.setEnabled(true);
-		freeReadsBox.setEnabled(true);
-		userBox.setEnabled(true);
-		
-		allSplitsBox.setEnabled(true);
-		allSplitsBox.setSelected(true);
-		
-		btnSave.setEnabled(true);
-		
-		sinceField.setText(dateFormatString);
+		sinceField.setName(dateFormatString);  // crashes here time for lunch
+		//sinceField.setText(dateFormatString);
 		untilField.setText(dateFormatString);
-		
-		sinceField.setColumns(11);
-		untilField.setColumns(11);
+		statusLine.setText("Please enter valid dates for your report or tick the 'Save all statistics box");
 		
         JPanel mainPanel = new JPanel(new GridLayout(0,3));
         mainPanel.add(contigBox);
@@ -147,39 +135,14 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
         mainPanel.add(new Label(" "));
         mainPanel.add(new Label(" "));
 
-		// class ReportDateListener implements DateListener
-	      //{
-	    	//public void dateChanged(DateEvent event){
-	    		//Calendar c = event.getSelectedDate();
-	    		//JDate date = c.getDate();
-	    		
-	    		//if (c != null) {
-	    		//	statusLine.setText("Date " + date + " has been selected");
-	    		//}
-	    		//else {
-	    			//statusLine.setText("No time selected.");
-	    		//}
-	    		//if (event.getSource() == calendarSince) {
-	    			//since = date.toString();
-	    		//}
-	    		//else if (event.getSource()== calendarUntil) {
-	    			//until = date.toString();
-	    		//}
-	    	//}
-	     //}
-		 
-		 //mainPanel.add(sinceField);
-        mainPanel.add(calendarSince);
+		mainPanel.add(sinceField);
+        //mainPanel.add(calendarSince);
         mainPanel.add(new Label(dateStartExplanationString));
         mainPanel.add(new Label(" "));
         
-        //mainPanel.add(untilField);
-        mainPanel.add(calendarUntil);
+        mainPanel.add(untilField);
+        //mainPanel.add(calendarUntil);
         mainPanel.add(new Label(dateEndExplanationString));
-        mainPanel.add(new Label(" "));
-        
-        mainPanel.add(allSplitsBox);
-        mainPanel.add(new Label(" "));
         mainPanel.add(new Label(" "));
 		
         mainPanel.add(splitExplanation);
@@ -187,70 +150,36 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		mainPanel.add(new Label(" "));
 		
 		mainPanel.add(statusLine);
+		mainPanel.add(new Label(" "));
+		mainPanel.add(new Label(" "));
 
 		contigBox.addActionListener(this);
 		freeReadsBox.addActionListener(this);
 		userBox.addActionListener(this);
 		
-		//ReportDateListener listener = new ReportDateListener();
-	    //calendarSince.addDateListener(listener);
-	    //calendarSince.setBorder(compoundBorder);
-	    //calendarUntil.addDateListener(listener);
-	   // calendarUntil.setBorder(compoundBorder);
-	    
 	    sinceField.addActionListener(this);
 		untilField.addActionListener(this);
-		
-		allSplitsBox.addActionListener(this);
+	
 		btnSave.addActionListener(this);
 		
-		
 		add(mainPanel, BorderLayout.NORTH);
+		startButtons();
 		createMenus();
 	}
 	
 	public void actionPerformed(ActionEvent event) {
 			
-		//String since = this.sinceField.getText();
-		//String until = this.untilField.getText();
-		
 		Arcturus.logInfo("in actionPerformed because " + event.getActionCommand() + 
 				" has been pressed and the dates entered are " + since + " and " + until);
 	
 		if (event.getSource()== contigBox) {		
-			if ((since.equals(dateFormatString) )|| (until.equals(dateFormatString)) )
-			{
-				if (allSplitsBox.isSelected()) {
-					query = contigQueryStart + contigQueryEnd;
-					preventOtherSelection();
-				}
-				else {
-					statusLine.setText("Please enter valid dates for your report or tick the 'All splits' box");
-				}
-			}
-			else {
-				query = contigQueryStart + "where statsdate >= " +  since +
-				" and statsdate <= " + until + " order by project_id";
-				preventOtherSelection();
-			}	
+			query = contigQueryStart;
+			preventOtherSelection();
 			titleString =  contigTitleString;					
 		}
 		else if (event.getSource() == freeReadsBox) {
-			if ((since.equals(dateFormatString) )|| (until.equals(dateFormatString)) )
-			{
-				if (allSplitsBox.isSelected()) {
-					query = freeReadsQueryStart + freeReadsQueryEnd;	
-					preventOtherSelection();
-				}
-				else {
-					statusLine.setText("Please enter valid dates for your report or tick the 'All splits' box");
-				}
-			}
-			else {
-				query = freeReadsQueryStart + "where statsdate >= " +  since +
-					" and statsdate <= " + until + " order by statsdate ASC";
-				preventOtherSelection();
-			}
+			query = freeReadsQueryStart;
+			preventOtherSelection();
 			titleString =  freeReadsTitleString;
 		}
 		else if (event.getSource() == userBox) {
@@ -258,14 +187,38 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				query = "select count(*) from USER";
 				titleString = "count";
 		}
-		else if (event.getSource() == btnSave) {						
-			Date sinceDate = calendarSince.getDate();
-			since = sinceDate.toString();
-			Date untilDate = calendarUntil.getDate();
-			until = untilDate.toString();
+		else if ((event.getSource() == sinceField) || (event.getSource() == untilField)) {
+			
+		}
+		else if (event.getSource() == btnSave) {			
+			sinceField.setEnabled(false);
+			untilField.setEnabled(false);
+			since = sinceField.getText();
+			until = untilField.getText();
+			
+			if ((since.equals(dateFormatString) )|| (until.equals(dateFormatString)) ) {
+					statusLine.setText("Please enter valid dates for your report or tick the 'All data' box");
+				}
+			else {
+				query = query + " where statsdate >= '" +  since +
+			"' and statsdate <= '" + until + "' order by statsdate";
+			}
+			
+			preventOtherSelection();
+			
+			//Date sinceDate = (Date) sinceField.getValue();
+			//Date sinceDate = calendarSince.getDate();
+			//since = sinceDate.toString();
+			//split into year, month, day on the -
+			// create the matching Date
+		
+			//Date untilDate = calendarUntil.getDate();
+			//Date untilDate = (Date) untilField.getValue();
+			//until = untilDate.toString();
 			Arcturus.logInfo("query being run is: " + query);
 			
-			if (sinceDate.before(untilDate)) {
+			//if (sinceDate.before(untilDate)) {
+			if (true) {
 				Connection conn;	
 				try {
 						conn = adb.getPooledConnection(this);
@@ -279,13 +232,16 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 					} catch (ArcturusDatabaseException exception) {
 						statusLine.setText("An error occurred when trying to find your report output from the Arcturus database");
 						Arcturus.logSevere("An error occurred when trying to find your report output from the Arcturus database", exception);
+						resetAllButtons();
 						exception.printStackTrace();
 					} catch (SQLException exception) {
 						statusLine.setText("An error occurred when trying to run the query to find your report output from the database");
 						Arcturus.logSevere("An error occurred when trying to run the query to find your report output from the database", exception);
+						resetAllButtons();
 					} catch (Exception exception) {
 						statusLine.setText("An error occurred when trying to save your report output");
 						Arcturus.logSevere("An error occurred when trying to save your report output", exception);
+						resetAllButtons();
 				}	
 			}
 			else {
@@ -299,16 +255,23 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		Arcturus.logInfo("at the end of actionPerformed query holds: " + query);
 	}
 	
+	protected void startButtons() {
+		contigBox.setEnabled(true);
+		freeReadsBox.setEnabled(true);
+		userBox.setEnabled(true);
+		
+		btnSave.setEnabled(true);
+	}
 	
 	protected void preventOtherSelection() {
 		contigBox.setEnabled(false);				
 		freeReadsBox.setEnabled(false);
 		userBox.setEnabled(false);
-		allSplitsBox.setEnabled(false);
+		
 		btnSave.setEnabled(true);
 	}
 	
-	protected void resetAllBoxes() {
+	protected void resetAllButtons() {
 		contigBox.setEnabled(true);
 		contigBox.setSelected(false);
 		
@@ -318,10 +281,11 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		userBox.setEnabled(true);
 		userBox.setSelected(false);
 		
-		allSplitsBox.setEnabled(true);
-		allSplitsBox.setSelected(false);
+		sinceField.setEnabled(true);
+		untilField.setEnabled(true);
 		
 		btnSave.setEnabled(false);
+		query = "";
 	}
 	
 	protected void saveStatsToFile(ResultSet rs) throws SQLException {
@@ -359,18 +323,18 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				writer.close();
 				Arcturus.logInfo("File " + file.getName() + " saved successfully");
 				statusLine.setText("Your data has been successfully saved to " + file.getName());
-				resetAllBoxes();
+				resetAllButtons();
 			} 
 			catch (IOException ioe) {
 				Arcturus.logWarning("Error encountered whilst writing file "
 						+ file.getPath(), ioe);
-				resetAllBoxes();
+				resetAllButtons();
 			}
 		}
 		else {
 			// User has cancelled, so reset all the buttons to enabled and unchecked 
 			Arcturus.logWarning("Save command cancelled by user\n");
-			resetAllBoxes();
+			resetAllButtons();
 		}
 	}
 
