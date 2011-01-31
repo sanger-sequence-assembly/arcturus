@@ -226,8 +226,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 						reportException("An error occurred when trying to save your report output", exception);
 				}	
 			}
-			else {
-				reportError("Date " + since + " is not before date " + until);		
+			else {	
 				sinceField.setEnabled(true);
 				untilField.setEnabled(true);
 			}
@@ -305,9 +304,26 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 								  " to until:" + untilYear + "-" + untilMonth + "-" + untilDay);	
 		
 		boolean sinceDateValid = checkDate(now, sinceYear, sinceMonth, sinceDay);
-		boolean untilDateValid = checkDate(now, untilYear, untilMonth, untilDay);
-		return (sinceCal.before(untilCal) && sinceDateValid && untilDateValid);
-
+		
+		if (sinceDateValid) {
+			boolean untilDateValid = checkDate(now, untilYear, untilMonth, untilDay);
+			if (untilDateValid) {
+				if (sinceCal.before(untilCal)) {
+					reportError("Date " + since + " is not before date " + until);	
+					return false;
+				}
+				else {
+					return true;
+				}
+			}
+			else {
+				return false;
+			}
+		}
+		else {
+			return false;
+		}
+		
 	}
 	
 	protected String printAsDate(int year, int month, int day){
@@ -315,29 +331,20 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	}
 	
 	protected boolean checkDate(Calendar now, int year, int month, int day) {
-		String message = "";
 		boolean check = true;
 		
-		if (year > now.YEAR ) {
-			message = "Year cannot be greater than " + now.YEAR;
-			check = false;
-		}
-		if (year > now.YEAR  && month > now.MONTH && day > now.DAY_OF_MONTH) {
-			message = "This system is unable to provide statistics after " + printAsDate(now.YEAR, now.MONTH, now.DAY_OF_MONTH);
-			check = false;
-		}
-		if (year < 1995) {
-			message = "We do not have statistics for " + year;
-			check = false;
+		if (year < 2005) {
+			reportError("We do not have statistics for " + year + ". ");
+			return false;
 		}
 		if ((month > 12) || (month < 1)){
-			message = "Invalid month: " + month;
-			check = false;
+			reportError("Invalid month: " + month + ". ");
+			return false;
 		}
 		if ((day > 31) || (day < 1)){
-			message = "Invalid day: " + day;
-		}
-		reportError(message);
+			reportError("Invalid day: " + day + ". ");
+			return false;
+		}	
 		return check;
 	}
 	
