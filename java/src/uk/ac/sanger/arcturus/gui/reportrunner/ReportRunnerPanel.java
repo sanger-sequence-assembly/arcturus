@@ -14,6 +14,7 @@ import com.toedter.calendar.*;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.EventListener;
+import java.util.GregorianCalendar;
 import java.util.Locale;
 
 import javax.swing.*;
@@ -123,7 +124,6 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		
 		sinceField.setName(dateFormatString);  
 		untilField.setText(dateFormatString);
-		statusLine.setText("Please enter valid dates for your report or tick the 'Save all statistics box");
 		
         JPanel mainPanel = new JPanel(new GridLayout(0,3));
         mainPanel.add(contigBox);
@@ -198,28 +198,16 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 			until = untilField.getText();
 			
 			if ((since.equals(dateFormatString) )|| (until.equals(dateFormatString)) ) {
-					statusLine.setText("Please enter valid dates for your report or tick the 'All data' box");
+					statusLine.setText("Please enter valid dates for your report");
 				}
 			else {
 				query = query + " where statsdate >= '" +  since +
 			"' and statsdate <= '" + until + "' order by statsdate";
 			}
-			
 			preventOtherSelection();
-			
-			//Date sinceDate = (Date) sinceField.getValue();
-			//Date sinceDate = calendarSince.getDate();
-			//since = sinceDate.toString();
-			//split into year, month, day on the -
-			// create the matching Date
-		
-			//Date untilDate = calendarUntil.getDate();
-			//Date untilDate = (Date) untilField.getValue();
-			//until = untilDate.toString();
 			Arcturus.logInfo("query being run is: " + query);
 			
-			//if (sinceDate.before(untilDate)) {
-			if (true) {
+			if (checkDates()){
 				Connection conn;	
 				try {
 						conn = adb.getPooledConnection(this);
@@ -231,29 +219,36 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 						ResultSet rs = stmt.executeQuery(query);
 						saveStatsToFile(rs);
 					} catch (ArcturusDatabaseException exception) {
-						statusLine.setText("An error occurred when trying to find your report output from the Arcturus database");
-						Arcturus.logSevere("An error occurred when trying to find your report output from the Arcturus database", exception);
-						resetAllButtons();
-						exception.printStackTrace();
+						reportException("An error occurred when trying to find your report output from the Arcturus database", exception);
 					} catch (SQLException exception) {
-						statusLine.setText("An error occurred when trying to run the query to find your report output from the database");
-						Arcturus.logSevere("An error occurred when trying to run the query to find your report output from the database", exception);
-						resetAllButtons();
+						reportException("An error occurred when trying to run the query to find your report output from the database", exception);
 					} catch (Exception exception) {
-						statusLine.setText("An error occurred when trying to save your report output");
-						Arcturus.logSevere("An error occurred when trying to save your report output", exception);
-						resetAllButtons();
+						reportException("An error occurred when trying to save your report output", exception);
 				}	
 			}
 			else {
-				statusLine.setText("Date" + since + " is not before date " + until);
-				Arcturus.logInfo("Date" + since + " is not before date " + until);					
+				reportError("Date " + since + " is not before date " + until);		
+				sinceField.setEnabled(true);
+				untilField.setEnabled(true);
 			}
 		}
 		else {
 				// Do nothing
 		}	
 		Arcturus.logInfo("at the end of actionPerformed query holds: " + query);
+	}
+	
+	protected void reportException( String message, Exception exception) {
+		statusLine.setText(message);
+		Arcturus.logSevere(message, exception);
+		resetAllButtons();
+		exception.printStackTrace();
+	}
+	
+	protected void reportError( String message) {
+		statusLine.setText(message);
+		Arcturus.logInfo(message);
+		resetAllButtons();
 	}
 	
 	protected void startButtons() {
@@ -289,6 +284,63 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		query = "";
 	}
 	
+	protected boolean checkDates() {
+		Calendar now = Calendar.getInstance();
+		GregorianCalendar sinceCal = new GregorianCalendar();
+		GregorianCalendar untilCal = new GregorianCalendar();
+		
+		String[] sinceDateParts = since.split("-");
+		int sinceYear = Integer.parseInt(sinceDateParts[0].trim());
+		int sinceMonth = Integer.parseInt(sinceDateParts[1].trim());
+		int sinceDay = Integer.parseInt(sinceDateParts[2].trim());
+		sinceCal.set(sinceYear, sinceMonth, sinceDay);
+		
+		String[] untilDateParts = until.split("-");
+		int untilYear = Integer.parseInt(untilDateParts[0].trim());
+		int untilMonth = Integer.parseInt(untilDateParts[1].trim());
+		int untilDay = Integer.parseInt(untilDateParts[2].trim());
+		untilCal.set(untilYear, untilMonth, untilDay);
+		
+		Arcturus.logInfo("Comparing since:" + sinceYear + "-" + sinceMonth + "-" + sinceDay + 
+								  " to until:" + untilYear + "-" + untilMonth + "-" + untilDay);	
+		
+		boolean sinceDateValid = checkDate(now, sinceYear, sinceMonth, sinceDay);
+		boolean untilDateValid = checkDate(now, untilYear, untilMonth, untilDay);
+		return (sinceCal.before(untilCal) && sinceDateValid && untilDateValid);
+
+	}
+	
+	protected String printAsDate(int year, int month, int day){
+		return(year + "-" + month + "-" + day);
+	}
+	
+	protected boolean checkDate(Calendar now, int year, int month, int day) {
+		String message = "";
+		boolean check = true;
+		
+		if (year > now.YEAR ) {
+			message = "Year cannot be greater than " + now.YEAR;
+			check = false;
+		}
+		if (year > now.YEAR  && month > now.MONTH && day > now.DAY_OF_MONTH) {
+			message = "This system is unable to provide statistics after " + printAsDate(now.YEAR, now.MONTH, now.DAY_OF_MONTH);
+			check = false;
+		}
+		if (year < 1995) {
+			message = "We do not have statistics for " + year;
+			check = false;
+		}
+		if ((month > 12) || (month < 1)){
+			message = "Invalid month: " + month;
+			check = false;
+		}
+		if ((day > 31) || (day < 1)){
+			message = "Invalid day: " + day;
+		}
+		reportError(message);
+		return check;
+	}
+	
 	protected void saveStatsToFile(ResultSet rs) throws SQLException {
 		final JFileChooser fc = new JFileChooser();
 		fc.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
@@ -298,17 +350,14 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		
 		if (returnVal == JFileChooser.APPROVE_OPTION) {
 			try {
-				Arcturus.logInfo("Saving: " + file.getName() + ".\n");
+				//Arcturus.logInfo("Saving: " + file.getName() + ".\n");
 				
 				BufferedWriter writer = new BufferedWriter(new FileWriter(file));
 				ResultSetMetaData rsmd = rs.getMetaData();
 				int cols = rsmd.getColumnCount();	
 
-				Arcturus.logInfo("There are " + cols +" columns in the data set");
-				
-				//writer.newLine();
+				//Arcturus.logInfo("There are " + cols +" columns in the data set");
 				writer.write(titleString);
-				
 				String colValue = "";
 				
 				while (rs.next()) {
