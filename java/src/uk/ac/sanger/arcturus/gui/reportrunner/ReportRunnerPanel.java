@@ -96,13 +96,17 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		"statsdate," +
 		"total_reads," +
 		"reads_in_contigs," +
-		"free_reads\n";
+		"free_reads," +
+		"asped_reads," +
+		"next_gen_reads\n";
     protected String freeReadsQueryStart = "select " +
 	"organism, " +
 	"statsdate,  " +
 	"total_reads,  " +
 	"reads_in_contigs,  " +
-	"free_reads " +
+	"free_reads, " +
+	"asped_reads, " +
+	"next_gen_reads "+
 	"from ORGANISM_HISTORY ";
     protected String freeReadsQueryEnd = "order by statsdate ASC";
     
@@ -117,8 +121,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	{	
 		super(parent, adb);
 		
-		sinceField.setName(dateFormatString);  // crashes here time for lunch
-		//sinceField.setText(dateFormatString);
+		sinceField.setName(dateFormatString);  
 		untilField.setText(dateFormatString);
 		statusLine.setText("Please enter valid dates for your report or tick the 'Save all statistics box");
 		
@@ -136,12 +139,10 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
         mainPanel.add(new Label(" "));
 
 		mainPanel.add(sinceField);
-        //mainPanel.add(calendarSince);
         mainPanel.add(new Label(dateStartExplanationString));
         mainPanel.add(new Label(" "));
         
         mainPanel.add(untilField);
-        //mainPanel.add(calendarUntil);
         mainPanel.add(new Label(dateEndExplanationString));
         mainPanel.add(new Label(" "));
 		
@@ -322,7 +323,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				} 
 				writer.close();
 				Arcturus.logInfo("File " + file.getName() + " saved successfully");
-				statusLine.setText("Your data has been successfully saved to " + file.getName());
+				statusLine.setText("Your data has been saved to " + file.getName());
 				resetAllButtons();
 			} 
 			catch (IOException ioe) {
