@@ -125,34 +125,23 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		sinceField.setName(dateFormatString);  
 		untilField.setText(dateFormatString);
 		
-        JPanel mainPanel = new JPanel(new GridLayout(0,3));
-        mainPanel.add(contigBox);
-        mainPanel.add(new Label(" "));
-        mainPanel.add(new Label(" "));
-        
+        //JPanel mainPanel = new JPanel(new GridLayout(0,3));
+		JPanel mainPanel = new JPanel(new FlowLayout());
+		JPanel datePanel = new JPanel (new FlowLayout());
+		JPanel savePanel = new JPanel (new FlowLayout());
+		
+        mainPanel.add(contigBox);   
         mainPanel.add(freeReadsBox);
-        mainPanel.add(new Label(" "));
-        mainPanel.add(new Label(" "));
-
         mainPanel.add(userBox);
-        mainPanel.add(new Label(" "));
-        mainPanel.add(new Label(" "));
-
-		mainPanel.add(sinceField);
-        mainPanel.add(new Label(dateStartExplanationString));
-        mainPanel.add(new Label(" "));
+      
+		datePanel.add(sinceField);
+        datePanel.add(new Label(dateStartExplanationString)); 
+        datePanel.add(untilField);
+        datePanel.add(new Label(dateEndExplanationString));
         
-        mainPanel.add(untilField);
-        mainPanel.add(new Label(dateEndExplanationString));
-        mainPanel.add(new Label(" "));
-		
-        mainPanel.add(splitExplanation);
-		mainPanel.add(btnSave);
-		mainPanel.add(new Label(" "));
-		
-		mainPanel.add(statusLine);
-		mainPanel.add(new Label(" "));
-		mainPanel.add(new Label(" "));
+        savePanel.add(splitExplanation);
+		savePanel.add(btnSave);
+		datePanel.add(statusLine);
 
 		contigBox.addActionListener(this);
 		freeReadsBox.addActionListener(this);
@@ -164,6 +153,9 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		btnSave.addActionListener(this);
 		
 		add(mainPanel, BorderLayout.NORTH);
+		add(datePanel, BorderLayout.CENTER);
+		add(savePanel, BorderLayout.SOUTH);
+		
 		startButtons();
 		createMenus();
 	}
