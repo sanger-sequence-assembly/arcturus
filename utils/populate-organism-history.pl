@@ -115,7 +115,7 @@ elsif (($since ne "") && ($until ne "")) {
 		my $date_query = "select max(statsdate), until_date from time_intervals;";
 		my $dqh = $dbh->prepare($date_query);
 
-		my $date_drop = "drop table time_intervals";
+		my $date_drop = "drop temporary table time_intervals";
 		my $statsdate;
 		my $tempdate;
   
@@ -217,18 +217,18 @@ sub checkFreeReadChange {
   my $date = shift;
   my $threshold = shift;
 
-	print STDERR "\tChecking for free read variation over the allowed threshold of $threshold reads on $date\n";
+	print STDERR "\tChecking for free read variation over the allowed threshold of $threshold reads on $date and previous date\n";
 
 	# get the free_reads for stats_day
 	my $stasday_free_reads = 0;
 	my $statsday_query = "select statsdate, total_reads, free_reads, asped_reads 
 		from ORGANISM_HISTORY 
- 		where statsdate = date_sub(?,interval 1 day)";
+ 		where statsdate = ?";
 	my $dsth = $dbh->prepare_cached($statsday_query);
 
  	my $previous_query = "select statsdate, total_reads, free_reads, asped_reads 
  		from ORGANISM_HISTORY 
- 		where statsdate = date_sub(?,interval 2 day)";
+ 		where statsdate = date_sub(?,interval 1 day)";
 	my $psth = $dbh->prepare_cached($previous_query);
 
 	my $statsday_count = $dsth->execute($date) || &queryFailed($statsday_query);
@@ -298,7 +298,7 @@ sub showUsage {
     my $code = shift || 0;
 
 		print STDOUT "\n Please supply two dates for an inclusive period to populate the organism statistics,";
-		print STDOUT "\n or no dates to populate yesterday's data\n";
+		print STDOUT "\n or no dates to populate yesterday's data, with a threshold of read variation to ignore\n";
     print STDOUT "\n Parameter input ERROR: $code \n" if $code; 
     print STDOUT "\n";
     unless ($organism && $instance) {
