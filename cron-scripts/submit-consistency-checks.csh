@@ -19,7 +19,7 @@ echo
 echo Checking the consistency of the Arcturus databases
 
 set JARFILE=${SCRIPT_HOME}/../java/arcturus.jar
-set CONSISTENCYFOLDER=${SCRIPT_HOME}/../consistency-checker
+set CONSISTENCYFOLDER=${HOME}/../consistency-checker
 
 if  ( ! -d $CONSISTENCYFOLDER ) then
   mkdir $CONSISTENCYFOLDER

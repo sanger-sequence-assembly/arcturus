@@ -24,17 +24,17 @@ echo Building the list of modified Arcturus databases ready for the consistency 
 switch($MYSQL_HOST)
 case mcs6:
 # check for a LIVE database used in the last $TIME_IN_DAYS days
-	perl ${SCRIPT_HOME}/$PERL_SCRIPT -host $MYSQL_HOST -port 15001  -username $MYSQL_USER -password $MYSQL_PASSWORD -since $TIME_IN_DAYS > $HOME/hlm_active_organisms.list
+	perl ${SCRIPT_HOME}/$PERL_SCRIPT -host $MYSQL_HOST -port 15001  -username $MYSQL_USER -password $MYSQL_PASSWORD -since $TIME_IN_DAYS > $HOME/hlmp_active_organisms.list
 
 	echo
 	echo Helminth list built in $HOME/hlm_active_organisms.list
 
-	perl ${SCRIPT_HOME}/$PERL_SCRIPT -host $MYSQL_HOST -port 15003  -username $MYSQL_USER -password $MYSQL_PASSWORD -since $TIME_IN_DAYS > $HOME/arc_active_organisms.list
+	perl ${SCRIPT_HOME}/$PERL_SCRIPT -host $MYSQL_HOST -port 15003  -username $MYSQL_USER -password $MYSQL_PASSWORD -since $TIME_IN_DAYS > $HOME/arcp_active_organisms.list
 
 	echo
 	echo Arcturus list built in $HOME/arc_active_organisms.list
 
-	perl ${SCRIPT_HOME}/$PERL_SCRIPT -host $MYSQL_HOST -port 15005  -username $MYSQL_USER -password $MYSQL_PASSWORD -since $TIME_IN_DAYS > $HOME/zeb_active_organisms.list
+	perl ${SCRIPT_HOME}/$PERL_SCRIPT -host $MYSQL_HOST -port 15005  -username $MYSQL_USER -password $MYSQL_PASSWORD -since $TIME_IN_DAYS > $HOME/zebp_active_organisms.list
 
 	echo
 	echo Zebrafish list built in $HOME/zeb_active_organisms.list
@@ -42,7 +42,7 @@ case mcs6:
 	breaksw
 case mcs4a:
 # check for a TEST database used in the last $TIME_IN_DAYS days
-	perl ${SCRIPT_HOME}/$PERL_SCRIPT -host $MYSQL_HOST -port 3311 -username $MYSQL_USER -password $MYSQL_PASSWORD -since $TIME_IN_DAYS > $HOME/test_active_organisms.list
+	perl ${SCRIPT_HOME}/$PERL_SCRIPT -host $MYSQL_HOST -port 3311 -username $MYSQL_USER -password $MYSQL_PASSWORD -since $TIME_IN_DAYS > $HOME/arct_active_organisms.list
 
 	echo
 	echo Test databases list built in $HOME/test_active_organisms.list

@@ -23,7 +23,7 @@ while (my $nextword = shift @ARGV) {
     } elsif ($nextword eq '-password') {
 	$password = shift @ARGV;
     } elsif ($nextword eq '-since') {
-	$since = shift;
+	$since = shift @ARGV;
     } elsif ($nextword eq '-hideidle') {
 	$hideidle = 1;
     } elsif ($nextword eq '-help') {
@@ -38,12 +38,10 @@ $username = $ENV{'MYSQL_USERNAME'} unless defined($username);
 $password = $ENV{'MYSQL_PASSWORD'} unless defined($password);
 
 unless (defined($host) && defined($port) &&
-	defined($username) && defined($password)) {
+	defined($username) && defined($password) && defined($since)) {
     &showHelp("One or more mandatory options were missing");
     exit(1);
 }
-
-$since = 28 unless (defined($since) && $since =~ /^\d+$/);
 
 my $dbname = 'arcturus';
 
@@ -98,11 +96,6 @@ sub showHelp {
     print STDERR "\t-port\t\tPort\n";
     print STDERR "\t-username\tUsername to connect to server (overrides ENV\{MYSQL_USERNAME\})\n";
     print STDERR "\t-password\tPassword to connect to server (overrides ENV\{MYSQL_PASSWORD\})\n";
-
-    print STDERR "\n";
-
-    print STDERR "OPTIONAL PARAMETERS:\n";
-
     print STDERR "\t-since\t\tNumber of days before present for import summary [default: 28]\n";
-    print STDERR "\t-hideidle\tShow only the projects that have been active recently\n";
+    print STDERR "\n";
 }
