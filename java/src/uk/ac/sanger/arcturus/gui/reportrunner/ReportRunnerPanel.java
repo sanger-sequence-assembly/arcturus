@@ -88,7 +88,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	
 	protected JFileChooser fileChooser = new JFileChooser();
 	
-	protected JList lstProjects;
+	protected JList projectList;
 	protected ProjectListModel plm = new ProjectListModel(adb);
 	// replace message line with this? 
 	// protected JTextArea txtMessages = new JTextArea(20, 40);
@@ -120,7 +120,6 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	"max_contig_length, " +
 	"n50_contig_length " +
 	"from PROJECT_CONTIG_HISTORY ";
-    protected String contigQueryEnd = " order by project_id";
     
     protected String freeReadsTitleString = 
 		"organism," +
@@ -139,10 +138,15 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	"asped_reads, " +
 	"next_gen_reads "+
 	"from ORGANISM_HISTORY ";
-    protected String freeReadsQueryEnd = "order by statsdate ASC";
     
     protected String since = dateFormatString;
     protected String until = dateFormatString;
+    protected String projectName = "";
+    
+    protected String projectQueryRestriction = " where statsdate >= '" +  since +
+	"' and statsdate <= '" + until + "' and name = " + projectName + " order by statsdate";
+    protected String dateQueryRestriction = " where statsdate >= '" +  since +
+	"' and statsdate <= '" + until + "' order by statsdate";
     
     protected JCalendar calendarSince = new JCalendar();
 	protected JCalendar calendarUntil = new JCalendar();
@@ -187,8 +191,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	
 	public void actionPerformed(ActionEvent event) {
 			
-		Arcturus.logInfo("in actionPerformed because " + event.getActionCommand() + 
-				" has been pressed and the dates entered are " + since + " and " + until);
+		Arcturus.logInfo("in actionPerformed because " + event.getSource() + 
+				" has been pressed and the dates entered are " + since + " and " + until + " and the chosen project is " + projectName);
 	
 		if (event.getSource()== contigBox) {		
 			query = contigQueryStart;
@@ -209,10 +213,12 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 			if (allSplitsBox.isSelected()) {
 				startProjectField.setEnabled(false);
 				endProjectField.setEnabled(false);
+				projectList.setEnabled(false);
 			}
 			else {
 				startProjectField.setEnabled(true);
 				endProjectField.setEnabled(true);
+				projectList.setEnabled(true);
 			}
 		}
 		else if ((event.getSource() == sinceField) || (event.getSource() == untilField)) {
@@ -229,9 +235,12 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 					sinceField.setEnabled(true);
 					untilField.setEnabled(true);
 				}
+			else if (allSplitsBox.isSelected()){
+				query = query + dateQueryRestriction;
+			}
 			else {
-				query = query + " where statsdate >= '" +  since +
-			"' and statsdate <= '" + until + "' order by statsdate";
+				query = query + projectQueryRestriction;
+				
 			}
 			preventOtherSelection();
 			Arcturus.logInfo("query being run is: " + query);
@@ -276,7 +285,6 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	protected void reportError( String message) {
 		statusLine.setText(message);
 		Arcturus.logInfo(message);
-		resetAllButtons();
 	}
 	
 	protected void startButtons() {
@@ -310,23 +318,43 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		
 		btnSave.setEnabled(false);
 		query = "";
+		titleString = "";
 	}
 	
 	protected boolean checkDates() {
 		Calendar now = Calendar.getInstance();
 		GregorianCalendar sinceCal = new GregorianCalendar();
 		GregorianCalendar untilCal = new GregorianCalendar();
+		int sinceYear = 0;
+		int sinceMonth = 0;
+		int sinceDay = 0;
+		int untilYear = 0;
+		int untilMonth = 0;
+		int untilDay = 0;
 		
 		String[] sinceDateParts = since.split("-");
-		int sinceYear = Integer.parseInt(sinceDateParts[0].trim());
-		int sinceMonth = Integer.parseInt(sinceDateParts[1].trim());
-		int sinceDay = Integer.parseInt(sinceDateParts[2].trim());
-		sinceCal.set(sinceYear, sinceMonth, sinceDay);
-		
 		String[] untilDateParts = until.split("-");
-		int untilYear = Integer.parseInt(untilDateParts[0].trim());
-		int untilMonth = Integer.parseInt(untilDateParts[1].trim());
-		int untilDay = Integer.parseInt(untilDateParts[2].trim());
+		
+		// find a suitable check to avoid text strings
+		
+		if (sinceDateParts.length == 0) {
+			reportError("Invalid date" + since);
+			return false;
+		}
+		
+		if (untilDateParts.length == 0) {
+			reportError("Invalid date" + until);
+			return false;
+		}
+	
+		sinceYear = Integer.parseInt(sinceDateParts[0].trim());
+		sinceMonth = Integer.parseInt(sinceDateParts[1].trim());
+		sinceDay = Integer.parseInt(sinceDateParts[2].trim());
+		sinceCal.set(sinceYear, sinceMonth, sinceDay);
+	
+		untilYear = Integer.parseInt(untilDateParts[0].trim());
+		untilMonth = Integer.parseInt(untilDateParts[1].trim());
+		untilDay = Integer.parseInt(untilDateParts[2].trim());
 		untilCal.set(untilYear, untilMonth, untilDay);
 		
 		Arcturus.logInfo("Comparing since:" + sinceYear + "-" + sinceMonth + "-" + sinceDay + 
@@ -337,7 +365,9 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		if (sinceDateValid) {
 			boolean untilDateValid = checkDate(now, untilYear, untilMonth, untilDay);
 			if (untilDateValid) {
-				if (sinceCal.before(untilCal)) {
+				//if (sinceCal.before(untilCal)) {
+					if (untilCal.before(sinceCal)) {
+
 					reportError("Date " + since + " is not before date " + until);	
 					return false;
 				}
@@ -352,7 +382,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		else {
 			return false;
 		}
-		
+	
 	}
 	
 	protected String printAsDate(int year, int month, int day){
@@ -362,7 +392,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	protected boolean checkDate(Calendar now, int year, int month, int day) {
 		boolean check = true;
 		
-		if (year < 2005) {
+		if (year < 2010) {
 			reportError("We do not have statistics for " + year + ". ");
 			return false;
 		}
@@ -511,15 +541,15 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	protected void setAllProjectsSelected(boolean allSelected) {
 		if (allSelected) {
 			int start = 0;
-			int end = lstProjects.getModel().getSize() - 1;
+			int end = projectList.getModel().getSize() - 1;
 			
 			if (end >= 0) {
-				lstProjects.setSelectionInterval(start, end);
-				lstProjects.setEnabled(false);
+				projectList.setSelectionInterval(start, end);
+				projectList.setEnabled(false);
 			}
 		} else {
-			lstProjects.clearSelection();
-			lstProjects.setEnabled(true);
+			projectList.clearSelection();
+			projectList.setEnabled(true);
 		}
 
 	}
@@ -567,14 +597,15 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 
 	private JPanel createProjectPanel() {
 		JPanel projectPanel = new JPanel (new FlowLayout());
-
-		projectPanel.add(startProjectField);
-		projectPanel.add(new Label(projectStartExplanationString)); 
-		projectPanel.add(endProjectField);
-		projectPanel.add(new Label(projectEndExplanationString)); 
+		
+		//projectPanel.add(startProjectField);
+		//projectPanel.add(new Label(projectStartExplanationString)); 
+		//projectPanel.add(endProjectField);
+		//projectPanel.add(new Label(projectEndExplanationString)); 
+		projectPanel.add(createProjectList());
 		projectPanel.add(allSplitsBox);
 
-        return decoratePanel(projectPanel, "Step 3: Choose the project range");
+        return decoratePanel(projectPanel, "Step 3: Choose the project");
 	}
 	
 	private JPanel createSavePanel() {
@@ -584,37 +615,37 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
         return decoratePanel(savePanel, "Step 4: save the CSV file to the machine you are running Minerva on");
 	}
 	
-	private void buildProjectList () {
+	private JPanel createProjectList () {
 		
 		JPanel panel = new JPanel(new BorderLayout());
 
-	
-		
 		plm.addListDataListener(new ListDataListener() {
 			public void contentsChanged(ListDataEvent e) {
 				refreshList();
 			}
-
 			public void intervalAdded(ListDataEvent e) {
 				refreshList();
 			}
-
 			public void intervalRemoved(ListDataEvent e) {
 				refreshList();
 			}		
 		});
 
-		lstProjects = new JList(plm);
-		lstProjects.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-		lstProjects.addListSelectionListener(new ListSelectionListener() {
+		projectList = new JList(plm);
+		projectList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+		projectList.addListSelectionListener(new ListSelectionListener() {
 			public void valueChanged(ListSelectionEvent e) {
-				Object[] selected = lstProjects.getSelectedValues();
+				Object[] selectedProjects = projectList.getSelectedValues();
+				for (int i = 0; i < selectedProjects.length; i++) {
+					projectName = selectedProjects[i].toString();
+					reportError("Looking for data for project " + projectName);
+				}
 			}
 		});
 
-		JScrollPane scrollpane = new JScrollPane(lstProjects);
+		JScrollPane scrollpane = new JScrollPane(projectList);
 		panel.add(scrollpane, BorderLayout.CENTER);
-		
+		return panel;
 	}
 }
 
