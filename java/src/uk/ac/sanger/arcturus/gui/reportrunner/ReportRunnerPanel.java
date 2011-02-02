@@ -1,6 +1,8 @@
 package uk.ac.sanger.arcturus.gui.reportrunner;
 
 import uk.ac.sanger.arcturus.gui.*;
+import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectListModel;
+import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectProxy;
 
 import java.util.Calendar.*;
 import java.util.Locale.*;
@@ -39,6 +41,10 @@ import javax.swing.border.Border;
 import javax.swing.border.EtchedBorder;
 import javax.swing.SwingUtilities;
 import javax.swing.border.Border;
+import javax.swing.event.ListDataEvent;
+import javax.swing.event.ListDataListener;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 import javax.swing.filechooser.*;
 
 import java.awt.*;
@@ -58,12 +64,16 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
     static String projectFormatString = "nnnnnn";
     static String projectStartExplanationString ="Please enter the start project id";
     static String projectEndExplanationString ="Please enter the end project id";
+    static String allSplitsString="All projects"; 
     
     protected JButton btnSave = new JButton(saveString);
-	
+    protected JCheckBox allSplitsBox = new JCheckBox(allSplitsString);
+    
 	final JCheckBox contigBox = new JCheckBox(contigString);
 	final JCheckBox freeReadsBox = new JCheckBox(freeReadsString);		
 	final JCheckBox userBox = new JCheckBox(userString);	
+	
+	
 	final JLabel splitExplanation = new JLabel(splitExplanationString);
 	final JLabel statusLine = new JLabel("");
 	
@@ -77,6 +87,11 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	private final Border LOWERED_ETCHED_BORDER = BorderFactory.createEtchedBorder(EtchedBorder.LOWERED);
 	
 	protected JFileChooser fileChooser = new JFileChooser();
+	
+	protected JList lstProjects;
+	protected ProjectListModel plm = new ProjectListModel(adb);
+	// replace message line with this? 
+	// protected JTextArea txtMessages = new JTextArea(20, 40);
 	
 	protected Statement stmt = null;
 	protected String query = "";
@@ -133,16 +148,19 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	protected JCalendar calendarUntil = new JCalendar();
 	
 	
-	public ReportRunnerPanel(MinervaTabbedPane parent, ArcturusDatabase adb)
+	public ReportRunnerPanel(MinervaTabbedPane parent, ArcturusDatabase adb) throws ArcturusDatabaseException
 	{	
 		
 		super(parent, adb);
 		
 		int vfill = 5;
 		
+		plm = new ProjectListModel(adb);
+		
 		contigBox.addActionListener(this);
 		freeReadsBox.addActionListener(this);
 		userBox.addActionListener(this);
+		allSplitsBox.addActionListener(this);
 		
 		sinceField.addActionListener(this);
 		untilField.addActionListener(this);
@@ -187,6 +205,16 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				query = "select count(*) from USER";
 				titleString = "count";
 		}
+		else if (event.getSource() ==allSplitsBox) {
+			if (allSplitsBox.isSelected()) {
+				startProjectField.setEnabled(false);
+				endProjectField.setEnabled(false);
+			}
+			else {
+				startProjectField.setEnabled(true);
+				endProjectField.setEnabled(true);
+			}
+		}
 		else if ((event.getSource() == sinceField) || (event.getSource() == untilField)) {
 			
 		}
@@ -198,6 +226,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 			
 			if ((since.equals(dateFormatString) )|| (until.equals(dateFormatString)) ) {
 					statusLine.setText("Please enter valid dates for your report");
+					sinceField.setEnabled(true);
+					untilField.setEnabled(true);
 				}
 			else {
 				query = query + " where statsdate >= '" +  since +
@@ -472,6 +502,27 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 			publish(message);
 		}
 }
+	protected void refreshList() {
+		boolean allSelected = allSplitsBox.isSelected();
+		
+		setAllProjectsSelected(allSelected);
+	}
+	
+	protected void setAllProjectsSelected(boolean allSelected) {
+		if (allSelected) {
+			int start = 0;
+			int end = lstProjects.getModel().getSize() - 1;
+			
+			if (end >= 0) {
+				lstProjects.setSelectionInterval(start, end);
+				lstProjects.setEnabled(false);
+			}
+		} else {
+			lstProjects.clearSelection();
+			lstProjects.setEnabled(true);
+		}
+
+	}
 
 	// Private methods
 	
@@ -521,6 +572,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		projectPanel.add(new Label(projectStartExplanationString)); 
 		projectPanel.add(endProjectField);
 		projectPanel.add(new Label(projectEndExplanationString)); 
+		projectPanel.add(allSplitsBox);
 
         return decoratePanel(projectPanel, "Step 3: Choose the project range");
 	}
@@ -530,6 +582,39 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		savePanel.add(splitExplanation);
 		savePanel.add(btnSave);
         return decoratePanel(savePanel, "Step 4: save the CSV file to the machine you are running Minerva on");
+	}
+	
+	private void buildProjectList () {
+		
+		JPanel panel = new JPanel(new BorderLayout());
+
+	
+		
+		plm.addListDataListener(new ListDataListener() {
+			public void contentsChanged(ListDataEvent e) {
+				refreshList();
+			}
+
+			public void intervalAdded(ListDataEvent e) {
+				refreshList();
+			}
+
+			public void intervalRemoved(ListDataEvent e) {
+				refreshList();
+			}		
+		});
+
+		lstProjects = new JList(plm);
+		lstProjects.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+		lstProjects.addListSelectionListener(new ListSelectionListener() {
+			public void valueChanged(ListSelectionEvent e) {
+				Object[] selected = lstProjects.getSelectedValues();
+			}
+		});
+
+		JScrollPane scrollpane = new JScrollPane(lstProjects);
+		panel.add(scrollpane, BorderLayout.CENTER);
+		
 	}
 }
 
