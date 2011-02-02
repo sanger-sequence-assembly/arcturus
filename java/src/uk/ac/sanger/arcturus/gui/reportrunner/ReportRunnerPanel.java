@@ -46,9 +46,12 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
     static String userString = "Save statistics about your work";
     static String saveString = "Save statistics to a comma-separated file on your machine";
     static String splitExplanationString ="You can save only the data that you are authorised to see in Minerva";
-    static String dateStartExplanationString ="Please enter the start date for the data you want to export";
-    static String dateEndExplanationString ="Please enter the end date for the data you want to export";
+    static String dateStartExplanationString ="Please enter the start date";
+    static String dateEndExplanationString ="Please enter the end date";
     static String dateFormatString = "YYYY-MM-DD";
+    static String projectFormatString = "nnnnnn";
+    static String projectStartExplanationString ="Please enter the start project id";
+    static String projectEndExplanationString ="Please enter the end project id";
     
     protected JButton btnSave = new JButton(saveString);
 	
@@ -61,6 +64,11 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	final JFormattedTextField sinceField = new JFormattedTextField(dateFormatString);
 	final JFormattedTextField untilField = new JFormattedTextField(dateFormatString);
      	
+	final JFormattedTextField startProjectField = new JFormattedTextField(projectFormatString);
+	final JFormattedTextField endProjectField = new JFormattedTextField(projectFormatString);
+	
+	final static int maxGap = 20;
+	
 	protected JFileChooser fileChooser = new JFileChooser();
 	
 	protected Statement stmt = null;
@@ -121,38 +129,69 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	public ReportRunnerPanel(MinervaTabbedPane parent, ArcturusDatabase adb)
 	{	
 		super(parent, adb);
-		
-		sinceField.setName(dateFormatString);  
-		untilField.setText(dateFormatString);
-		
-        //JPanel mainPanel = new JPanel(new GridLayout(0,3));
-		JPanel mainPanel = new JPanel(new FlowLayout());
-		JPanel datePanel = new JPanel (new FlowLayout());
+	
+		JPanel topPanel = new JPanel(new FlowLayout());
+		JPanel datePanel = new JPanel (new GridLayout(0,2));
 		JPanel savePanel = new JPanel (new FlowLayout());
 		
-        mainPanel.add(contigBox);   
-        mainPanel.add(freeReadsBox);
-        mainPanel.add(userBox);
-      
+        datePanel.add(contigBox);   
+        datePanel.add(new Label("")); 
+        datePanel.add(freeReadsBox);
+        datePanel.add(new Label("")); 
+        datePanel.add(userBox);
+        datePanel.add(new Label("")); 
+       
+        datePanel.add(new Label("")); 
+        datePanel.add(new Label("")); 
+        datePanel.add(new Label("")); 
+        datePanel.add(new Label("")); 
+        
 		datePanel.add(sinceField);
         datePanel.add(new Label(dateStartExplanationString)); 
         datePanel.add(untilField);
         datePanel.add(new Label(dateEndExplanationString));
+       
+        datePanel.add(new Label("")); 
+        datePanel.add(new Label("")); 
+        datePanel.add(new Label("")); 
+        datePanel.add(new Label("")); 
+        
+        datePanel.add(startProjectField);
+        datePanel.add(new Label(projectStartExplanationString)); 
+        datePanel.add(endProjectField);
+        datePanel.add(new Label(projectEndExplanationString)); 
+        
+        datePanel.add(new Label("")); 
+        datePanel.add(new Label("")); 
+        datePanel.add(new Label("")); 
+        datePanel.add(new Label("")); 
+        
+        datePanel.add(new Label("")); 
+        datePanel.add(new Label("")); 
+        datePanel.add(new Label("")); 
+        datePanel.add(new Label("")); 
+        
+        datePanel.add(new Label("")); 
+        datePanel.add(new Label("")); 
+        datePanel.add(new Label("")); 
+        datePanel.add(new Label("")); 
+        
+        topPanel.add(statusLine);
+        statusLine.setText("Please choose the kind of report you want to run, then the dates and the projects to find");
         
         savePanel.add(splitExplanation);
 		savePanel.add(btnSave);
-		datePanel.add(statusLine);
-
+		
 		contigBox.addActionListener(this);
 		freeReadsBox.addActionListener(this);
 		userBox.addActionListener(this);
 		
-	    sinceField.addActionListener(this);
+		sinceField.addActionListener(this);
 		untilField.addActionListener(this);
 	
 		btnSave.addActionListener(this);
 		
-		add(mainPanel, BorderLayout.NORTH);
+		add(topPanel, BorderLayout.NORTH);
 		add(datePanel, BorderLayout.CENTER);
 		add(savePanel, BorderLayout.SOUTH);
 		
