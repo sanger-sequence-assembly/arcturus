@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.gui.reportrunner;
 
 import uk.ac.sanger.arcturus.gui.*;
+
 import java.util.Calendar.*;
 import java.util.Locale.*;
 
@@ -17,7 +18,6 @@ import java.util.EventListener;
 import java.util.GregorianCalendar;
 import java.util.Locale;
 
-import javax.swing.*;
 
 import java.lang.String;
 import java.sql.Connection;
@@ -29,10 +29,16 @@ import java.text.MessageFormat;
 import java.util.List;
 import java.util.Vector;
 import java.io.*;
+
 import java.awt.*;
 import java.awt.event.*;
+import java.awt.BorderLayout;
 
+import javax.swing.*;
+import javax.swing.border.Border;
+import javax.swing.border.EtchedBorder;
 import javax.swing.SwingUtilities;
+import javax.swing.border.Border;
 import javax.swing.filechooser.*;
 
 import java.awt.*;
@@ -68,6 +74,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	final JFormattedTextField endProjectField = new JFormattedTextField(projectFormatString);
 	
 	final static int maxGap = 20;
+	private final Border LOWERED_ETCHED_BORDER = BorderFactory.createEtchedBorder(EtchedBorder.LOWERED);
 	
 	protected JFileChooser fileChooser = new JFileChooser();
 	
@@ -128,59 +135,10 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	
 	public ReportRunnerPanel(MinervaTabbedPane parent, ArcturusDatabase adb)
 	{	
-		super(parent, adb);
-	
-		JPanel topPanel = new JPanel(new FlowLayout());
-		JPanel datePanel = new JPanel (new GridLayout(0,2));
-		JPanel savePanel = new JPanel (new FlowLayout());
 		
-        datePanel.add(contigBox);   
-        datePanel.add(new Label("")); 
-        datePanel.add(freeReadsBox);
-        datePanel.add(new Label("")); 
-        datePanel.add(userBox);
-        datePanel.add(new Label("")); 
-       
-        datePanel.add(new Label("")); 
-        datePanel.add(new Label("")); 
-        datePanel.add(new Label("")); 
-        datePanel.add(new Label("")); 
-        
-		datePanel.add(sinceField);
-        datePanel.add(new Label(dateStartExplanationString)); 
-        datePanel.add(untilField);
-        datePanel.add(new Label(dateEndExplanationString));
-       
-        datePanel.add(new Label("")); 
-        datePanel.add(new Label("")); 
-        datePanel.add(new Label("")); 
-        datePanel.add(new Label("")); 
-        
-        datePanel.add(startProjectField);
-        datePanel.add(new Label(projectStartExplanationString)); 
-        datePanel.add(endProjectField);
-        datePanel.add(new Label(projectEndExplanationString)); 
-        
-        datePanel.add(new Label("")); 
-        datePanel.add(new Label("")); 
-        datePanel.add(new Label("")); 
-        datePanel.add(new Label("")); 
-        
-        datePanel.add(new Label("")); 
-        datePanel.add(new Label("")); 
-        datePanel.add(new Label("")); 
-        datePanel.add(new Label("")); 
-        
-        datePanel.add(new Label("")); 
-        datePanel.add(new Label("")); 
-        datePanel.add(new Label("")); 
-        datePanel.add(new Label("")); 
-        
-        topPanel.add(statusLine);
-        statusLine.setText("Please choose the kind of report you want to run, then the dates and the projects to find");
-        
-        savePanel.add(splitExplanation);
-		savePanel.add(btnSave);
+		super(parent, adb);
+		
+		int vfill = 5;
 		
 		contigBox.addActionListener(this);
 		freeReadsBox.addActionListener(this);
@@ -188,12 +146,22 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		
 		sinceField.addActionListener(this);
 		untilField.addActionListener(this);
+		startProjectField.addActionListener(this);
+		endProjectField.addActionListener(this);
 	
 		btnSave.addActionListener(this);
 		
-		add(topPanel, BorderLayout.NORTH);
-		add(datePanel, BorderLayout.CENTER);
-		add(savePanel, BorderLayout.SOUTH);
+		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+		
+		add(createButtonPanel());
+		add(Box.createVerticalStrut(vfill));
+		add(createDatePanel());
+		add(Box.createVerticalStrut(vfill));
+		add(createProjectPanel());
+		add(Box.createVerticalStrut(vfill));
+		add(createSavePanel());
+		add(Box.createVerticalStrut(vfill));
+		add(createTopPanel());
 		
 		startButtons();
 		createMenus();
@@ -505,6 +473,66 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		}
 }
 
-
-}
+	// Private methods
 	
+	private JPanel decoratePanel(JPanel panel, String caption) {
+		Border border = BorderFactory.createTitledBorder(LOWERED_ETCHED_BORDER, caption);
+
+		panel.setBorder(border);
+		
+		return panel;
+	}
+	
+	private JPanel createButtonPanel() {
+		JPanel buttonPanel = new JPanel(new FlowLayout());
+		
+        buttonPanel.add(contigBox);   
+        buttonPanel.add(freeReadsBox);
+        buttonPanel.add(userBox);
+       
+        return decoratePanel(buttonPanel, "Step 1: Choose the kind of report to run");
+	}
+	
+	private JPanel createTopPanel() {
+		JPanel topPanel = new JPanel(new FlowLayout());
+		
+		topPanel.add(statusLine);
+		statusLine.setText("Please choose the kind of report you want to run, then the dates and the projects to find");
+        
+		return decoratePanel(topPanel, "Messages");
+	}
+
+	
+	private JPanel createDatePanel() {
+		JPanel datePanel = new JPanel (new FlowLayout());
+		
+		datePanel.add(sinceField);
+		datePanel.add(new Label(dateStartExplanationString)); 
+		datePanel.add(untilField);
+		datePanel.add(new Label(dateEndExplanationString));
+
+        return decoratePanel(datePanel, "Step 2: Choose the start and end dates");
+	}
+
+	private JPanel createProjectPanel() {
+		JPanel projectPanel = new JPanel (new FlowLayout());
+
+		projectPanel.add(startProjectField);
+		projectPanel.add(new Label(projectStartExplanationString)); 
+		projectPanel.add(endProjectField);
+		projectPanel.add(new Label(projectEndExplanationString)); 
+
+        return decoratePanel(projectPanel, "Step 3: Choose the project range");
+	}
+	
+	private JPanel createSavePanel() {
+		JPanel savePanel = new JPanel (new FlowLayout());
+		savePanel.add(splitExplanation);
+		savePanel.add(btnSave);
+        return decoratePanel(savePanel, "Step 4: save the CSV file to the machine you are running Minerva on");
+	}
+}
+
+
+
+
