@@ -144,8 +144,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	"next_gen_reads "+
 	"from ORGANISM_HISTORY ";
     
-    protected String contigTransferTitleString = "statsdate,name,contig_transfers";
-    protected String projectActivityTitleString = "statsdate,name,total_contigs,total_contig_length,n50_contig_length";
+    protected String contigTransferTitleString = "statsdate, name, contig_transfers\n";
+    protected String projectActivityTitleString = "statsdate, name, total_contigs, total_contig_length, n50_contig_length\n";
     
     protected String since = dateFormatString;
     protected String until = dateFormatString;
@@ -278,8 +278,19 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				}
 				preventOtherSelection();
 				Arcturus.logInfo("query being run is: " + query);
+				boolean doQuery = false;
 				
-				if (checkDates()){
+				if (contigTransferBox.isSelected() || projectActivityBox.isSelected()) {
+					doQuery = true;
+				}
+				else {
+					doQuery = checkDates();
+					if (!(doQuery)) {	
+						sinceField.setEnabled(true);
+						untilField.setEnabled(true);
+					}
+				}
+				if (doQuery) {
 					Connection conn;	
 					try {
 							conn = adb.getPooledConnection(this);
@@ -297,10 +308,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 						} catch (Exception exception) {
 							reportException("An error occurred when trying to save your report output", exception);
 					}	
-				}
-				else {	
-					sinceField.setEnabled(true);
-					untilField.setEnabled(true);
+					resetAllButtons();
 				}
 			}
 		}
@@ -354,11 +362,16 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		
 		contigTransferBox.setEnabled(true);
 		contigTransferBox.setSelected(false);
+		
 		projectActivityBox.setEnabled(true);
 		projectActivityBox.setSelected(false);
 		
+		allSplitsBox.setEnabled(true);
+		allSplitsBox.setSelected(false);
+		
 		sinceField.setEnabled(true);
 		untilField.setEnabled(true);
+		emailField.setEnabled(true);
 		
 		btnSave.setEnabled(false);
 		query = "";
