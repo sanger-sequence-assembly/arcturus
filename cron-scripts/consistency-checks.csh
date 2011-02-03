@@ -11,8 +11,7 @@ else
   exit -1
 endif
 
-set ABSOLUTE_SCRIPT_HOME=`pwd`
-set LSF_SCRIPT_NAME=${ABSOLUTE_SCRIPT_HOME}/submit-consistency-checks.csh
+set LSF_SCRIPT_NAME=${SCRIPT_HOME}/submit-consistency-checks.csh
 
 echo
 echo ------------------------------------------------------------
