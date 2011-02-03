@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS `ORGANISM_HISTORY` (
 	`total_reads` int(12) unsigned NOT NULL default 0,
 	`reads_in_contigs` int(12) unsigned NOT NULL default 0,
 	`free_reads` int(12) unsigned NOT NULL default 0,
+	`asped_reads` int(12) unsigned NOT NULL default 0,
+	`next_gen_reads` int(12) unsigned NOT NULL default 0,
   PRIMARY KEY (`organism`,`statsdate`),
   KEY `statsdate` (`statsdate`)
-) ENGINE=MyInnoDB DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;

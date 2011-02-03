@@ -12,4 +12,4 @@ CREATE TABLE IF NOT EXISTS `PROJECT_CONTIG_HISTORY` (
 	`n50_contig_length` int(12) unsigned NOT NULL default 0,
   PRIMARY KEY (`project_id`,`statsdate`),
   KEY `statsdate` (`statsdate`)
-) ENGINE=MyInnoDB DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
