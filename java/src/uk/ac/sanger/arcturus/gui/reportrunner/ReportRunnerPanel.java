@@ -55,13 +55,16 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	
 	static String contigString = "Save statistics about contigs";
     static String freeReadsString = "Save statistics about free reads";
-    static String userString = "Save statistics about your work";
+    static String contigTransferString = "Save statistics about contig transfers";
+    static String projectActivityString = "Save statistics about project activity";
     static String saveString = "Save statistics to a comma-separated file on your machine";
     static String splitExplanationString ="You can save only the data that you are authorised to see in Minerva";
     static String dateStartExplanationString ="Please enter the start date";
     static String dateEndExplanationString ="Please enter the end date";
     static String dateFormatString = "YYYY-MM-DD";
     static String projectFormatString = "nnnnnn";
+    static String emailFormatString = "email";
+    static String emailExplanationString = "Please enter your email login name";
     static String projectStartExplanationString ="Please enter the start project id";
     static String projectEndExplanationString ="Please enter the end project id";
     static String allSplitsString="All projects"; 
@@ -71,8 +74,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
     
 	final JCheckBox contigBox = new JCheckBox(contigString);
 	final JCheckBox freeReadsBox = new JCheckBox(freeReadsString);		
-	final JCheckBox userBox = new JCheckBox(userString);	
-	
+	final JCheckBox contigTransferBox = new JCheckBox(contigTransferString);	
+	final JCheckBox projectActivityBox = new JCheckBox(projectActivityString);	
 	
 	final JLabel splitExplanation = new JLabel(splitExplanationString);
 	final JLabel statusLine = new JLabel("");
@@ -82,6 +85,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
      	
 	final JFormattedTextField startProjectField = new JFormattedTextField(projectFormatString);
 	final JFormattedTextField endProjectField = new JFormattedTextField(projectFormatString);
+	
+	final JFormattedTextField emailField = new JFormattedTextField(emailFormatString);
 	
 	final static int maxGap = 20;
 	private final Border LOWERED_ETCHED_BORDER = BorderFactory.createEtchedBorder(EtchedBorder.LOWERED);
@@ -139,14 +144,13 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	"next_gen_reads "+
 	"from ORGANISM_HISTORY ";
     
+    protected String contigTransferTitleString = "statsdate,name,contig_transfers";
+    protected String projectActivityTitleString = "statsdate,name,total_contigs,total_contig_length,n50_contig_length";
+    
     protected String since = dateFormatString;
     protected String until = dateFormatString;
     protected String projectName = "";
-    
-    protected String projectQueryRestriction = " where statsdate >= '" +  since +
-	"' and statsdate <= '" + until + "' and name = " + projectName + " order by statsdate";
-    protected String dateQueryRestriction = " where statsdate >= '" +  since +
-	"' and statsdate <= '" + until + "' order by statsdate";
+    protected String email = "";
     
     protected JCalendar calendarSince = new JCalendar();
 	protected JCalendar calendarUntil = new JCalendar();
@@ -163,13 +167,15 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		
 		contigBox.addActionListener(this);
 		freeReadsBox.addActionListener(this);
-		userBox.addActionListener(this);
+		contigTransferBox.addActionListener(this);
+		projectActivityBox.addActionListener(this);
 		allSplitsBox.addActionListener(this);
 		
 		sinceField.addActionListener(this);
 		untilField.addActionListener(this);
 		startProjectField.addActionListener(this);
 		endProjectField.addActionListener(this);
+		emailField.addActionListener(this);
 	
 		btnSave.addActionListener(this);
 		
@@ -192,22 +198,31 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	public void actionPerformed(ActionEvent event) {
 			
 		Arcturus.logInfo("in actionPerformed because " + event.getSource() + 
-				" has been pressed and the dates entered are " + since + " and " + until + " and the chosen project is " + projectName);
+				" has been pressed and the dates entered are " + since + " and " + until + " and the chosen project is " + projectName + "and the email is " + email);
 	
 		if (event.getSource()== contigBox) {		
 			query = contigQueryStart;
+			titleString =  contigTitleString;
 			preventOtherSelection();
-			titleString =  contigTitleString;					
 		}
 		else if (event.getSource() == freeReadsBox) {
 			query = freeReadsQueryStart;
-			preventOtherSelection();
 			titleString =  freeReadsTitleString;
+			preventOtherSelection();
 		}
-		else if (event.getSource() == userBox) {
-			// add in checks as for other reports and David's SQL
-				query = "select count(*) from USER";
-				titleString = "count";
+		else if (event.getSource() == contigTransferBox) {
+			sinceField.setEnabled(false);
+			untilField.setEnabled(false);
+			allSplitsBox.setEnabled(false);
+			titleString = contigTransferTitleString;
+			preventOtherSelection();
+		}
+		else if (event.getSource() == projectActivityBox) {
+			sinceField.setEnabled(false);
+			untilField.setEnabled(false);
+			allSplitsBox.setEnabled(false);		
+			titleString = projectActivityTitleString;
+			preventOtherSelection();
 		}
 		else if (event.getSource() ==allSplitsBox) {
 			if (allSplitsBox.isSelected()) {
@@ -221,52 +236,72 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				projectList.setEnabled(true);
 			}
 		}
-		else if ((event.getSource() == sinceField) || (event.getSource() == untilField)) {
-			
-		}
 		else if (event.getSource() == btnSave) {			
 			sinceField.setEnabled(false);
 			untilField.setEnabled(false);
+			emailField.setEnabled(false);
 			since = sinceField.getText();
 			until = untilField.getText();
+			email = emailField.getText();
 			
-			if ((since.equals(dateFormatString) )|| (until.equals(dateFormatString)) ) {
-					statusLine.setText("Please enter valid dates for your report");
+			if ( (contigBox.isSelected()) || freeReadsBox.isSelected()) {
+				if ((since.equals(dateFormatString) )|| (until.equals(dateFormatString)) ) {
+					reportError("Please enter valid dates for your report");
 					sinceField.setEnabled(true);
 					untilField.setEnabled(true);
 				}
-			else if (allSplitsBox.isSelected()){
-				query = query + dateQueryRestriction;
+			}
+			else if (email.equals(emailFormatString)){
+				reportError("Please enter your login address that you use for email e.g. kt6");
+				emailField.setEnabled(true);
 			}
 			else {
-				query = query + projectQueryRestriction;
+				if (contigBox.isSelected() || freeReadsBox.isSelected()) {
+					if (allSplitsBox.isSelected()) {
+						query = query + " where statsdate >= '" +  since +
+							"' and statsdate <= '" + until + "' order by statsdate";
+					}
+					else {
+						query = query + " where statsdate >= '" +  since +
+						"' and statsdate <= '" + until + "' and name = " + projectName + " order by statsdate";
+					}
+				}
+				else if (contigTransferBox.isSelected()) {
+					query = "select H.statsdate,H.name,total_contigs, H.total_contig_length,H.n50_contig_length" +
+					" from PROJECT_CONTIG_HISTORY H left join PROJECT P using (project_id) where P.owner = '" + email +"'";
+				}
+				else if (projectActivityBox.isSelected()){
+					query = "select date(CTR.opened) as opendate,P.name,count(*) as requests" +
+					" from CONTIGTRANSFERREQUEST CTR left join PROJECT P on (CTR.new_project_id=P.project_id) " +
+					" where CTR.requester= '" + email + "' and CTR.status='done' and CTR.requester=P.owner group by opendate,name";
+					titleString = "open_date,name,contig_transfers";
+				}
+				preventOtherSelection();
+				Arcturus.logInfo("query being run is: " + query);
 				
-			}
-			preventOtherSelection();
-			Arcturus.logInfo("query being run is: " + query);
-			
-			if (checkDates()){
-				Connection conn;	
-				try {
-						conn = adb.getPooledConnection(this);
-					
-						stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
-			              java.sql.ResultSet.CONCUR_READ_ONLY);		
-						stmt.setFetchSize(Integer.MIN_VALUE);		
+				if (checkDates()){
+					Connection conn;	
+					try {
+							conn = adb.getPooledConnection(this);
 						
-						ResultSet rs = stmt.executeQuery(query);
-						saveStatsToFile(rs);
-					} catch (ArcturusDatabaseException exception) {
-						reportException("An error occurred when trying to find your report output from the Arcturus database", exception);
-					} catch (SQLException exception) {
-						reportException("An error occurred when trying to run the query to find your report output from the database", exception);
-					} catch (Exception exception) {
-						reportException("An error occurred when trying to save your report output", exception);
-				}	
-			}
-			else {	
-				sinceField.setEnabled(true);
-				untilField.setEnabled(true);
+							stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
+				              java.sql.ResultSet.CONCUR_READ_ONLY);		
+							stmt.setFetchSize(Integer.MIN_VALUE);		
+							
+							ResultSet rs = stmt.executeQuery(query);
+							saveStatsToFile(rs);
+						} catch (ArcturusDatabaseException exception) {
+							reportException("An error occurred when trying to find your report output from the Arcturus database", exception);
+						} catch (SQLException exception) {
+							reportException("An error occurred when trying to run the query to find your report output from the database", exception);
+						} catch (Exception exception) {
+							reportException("An error occurred when trying to save your report output", exception);
+					}	
+				}
+				else {	
+					sinceField.setEnabled(true);
+					untilField.setEnabled(true);
+				}
 			}
 		}
 		else {
@@ -290,7 +325,9 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	protected void startButtons() {
 		contigBox.setEnabled(true);
 		freeReadsBox.setEnabled(true);
-		userBox.setEnabled(true);
+		contigTransferBox.setEnabled(true);
+		contigTransferBox.setEnabled(true);
+		projectActivityBox.setEnabled(true);
 		
 		btnSave.setEnabled(true);
 	}
@@ -298,7 +335,9 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	protected void preventOtherSelection() {
 		contigBox.setEnabled(false);				
 		freeReadsBox.setEnabled(false);
-		userBox.setEnabled(false);
+		contigTransferBox.setEnabled(false);
+		contigTransferBox.setEnabled(false);
+		projectActivityBox.setEnabled(false);
 		
 		btnSave.setEnabled(true);
 	}
@@ -310,8 +349,13 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		freeReadsBox.setEnabled(true);		
 		freeReadsBox.setSelected(false);
 		
-		userBox.setEnabled(true);
-		userBox.setSelected(false);
+		contigTransferBox.setEnabled(true);
+		contigTransferBox.setSelected(false);
+		
+		contigTransferBox.setEnabled(true);
+		contigTransferBox.setSelected(false);
+		projectActivityBox.setEnabled(true);
+		projectActivityBox.setSelected(false);
 		
 		sinceField.setEnabled(true);
 		untilField.setEnabled(true);
@@ -569,7 +613,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		
         buttonPanel.add(contigBox);   
         buttonPanel.add(freeReadsBox);
-        buttonPanel.add(userBox);
+        buttonPanel.add(contigTransferBox);
+        buttonPanel.add(projectActivityBox);
        
         return decoratePanel(buttonPanel, "Step 1: Choose the kind of report to run");
 	}
@@ -591,6 +636,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		datePanel.add(new Label(dateStartExplanationString)); 
 		datePanel.add(untilField);
 		datePanel.add(new Label(dateEndExplanationString));
+		datePanel.add(emailField);
+		datePanel.add(new Label(emailExplanationString));
 
         return decoratePanel(datePanel, "Step 2: Choose the start and end dates");
 	}
@@ -598,10 +645,6 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	private JPanel createProjectPanel() {
 		JPanel projectPanel = new JPanel (new FlowLayout());
 		
-		//projectPanel.add(startProjectField);
-		//projectPanel.add(new Label(projectStartExplanationString)); 
-		//projectPanel.add(endProjectField);
-		//projectPanel.add(new Label(projectEndExplanationString)); 
 		projectPanel.add(createProjectList());
 		projectPanel.add(allSplitsBox);
 
