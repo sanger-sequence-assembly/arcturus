@@ -3,8 +3,7 @@
 
 set SCRIPT_HOME=`dirname $0`
 set SCRIPT_NAME=`basename $0`
-set ABSOLUTE_SCRIPT_HOME = `pwd`
-set UTILSFOLDER=${ABSOLUTE_SCRIPT_HOME}/../utils
+set UTILSFOLDER=${SCRIPT_HOME}/../utils
 set PROJECTSTATSFOLDER=${HOME}/project-stats
 
 #set ARCTURUS=/nfs/users/nfs_k/kt6/ARCTURUS/arcturus/branches/6163487_warehouse
@@ -22,7 +21,7 @@ endif
 
 set LOGFILE=${HOME}/${INSTANCE}-backpopulate-project-stats.log
 set SINCE = '2010-01-01'
-set UNTIL = '2011-01-31'
+set UNTIL = '2011-02-03'
 set THRESHOLD = 1000
 
 echo
