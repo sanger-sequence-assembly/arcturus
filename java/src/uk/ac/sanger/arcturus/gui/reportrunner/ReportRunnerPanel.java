@@ -7,8 +7,13 @@ import uk.ac.sanger.arcturus.gui.common.projectlist.ProjectProxy;
 import java.util.Calendar.*;
 import java.util.Locale.*;
 
+import uk.ac.sanger.arcturus.people.PeopleManager;
+import uk.ac.sanger.arcturus.people.Person;
+import uk.ac.sanger.arcturus.people.role.Role;
 import uk.ac.sanger.arcturus.utils.CheckConsistency;
 
+import uk.ac.sanger.arcturus.data.Assembly;
+import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.Arcturus;
@@ -19,6 +24,7 @@ import java.util.Date;
 import java.util.EventListener;
 import java.util.GregorianCalendar;
 import java.util.Locale;
+import java.util.Set;
 
 
 import java.lang.String;
@@ -64,7 +70,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
     static String dateFormatString = "YYYY-MM-DD";
     static String projectFormatString = "nnnnnn";
     static String emailFormatString = "email";
-    static String emailExplanationString = "Please enter your email login name";
+    static String emailExplanationString = "Please enter the email login name";
     static String projectStartExplanationString ="Please enter the start project id";
     static String projectEndExplanationString ="Please enter the end project id";
     static String allSplitsString="All projects"; 
@@ -155,6 +161,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
     protected JCalendar calendarSince = new JCalendar();
 	protected JCalendar calendarUntil = new JCalendar();
 	
+	protected Person loggedInUser = new Person(PeopleManager.getEffectiveUID());
 	
 	public ReportRunnerPanel(MinervaTabbedPane parent, ArcturusDatabase adb) throws ArcturusDatabaseException
 	{	
@@ -164,6 +171,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		int vfill = 5;
 		
 		plm = new ProjectListModel(adb);
+		emailField.setText(loggedInUser.toString());
 		
 		contigBox.addActionListener(this);
 		freeReadsBox.addActionListener(this);
@@ -256,6 +264,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				emailField.setEnabled(true);
 			}
 			else {
+				// all these should become adb reports
 				if (contigBox.isSelected() || freeReadsBox.isSelected()) {
 					if (allSplitsBox.isSelected()) {
 						query = query + " where statsdate >= '" +  since +
@@ -277,11 +286,13 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 					titleString = "open_date,name,contig_transfers";
 				}
 				preventOtherSelection();
-				Arcturus.logInfo("query being run is: " + query);
 				boolean doQuery = false;
 				
-				if (contigTransferBox.isSelected() || projectActivityBox.isSelected()) {
-					doQuery = true;
+				if (contigTransferBox.isSelected()) {
+					doQuery = checkLoggedInUserCanRunUserReports();
+				}
+				else if (projectActivityBox.isSelected()) {
+					doQuery = checkLoggedInUserCanRunUserReports();
 				}
 				else {
 					doQuery = checkDates();
@@ -290,6 +301,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 						untilField.setEnabled(true);
 					}
 				}
+				Arcturus.logInfo("Save button pressed: query holds: " + query + " and doQuery is " + doQuery);
 				if (doQuery) {
 					Connection conn;	
 					try {
@@ -315,18 +327,18 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		else {
 				// Do nothing
 		}	
-		Arcturus.logInfo("at the end of actionPerformed query holds: " + query);
+		
 	}
 	
 	protected void reportException( String message, Exception exception) {
-		statusLine.setText(message);
+		statusLine.setText(loggedInUser + ": " + message);
 		Arcturus.logSevere(message, exception);
 		resetAllButtons();
 		exception.printStackTrace();
 	}
 	
 	protected void reportError( String message) {
-		statusLine.setText(message);
+		statusLine.setText(loggedInUser + ": " + message);
 		Arcturus.logInfo(message);
 	}
 	
@@ -424,8 +436,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 			if (untilDateValid) {
 				//if (sinceCal.before(untilCal)) {
 					if (untilCal.before(sinceCal)) {
-
-					reportError("Date " + since + " is not before date " + until);	
+						reportError("Date " + since + " is not before date " + until);	
 					return false;
 				}
 				else {
@@ -463,6 +474,58 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		}	
 		return check;
 	}
+	
+	protected boolean checkLoggedInUserCanRunContigReports(){
+		// For the contig stats, the owner can generate statistics for their own projects whilst the team leader, coordinator and administrator can see all projects.
+
+		try {
+			Set<Project> projects = adb.getProjectsForOwner(loggedInUser);
+		
+			Assembly[] assemblies = adb.getAllAssemblies();
+			Assembly assembly;
+			Project project = new Project();
+			
+			for (int i = 0; i < assemblies.length; i++) {
+				assembly = assemblies[i];
+				project = adb.getProjectByName(assembly, projectName);
+			}
+			
+			if (projectName.equals(project.getName())) {
+				return true;
+			}
+			else {
+				if (adb.hasFullPrivileges(loggedInUser)){
+					return true;
+				}
+				else {
+					reportError("You do not have privileges to run this report for all data");	
+					return false;
+				}
+			}
+		} catch (ArcturusDatabaseException exception) {
+			reportException("An error occurred when trying to check your priviliges in the Arcturus database", exception);
+			return false;
+		}
+	}
+	
+	protected boolean checkLoggedInUserCanRunUserReports(){
+		// For the user stats, anyone with team leader role can generate statistics for all users, whilst anyone else sees only their own.
+		if (loggedInUser.toString().equals(email)) {
+			return true;
+		}
+		else {
+			Role loggedInUserRole = loggedInUser.getRole();
+			String role = "role";
+			if (role.equals("team leader")){
+				return true;
+			}
+			else {
+				reportError("You do not have privileges to run this report for all data");	
+				return false;
+			}
+		}
+	}
+	
 	
 	protected void saveStatsToFile(ResultSet rs) throws SQLException {
 		final JFileChooser fc = new JFileChooser();
