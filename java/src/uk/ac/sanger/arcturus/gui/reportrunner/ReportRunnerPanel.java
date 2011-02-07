@@ -205,17 +205,19 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	
 	public void actionPerformed(ActionEvent event) {
 			
-		Arcturus.logInfo("in actionPerformed because " + event.getSource() + 
-				" has been pressed and the dates entered are " + since + " and " + until + " and the chosen project is " + projectName + "and the email is " + email);
+		//Arcturus.logInfo("in actionPerformed because " + event.getSource() + 
+			//	" has been pressed and the dates entered are " + since + " and " + until + " and the chosen project is " + projectName + "and the email is " + email);
 	
 		if (event.getSource()== contigBox) {		
 			query = contigQueryStart;
 			titleString =  contigTitleString;
+			emailField.setEnabled(false);
 			preventOtherSelection();
 		}
 		else if (event.getSource() == freeReadsBox) {
 			query = freeReadsQueryStart;
 			titleString =  freeReadsTitleString;
+			emailField.setEnabled(false);
 			preventOtherSelection();
 		}
 		else if (event.getSource() == contigTransferBox) {
@@ -244,26 +246,34 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				projectList.setEnabled(true);
 			}
 		}
-		else if (event.getSource() == btnSave) {			
+		else if (event.getSource() == btnSave) {		
+			Arcturus.logInfo("Save button pressed");
 			sinceField.setEnabled(false);
 			untilField.setEnabled(false);
 			emailField.setEnabled(false);
+			allSplitsBox.setEnabled(false);
+			projectList.setEnabled(false);
+			
 			since = sinceField.getText();
 			until = untilField.getText();
 			email = emailField.getText();
 			
-			if ( (contigBox.isSelected()) || freeReadsBox.isSelected()) {
-				if ((since.equals(dateFormatString) )|| (until.equals(dateFormatString)) ) {
+			
+			if ((since.equals(dateFormatString) )|| (until.equals(dateFormatString)) ) {
+				if ( (contigBox.isSelected()) || freeReadsBox.isSelected()) {
 					reportError("Please enter valid dates for your report");
 					sinceField.setEnabled(true);
 					untilField.setEnabled(true);
 				}
 			}
 			else if (email.equals(emailFormatString)){
-				reportError("Please enter your login address that you use for email e.g. kt6");
-				emailField.setEnabled(true);
+				if ( (contigTransferBox.isSelected()) || projectActivityBox.isSelected()) {
+					reportError("Please enter your login address that you use for email e.g. kt6");
+					emailField.setEnabled(true);
+				}
 			}
 			else {
+				Arcturus.logInfo("Save button pressed: dates and email are OK");
 				// all these should become adb reports
 				if (contigBox.isSelected() || freeReadsBox.isSelected()) {
 					if (allSplitsBox.isSelected()) {
@@ -272,7 +282,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 					}
 					else {
 						query = query + " where statsdate >= '" +  since +
-						"' and statsdate <= '" + until + "' and name = " + projectName + " order by statsdate";
+						"' and statsdate <= '" + until + "' and name = '" + projectName + "' order by statsdate";
 					}
 				}
 				else if (contigTransferBox.isSelected()) {
@@ -287,14 +297,23 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				}
 				preventOtherSelection();
 				boolean doQuery = false;
-				
+				Arcturus.logInfo("Save button pressed: checking user has privileges to run reports");
 				if (contigTransferBox.isSelected()) {
-					doQuery = checkLoggedInUserCanRunUserReports();
+					doQuery = checkLoggedInUserCanRunContigReports();
 				}
 				else if (projectActivityBox.isSelected()) {
 					doQuery = checkLoggedInUserCanRunUserReports();
 				}
 				else {
+					if (contigBox.isSelected()) {
+						if (!(checkLoggedInUserCanRunContigReports())) {	
+							sinceField.setEnabled(true);
+							untilField.setEnabled(true);
+						}
+						else {
+							doQuery = true;
+						}
+					}
 					doQuery = checkDates();
 					if (!(doQuery)) {	
 						sinceField.setEnabled(true);
@@ -331,14 +350,14 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	}
 	
 	protected void reportException( String message, Exception exception) {
-		statusLine.setText(loggedInUser + ": " + message);
+		statusLine.setText(message);
 		Arcturus.logSevere(message, exception);
 		resetAllButtons();
 		exception.printStackTrace();
 	}
 	
 	protected void reportError( String message) {
-		statusLine.setText(loggedInUser + ": " + message);
+		statusLine.setText(message);
 		Arcturus.logInfo(message);
 	}
 	
@@ -484,10 +503,12 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 			Assembly[] assemblies = adb.getAllAssemblies();
 			Assembly assembly;
 			Project project = new Project();
+			reportError("Checking the possible " + assemblies.length + " assemblies for this database");
 			
 			for (int i = 0; i < assemblies.length; i++) {
 				assembly = assemblies[i];
 				project = adb.getProjectByName(assembly, projectName);
+				reportError("Found project " + projectName + " in assembly " + i);
 			}
 			
 			if (projectName.equals(project.getName())) {
@@ -498,7 +519,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 					return true;
 				}
 				else {
-					reportError("You do not have privileges to run this report for all data");	
+					reportError("You " + loggedInUser.toString() + " do not have privileges to run this report for all data");	
+					projectList.setEnabled(true);
 					return false;
 				}
 			}
@@ -520,7 +542,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				return true;
 			}
 			else {
-				reportError("You do not have privileges to run this report for all data");	
+				reportError("You " + loggedInUser.toString() + " do not have privileges to run this report for all data");	
+				projectList.setEnabled(true);
 				return false;
 			}
 		}
