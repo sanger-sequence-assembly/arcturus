@@ -11,12 +11,14 @@ else
   exit -1
 endif
 
+set LSF_SCRIPT_NAME=${SCRIPT_HOME}/submit-consistency-checks.csh
+
 echo
 echo ------------------------------------------------------------
 echo
 echo Checking the consistency of the Arcturus databases
 
-set CONSISTENCYFOLDER=${SCRIPT_HOME}/../consistency-checker
+set CONSISTENCYFOLDER=${HOME}/consistency-checker
 
 if  ( ! -d $CONSISTENCYFOLDER ) then
   mkdir $CONSISTENCYFOLDER
@@ -32,11 +34,10 @@ foreach ORG (`cat ~/${INSTANCE}_active_organisms.list`)
   if  ( ! -d $ORG ) then
     mkdir $ORG
   endif
-
-  pushd $ORG
-		echo Submitting a batch job to check the consistency of the $ORG organism in the $INSTANCE database instance...
-		bsub -q phrap -o ${CONSISTENCYFOLDER}/$ORG.log -J ${ORG}cc -N ${SCRIPT_HOME}/submit-consistency-checks.csh test $ORG
-  popd
+	pushd $ORG
+		echo Submitting a batch job to check the consistency of the $ORG organism in the $INSTANCE database instance using ${LSF_SCRIPT_NAME}...
+		bsub -q phrap -o ${CONSISTENCYFOLDER}/$ORG.log -J ${ORG}cc -N ${LSF_SCRIPT_NAME} test $ORG
+	popd
 end
 
 echo All done at `date`
