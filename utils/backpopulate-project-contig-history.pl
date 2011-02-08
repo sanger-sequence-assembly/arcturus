@@ -168,7 +168,7 @@ foreach my $date (@datelist) {
   print STDERR"*************\n";
 } # end foreach date
 
-$nsth->finish();
+#$nsth->finish();
 $ssth->finish();
 $isth->finish();
 

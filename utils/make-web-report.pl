@@ -783,27 +783,4 @@ sub showUsage {
     print STDERR "    -organism\t\tName of organism\n";
 }
 
-sub printCSV {
-	my ($csvfile, $csvlines) = @_;
-
-	my $csvlinesref = ref($csvlines);
-	my $ret;
-
-	unless ($csvlinesref eq 'ARRAY') {
-		$ret = -1;
-	}
-
-	open($csvhandle, "> $csvfile") or die "Cannot open filehandle to $csvfile : $!";
-
-	foreach my $csvline (@{$csvlines}){
-		foreach my $csvitem (@{$csvline}){
-			print $csvhandle "$csvitem,";
-		}
-		$i++;
-		print $csvhandle "@$csvline[$i]\n";
-	}
-
-	$ret = close $csvhandle;
-	return $ret;
-	}
 

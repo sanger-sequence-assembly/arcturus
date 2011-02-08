@@ -1,6 +1,7 @@
 #!/bin/csh 
 # backpopulate-project-stats.csh
 
+
 set SCRIPT_HOME=`dirname $0`
 set SCRIPT_NAME=`basename $0`
 
@@ -24,9 +25,6 @@ else
 endif
 
 set LOGFILE=${HOME}/${INSTANCE}-backpopulate-project-stats.log
-#set SINCE = '2010-01-01'
-#set UNTIL = '2011-02-06'
-#set THRESHOLD = 1000
 
 echo
 echo ------------------------------------------------------------
@@ -65,11 +63,11 @@ foreach ORG (`cat ${HOME}/${INSTANCE}_active_organisms.list`)
   endif
 
   pushd $ORG
-		echo Submitting a batch job to backpopulate PROJECT_CONTIG_HISTORY for the $ORG organism in the $INSTANCE database instance...
-		bsub -q phrap -o ${PROJECTSTATSFOLDER}/${ORG}bps.log -J ${ORG}bps -N ${STATS_SCRIPT} -instance $INSTANCE -organism $ORG -since ${SINCE} -until ${UNTIL}
+		echo Backpopulating PROJECT_CONTIG_HISTORY for the $ORG organism in the $INSTANCE database instance...
+		${STATS_SCRIPT} -instance $INSTANCE -organism $ORG -since ${SINCE} -until ${UNTIL}
 
-		echo Submitting a batch job to backpopulate ORGANISM_HISTORY for the $ORG organism in the $INSTANCE database instance...
-		bsub -q phrap -o ${PROJECTSTATSFOLDER}/${ORG}bfr.log -J ${ORG}bfr -N ${READS_SCRIPT} -instance $INSTANCE -organism $ORG -threshold ${THRESHOLD} -since ${SINCE} -until ${UNTIL}
+		echo Backpopulating ORGANISM_HISTORY for the $ORG organism in the $INSTANCE database instance with a threshold of ${THRESHOLD}...
+		${READS_SCRIPT} -instance $INSTANCE -organism $ORG -threshold ${THRESHOLD} -since ${SINCE} -until ${UNTIL}
   popd
 end
 

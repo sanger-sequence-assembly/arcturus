@@ -18,7 +18,8 @@ set STATS_SCRIPT = ${UTILSFOLDER}/populate-project-contig-history
 set READS_SCRIPT = ${UTILSFOLDER}/populate-organism-history
 
 if ( $# > 0 ) then
-  set INSTANCE=$1
+  set INSTANCE = $1
+	set THRESHOLD = $2
 else
   echo Please provide the instance name to run this script against: illumna, mysql, pathogen or test
 	exit(-1)
@@ -64,7 +65,9 @@ foreach ORG (`cat ${HOME}/${INSTANCE}_active_organisms.list`)
 		${STATS_SCRIPT} -instance $INSTANCE -organism $ORG
 
 		echo Running ${READS_SCRIPT} to calculate free read statistics for the $ORG organism in the $INSTANCE database instance...
-		${READS_SCRIPT} -instance $INSTANCE -organism $ORG -threshold 100
+		echo Any read variation over ${THRESHOLD} will be notified to email freereads and cc to arcturus-help
+		tify
+		${READS_SCRIPT} -instance $INSTANCE -organism $ORG -threshold ${THRESHOLD} 
   popd
 end
 

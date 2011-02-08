@@ -234,6 +234,7 @@ sub checkFreeReadChange {
 	my $statsday_count = $dsth->execute($date) || &queryFailed($statsday_query);
 	my $statsday_values = $dsth->fetchall_arrayref();
 #
+	my $user = "freeread";
 	foreach my $statsday_value (@$statsday_values) {
 		my $statsdate = @$statsday_value[0];
 		my $total_reads_stats_day = @$statsday_value[1];
@@ -256,22 +257,24 @@ sub checkFreeReadChange {
  			my $free_read_difference =  abs($free_reads_previous_day - $free_reads_stats_day);
 
  			if ($free_read_difference >= $threshold) {
-	 			my $msg = "This is to let you know that the difference between the free reads for the $organism database ";
-				$msg .= "on $statsdate and $previous_date is $free_read_difference.\n\n";
- 				$msg .= "This is over the threshold of $threshold reads difference that has been set.\n\n";
+	 			my $message = "This is to let you know that the difference between the free reads for the $organism database ";
+				$message .= "on $statsdate and $previous_date is $free_read_difference.\n\n";
+ 				$message .= "This is over the threshold of $threshold reads difference that has been set.\n\n";
 
- 				$msg .= "\n $previous_date\n";
-				$msg .= "\t total reads = $total_reads_previous_day\n";
-				$msg .= "\t asped reads  = $asped_reads_previous_day\n";
-				$msg .= "\t free reads = $free_reads_previous_day\n";
-				$msg .= "\n";
- 				$msg .= "\n $statsdate\n";
-				$msg .= "\t total reads = $total_reads_stats_day\n";
-				$msg .= "\t asped reads = $asped_reads_stats_day\n";
-				$msg .= "\t free reads = $free_reads_stats_day\n" ;
+ 				$message .= "\n $previous_date\n";
+				$message .= "\t total reads = $total_reads_previous_day\n";
+				$message .= "\t asped reads  = $asped_reads_previous_day\n";
+				$message .= "\t free reads = $free_reads_previous_day\n";
+				$message .= "\t asped reads = $asped_reads_previous_day\n";
+				$message .= "\n";
+ 				$message .= "\n $statsdate\n";
+				$message .= "\t total reads = $total_reads_stats_day\n";
+				$message .= "\t asped reads = $asped_reads_stats_day\n";
+				$message .= "\t free reads = $free_reads_stats_day\n" ;
+				$message .= "\t asped reads = $asped_reads_stats_day\n" ;
 
-				#&sendMessage($user, $message, $instance, $organism) if $message;
-				print STDOUT "Message to send is :\n\n$msg\n\n";
+				&sendMessage($user, $message, $instance, $organism) if $message;
+				print STDERR $message;
 			}
 		}# end foreach previous_values
 	}# end foreach statsday_values
@@ -318,7 +321,7 @@ sub showUsage {
 sub sendMessage {
     my ($user,$message,$instance, $organism) = @_;
 
-		my $to = "kt6";
+		my $to = "arcturus-help";
 		$to .= ',' . $user if defined($user);
 
     if ($instance eq 'test') {
