@@ -81,7 +81,7 @@ if (($since eq "") || ($until eq "")) {
 	my $yesterday_query ="select date_sub(date(now()),interval 1 day)";
 
 	my $yqh = $dbh->prepare($yesterday_query);
-	$yqh->execute() or die "Cannot find yesterday's date";
+	$yqh->execute() or &queryFailed("Cannot find yesterday's date");
 	my $yesterday = $yqh->fetchrow_array();
 
 	push @datelist, $yesterday;
@@ -103,16 +103,16 @@ elsif (($since ne "") && ($until ne "")) {
 	else {
 	
 		my $date_create = "create temporary table time_intervals( statsdate DATE NOT NULL, until_date DATE NOT NULL)";
-		my $dch = $dbh->do($date_create) or die "Cannot create the time_intervals table";
+		my $dch = $dbh->do($date_create) or &queryFailed("Cannot create the time_intervals table");
 
 		my $date_insert = "insert into time_intervals values(date(?), date(?))";
 		my $dih = $dbh->prepare($date_insert);
-		$dih->execute($since, $until) or die "Cannot set up the time_intervals table";
+		$dih->execute($since, $until) or &queryFailed("Cannot set up the time_intervals table");
 
 		my $date_update = "update time_intervals set statsdate = timestampadd(DAY, 1, statsdate)";
 		my $duh = $dbh->prepare($date_update);
 
-		my $date_query = "select max(statsdate), until_date from time_intervals;";
+		my $date_query = "select max(statsdate), until_date from time_intervals group by statsdate;";
 		my $dqh = $dbh->prepare($date_query);
 
 		my $date_drop = "drop temporary table time_intervals";
@@ -126,8 +126,8 @@ elsif (($since ne "") && ($until ne "")) {
 		push @datelist, $statsdate;
 
 		while ($statsdate ne $until) { 
-			$duh->execute() or die "Cannot update the time_intervals table";
-			$dqh->execute() or die "Cannot find the maximum date";
+			$duh->execute() or &queryFailed("Cannot update the time_intervals table");
+			$dqh->execute() or &queryFailed("Cannot find the maximum date");
 			($statsdate, $tempdate) = $dqh->fetchrow_array();
 			#	print STDERR "Adding $statsdate to list of dates\n";
   		push @datelist, $statsdate;
@@ -192,7 +192,7 @@ foreach my $date (@datelist) {
 	my $asped_read_update_count = $asth->execute($date) || &queryFailed($asped_read_update);
 	my $next_gen_read_update_count = $nsth->execute($date) || &queryFailed($next_gen_read_update);
 
-	print STDERR "Checking for free read variation over the allowed threshold of $threshold reads\n";
+	#print STDERR "Checking for free read variation over the allowed threshold of $threshold reads\n";
 	&checkFreeReadChange( $dbh, $date, $threshold);
 } # end foreach date to populate
 
@@ -217,7 +217,7 @@ sub checkFreeReadChange {
   my $date = shift;
   my $threshold = shift;
 
-	print STDERR "\tChecking for free read variation over the allowed threshold of $threshold reads on $date and previous date\n";
+	print STDERR "\tChecking for free read variation over the allowed threshold of $threshold or more reads on $date and previous date\n";
 
 	# get the free_reads for stats_day
 	my $stasday_free_reads = 0;
@@ -234,14 +234,22 @@ sub checkFreeReadChange {
 	my $statsday_count = $dsth->execute($date) || &queryFailed($statsday_query);
 	my $statsday_values = $dsth->fetchall_arrayref();
 #
-	my $user = "freeread";
+	my $user = "";
+  if ($instance eq 'test') {
+		$user = "kt6";
+  }
+	else {
+		#$user = "kt6";
+		$user = "freeread";
+	}
+
 	foreach my $statsday_value (@$statsday_values) {
 		my $statsdate = @$statsday_value[0];
 		my $total_reads_stats_day = @$statsday_value[1];
 		my $free_reads_stats_day = @$statsday_value[2];
 		my $asped_reads_stats_day = @$statsday_value[3];
 
-		print STDERR "\tChecking for free read variation over the allowed threshold of $threshold reads on $statsdate ";
+		print STDERR "\tChecking for free read variation over the allowed threshold of $threshold reads on $statsdate \n";
 
 		my $previous_count = $psth->execute($date) || &queryFailed($previous_query);
 
@@ -254,12 +262,13 @@ sub checkFreeReadChange {
 			my $asped_reads_previous_day = @$previous_value[3];
 
 			print STDERR "and $previous_date\n";
- 			my $free_read_difference =  abs($free_reads_previous_day - $free_reads_stats_day);
+ 			my $free_read_difference =  $free_reads_stats_day - $free_reads_previous_day;
+ 			#my $free_read_difference =  abs($free_reads_previous_day - $free_reads_stats_day);
 
  			if ($free_read_difference >= $threshold) {
 	 			my $message = "This is to let you know that the difference between the free reads for the $organism database ";
 				$message .= "on $statsdate and $previous_date is $free_read_difference.\n\n";
- 				$message .= "This is over the threshold of $threshold reads difference that has been set.\n\n";
+ 				$message .= "This is over the threshold of $threshold or more reads difference that has been set.\n\n";
 
  				$message .= "\n $previous_date\n";
 				$message .= "\t total reads = $total_reads_previous_day\n";
@@ -271,7 +280,7 @@ sub checkFreeReadChange {
 				$message .= "\t total reads = $total_reads_stats_day\n";
 				$message .= "\t asped reads = $asped_reads_stats_day\n";
 				$message .= "\t free reads = $free_reads_stats_day\n" ;
-				$message .= "\t asped reads = $asped_reads_stats_day\n" ;
+				$message .= "\t asped reads = $asped_reads_stats_day\n\n\n" ;
 
 				&sendMessage($user, $message, $instance, $organism) if $message;
 				print STDERR $message;
@@ -321,12 +330,17 @@ sub showUsage {
 sub sendMessage {
     my ($user,$message,$instance, $organism) = @_;
 
-		my $to = "arcturus-help";
-		$to .= ',' . $user if defined($user);
+		my $to = "";
 
     if ($instance eq 'test') {
-				$to = $user;
+			$to = $user;
     }
+		else {
+			$to = "arcturus-help@sanger.ac.uk";
+			$to .= ',' . $user if defined($user);
+		}
+
+		print STDOUT "Sending message to $to\n";
 
     my $mail = new Mail::Send;
     $mail->to($user);
