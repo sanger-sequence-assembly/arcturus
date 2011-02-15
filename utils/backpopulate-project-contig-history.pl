@@ -65,7 +65,7 @@ $dih->execute($since, $until) or die "Cannot set up the time_intervals table";
 my $date_update = "update time_intervals set statsdate = timestampadd(DAY, 1, statsdate)";
 my $duh = $dbh->prepare($date_update);
 
-my $date_query = "select max(statsdate), until_date from time_intervals;";
+my $date_query = "select max(statsdate), until_date from time_intervals group by statsdate;";
 my $dqh = $dbh->prepare($date_query);
 
 my $date_drop = "drop temporary table time_intervals";
