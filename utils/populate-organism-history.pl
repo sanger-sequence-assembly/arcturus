@@ -121,7 +121,7 @@ elsif (($since ne "") && ($until ne "")) {
   
 		$statsdate = $since;
 
-		print STDERR "Finding dates from $statsdate until $until:\n";
+		print STDERR "Finding data from $statsdate until $until:\n";
 		#print STDERR "Adding $statsdate to list of dates\n";
 		push @datelist, $statsdate;
 
@@ -185,7 +185,7 @@ where statsdate = ?";
 my $nsth = $dbh->prepare_cached($next_gen_read_update);
 
 foreach my $date (@datelist) {
-	print STDERR "Inserting line for $date\n";
+	#print STDERR "Inserting line for $date\n";
 	my $insert_count = $isth->execute($organism, $date, $date, $date) || &queryFailed($insert_query);
 	my $total_read_update_count = $usth->execute($date) || &queryFailed($total_read_update);
 	my $free_read_update_count = $uusth->execute($date) || &queryFailed($free_read_update);
@@ -217,7 +217,7 @@ sub checkFreeReadChange {
   my $date = shift;
   my $threshold = shift;
 
-	print STDERR "\tChecking for free read variation over the allowed threshold of $threshold or more reads on $date and previous date\n";
+	#print STDERR "\tChecking for free read variation over the allowed threshold of $threshold or more reads on $date and previous date\n";
 
 	# get the free_reads for stats_day
 	my $stasday_free_reads = 0;
@@ -249,7 +249,7 @@ sub checkFreeReadChange {
 		my $free_reads_stats_day = @$statsday_value[2];
 		my $asped_reads_stats_day = @$statsday_value[3];
 
-		print STDERR "\tChecking for free read variation over the allowed threshold of $threshold reads on $statsdate \n";
+		print STDERR "\tChecking for free read variation over the allowed threshold of $threshold reads on $statsdate ";
 
 		my $previous_count = $psth->execute($date) || &queryFailed($previous_query);
 
@@ -274,13 +274,11 @@ sub checkFreeReadChange {
 				$message .= "\t total reads = $total_reads_previous_day\n";
 				$message .= "\t asped reads  = $asped_reads_previous_day\n";
 				$message .= "\t free reads = $free_reads_previous_day\n";
-				$message .= "\t asped reads = $asped_reads_previous_day\n";
 				$message .= "\n";
  				$message .= "\n $statsdate\n";
 				$message .= "\t total reads = $total_reads_stats_day\n";
 				$message .= "\t asped reads = $asped_reads_stats_day\n";
-				$message .= "\t free reads = $free_reads_stats_day\n" ;
-				$message .= "\t asped reads = $asped_reads_stats_day\n\n\n" ;
+				$message .= "\t free reads = $free_reads_stats_day\n\n\n" ;
 
 				&sendMessage($user, $message, $instance, $organism) if $message;
 				print STDERR $message;
@@ -336,7 +334,7 @@ sub sendMessage {
 			$to = $user;
     }
 		else {
-			$to = "arcturus-help@sanger.ac.uk";
+			$to = "arcturus-help\@sanger.ac.uk";
 			$to .= ',' . $user if defined($user);
 		}
 
