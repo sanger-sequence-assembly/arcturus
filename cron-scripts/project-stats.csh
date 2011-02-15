@@ -51,7 +51,7 @@ endif
 
 cd ${PROJECTSTATSFOLDER}
 
-foreach ORG (`cat ${HOME}/${INSTANCE}_active_organisms.list`)
+foreach ORG (`cat ${HOME}/project_stats_organisms.list`)
   set ORG=`echo $ORG | awk -F : '{print $1}'`
 
   echo Creating project statistics for the $ORG database
