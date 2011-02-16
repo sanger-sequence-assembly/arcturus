@@ -10,7 +10,6 @@ import java.util.Locale.*;
 import uk.ac.sanger.arcturus.people.PeopleManager;
 import uk.ac.sanger.arcturus.people.Person;
 import uk.ac.sanger.arcturus.people.role.Role;
-import uk.ac.sanger.arcturus.utils.CheckConsistency;
 
 import uk.ac.sanger.arcturus.data.Assembly;
 import uk.ac.sanger.arcturus.data.Project;
@@ -218,6 +217,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 			query = freeReadsQueryStart;
 			titleString =  freeReadsTitleString;
 			emailField.setEnabled(false);
+			projectList.setEnabled(false);
+			allSplitsBox.setEnabled(false);
 			preventOtherSelection();
 		}
 		else if (event.getSource() == contigTransferBox) {
@@ -281,8 +282,14 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 							"' and statsdate <= '" + until + "' order by statsdate";
 					}
 					else {
-						query = query + " where statsdate >= '" +  since +
+						if (contigBox.isSelected()) {
+							query = query + " where statsdate >= '" +  since +
 						"' and statsdate <= '" + until + "' and name = '" + projectName + "' order by statsdate";
+						}
+						else {
+							query = query + " where statsdate >= '" +  since +
+							"' and statsdate <= '" + until + "' order by statsdate";
+						}
 					}
 				}
 				else if (contigTransferBox.isSelected()) {
@@ -397,6 +404,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		projectActivityBox.setEnabled(true);
 		projectActivityBox.setSelected(false);
 		
+		projectList.setEnabled(true);
 		allSplitsBox.setEnabled(true);
 		allSplitsBox.setSelected(false);
 		
@@ -780,7 +788,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				Object[] selectedProjects = projectList.getSelectedValues();
 				for (int i = 0; i < selectedProjects.length; i++) {
 					projectName = selectedProjects[i].toString();
-					reportError("Looking for data for project " + projectName);
+					allSplitsBox.setEnabled(false);
+					//reportError("Looking for data for project " + projectName);
 				}
 			}
 		});
