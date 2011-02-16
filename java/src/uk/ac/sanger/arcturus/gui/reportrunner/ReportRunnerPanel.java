@@ -249,29 +249,26 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		}
 		else if (event.getSource() == btnSave) {		
 			Arcturus.logInfo("Save button pressed");
+			
+			since = sinceField.getText();
+			until = untilField.getText();
+			email = emailField.getText();
+			
 			sinceField.setEnabled(false);
 			untilField.setEnabled(false);
 			emailField.setEnabled(false);
 			allSplitsBox.setEnabled(false);
 			projectList.setEnabled(false);
 			
-			since = sinceField.getText();
-			until = untilField.getText();
-			email = emailField.getText();
-			
-			
-			if ((since.equals(dateFormatString) )|| (until.equals(dateFormatString)) ) {
-				if ( (contigBox.isSelected()) || freeReadsBox.isSelected()) {
+			Arcturus.logInfo("Save button pressed: about to check that dates and email are OK");
+			if (((since.equals(dateFormatString) )|| (until.equals(dateFormatString)) ) && ( (contigBox.isSelected()) || freeReadsBox.isSelected())) {
 					reportError("Please enter valid dates for your report");
 					sinceField.setEnabled(true);
 					untilField.setEnabled(true);
-				}
 			}
-			else if (email.equals(emailFormatString)){
-				if ( (contigTransferBox.isSelected()) || projectActivityBox.isSelected()) {
+			else if ((email.equals(emailFormatString)) && ( (contigTransferBox.isSelected()) || projectActivityBox.isSelected())) {
 					reportError("Please enter your login address that you use for email e.g. kt6");
 					emailField.setEnabled(true);
-				}
 			}
 			else {
 				Arcturus.logInfo("Save button pressed: dates and email are OK");
