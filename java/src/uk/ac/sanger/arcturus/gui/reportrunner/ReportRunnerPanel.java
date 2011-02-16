@@ -358,12 +358,14 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	
 	protected void reportException( String message, Exception exception) {
 		statusLine.setText(message);
-		Arcturus.logSevere(message, exception);
 		resetAllButtons();
+		message = message + "\nCurrent organism is " + adb.getInstance() + " and last query run is \n" + query;
+		Arcturus.logSevere(message, exception);
 		exception.printStackTrace();
 	}
 	
 	protected void reportError( String message) {
+		statusLine.setForeground(Color.red);
 		statusLine.setText(message);
 		Arcturus.logInfo(message);
 	}
@@ -384,7 +386,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		contigTransferBox.setEnabled(false);
 		contigTransferBox.setEnabled(false);
 		projectActivityBox.setEnabled(false);
-		
+		statusLine.setForeground(Color.black);
+		statusLine.setText("Please choose the kind of report you want to run, then the dates and the projects to find");
 		btnSave.setEnabled(true);
 	}
 	
@@ -600,7 +603,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		}
 		else {
 			// User has cancelled, so reset all the buttons to enabled and unchecked 
-			Arcturus.logWarning("Save command cancelled by user\n");
+			Arcturus.logInfo("Save command cancelled by user\n");
+			statusLine.setText("Your save request has been cancelled");
 			resetAllButtons();
 		}
 	}
