@@ -10,7 +10,6 @@ import java.util.Locale.*;
 import uk.ac.sanger.arcturus.people.PeopleManager;
 import uk.ac.sanger.arcturus.people.Person;
 import uk.ac.sanger.arcturus.people.role.Role;
-import uk.ac.sanger.arcturus.utils.CheckConsistency;
 
 import uk.ac.sanger.arcturus.data.Assembly;
 import uk.ac.sanger.arcturus.data.Project;
@@ -218,6 +217,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 			query = freeReadsQueryStart;
 			titleString =  freeReadsTitleString;
 			emailField.setEnabled(false);
+			projectList.setEnabled(false);
+			allSplitsBox.setEnabled(false);
 			preventOtherSelection();
 		}
 		else if (event.getSource() == contigTransferBox) {
@@ -248,29 +249,26 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		}
 		else if (event.getSource() == btnSave) {		
 			Arcturus.logInfo("Save button pressed");
+			
+			since = sinceField.getText();
+			until = untilField.getText();
+			email = emailField.getText();
+			
 			sinceField.setEnabled(false);
 			untilField.setEnabled(false);
 			emailField.setEnabled(false);
 			allSplitsBox.setEnabled(false);
 			projectList.setEnabled(false);
 			
-			since = sinceField.getText();
-			until = untilField.getText();
-			email = emailField.getText();
-			
-			
-			if ((since.equals(dateFormatString) )|| (until.equals(dateFormatString)) ) {
-				if ( (contigBox.isSelected()) || freeReadsBox.isSelected()) {
+			Arcturus.logInfo("Save button pressed: about to check that dates and email are OK");
+			if (((since.equals(dateFormatString) )|| (until.equals(dateFormatString)) ) && ( (contigBox.isSelected()) || freeReadsBox.isSelected())) {
 					reportError("Please enter valid dates for your report");
 					sinceField.setEnabled(true);
 					untilField.setEnabled(true);
-				}
 			}
-			else if (email.equals(emailFormatString)){
-				if ( (contigTransferBox.isSelected()) || projectActivityBox.isSelected()) {
+			else if ((email.equals(emailFormatString)) && ( (contigTransferBox.isSelected()) || projectActivityBox.isSelected())) {
 					reportError("Please enter your login address that you use for email e.g. kt6");
 					emailField.setEnabled(true);
-				}
 			}
 			else {
 				Arcturus.logInfo("Save button pressed: dates and email are OK");
@@ -281,8 +279,14 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 							"' and statsdate <= '" + until + "' order by statsdate";
 					}
 					else {
-						query = query + " where statsdate >= '" +  since +
+						if (contigBox.isSelected()) {
+							query = query + " where statsdate >= '" +  since +
 						"' and statsdate <= '" + until + "' and name = '" + projectName + "' order by statsdate";
+						}
+						else {
+							query = query + " where statsdate >= '" +  since +
+							"' and statsdate <= '" + until + "' order by statsdate";
+						}
 					}
 				}
 				else if (contigTransferBox.isSelected()) {
@@ -351,12 +355,14 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 	
 	protected void reportException( String message, Exception exception) {
 		statusLine.setText(message);
-		Arcturus.logSevere(message, exception);
 		resetAllButtons();
+		message = message + "\nCurrent organism is " + adb.getInstance() + " and last query run is \n" + query;
+		Arcturus.logSevere(message, exception);
 		exception.printStackTrace();
 	}
 	
 	protected void reportError( String message) {
+		statusLine.setForeground(Color.red);
 		statusLine.setText(message);
 		Arcturus.logInfo(message);
 	}
@@ -377,7 +383,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		contigTransferBox.setEnabled(false);
 		contigTransferBox.setEnabled(false);
 		projectActivityBox.setEnabled(false);
-		
+		statusLine.setForeground(Color.black);
+		statusLine.setText("Please choose the kind of report you want to run, then the dates and the projects to find");
 		btnSave.setEnabled(true);
 	}
 	
@@ -397,6 +404,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		projectActivityBox.setEnabled(true);
 		projectActivityBox.setSelected(false);
 		
+		projectList.setEnabled(true);
 		allSplitsBox.setEnabled(true);
 		allSplitsBox.setSelected(false);
 		
@@ -592,7 +600,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 		}
 		else {
 			// User has cancelled, so reset all the buttons to enabled and unchecked 
-			Arcturus.logWarning("Save command cancelled by user\n");
+			Arcturus.logInfo("Save command cancelled by user\n");
+			statusLine.setText("Your save request has been cancelled");
 			resetAllButtons();
 		}
 	}
@@ -780,7 +789,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				Object[] selectedProjects = projectList.getSelectedValues();
 				for (int i = 0; i < selectedProjects.length; i++) {
 					projectName = selectedProjects[i].toString();
-					reportError("Looking for data for project " + projectName);
+					allSplitsBox.setEnabled(false);
+					//reportError("Looking for data for project " + projectName);
 				}
 			}
 		});
