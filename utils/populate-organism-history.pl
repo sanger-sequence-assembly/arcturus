@@ -303,9 +303,9 @@ sub checkFreeReadChange {
 
 				my $contig_count = $csth->execute($date, $date, $date,$date) || &queryFailed($contig_query);
 				my $contigs = $csth->fetchall_arrayref();
-				$message .= "contig_id\tgap4name\t\tlength\tnreads\tproject_id\tnewreads\tcover\torigin\t\t\t\tcreator\tcreated\tupdated\n";
+				$message .= "contig_id\tgap4name\t\t\t\tlength\tnreads\tproject_id\tnewreads\tcover\torigin\t\tcreator\tcreated\tupdated\n";
 				foreach my $contig (@$contigs) {
-					$message .= "@$contig[0]\t@$contig[1]\t\t@$contig[2]\t@$contig[3]\t@$contig[4]\t@$contig[5]\t@$contig[6]\t@$contig[7]\t@$contig[8]\t@$contig[9]\n";
+					$message .= "@$contig[0]\t\t@$contig[1]\t\t\t@$contig[2]\t@$contig[3]\t@$contig[4]\t\t@$contig[5]\t@$contig[6]\t@$contig[7]\t@$contig[8]\t@$contig[9]\t\t@$contig[10]\n";
 				}
 				$message .= "End of list of contigs created or updated on $previous_date and $statsdate.\n\n";
 
