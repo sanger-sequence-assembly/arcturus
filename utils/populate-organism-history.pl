@@ -255,8 +255,8 @@ sub checkFreeReadChange {
 		$user = "kt6";
   }
 	else {
-		$user = "kt6";
-		#$user = "freeread";
+		#$user = "kt6"; uncomment me to try out tests on LIVE whilst avoiding emailing the users
+		$user = "freeread";
 	}
 
 	foreach my $statsday_value (@$statsday_values) {
