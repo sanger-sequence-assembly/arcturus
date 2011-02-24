@@ -370,7 +370,7 @@ if ( -f "${gap5name}.$version") {
     }
 }
 
-system ("${gap5root}/tg_index -s $samfile -o $gap5name.$version");
+system ("${gap5root}/tg_index -test -s $samfile -o $gap5name.$version");
 
 unless ($? == 0) {
     print STDERR "!! -- FAILED to create a Gap5 database ($?) --\n";
