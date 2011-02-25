@@ -1,7 +1,6 @@
 -- check-bins.sql to find discrepancy between OligoFinder.java and the free reads overnight job populate-organism-history.pl
-SELECT 'READS IN PROJECTS TRASH, FREEASSEMBLY and BIN' AS ' ';
 select 
-	sum(C.nreads)
+	sum(C.nreads) as 'READS IN PROJECTS TRASH, FREEASSEMBLY and BIN'
 	from CONTIG as C,PROJECT as P  
 	where C.contig_id in 
      (select distinct CA.contig_id from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)
@@ -11,9 +10,8 @@ select
     and P.name in ('BIN','FREEASSEMBLY','TRASH')
     and P.project_id = C.project_id; 
 
-SELECT 'READS IN PROJECTS TRASH, FREEASSEMBLY and BIN' AS ' ';
 select 
-	sum(C.nreads)
+	sum(C.nreads) 'READS IN PROJECTS TRASH, FREEASSEMBLY and BIN'
 	from CONTIG as C,PROJECT as P  
 	where C.contig_id in 
      (select distinct CA.contig_id from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)
@@ -23,11 +21,8 @@ select
     and P.name not in ('BIN','FREEASSEMBLY','TRASH')
     and P.project_id = C.project_id; 
 
-SELECT 'READS IN ALL CONTIGS' AS ' ';
-select sum(nreads) from CONTIG;
+select sum(nreads) as 'READS IN ALL CONTIGS' from CONTIG;
 
-SELECT 'READS IN CURRENT CONTIGS' AS ' ';
-select sum(nreads) from CURRENTCONTIGS;
+select sum(nreads)  as 'READS IN CURRENT CONTIGS' from CURRENTCONTIGS;
 
-SELECT 'READS IN READ TABLE' AS ' ';
-select count(*) from READINFO;
+select count(*)  'READS IN READ TABLE' from READINFO;
