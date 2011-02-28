@@ -276,7 +276,7 @@ foreach my $fasta (@reads) {
         my $template = $fasta; $template =~ s/(.*)\..*/$1/;
         $read->setTemplate($template)     unless $read->getTemplate();
 # generate chemistry
-        $read->setPrimer("Custom_Primer") unless $read->getPrimer();
+        $read->setPrimer("Unknown_primer") unless $read->getPrimer();
         $read->setChemistry("Dye_primer") unless $read->getChemistry();
 
 # test/generate quality clipping; test the note field for 
