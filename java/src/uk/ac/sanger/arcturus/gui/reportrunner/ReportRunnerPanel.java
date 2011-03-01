@@ -303,10 +303,10 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				boolean doQuery = false;
 				Arcturus.logInfo("Save button pressed: checking user has privileges to run reports");
 				if (contigTransferBox.isSelected()) {
-					doQuery = checkLoggedInUserCanRunContigReports();
+					//doQuery = checkLoggedInUserCanRunContigReports();
 				}
 				else if (projectActivityBox.isSelected()) {
-					doQuery = checkLoggedInUserCanRunUserReports();
+					//doQuery = checkLoggedInUserCanRunUserReports();
 				}
 				else {
 					if (contigBox.isSelected()) {
