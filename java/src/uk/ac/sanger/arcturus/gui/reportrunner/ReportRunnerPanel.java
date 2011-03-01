@@ -17,7 +17,7 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.Arcturus;
 
-import com.toedter.calendar.*;
+//import com.toedter.calendar.*;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.EventListener;
@@ -157,8 +157,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
     protected String projectName = "";
     protected String email = "";
     
-    protected JCalendar calendarSince = new JCalendar();
-	protected JCalendar calendarUntil = new JCalendar();
+    //protected JCalendar calendarSince = new JCalendar();
+	//protected JCalendar calendarUntil = new JCalendar();
 	
 	protected Person loggedInUser = new Person(PeopleManager.getEffectiveUID());
 	
