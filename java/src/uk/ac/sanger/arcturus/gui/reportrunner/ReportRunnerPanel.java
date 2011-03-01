@@ -290,7 +290,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 					}
 				}
 				else if (contigTransferBox.isSelected()) {
-					query = "select H.statsdate,H.name,total_contigs, H.total_contig_length,H.n50_contig_length" +
+					query = "select H.statsdate, H.name, total_contigs" +
 					" from PROJECT_CONTIG_HISTORY H left join PROJECT P using (project_id) where P.owner = '" + email +"'";
 				}
 				else if (projectActivityBox.isSelected()){
