@@ -310,13 +310,13 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 				}
 				else {
 					if (contigBox.isSelected()) {
-						if (!(checkLoggedInUserCanRunContigReports())) {	
-							sinceField.setEnabled(true);
-							untilField.setEnabled(true);
-						}
-						else {
+						//if (!(checkLoggedInUserCanRunContigReports())) {	
+							//sinceField.setEnabled(true);
+							//untilField.setEnabled(true);
+						//}
+						//else {
 							doQuery = true;
-						}
+						//}
 					}
 					doQuery = checkDates();
 					if (!(doQuery)) {	
