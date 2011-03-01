@@ -63,7 +63,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
     static String contigTransferString = "Save statistics about contig transfers";
     static String projectActivityString = "Save statistics about project activity";
     static String saveString = "Save statistics to a comma-separated file on your machine";
-    static String splitExplanationString ="You can save only the data that you are authorised to see in Minerva";
+    static String splitExplanationString ="You can save your data and other people's data from Minerva";
     static String dateStartExplanationString ="Please enter the start date";
     static String dateEndExplanationString ="Please enter the end date";
     static String dateFormatString = "YYYY-MM-DD";
@@ -300,7 +300,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 					titleString = "open_date,name,contig_transfers";
 				}
 				preventOtherSelection();
-				boolean doQuery = false;
+				boolean doQuery = true;
 				Arcturus.logInfo("Save button pressed: checking user has privileges to run reports");
 				if (contigTransferBox.isSelected()) {
 					//doQuery = checkLoggedInUserCanRunContigReports();
