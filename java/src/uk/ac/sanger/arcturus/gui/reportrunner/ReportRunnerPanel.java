@@ -17,7 +17,7 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.Arcturus;
 
-import com.toedter.calendar.*;
+//import com.toedter.calendar.*;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.EventListener;
@@ -63,7 +63,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
     static String contigTransferString = "Save statistics about contig transfers";
     static String projectActivityString = "Save statistics about project activity";
     static String saveString = "Save statistics to a comma-separated file on your machine";
-    static String splitExplanationString ="You can save only the data that you are authorised to see in Minerva";
+    static String splitExplanationString ="You can save your data and other people's data from Minerva";
     static String dateStartExplanationString ="Please enter the start date";
     static String dateEndExplanationString ="Please enter the end date";
     static String dateFormatString = "YYYY-MM-DD";
@@ -157,8 +157,8 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
     protected String projectName = "";
     protected String email = "";
     
-    protected JCalendar calendarSince = new JCalendar();
-	protected JCalendar calendarUntil = new JCalendar();
+    //protected JCalendar calendarSince = new JCalendar();
+	//protected JCalendar calendarUntil = new JCalendar();
 	
 	protected Person loggedInUser = new Person(PeopleManager.getEffectiveUID());
 	
@@ -290,7 +290,7 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 					}
 				}
 				else if (contigTransferBox.isSelected()) {
-					query = "select H.statsdate,H.name,total_contigs, H.total_contig_length,H.n50_contig_length" +
+					query = "select H.statsdate, H.name, total_contigs" +
 					" from PROJECT_CONTIG_HISTORY H left join PROJECT P using (project_id) where P.owner = '" + email +"'";
 				}
 				else if (projectActivityBox.isSelected()){
@@ -300,23 +300,23 @@ public class ReportRunnerPanel extends MinervaPanel implements ActionListener{
 					titleString = "open_date,name,contig_transfers";
 				}
 				preventOtherSelection();
-				boolean doQuery = false;
+				boolean doQuery = true;
 				Arcturus.logInfo("Save button pressed: checking user has privileges to run reports");
 				if (contigTransferBox.isSelected()) {
-					doQuery = checkLoggedInUserCanRunContigReports();
+					//doQuery = checkLoggedInUserCanRunContigReports();
 				}
 				else if (projectActivityBox.isSelected()) {
-					doQuery = checkLoggedInUserCanRunUserReports();
+					//doQuery = checkLoggedInUserCanRunUserReports();
 				}
 				else {
 					if (contigBox.isSelected()) {
-						if (!(checkLoggedInUserCanRunContigReports())) {	
-							sinceField.setEnabled(true);
-							untilField.setEnabled(true);
-						}
-						else {
+						//if (!(checkLoggedInUserCanRunContigReports())) {	
+							//sinceField.setEnabled(true);
+							//untilField.setEnabled(true);
+						//}
+						//else {
 							doQuery = true;
-						}
+						//}
 					}
 					doQuery = checkDates();
 					if (!(doQuery)) {	

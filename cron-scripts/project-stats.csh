@@ -6,14 +6,14 @@ set SCRIPT_NAME=`basename $0`
 set PROJECTSTATSFOLDER=${HOME}/project-stats
 set LOGFILE=${HOME}/project-stats.log
 
-set UTILSFOLDER=${SCRIPT_HOME}/../utils
 set PROJECTSTATSFOLDER=${HOME}/project-stats
 
-echo SCRIPT_HOME is ${SCRIPT_HOME} and UTILSFOLDER is ${UTILSFOLDER}
-#set ARCTURUS=/nfs/users/nfs_k/kt6/ARCTURUS/arcturus/branches/6163487_warehouse
+set ARCTURUS=/nfs/users/nfs_k/kt6/ARCTURUS/arcturus/branches/6163487_warehouse
+#set ARCTURUS=/nfs/users/nfs_k/kt6/ARCTURUS/arcturus/trunk.clean
 #set ARCTURUS=/software/arcturus
-#set UTILSFOLDER=${ARCTURUS}/utils
+set UTILSFOLDER=${ARCTURUS}/utils
 
+echo SCRIPT_HOME is ${SCRIPT_HOME} and UTILSFOLDER is ${UTILSFOLDER}
 set STATS_SCRIPT = ${UTILSFOLDER}/populate-project-contig-history
 set READS_SCRIPT = ${UTILSFOLDER}/populate-organism-history
 
@@ -51,7 +51,7 @@ endif
 
 cd ${PROJECTSTATSFOLDER}
 
-foreach ORG (`cat ${HOME}/project_stats_organisms.list`)
+foreach ORG (`cat ${HOME}/${INSTANCE}_project_stats_organisms.list`)
   set ORG=`echo $ORG | awk -F : '{print $1}'`
 
   echo Creating project statistics for the $ORG database
@@ -66,7 +66,6 @@ foreach ORG (`cat ${HOME}/project_stats_organisms.list`)
 
 		echo Running ${READS_SCRIPT} to calculate free read statistics for the $ORG organism in the $INSTANCE database instance...
 		echo Any read variation over ${THRESHOLD} will be notified to email freereads and cc to arcturus-help
-		tify
 		${READS_SCRIPT} -instance $INSTANCE -organism $ORG -threshold ${THRESHOLD} 
   popd
 end
