@@ -337,8 +337,8 @@ public class NewProjectPanel extends JPanel {
 		} catch (RepositoryException e) {
 			Arcturus.logWarning("An error occurred during a repository lookup on \"" + text + "\"", e);
 		}
-		// make the default pathname dependent on the organism being used to avoid overwriting live data
-		String organism = (adb.getInstance()).toString();
+		
+		txtAssemblySuffix.setEditable(false);
 		if (autocompleteAssemblySuffix) {
 			txtAssemblySuffix.setText(getAssemblySuffix() + text);
 		}
