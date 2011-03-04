@@ -338,7 +338,7 @@ public class NewProjectPanel extends JPanel {
 			Arcturus.logWarning("An error occurred during a repository lookup on \"" + text + "\"", e);
 		}
 		
-	
+		txtAssemblySuffix.setEditable(false);
 		if (autocompleteAssemblySuffix) {
 				txtAssemblySuffix.setText(this.getAssemblySuffix() + text);
 		}
