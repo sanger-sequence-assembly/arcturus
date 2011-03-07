@@ -1810,26 +1810,30 @@ sub scaffoldfileparser { # TO BE TESTED
 }
 
 #------------------------------------------------------------------------
-
 sub sendMessage {
-    my ($user,$message,$instance) = @_;
-
-		my $to = DEFAULT_HELPDESK_EMAIL;
-		$to .= ',' . $user if defined($user);
-
-    if ($instance eq 'test') {
-				$to = $user;
+   my ($user,$message,$instance, $organism) = @_;
+ 
+   my $to = "";
+ 
+   if ($instance eq 'test') {
+       $to = $user;
     }
-
+    else {
+		  $to = DEFAULT_HELPDESK_EMAIL;
+      $cc = $user if defined($user);
+    }
+ 
+    print STDOUT "Sending message to $to\n";
+ 
     my $mail = new Mail::Send;
-    $mail->to($user);
-    $mail->subject("Arcturus project import FAILED");
-    #$mail->add("X-Arcturus", "contig-transfer-manager");
-    my $handle = $mail->open;
-    print $handle "$message\n";
-    $handle->close;
-    
-}
+     $mail->to($to);
+     $mail->cc($cc);
+     $mail->subject("Arcturus project import FAILED");
+     my $handle = $mail->open;
+     print $handle "$message\n";
+     $handle->close or die "Problems sending mail to $to cc to $cc: $!\n";
+ 
+ }
 
 #------------------------------------------------------------------------
 

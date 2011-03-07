@@ -354,27 +354,27 @@ sub showUsage {
 }
 
 sub sendMessage {
-    my ($user,$message,$instance, $organism) = @_;
-
-		my $to = "";
-
-    if ($instance eq 'test') {
-			$to = $user;
+   my ($user,$message,$instance, $organism) = @_;
+ 
+   my $to = "";
+ 
+   if ($instance eq 'test') {
+       $to = $user;
     }
-		else {
-			$to = 'arcturus-help@sanger.ac.uk';
-			$to .= ',' . $user if defined($user);
-		}
-
-		print STDOUT "Sending message to $to\n";
-
+    else {
+      $to = 'arcturus-help@sanger.ac.uk';
+      $cc = $user if defined($user);
+    }
+ 
+    print STDOUT "Sending message to $to\n";
+ 
     my $mail = new Mail::Send;
-    $mail->to($user);
-    $mail->subject("Unexpected change in the number of free reads for $organism");
-    #$mail->add("X-Arcturus", "contig-transfer-manager");
-    my $handle = $mail->open;
-    print $handle "$message\n";
-    $handle->close;
-    
-}
+     $mail->to($to);
+     $mail->cc($cc);
+     $mail->subject("Unexpected change in the number of free reads for $organism");
+     my $handle = $mail->open;
+     print $handle "$message\n";
+     $handle->close or die "Problems sending mail to $to cc to $cc: $!\n";
+ 
+ }
 
