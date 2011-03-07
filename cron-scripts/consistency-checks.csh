@@ -36,7 +36,7 @@ foreach ORG (`cat ~/${INSTANCE}_active_organisms.list`)
   endif
 	pushd $ORG
 		echo Submitting a batch job to check the consistency of the $ORG organism in the $INSTANCE database instance using ${LSF_SCRIPT_NAME}...
-		bsub -q phrap -o ${CONSISTENCYFOLDER}/$ORG.log -J ${ORG}cc -N ${LSF_SCRIPT_NAME} test $ORG
+		bsub -q phrap -o ${CONSISTENCYFOLDER}/$ORG.log -J ${ORG}cc -N ${LSF_SCRIPT_NAME} ${INSTANCE} $ORG
 	popd
 end
 
