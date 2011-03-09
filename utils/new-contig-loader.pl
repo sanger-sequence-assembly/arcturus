@@ -844,7 +844,7 @@ if ($frugal) { # this whole block should go to a contig "factory"
 		$logger->severe("Loading is aborted");
 		my $projectreadmessage = &printprojectreadhash(%projectreadhash);
 		$logger->severe($projectreadmessage);
-		&sendMessage($user,$projectreadmessage, $instance); 
+		&sendMessage($user,$projectreadmessage, $instance, $organism); 
 		$adb->disconnect();
 		exit 1;
 }
@@ -1368,12 +1368,12 @@ $adb->disconnect();
 my $missedcontigmessage = "";
 
 my $message = $adb->getMessageForUser($user);
-&sendMessage($user, $message, $instance) if $message;
+&sendMessage($user, $message, $instance, $organism) if $message;
 
 if ($missed > 0) {
 	$missedcontigmessage = &printmissedcontighash(%missedcontighash);
 	$logger->severe($missedcontigmessage);
-	&sendMessage($user,$missedcontigmessage, $instance); 
+	&sendMessage($user,$missedcontigmessage, $instance, $organism); 
 }
 
 # Close the CAF contig name to Arcturus ID map file, if it was opened
@@ -1828,7 +1828,7 @@ sub sendMessage {
     my $mail = new Mail::Send;
      $mail->to($to);
      $mail->cc($cc);
-     $mail->subject("Arcturus project import FAILED");
+     $mail->subject("Arcturus project import FAILED for instance=$instance organism=$organism");
      my $handle = $mail->open;
      print $handle "$message\n";
      $handle->close or die "Problems sending mail to $to cc to $cc: $!\n";
