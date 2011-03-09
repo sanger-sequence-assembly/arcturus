@@ -37,10 +37,10 @@ case mcs6:
 	echo Pathogen list built in $HOME/pathogen_active_organisms.list:
 	cat $HOME/pathogen_active_organisms.list
 	echo
-	echo Extracting ZGTC_nn to vertebrate list for LDAP lookup
-	grep ZGTC $HOME/tmp_pathogen_active_organisms.list > vertebrate_active_organisms.list
-	echo Vertebrate list built in $HOME/vertebrate_active_organisms.list:
-	cat $HOME/vertebrate_active_organisms.list
+	echo Extracting ZGTC_nn to vertebrates list for LDAP lookup
+	grep ZGTC $HOME/tmp_pathogen_active_organisms.list > vertebrates_active_organisms.list
+	echo Vertebrate list built in $HOME/vertebrates_active_organisms.list:
+	cat $HOME/vertebrates_active_organisms.list
 	rm $HOME/tmp_pathogen_active_organisms.list
 
 	perl ${SCRIPT_HOME}/$PERL_SCRIPT -host $MYSQL_HOST -port 15005  -username $MYSQL_USER -password $MYSQL_PASSWORD -since $TIME_IN_DAYS > $HOME/illumina_active_organisms.list
