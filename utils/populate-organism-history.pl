@@ -150,18 +150,17 @@ my $insert_query = "insert into ORGANISM_HISTORY (
 	?,
 	?,
 	9999,
-	sum(C.nreads),
+	sum(nreads),
 	9999,
 	9999,
 	9999
-	from CONTIG as C,PROJECT as P  
+	from CONTIG as C
 	where C.contig_id in 
      (select distinct CA.contig_id from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)
      on (CA.contig_id = C2CMAPPING.parent_id and C2CMAPPING.contig_id = CB.contig_id)
-     where CA.created < ? and CA.nreads > 1 and CA.length >= 0 
-		 and (C2CMAPPING.parent_id is null  or CB.created > ?))
-    and P.name not in ('BIN','FREEASSEMBLY','TRASH')
-    and P.project_id = C.project_id";
+     where CA.created < ? and CA.length >= 0 
+		 and (C2CMAPPING.parent_id is null  or CB.created > ?))";
+
 my $isth = $dbh->prepare_cached($insert_query);
 
 my $total_read_update = "update ORGANISM_HISTORY 
@@ -355,27 +354,27 @@ sub showUsage {
 }
 
 sub sendMessage {
-    my ($user,$message,$instance, $organism) = @_;
-
-		my $to = "";
-
-    if ($instance eq 'test') {
-			$to = $user;
+   my ($user,$message,$instance, $organism) = @_;
+ 
+   my $to = "";
+ 
+   if ($instance eq 'test') {
+       $to = $user;
     }
-		else {
-			$to = "arcturus-help\@sanger.ac.uk";
-			$to .= ',' . $user if defined($user);
-		}
-
-		print STDOUT "Sending message to $to\n";
-
+    else {
+      $to = 'arcturus-help@sanger.ac.uk';
+      $cc = $user if defined($user);
+    }
+ 
+    print STDOUT "Sending message to $to\n";
+ 
     my $mail = new Mail::Send;
-    $mail->to($user);
-    $mail->subject("Unexpected change in the number of free reads for $organism");
-    #$mail->add("X-Arcturus", "contig-transfer-manager");
-    my $handle = $mail->open;
-    print $handle "$message\n";
-    $handle->close;
-    
-}
+     $mail->to($to);
+     $mail->cc($cc);
+     $mail->subject("Unexpected change in the number of free reads for $organism");
+     my $handle = $mail->open;
+     print $handle "$message\n";
+     $handle->close or die "Problems sending mail to $to cc to $cc: $!\n";
+ 
+ }
 
