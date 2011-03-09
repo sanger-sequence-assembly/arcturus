@@ -29,10 +29,19 @@ case mcs6:
 	echo
 	echo Helminth list built in $HOME/mysql_active_organisms.list
 
-	perl ${SCRIPT_HOME}/$PERL_SCRIPT -host $MYSQL_HOST -port 15003  -username $MYSQL_USER -password $MYSQL_PASSWORD -since $TIME_IN_DAYS > $HOME/pathogen_active_organisms.list
+	perl ${SCRIPT_HOME}/$PERL_SCRIPT -host $MYSQL_HOST -port 15003  -username $MYSQL_USER -password $MYSQL_PASSWORD -since $TIME_IN_DAYS > $HOME/tmp_pathogen_active_organisms.list
 
 	echo
-	echo Arcturus list built in $HOME/pathogen_active_organisms.list
+	echo Renaming TASMANIAN_DEVIL to TASMANIAN for LDAP lookup
+	sed '/^ZGTC_[0-9]*/d' $HOME/tmp_pathogen_active_organisms.list | sed 's/_DEVIL//' > pathogen_active_organisms.list
+	echo Pathogen list built in $HOME/pathogen_active_organisms.list:
+	cat $HOME/pathogen_active_organisms.list
+	echo
+	echo Extracting ZGTC_nn to vertebrate list for LDAP lookup
+	grep ZGTC $HOME/tmp_pathogen_active_organisms.list > vertebrate_active_organisms.list
+	echo Vertebrate list built in $HOME/vertebrate_active_organisms.list:
+	cat $HOME/vertebrate_active_organisms.list
+	rm $HOME/tmp_pathogen_active_organisms.list
 
 	perl ${SCRIPT_HOME}/$PERL_SCRIPT -host $MYSQL_HOST -port 15005  -username $MYSQL_USER -password $MYSQL_PASSWORD -since $TIME_IN_DAYS > $HOME/illumina_active_organisms.list
 
