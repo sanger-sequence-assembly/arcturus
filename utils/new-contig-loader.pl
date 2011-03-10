@@ -1814,6 +1814,7 @@ sub sendMessage {
    my ($user,$message,$instance, $organism) = @_;
  
    my $to = "";
+   my $cc = "";
  
    if ($instance eq 'test') {
        $to = $user;
