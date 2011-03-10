@@ -1,6 +1,8 @@
 #!/usr/local/bin/perl -w
 require Mail::Send;
 
+use strict;
+
 my $user = "kt6";
 my $message = "This is a test email to investigate the broken PERL Help Desk ticket creation in RT 205601";
 my $instance = "pathogen";
@@ -12,6 +14,7 @@ sub sendMessage {
    my ($user,$message,$instance, $organism) = @_;
  
    my $to = "";
+   my $cc = "";
  
    if ($instance eq 'test') {
        $to = $user;
