@@ -1,4 +1,4 @@
-
+#!/usr/local/bin/perl
 # populate-project-contig-history.pl
 # runs each night to add a row for today
 # generates a csv of year so far to project directory/csv
@@ -128,7 +128,7 @@ sub populateProjectContigHistory {
 		print STDERR"Data for $project_contig_insert_count projects collected\n";
 	}
 
-	my $project_query = "select project_id, name, statsdate from PROJECT_CONTIG_HISTORY where statsdate = date(now())";
+	my $project_query = "select project_id, name, max_contig_length, statsdate from PROJECT_CONTIG_HISTORY where statsdate = date(now())";
 
 	my $ssth = $dbh->prepare($project_query);
 	$ssth->execute() || &queryFailed($project_query);
@@ -139,7 +139,8 @@ sub populateProjectContigHistory {
 
 		my $project_id = @$project[0];
 		my $project_name = @$project[1];
-		my $date = @$project[2];
+		my $max_contig_length = @$project[2];
+		my $date = @$project[3];
 
 if ($test) {
    print STDERR "Creating N50 contig length for project $project_name\n";
@@ -157,9 +158,9 @@ if ($test) {
 		my $N50_contig_length_count = $nsth->execute($N50_contig_length, $project_id, $date) || &queryFailed($N50_contig_length_update);
 		$nsth->finish();
 
- 		if ($test) {
-    	print STDERR "N50 read for project $project_id is $N50_contig_length\n\n";
- 		}
+		if ($N50_contig_length > $max_contig_length) {
+    	print STDERR "WARNING: N50 read for project $project_id is $N50_contig_length which is greater than the maximum contig length $max_contig_length\n\n";
+		}
 
 	} # end foreach project 
 }
