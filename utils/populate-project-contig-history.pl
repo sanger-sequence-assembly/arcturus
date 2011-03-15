@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl -w
+
 # populate-project-contig-history.pl
 # runs each night to add a row for today
 # generates a csv of year so far to project directory/csv
@@ -128,7 +128,7 @@ sub populateProjectContigHistory {
 		print STDERR"Data for $project_contig_insert_count projects collected\n";
 	}
 
-	my $project_query = "select project_id, name, statsdate from PROJECT_CONTIG_HISTORY where statsdate = now()";
+	my $project_query = "select project_id, name, statsdate from PROJECT_CONTIG_HISTORY where statsdate = date(now())";
 
 	my $ssth = $dbh->prepare($project_query);
 	$ssth->execute() || &queryFailed($project_query);
@@ -158,7 +158,7 @@ if ($test) {
 		$nsth->finish();
 
  		if ($test) {
-    	print STDERR"Median read for project $project_id is $N50_contig_length\n\n";
+    	print STDERR "N50 read for project $project_id is $N50_contig_length\n\n";
  		}
 
 	} # end foreach project 
@@ -233,14 +233,14 @@ sub get_N50_from_lengths {
 
     my $target_length = int($sum_length/2);
 
-    #print STDERR "get_N50_from_lengths: list of length ", scalar(@{$lengths}), ", sum_length=$sum_length",
-    #", target_length=$target_length\n";
+    print STDERR "get_N50_from_lengths: list of length ", scalar(@{$lengths}), ", sum_length=$sum_length",
+    ", target_length=$target_length\n";
 
     $sum_length = 0;
 
      foreach my $ctglen (@{$lengths}) {
 	$sum_length += $ctglen;
-	#printf STDERR "%10d %8d\n",$sum_length,$ctglen;
+	printf STDERR "\tsum_length = %10d this_contig_length = %8d\n",$sum_length,$ctglen;
 	return $ctglen if ($sum_length > $target_length);
     }   
 
