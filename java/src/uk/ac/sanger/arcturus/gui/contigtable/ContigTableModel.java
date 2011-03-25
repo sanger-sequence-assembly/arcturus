@@ -117,7 +117,7 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 				return new Integer(contig.getID());
 
 			case COLUMN_NAME:
-				return contig.getName();
+				return "Contig" + contig.getID();
 
 			case COLUMN_PROJECT:
 				return contig.getProject().getName();
