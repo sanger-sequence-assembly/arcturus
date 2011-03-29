@@ -2189,15 +2189,35 @@ sub putExportMarkForProject {
                              $project->getGap4Name() || 'not specified');
 }
 
-sub addImportExport {
+sub startImportExport {
 # private
     my $dbh = shift;
 
     &verifyPrivate($dbh,"addImportExport");
 
     my $query = "insert into IMPORTEXPORT "
-              . "(project_id,action,username,file,date) "
-              . "values (?,?,?,?,now())";
+              . "(project_id,action,username,file,starttime, endtime) "
+              . "values (?,?,?,?,now(), NULL)";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $rc = ($sth->execute(@_) || &queryFailed($query,@_));
+
+    $sth->finish();
+
+    $rc = $dbh->{'mysql_insertid'} if ($rc+0);
+
+    return $rc+0; # true for entry inserted; false for failure
+}
+
+
+sub endImportExport {
+# private
+    my $dbh = shift;
+
+    &verifyPrivate($dbh,"addImportExport");
+
+    my $query = "update IMPORTEXPORT set endtime = now() where project_id = ?";
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -2244,7 +2264,7 @@ sub getImportExport {
   	      . " where project_id = ?"
               . "   and action = ?";
     if (scalar(@_) > 2) {
-        $query   .= "   and date >= ?" if ($_[2]);
+        $query   .= "   and endtime >= ?" if ($_[2]);
         pop @_ unless $_[2];
     }
 
@@ -2258,6 +2278,30 @@ sub getImportExport {
 
     return $result;
 }
+
+sub getImportExportInProgress {
+# private
+    my $dbh = shift;
+
+    my $query = "select max(date) from IMPORTEXPORT"
+  	      . " where project_id = ?"
+              . "   and action = ?";
+    if (scalar(@_) > 2) {
+        $query   .= "   and starttime >= ? and endtime is NULL" if ($_[2]);
+        pop @_ unless $_[2];
+    }
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute(@_) || &queryFailed($query,@_);
+
+    my $result = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    return $result;
+}
+
 
 #--------------------------------------------------------------------
 
