@@ -2160,15 +2160,26 @@ sub putImportMarkForProject {
     my $this = shift;
     my $project = shift;
     my $scaffold = shift;
+		my $isStart = shift;
+
+		my $id;
 
     &verifyParameter($project,'putImportForProject');
 
-    my $id = &addImportExport ($this->getConnection(),
+		if ($isStart) {
+    	$id = &startImportExport ($this->getConnection(),
                                $project->getProjectID(),
                                'import',
                                $this->getArcturusUser(),
                                $project->getGap4Name() || 'not specified');
-
+		}
+		else {
+    	$id = &endImportExport ($this->getConnection(),
+                               $project->getProjectID(),
+                               'import',
+                               $this->getArcturusUser(),
+                               $project->getGap4Name() || 'not specified');
+		}
     return $id unless $scaffold;
 
     return 0 unless (ref($scaffold) eq 'ARRAY'); # replace by Scaffold instance ?
@@ -2179,14 +2190,24 @@ sub putImportMarkForProject {
 sub putExportMarkForProject {
     my $this = shift;
     my $project = shift;
+		my $isStart = shift;
 
     &verifyParameter($project,'putExportForProject');
 
-    return &addImportExport ($this->getConnection(),
+		if ($isStart) {
+    	return &startImportExport ($this->getConnection(),
                              $project->getProjectID(),
                              'export',
                              $this->getArcturusUser(),
                              $project->getGap4Name() || 'not specified');
+		}
+		else {
+    	return &endImportExport ($this->getConnection(),
+                             $project->getProjectID(),
+                             'export',
+                             $this->getArcturusUser(),
+                             $project->getGap4Name() || 'not specified');
+		}
 }
 
 sub startImportExport {
@@ -2245,7 +2266,7 @@ sub getLastExportOfProject {
 }
 
 sub getLastImportOfProject {
-# get the last import date (of running the import process)
+# get the last import completion date (of running the import process)
     my $this = shift;
     my $project = shift;
 
@@ -2260,7 +2281,7 @@ sub getImportExport {
 # private
     my $dbh = shift;
 
-    my $query = "select max(date) from IMPORTEXPORT"
+    my $query = "select max(endtime) from IMPORTEXPORT"
   	      . " where project_id = ?"
               . "   and action = ?";
     if (scalar(@_) > 2) {
@@ -2283,7 +2304,7 @@ sub getImportExportInProgress {
 # private
     my $dbh = shift;
 
-    my $query = "select max(date) from IMPORTEXPORT"
+    my $query = "select max(starttime) from IMPORTEXPORT"
   	      . " where project_id = ?"
               . "   and action = ?";
     if (scalar(@_) > 2) {
@@ -2319,7 +2340,7 @@ sub getLastChangeOfProject {
     my $query = "select max(updated) as changed from CONTIG"
 	      . " where project_id = $pid" 
               . " union "
-              . "select max(date) as changed from IMPORTEXPORT"
+              . "select max(endtime) as changed from IMPORTEXPORT"
 	      . " where project_id = $pid"
               . "   and action = 'import'"
               . " union "
