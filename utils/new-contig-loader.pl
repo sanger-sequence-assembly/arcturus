@@ -844,7 +844,8 @@ if ($frugal) { # this whole block should go to a contig "factory"
 		$logger->severe("Loading is aborted");
 		my $projectreadmessage = &printprojectreadhash(%projectreadhash);
 		$logger->severe($projectreadmessage);
-		&sendMessage($user,$projectreadmessage, $instance, $organism); 
+		my $subject = "Arcturus import of $gap4dbname NOT STARTED as reads already exist elsewhere in  $organism in $instance";
+		&sendMessage($user, $subject, $projectreadmessage); 
 		$adb->disconnect();
 		exit 1;
 }
@@ -1368,12 +1369,14 @@ $adb->disconnect();
 my $missedcontigmessage = "";
 
 my $message = $adb->getMessageForUser($user);
-&sendMessage($user, $message, $instance, $organism) if $message;
+my $subject = "Arcturus import $gap4dbname has FAILED for $organism in $instance";
+&sendMessage($user, $subject, $message) if $message;
 
 if ($missed > 0) {
+	my $subject = "Arcturus import $gap4dbname has MISSED CONTIGS for $organism in $instance";
 	$missedcontigmessage = &printmissedcontighash(%missedcontighash);
 	$logger->severe($missedcontigmessage);
-	&sendMessage($user,$missedcontigmessage, $instance, $organism); 
+	&sendMessage($user, $subject, $missedcontigmessage); 
 }
 
 # Close the CAF contig name to Arcturus ID map file, if it was opened
@@ -1811,7 +1814,7 @@ sub scaffoldfileparser { # TO BE TESTED
 
 #------------------------------------------------------------------------
 sub sendMessage {
-   my ($user,$message,$instance, $organism) = @_;
+   my ($user, $subject, $message) = @_;
  
    my $to = "";
    my $cc = "";
@@ -1829,10 +1832,10 @@ sub sendMessage {
     my $mail = new Mail::Send;
      $mail->to($to);
      $mail->cc($cc);
-     $mail->subject("Arcturus project import FAILED for instance=$instance organism=$organism");
+     $mail->subject($subject);
      my $handle = $mail->open;
      print $handle "$message\n";
-     $handle->close or die "Problems sending mail to $to cc to $cc: $!\n";
+     $handle->close or die "Problems sending mail $subject with content $message to $to cc to $cc: $!\n";
  
  }
 
