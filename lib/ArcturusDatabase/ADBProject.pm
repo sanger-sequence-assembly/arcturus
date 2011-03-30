@@ -2304,23 +2304,19 @@ sub getImportExportInProgress {
 # private
     my $dbh = shift;
 
-    my $query = "select max(starttime) from IMPORTEXPORT"
-  	      . " where project_id = ?"
-              . "   and action = ?";
-    if (scalar(@_) > 2) {
-        $query   .= "   and starttime >= ? and endtime is NULL" if ($_[2]);
-        pop @_ unless $_[2];
-    }
+		my $query  = "select username, action, starttime, endtime from IMPORTEXPORT"
+		. "where project_id = ? and starttime = "
+		. "(select max(starttime) from IMPORTEXPORT where project_id = ?)";
 
     my $sth = $dbh->prepare_cached($query);
 
     $sth->execute(@_) || &queryFailed($query,@_);
 
-    my $result = $sth->fetchrow_array();
+    my ($username, $action, $starttime, $endtime)  = $sth->fetchrow_array();
 
     $sth->finish();
 
-    return $result;
+    return $($username, $action, $starttime, $endtime);
 }
 
 
