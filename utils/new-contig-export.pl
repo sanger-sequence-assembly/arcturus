@@ -466,6 +466,29 @@ $adb->setLogger($logger);
 
 Contig->setLogger($logger);
  
+#-----------------------------------------------------------------------------
+# check that there is not an export or import already running for this project
+#-----------------------------------------------------------------------------
+
+my ($username, $action, $starttime, $endtime) = $project->getImportExportAlreadyRunning();
+my $dbh = $adb->getConnection();
+my $projectname = $project->getProjectName();
+
+if ($endtime eq 'NULL') {            
+	$logger->error("Project $projectname already has a $action running started by $username at $starttime so this import has been ABORTED");
+  $adb->disconnect();
+  exit 1;
+}
+else {
+	my $status = $project->startImportExport($dbh);
+	unless ($status) {
+		$logger->error("Unable to set start time for project $projectname  by $username at $starttime so this import has been ABORTED");
+  	$adb->disconnect();
+  	exit 1;
+	}
+}
+
+
 #----------------------------------------------------------------
 # get a list of contigs or projects to be exported
 #----------------------------------------------------------------
@@ -864,6 +887,13 @@ $logger->info("return $contig ".($contig->isPadded() ? 'padded' : 'not padded!')
     $contigs = []; # undef as an array
 }
 
+my $status = $project->endImportExport($dbh);
+unless ($status) {
+		$logger->error("Unable to set end time for project $projectname  by $username ");
+  	$adb->disconnect();
+  	exit 1;
+}
+
 $adb->disconnect();
 
 # TO BE DONE: message and error testing
@@ -887,7 +917,6 @@ else {
 foreach my $handle ($fhDNA,$fhQTY,$fhRDS) {
     $handle->close() if $handle;
 }
-
 $logger->close();
 
 exit;

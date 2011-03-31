@@ -541,6 +541,27 @@ unless ($projectinheritance{$pinherit}) {
     exit 0;
 }
 
+#-----------------------------------------------------------------------------
+# check that there is not an export or import already running for this project
+#-----------------------------------------------------------------------------
+
+my ($username, $action, $starttime, $endtime) = $project->getImportExportAlreadyRunning();
+my $dbh = $adb->getConnection();
+
+if ($endtime eq 'NULL') {            
+	$logger->error("Project $pidentifier already has a $action running started by $username at $starttime so this import has been ABORTED");
+  $adb->disconnect();
+  exit 1;
+}
+else {
+	my $status = $project->startImportExport($dbh);
+	unless ($status) {
+		$logger->error("Unable to set start time for project $pidentifier  by $username at $starttime so this import has been ABORTED");
+  	$adb->disconnect();
+  	exit 1;
+	}
+}
+
 #----------------------------------------------------------------
 # acquire a lock on the project
 #----------------------------------------------------------------
@@ -754,7 +775,7 @@ if ($frugal) { # this whole block should go to a contig "factory"
         # check that the read is not already in another project
             &checkprojectforread($objectname, $pidentifier);
 
-            if ($rejectreadname && $objectname =~ /$rejectreadname/) {
+            if (defined($rejectreadname) && $objectname =~ /$rejectreadname/) {
 		$logger->warning("read $objectname was rejected");
                 next;
 	    }
@@ -1361,6 +1382,13 @@ unless ($lockstatusfound && $autolockmode) {
 # in autolock: the project was not locked before; return to this state
 # not in autolock: always unlock to project after input is finished
     $project->releaseLock() || $logger->severe("could not release lock");
+}
+my $status = $project->endImportExport($dbh);
+
+unless ($status) {
+		$logger->error("Unable to set end time for project $pidentifier  by $username");
+  	$adb->disconnect();
+  	exit 1;
 }
 
 $adb->disconnect();
