@@ -128,7 +128,6 @@ sub getImportExportAlreadyRunning {
 
     my $ADB = $this->{ADB} || return undef;
 
-print STDERR "Project::about to call getImportExportStart \n"; 
     my ($username, $action, $starttime, $endtime) = $ADB->getImportExportStart($this, @_);
 }
 

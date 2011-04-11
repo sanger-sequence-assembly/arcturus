@@ -2164,7 +2164,7 @@ sub putImportMarkForProject {
 
 		my $id;
 
-    #&verifyParameter($project,'putImportForProject');
+    &verifyParameter($project,'putImportForProject');
 
 		if ($action eq "start") {
     	$id = &startImportExport ($this->getConnection(),
@@ -2191,7 +2191,7 @@ sub putExportMarkForProject {
     my $project = shift;
 		my $action = shift;
 
-    #&verifyParameter($project,'putExportForProject');
+    &verifyParameter($project,'putExportForProject');
 
 		if ($action eq "start") {
     	return &startImportExport ($this->getConnection(),
@@ -2211,8 +2211,6 @@ sub putExportMarkForProject {
 sub startImportExport {
 # private
     my ($dbh, $project_id, $action, $username, $file)  = @_;
-
-    #&verifyPrivate($dbh,"addImportExport");
 
     my $query = "insert into IMPORTEXPORT "
               . "(project_id,action,username,file,starttime, endtime) "
@@ -2234,18 +2232,13 @@ sub stopImportExport {
 # private
     my ($dbh, $project_id, $action, $username)  = @_;
 
-
-    #&verifyPrivate($dbh,"addImportExport");
-
     my $query = "update IMPORTEXPORT set endtime = now() where project_id = ? and action = ? and username = ?";
 
     my $sth = $dbh->prepare_cached($query);
 
-    my $rc = ($sth->execute($project_id, $action, $username) || &queryFailed($query,$project_id, $action, $username));
+    my $rc = ($sth->execute($project_id, $action, $username) || &queryFailed($query, $project_id, $action, $username));
 
     $sth->finish();
-
-    $rc = $dbh->{'mysql_insertid'} if ($rc+0);
 
     return $rc+0; # true for entry inserted; false for failure
 }
@@ -2305,9 +2298,7 @@ sub getImportExportStart {
 
     my $dbh = $this->getConnection();
 
-print STDERR "ADBPRoject::getImportExportStart about to get project id\n"; 
     my $pid = $project->getProjectID();
-print STDERR "ADBPRoject::getImportExportStart has project id $pid\n"; 
 
 		my $query  = "select username, action, starttime, endtime from IMPORTEXPORT"
 		. " where project_id = ? and starttime = "

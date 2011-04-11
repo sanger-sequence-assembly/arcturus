@@ -375,17 +375,17 @@ my $pi = 0;
 foreach my $project (@projects) {
 	my $project_id = $project->getProjectID();
 	my $projectname = $project->getProjectName();
-	print STDERR "Checking if project $pi $projectname ($project_id) already has an export running\n";
+	print STDERR "Checking if project $pi $projectname ($project_id) already has an import or export running\n";
 	my ($username, $action, $starttime, $endtime) = $project->getImportExportAlreadyRunning();
 
-	if ($endtime eq 'NULL') {            
+	unless (defined($endtime)) {            
 		$logger->severe("Project $projectname ($project_id) already has a $action running started by $username at $starttime so this import has been ABORTED");
     splice @projects,$pi,1; # remove project from list
 	}
 	else {
-		print STDERR "Marking the export start time\n";
-		#my $status = $project->markExport($adb, $project, "start");
-		my $status = $project->markExport();
+		print STDERR "Last $action was run by $username at $starttime finishing at $endtime\n";
+		print STDERR "Marking this export start time\n";
+		my $status = $project->markExport("start");
 		unless ($status) {
 			$logger->severe("Status is $status so unable to set start time for project export for $projectname");
   		$adb->disconnect();
@@ -396,17 +396,19 @@ foreach my $project (@projects) {
 }
 
 # if the projects should be locked: acquire the lock here
-print STDERR "Obtaining a lock\n";
 my $i = 0;
 # acquire the lock on the projects
 while ($lock && $i < scalar(@projects)) {
-    my $project = $projects[$i];
-    my ($status,$msg) = $project->acquireLock();
-    if ($status && $status == 2) { # success
-        $i++;
-        next;
+	print STDERR "Obtaining a lock for the $i th project ...";
+  my $project = $projects[$i];
+  my ($status,$msg) = $project->acquireLock();
+  if ($status && $status == 2) { # success
+    $i++;
+		print STDERR " lock acquired.\n";
+    next;
     }
  
+	print STDERR " skipping project\n";
 	my $projectname = $project->getProjectName();
  # failed to acquirelock on project
     $logger->severe("Failed to acquire lock on project "
@@ -537,7 +539,8 @@ foreach my $project (@projects) {
         $logger->warning("no contigs exported for project $projectname");
     }
 
-	my $status = $project->markExport($adb, $project, "stop");
+	print STDERR "Marking this export end time\n";
+	my $status = $project->markExport("stop");
 	unless ($status) {
 		$logger->severe("Status is $status so unable to set end time for project export for $projectname");
   	$adb->disconnect();
