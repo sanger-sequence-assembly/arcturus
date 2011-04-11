@@ -528,21 +528,22 @@ print STDERR "Changing access privileges on Gap database\n";
 &mySystem ("chmod ug-w ${gapname}.$version.aux");
 
 #------------------------------------------------------------------------------
-# marking project as exported (only in standard export mode)
+# marking project as exported (only in standard export mode) is now done in contig-export and new-contig-loader using ADBProject routines, not a seperate PERL script
+# TO DO:  why is this still in use, and not new-contig-export? Tags need to be checked for RT 210374
 #------------------------------------------------------------------------------
 
-unless ($scaffold || uc($projectname) ne uc($gapname) || $version ne 'A') {
+#unless ($scaffold || uc($projectname) ne uc($gapname) || $version ne 'A') {
 
-    print STDERR "Marking project $projectname as exported\n";
+#    print STDERR "Marking project $projectname as exported\n";
 
-    my $marker_script =  "${arcturus_home}/utils/project-export-marker";
-    $marker_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
-    &mySystem("$marker_script -i $instance -o $organism -p ${gapname} "
-	   ."-file $pwd/${gapname}.$version");
+#    my $marker_script =  "${arcturus_home}/utils/project-export-marker";
+#    $marker_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
+#    &mySystem("$marker_script -i $instance -o $organism -p ${gapname} "
+#	   ."-file $pwd/${gapname}.$version");
 
-    if ($?) {
-	print STDERR "!! -- No export mark written ($?) --\n";
-    }
+#    if ($?) {
+#	print STDERR "!! -- No export mark written ($?) --\n";
+#    }
 }
 
 #------------------------------------------------------------------------------
