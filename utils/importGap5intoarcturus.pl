@@ -221,27 +221,29 @@ if ($rundir && $rundir ne $pwd) {
 # check existence and accessibility of gap database to be imported
 #------------------------------------------------------------------------------
 
-unless ( -f "${gapname}.$version") {
-    print STDOUT "!! -- Project $gapname version $version"
+my $extension = ".g5d";
+
+unless ( -f "${gapname}.$version.$extension") {
+    print STDOUT "!! -- Project $gapname version $version stored in file $gapname.$version.$extension"
                      ." does not exist in $pwd --\n";
     exit 1;
 }
 
 if ( -f "${gapname}.$version.BUSY") {
     print STDOUT "!! -- Import of project $gapname aborted:"
-                     ." version $version is BUSY --\n";
+                     ." version $version is BUSY as Gap is using this database--\n";
     exit 1;
 }
 
 if ( -f "${gapname}.A.BUSY") {
     print STDOUT "!! -- Import of project $gapname WARNING:"
-                     ." version A is BUSY --\n";
+                     ." version A is BUSY as Gap is using this database--\n";
     exit 1 if $abortonwarning;
 }
 
 if ( -f "${gapname}.B.BUSY") {
     print STDOUT "!! -- Import of project $gapname aborted:"
-                     ." version B is BUSY --\n";
+                     ." version B is BUSY as Gap is using this database --\n";
     exit 1;
 }
 
