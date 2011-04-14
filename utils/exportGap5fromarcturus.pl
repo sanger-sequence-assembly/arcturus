@@ -242,9 +242,11 @@ if ( -f "${gap5name}.$version.BUSY") {
 # backup working version (zero)
 #------------------------------------------------------------------------------
 
-my $backup_db = $gap5name . '.' . BACKUP_VERSION;
+my $extension = ".g5d";
+
+my $backup_db = $gap5name . '.' . BACKUP_VERSION . $extension;
 my $backup_busy_file = $backup_db . '.BUSY';
-my $backup_aux_file = $backup_db . '.aux';
+my $backup_aux_file = $backup_db . '.aux' .$extension;
 
 my $working_db = $gap5name . '.' . WORKING_VERSION;
 my $working_busy_file = $working_db . '.BUSY';
@@ -384,9 +386,9 @@ unless ($? == 0) {
 
 print STDERR "Changing access provileges on Gap5 database\n";
 
-&mySystem ("chmod ug-w ${gap5name}.$version");
+&mySystem ("chmod ug-w ${gap5name}.$version.$extension");
 
-&mySystem ("chmod ug-w ${gap5name}.$version.aux");
+&mySystem ("chmod ug-w ${gap5name}.$version.aux.$extension");
 
 #------------------------------------------------------------------------------
 # marking project as exported (only in standard export mode)
