@@ -379,7 +379,7 @@ foreach my $project (@projects) {
 	my ($username, $action, $starttime, $endtime) = $project->getImportExportAlreadyRunning();
 
 	unless (defined($endtime)) {            
-		$logger->severe("Project $projectname ($project_id) already has a $action running started by $username at $starttime so this import has been ABORTED");
+		$logger->severe("Project $projectname ($project_id) already has a $action running started by $username at $starttime so this export has been ABORTED");
     splice @projects,$pi,1; # remove project from list
 	}
 	else {
@@ -540,7 +540,7 @@ foreach my $project (@projects) {
     }
 
 	print STDERR "Marking this export end time\n";
-	my $status = $project->markExport("stop");
+	my $status = $project->markExport("end");
 	unless ($status) {
 		$logger->severe("Status is $status so unable to set end time for project export for $projectname");
   	$adb->disconnect();

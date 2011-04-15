@@ -544,7 +544,7 @@ print STDERR "Changing access privileges on Gap database\n";
 #    if ($?) {
 #	print STDERR "!! -- No export mark written ($?) --\n";
 #    }
-}
+#}
 
 #------------------------------------------------------------------------------
 # transfer the project lock to the project owner

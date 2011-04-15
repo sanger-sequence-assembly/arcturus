@@ -2171,7 +2171,7 @@ sub putImportMarkForProject {
                                $project->getProjectID(),
                                'import',
                                $this->getArcturusUser(),
-                               $project->getGap4Name() || 'not specified');
+                  						 $project->getDirectory() || 'not specified');
 		}
 		else {
     	$id = &stopImportExport ($this->getConnection(),
