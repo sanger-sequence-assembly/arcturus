@@ -46,7 +46,7 @@ my $url = "DBI:mysql:$dbname;host=$host;port=$port";
 
 my $dbh = DBI->connect($url, $username, $password, { RaiseError => 1 , PrintError => 0});
 
-my $query = "select r.readname, g.rstart, s.seqlen,  r.strand, c.contig_id, g.cstart from SEQUENCE s, SEQ2READ q, MAPPING m, READINFO r, CURRENTCONTIGS c,  SEGMENT g where g.mapping_id = m.mapping_id and m.mapping_id = g.mapping_id and m.seq_id = q.seq_id and s.seq_id = q.seq_id and q.read_id = r.read_id and m.contig_id = c.contig_id  order by c.contig_id, g.cstart, g.rstart";
+my $query = "select r.readname, min(t.rstart), sum(t.length),  r.strand, c.contig_id, min(t.cstart) from SEQUENCE s, SEQ2READ  q, MAPPING m, SEGMENT t, READINFO r, CURRENTCONTIGS c where  m.mapping_id = t.mapping_id and m.seq_id = q.seq_id and s.seq_id = q.seq_id and q.read_id = r.read_id and m.contig_id = c.contig_id  and c.contig_id = 57699 group by t.mapping_id order by c.contig_id, m.cstart";
     
 my $contigreads = $dbh->selectall_arrayref($query) || die "Cannot run query $query: $DBI::errstr";
     
