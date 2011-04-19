@@ -2164,14 +2164,16 @@ sub putImportMarkForProject {
 
 		my $id;
 
-    &verifyParameter($project,'putImportForProject');
+    &verifyParameter($project,'putImportForProject') ;
+		my $projectname = "not defined";
+		$projectname = "$project->getDirectory()/$project->getProjectName().0";
 
 		if ($action eq "start") {
     	$id = &startImportExport ($this->getConnection(),
                                $project->getProjectID(),
                                'import',
                                $this->getArcturusUser(),
-                  						 $project->getDirectory() || 'not specified');
+                  						 $projectname);
 		}
 		else {
     	$id = &stopImportExport ($this->getConnection(),
@@ -2192,13 +2194,15 @@ sub putExportMarkForProject {
 		my $action = shift;
 
     &verifyParameter($project,'putExportForProject');
+		my $projectname = "not defined";
+		$projectname = "$project->getDirectory()/$project->getProjectName().A";
 
 		if ($action eq "start") {
     	return &startImportExport ($this->getConnection(),
                              $project->getProjectID(),
                              'export',
                              $this->getArcturusUser(),
-                  					$project->getDirectory() || 'not specified');
+                  					 $projectname);
 		}
 		else {
     	return &stopImportExport ($this->getConnection(),
