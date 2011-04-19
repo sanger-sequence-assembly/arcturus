@@ -46,7 +46,7 @@ my $url = "DBI:mysql:$dbname;host=$host;port=$port";
 
 my $dbh = DBI->connect($url, $username, $password, { RaiseError => 1 , PrintError => 0});
 
-my $query = "select r.readname, g.rstart, s.seqlen,  r.strand, c.gap4name, g.cstart from SEQUENCE s, SEQ2READ q, MAPPING m, READINFO r, CURRENTCONTIGS c,  SEGMENT g where g.mapping_id = m.mapping_id and m.mapping_id = g.mapping_id and m.seq_id = q.seq_id and s.seq_id = q.seq_id and q.read_id = r.read_id and m.contig_id = c.contig_id  order by c.gap4name, g.cstart, g.rstart";
+my $query = "select r.readname, g.rstart, s.seqlen,  r.strand, c.contig_id, g.cstart from SEQUENCE s, SEQ2READ q, MAPPING m, READINFO r, CURRENTCONTIGS c,  SEGMENT g where g.mapping_id = m.mapping_id and m.mapping_id = g.mapping_id and m.seq_id = q.seq_id and s.seq_id = q.seq_id and q.read_id = r.read_id and m.contig_id = c.contig_id  order by c.contig_id, g.cstart, g.rstart";
     
 my $contigreads = $dbh->selectall_arrayref($query) || die "Cannot run query $query: $DBI::errstr";
     
@@ -63,13 +63,13 @@ my $contigreads = $dbh->selectall_arrayref($query) || die "Cannot run query $que
 # merged_contig1 * 2992 *
 #
 # column 1: a star symbol
-# column 2: read name									r.readname
-# column 3: the first trimmed position of the read			g.rstart
-# column 4: the length of the trimmed read					s.seqlen
+# column 2: read name																						r.readname
+# column 3: the first trimmed position of the read							g.rstart
+# column 4: the length of the trimmed read											s.seqlen
 # column 5: orientation of the read (0 = forward, 1=reverse)  	r.strand translated to 0 and 1
-# column 6: name of the contig 							c.gap4name
+# column 6: name of the contig 																	pathogen_RATTI_contig_<c.contig_id>
 # column 7: a star symbol
-# column 8: position of the read in the contig				the nth read in the contig		
+# column 8: position of the read in the contig									g.cstart
 # column 9: a star symbol
 #
 # All separated by 1 space 
@@ -94,7 +94,7 @@ foreach my $contigread (@{$contigreads}) {
 	else {
 		print " 1 ";
 	}
-	print "@$contigread[4] * @$contigread[5] *\n";
+	print "pathogen_RATTI_contig_@$contigread[4] * @$contigread[5] *\n";
 }
 
 $dbh->disconnect();
