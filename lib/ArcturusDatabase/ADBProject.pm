@@ -2166,7 +2166,7 @@ sub putImportMarkForProject {
 
     &verifyParameter($project,'putImportForProject') ;
 		my $projectname = "not defined";
-		$projectname = "$project->getDirectory()/$project->getProjectName().0";
+		$projectname = $project->getDirectory()."/".$project->getProjectName().".0";
 
 		if ($action eq "start") {
     	$id = &startImportExport ($this->getConnection(),
@@ -2195,7 +2195,7 @@ sub putExportMarkForProject {
 
     &verifyParameter($project,'putExportForProject');
 		my $projectname = "not defined";
-		$projectname = "$project->getDirectory()/$project->getProjectName().A";
+		$projectname = $project->getDirectory()."/".$project->getProjectName().".A";
 
 		if ($action eq "start") {
     	return &startImportExport ($this->getConnection(),
