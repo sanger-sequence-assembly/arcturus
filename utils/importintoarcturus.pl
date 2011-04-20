@@ -434,6 +434,12 @@ unless ($version eq "B" || $nonstandard) {
             print STDERR "!! -- Import of $gapname.$version aborted --\n";
             exit 1;
         }
+        &mySystem("rmdb $gapname $version~");
+        unless ($? == 0) {
+            print STDERR "!! -- FAILED to remove existing $gapname.$version~ ($?) --\n"; 
+            print STDERR "!! -- Import of $gapname.$version aborted --\n";
+            exit 1;
+        }
     }
     &mySystem("cpdb $gapname $version $gapname B");
     unless ($? == 0) {
@@ -442,7 +448,15 @@ unless ($version eq "B" || $nonstandard) {
             print STDERR "!! -- Import of $gapname.$version aborted --\n";
             exit 1;
         }
-    }       
+		}
+		&mySystem ("cpdb $gapname $version $gapname $version~");
+		unless ($? == 0) {
+			print STDERR "!! -- WARNING: failed to back up $gapname.$version to $gapname.$version~ ($?    ) --\n";
+    	if ($abortonwarning) {
+        print STDERR "!! -- Import of $gapname.$version aborted --\n";
+        exit 1;
+     	}
+		}
 }
 
 #------------------------------------------------------------------------------
@@ -526,8 +540,13 @@ $adb->disconnect();
 
 unless ($keep) {
 
-    print STDOUT "Cleaning up\n";
+		print STDOUT "Cleaning up original version $gapname.$version ($gapname.$version~ remains for your convenience)\n";
+		     system ("rmdb $gapname $version");
+		     unless ($? == 0) {
+		        print STDERR "!! -- WARNING: failed to remove $gapname.$version ($?) --\n";
+		}
 
+    print STDOUT "Cleaning up temporary files in $tmpdir\n";
     &mySystem("rm -r -f $tmpdir");
 }
 

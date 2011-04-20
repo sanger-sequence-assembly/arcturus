@@ -541,6 +541,28 @@ unless ($projectinheritance{$pinherit}) {
     exit 0;
 }
 
+#-----------------------------------------------------------------------------
+# check that there is not an export or import already running for this project
+#-----------------------------------------------------------------------------
+print STDERR "Checking if project  $pidentifier already has an import or export running    \n";
+
+my ($username, $action, $starttime, $endtime) = $project->getImportExportAlreadyRunning();
+
+unless (defined($endtime)) {
+	$logger->error("Project $pidentifier already has a $action running started by $username at $starttime so this import has been ABORTED");
+  $adb->disconnect();
+  exit 1;
+}
+else {
+	print STDERR "Marking this import start time\n";
+	my $status = $project->markImport("start");
+	unless ($status) {
+		$logger->error("Unable to set start time for project $pidentifier  by $username at $starttime so this import has been ABORTED");
+  	$adb->disconnect();
+  	exit 1;
+	}
+}
+
 #----------------------------------------------------------------
 # acquire a lock on the project
 #----------------------------------------------------------------
@@ -754,7 +776,7 @@ if ($frugal) { # this whole block should go to a contig "factory"
         # check that the read is not already in another project
             &checkprojectforread($objectname, $pidentifier);
 
-            if ($rejectreadname && $objectname =~ /$rejectreadname/) {
+            if (defined($rejectreadname) && $objectname =~ /$rejectreadname/) {
 		$logger->warning("read $objectname was rejected");
                 next;
 	    }
@@ -829,9 +851,15 @@ if ($frugal) { # this whole block should go to a contig "factory"
         }
     }
     else {
-        $logger->warning("CAF file $caffilename has no reads");
-	$adb->disconnect();
-	exit 1;
+        $logger->warning("Arcturus import of $gap4dbname NOT STARTED as CAF file $caffilename has no reads");
+			$adb->disconnect();
+			print STDERR "Marking this import end time\n";
+			my $status = $project->markImport("end");
+
+			unless ($status) {
+				$logger->error("Unable to set end time for import of project $pidentifier  by $username");
+			}
+			exit 1;
     }
 
     @contiginventory = @contignames;
@@ -845,6 +873,13 @@ if ($frugal) { # this whole block should go to a contig "factory"
 		my $projectreadmessage = &printprojectreadhash(%projectreadhash);
 		$logger->severe($projectreadmessage);
 		my $subject = "Arcturus import of $gap4dbname NOT STARTED as reads already exist elsewhere in  $organism in $instance";
+		print STDERR "Marking this import end time\n";
+		my $status = $project->markImport("end");
+
+		unless ($status) {
+			$logger->error("Unable to set end time for import of project $pidentifier  by $username");
+		}
+
 		&sendMessage($user, $subject, $projectreadmessage); 
 		$adb->disconnect();
 		exit 1;
@@ -1208,7 +1243,7 @@ print STDOUT " end no frugal scan\n";
 
            }
 #$logger->monitor("memory usage after loading contig ".$contig->getContigName(),memory=>1);
-        } # END while contig KATE
+        } # END while contig 
 
         elsif ($contigtest || $loadcontigtags || $testcontigtags) {
 
@@ -1361,6 +1396,13 @@ unless ($lockstatusfound && $autolockmode) {
 # in autolock: the project was not locked before; return to this state
 # not in autolock: always unlock to project after input is finished
     $project->releaseLock() || $logger->severe("could not release lock");
+}
+
+print STDERR "Marking this import end time\n";
+my $status = $project->markImport("end");
+
+unless ($status) {
+		$logger->error("Unable to set end time for import of project $pidentifier  by $username");
 }
 
 $adb->disconnect();
