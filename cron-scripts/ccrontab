@@ -1,9 +1,11 @@
 ARC_CRON=/software/arcturus/cron-scripts
-00 08,10,12,14,16,18 * * 1,2,3,4,5 ${ARC_CRON}/readloader.csh >> ${HOME}/readloader/readloader.log 2>&1
+00 07,19 * * 1,2,3,4,5 ${ARC_CRON}/readloader.csh >> ${HOME}/readloader/readloader.log 2>&1
+#00 08,10,12,14,16,18 * * 1,2,3,4,5 ${ARC_CRON}/readloader.csh >> ${HOME}/readloader/readloader.log 2>&1
 00 01 * * 1,2,3,4,5 ${ARC_CRON}/make-web-reports.csh >> ${HOME}/web-reports.log 2>&1
 00 04 * * 1,2,3,4,5 ${ARC_CRON}/scaffolder.sh >> ${HOME}/scaffolder.log 2>&1
-05 04 * * 1,2,3,4,5 ${ARC_CRON}/build-active-organism-list.sh mcs6 30 >> ${HOME}/build-list.log 2>&1
-10 04 * * 1,2,3,4,5 ${ARC_CRON}/build-active-organism-list.sh mcs4a 30 >> ${HOME}/build-list.log 2>&1
-15 04 * * 1,2,3,4,5 ${ARC_CRON}/consistency-checks.csh hlmp >> ${HOME}/consistency-checks.log 2>&1
-17 04 * * 1,2,3,4,5 ${ARC_CRON}/consistency-checks.csh arcp >> ${HOME}/consistency-checks.log 2>&1
-19 04 * * 1,2,3,4,5 ${ARC_CRON}/consistency-checks.csh zebp >> ${HOME}/consistency-checks.log 2>&1
+05 04 * * 1,2,3,4,5 ${ARC_CRON}/build-active-organism-list.sh mcs6 1 >> ${HOME}/build-list.log 2>&1
+#10 04 * * 1,2,3,4,5 ${ARC_CRON}/build-active-organism-list.sh mcs8 1 >> ${HOME}/build-list.log 2>&1
+15 04 * * 1,2,3,4,5 ${ARC_CRON}/consistency-checks.csh pathogen >> ${HOME}/consistency-checks.log 2>&1
+20 04 * * 1,2,3,4,5 ${ARC_CRON}/consistency-checks.csh mysql >> ${HOME}/consistency-checks.log 2>&1
+25 04 * * 1,2,3,4,5 ${ARC_CRON}/consistency-checks.csh vertebrates >> ${HOME}/consistency-checks.log 2>&1
+
