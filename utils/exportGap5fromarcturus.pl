@@ -245,7 +245,7 @@ if ( -f "${gap5name}.$version.BUSY") {
 my $extension = ".g5d";
 
 my $backup_db = $gap5name . '.' . BACKUP_VERSION . $extension;
-my $backup_busy_file = $backup_db . '.BUSY';
+my $backup_busy_file = $gap5name . '.' . BACKUP_VERSION . '.BUSY';
 my $backup_aux_file = $backup_db . '.aux' .$extension;
 
 my $working_db = $gap5name . '.' . WORKING_VERSION;
