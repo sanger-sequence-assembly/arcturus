@@ -128,6 +128,7 @@ elsif (($since ne "") && ($until ne "")) {
 		while ($statsdate ne $until) { 
 			$duh->execute() or &queryFailed("Cannot update the time_intervals table");
 			$dqh->execute() or &queryFailed("Cannot find the maximum date");
+
 			($statsdate, $tempdate) = $dqh->fetchrow_array();
 			#	print STDERR "Adding $statsdate to list of dates\n";
   		push @datelist, $statsdate;
@@ -182,6 +183,7 @@ my $next_gen_read_update = "update ORGANISM_HISTORY
 set next_gen_reads = total_reads - asped_reads
 where statsdate = ?";
 my $nsth = $dbh->prepare_cached($next_gen_read_update);
+
 foreach my $date (@datelist) {
 	#print STDERR "Inserting line for $date\n";
 	my $insert_count = $isth->execute($organism, $date, $date, $date) || &queryFailed($insert_query);
@@ -215,7 +217,7 @@ sub checkFreeReadChange {
   my $date = shift;
   my $threshold = shift;
 
-	#print STDERR "\tChecking for free read variation over the allowed threshold of $threshold or more reads on $date and previous date\n";
+	#print STDERR "\tChecking for free read variation over the allowed threshold of $threshold or more reads on $date and previous date\n including consensus reads";
 
 	# get the free_reads for stats_day
 	my $statsday_query = "select statsdate, total_reads, free_reads, asped_reads 
@@ -240,6 +242,9 @@ sub checkFreeReadChange {
 
 	my $csth = $dbh->prepare_cached($contig_query);
 
+	my $consensus_query = "select count(*) from CONSENSUS where date(updated) = ? or date(updated) = ?";
+	my $cqh = $dbh->prepare($consensus_query);
+
 	my $lone_contig_ret = $lsth->execute($date, $date, $date, $date) || &queryFailed($lone_contig_query);
 	my $lone_contig_count = 0;
 	$lone_contig_count = $lsth->fetchrow_array();
@@ -254,7 +259,7 @@ sub checkFreeReadChange {
 		$user = "kt6";
   }
 	else {
-		#$user = "kt6"; uncomment me to try out tests on LIVE whilst avoiding emailing the users
+		#$user = "kt6"; # uncomment me to try out tests on LIVE whilst avoiding emailing the users
 		$user = "freeread";
 	}
 
@@ -271,16 +276,21 @@ sub checkFreeReadChange {
 		my $previous_values = $psth->fetchall_arrayref();
 
 		foreach my $previous_value (@$previous_values) {
+
 			my $previous_date = @$previous_value[0];
+
+			my $consensus_reads = 0;
+			my $consensus_count =	$cqh->execute($previous_date, $statsdate) or &queryFailed($consensus_query);
+			$consensus_reads = $cqh->fetchrow_array();
+
 			my $total_reads_previous_day = @$previous_value[1];
 			my $free_reads_previous_day = @$previous_value[2];
 			my $asped_reads_previous_day = @$previous_value[3];
 
-			print STDERR "and $previous_date\n";
+			print STDERR "and $previous_date (discounting $consensus_reads consensus reads)\n";
 
-			my $free_read_difference =  $free_reads_stats_day - $free_reads_previous_day;
-
- 			#my $free_read_difference =  abs($free_reads_previous_day - $free_reads_stats_day);
+			my $temp_free_read_difference =  $free_reads_stats_day - $free_reads_previous_day;
+			my $free_read_difference =  $temp_free_read_difference - $consensus_reads;
 
  			if ($free_read_difference >= $threshold) {
 
@@ -296,23 +306,27 @@ sub checkFreeReadChange {
  				$message .= "\n $statsdate\n";
 				$message .= "\t total reads = $total_reads_stats_day\n";
 				$message .= "\t asped reads = $asped_reads_stats_day\n";
-				$message .= "\t free reads = $free_reads_stats_day\n";
-				$message .= "\t contigs with one read = $lone_contig_count\n\n" ;
+				$message .= "\t free reads = $free_reads_stats_day\n\n";
+				$message .= "\t consensus reads  for both days = $consensus_reads\n\n";
+				$message .= "\t contigs with one read = $lone_contig_count\n" ;
 				$message .= "The following contigs were created or updated on $previous_date and $statsdate:\n\n";
+				$message .= "contig_id\tgap4name\t\t\t\tlength\tnreads\tproject_id\tnewreads\tcover\torigin\t\tcreator\tcreated\tupdated\n";
 
 				my $contig_count = $csth->execute($date, $date, $date,$date) || &queryFailed($contig_query);
 				my $contigs = $csth->fetchall_arrayref();
-				$message .= "contig_id\tgap4name\t\t\t\tlength\tnreads\tproject_id\tnewreads\tcover\torigin\t\tcreator\tcreated\tupdated\n";
 				foreach my $contig (@$contigs) {
-					$message .= "@$contig[0]\t\t@$contig[1]\t\t\t@$contig[2]\t@$contig[3]\t@$contig[4]\t\t@$contig[5]\t@$contig[6]\t@$contig[7]\t@$contig[8]\t@$contig[9]\t\t@$contig[10]\n";
+					$message .= "@$contig[0]\t\t@$contig[1]\t\t\t@$contig[2]\t@$contig[3]\t";
+					$message .= "@$contig[4]\t\t@$contig[5]\t@$contig[6]\t@$contig[7]\t";
+					$message .= "@$contig[8]\t@$contig[9]\t\t@$contig[10]\n";
 				}
 				$message .= "End of list of contigs created or updated on $previous_date and $statsdate.\n\n";
 
-				&sendMessage($user, $message, $instance, $organism) if $message;
+				&sendMessage($user, $message, $instance, $organism) if $message; #comment me out to avoid raising a Help Desk ticket when testing on live data
 				print STDERR $message;
 			}
 		}# end foreach previous_values
 	}# end foreach statsday_values
+	$cqh->finish();
 	$dsth->finish();
 	$psth->finish();
 }
