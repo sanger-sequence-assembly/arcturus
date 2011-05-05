@@ -378,20 +378,37 @@ foreach my $project (@projects) {
 	print STDERR "Checking if project $pi $projectname ($project_id) already has an import or export running\n";
 	my ($username, $action, $starttime, $endtime) = $project->getImportExportAlreadyRunning();
 
-	unless (defined($endtime)) {            
-		$logger->severe("Project $projectname ($project_id) already has a $action running started by $username at $starttime so this export has been ABORTED");
-    splice @projects,$pi,1; # remove project from list
+ 	my $msg = "";
+	my $continue = 0;
+
+	if (not(defined($starttime)) && not(defined($endtime))){
+			$msg = "This project has never been exported before\n";
+			$continue = 1;
+	}
+	elsif (defined($starttime) && not(defined($endtime))) {
+			$msg =  "Project $projectname ($project_id) already has a $action running ";
+			$msg .= "started by $username at $starttime so this export has been ABORTED\n";
+	}
+	elsif (defined($starttime) && defined($endtime)){
+			$msg = "Last $action was run by $username at $starttime finishing at $endtime\n";
+			$continue = 1;
+	}
+
+	if ($continue == 0) {
+			$logger->severe($msg);
+    	splice @projects,$pi,1; # remove project from list
 	}
 	else {
-		print STDERR "Last $action was run by $username at $starttime finishing at $endtime\n";
+		print STDERR $msg;
 		print STDERR "Marking this export start time\n";
 		my $status = $project->markExport("start");
 		unless ($status) {
 			$logger->severe("Status is $status so unable to set start time for project export for $projectname");
-  		$adb->disconnect();
-  		exit 1;
-		}
+ 			$adb->disconnect();
+		exit 1;
+		}	
 	}
+
 	$pi++;
 }
 
