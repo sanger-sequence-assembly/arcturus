@@ -15,13 +15,22 @@ set OPTIONS="-instance pathogen -source TraceServer -minreadid auto -info"
 set TODAY=`date '+%Y%m%d'`
 set LOGFOLDER=${LOGFOLDER}/${TODAY}
 
+if ( ! $?ACTIVE_ORGANISMS_LIST ) then
+    set ACTIVE_ORGANISMS_LIST=${HOME}/active-organisms.list
+endif
+
+if ( ! -f $ACTIVE_ORGANISMS_LIST ) then
+    echo Cannot find active organisms list file $ACTIVE_ORGANISMS_LIST
+    exit 1
+endif
+
 if ( ! -e ${LOGFOLDER} ) then
   mkdir ${LOGFOLDER}
 endif
 
-foreach ORG (`cat ~/active-organisms.list`)
+foreach ORG (`cat ${ACTIVE_ORGANISMS_LIST}`)
   set LOGNAME=`date +'%H%M'`
   set LOGFILE=${LOGFOLDER}/${LOGNAME}-${ORG}.out
-  set PARAMS=`echo $ORG | awk -F : '{org=$1; group= (NF>1) ? $2 : $1; printf "-organism %s -group %s",org,group}'`
+  set PARAMS="-organism $ORG"
   ${READLOADER} ${OPTIONS} ${PARAMS} >& ${LOGFILE}
 end

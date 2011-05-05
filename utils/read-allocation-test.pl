@@ -229,7 +229,7 @@ if ($lockenabled) {
 
 undef %options;
 
-$message = "multiply allocated reads found";
+$message = "This is to let you know that multiply allocated reads were found ";
 
 if ($workproject) { 
 # a (work) project is specified 
@@ -247,6 +247,8 @@ if ($betweenproject) {
     $options{betweenprojects} = 1;
     $message .= ", tested between projects";
 }
+
+$message .= "\n\nThese reads have been put into the PROBLEMS project to avoid making your project inconsistent.\n\n";
 
 $logger->warning("Testing consistency of read allocations ... ");
 

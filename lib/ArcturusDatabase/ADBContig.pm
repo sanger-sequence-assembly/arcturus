@@ -20,6 +20,8 @@ our @EXPORT = qw(getCurrentContigs); # DEPRECATE when view can be used
 
 use ArcturusDatabase::ADBRoot qw(queryFailed);
 
+use constant RETRY_IN_SECS => 60;
+
 #-----------------------------------------------------------------------------
 # constructor and initialisation via constructor of superclass
 #-----------------------------------------------------------------------------
@@ -577,7 +579,6 @@ sub putContig {
 # okay, the contig is new; find out if it is connected to existing contigs
 # search based on the read_ids (not seq_id) in (initial) current contigs  
 # NOTE: this may be done outside this method .... ?
-
     $message .= "$contigname is new ";
     if ($this->getParentContigsForContig($contig,usereads=>1)) {
         my @parentids = $contig->getParentContigIDs();
@@ -653,58 +654,81 @@ sub putContig {
 
     eval {
 	$dbh->begin_work;
+	$contigid = &putMetaDataForContig($dbh,$log,$contig,$checksum,$user_id,$problems_project_id);
 
-	$contigid = &putMetaDataForContig($dbh,$contig,$checksum,$user_id,$problems_project_id);
+	unless ($contigid > 0) {
+	    $log->severe("putContig failed to insert metadata for $contigname");
+	    die "failed to insert metadata for $contigname\n\n";
+	    #$message = "failed to insert metadata for $contigname";
+	    #return (0, $message);
+	}
 
 	$this->{lastinsertedcontigid} = $contigid;
-
-	return 0, "Failed to insert metadata for $contigname" unless $contigid;
-
 	$contig->setContigID($contigid);
 
 # then load the overall mappings (and put the mapping ID's in the instances)
 
-	die "Failed to insert read-to-contig mappings for $contigname"
-	    unless &putMappingsForContig($dbh,$contig,$log,type=>'read');
-
+	unless (&putMappingsForContig($dbh,$contig,$log,type=>'read') ) {
+	    $log->severe("putContig failed to insert contig-to-read mappings for $contigname: rolling back database");
+	    die "failed to insert contig-to-read mappings for $contigname\n\n";
+	    #$message = "failed to insert contig-to-read mappings for $contigname";
+	    #return (0, $message);
+	}
+	
 # the CONTIG2CONTIG mappings
+	
+	unless (&putMappingsForContig($dbh,$contig,$log,type=>'contig')) {
+	    $log->severe("failed to insert contig-to-contig mappings for $contigname: rolling back database");
 
-	die "Failed to insert contig-to-contig mappings for $contigname"
-	    unless &putMappingsForContig($dbh,$contig,$log,type=>'contig');
+	    # Dump the mappings for inspection
+	    my $mappings = $contig->getContigToContigMappings();
 
+	    foreach my $mapping (@{$mappings}) {
+		$log->severe("\n\nMAPPING: parent_id " . $mapping->getSequenceID() . "\n" . $mapping->writeToString());
+	    }
+
+	    die "failed to insert contig-to-contig mappings for $contigname\n\n";
+	    #$message = "failed to insert contig-to-contig mappings for $contigname";
+	    #return (0, $message);
+	}
+	
 # and contig tags?
-
+	
 	my %ctoptions = (notestexisting => 1); # it's a new contig
+	
 # TODO ? add tagtype selection ? register number opf tags added in Project object
-	die "Failed to insert tags for $contigname"
-	    unless $this->putTagsForContig($contig,%ctoptions);
-
+	unless ($this->putTagsForContig($contig,%ctoptions) ){
+	    $log->severe("failed to insert tags for $contigname: rolling back database");
+	    die "failed to insert tags for $contigname\n\n";
+	    #$message = "Failed to insert tags for $contigname";
+	    #return 0, $message;
+	}
+	
 # update the age counter in C2CMAPPING table (at very end of this insert)
-
+	
 	$this->buildHistoryTreeForContig($contigid);
-
+	
 # and assign the contig to the specified project (if possible)
-
+	
 	$message .= "; ".$this->allocateContigToProject($contig,$project) if $project;
-
+	
 	$dbh->commit;
     };
-
+    
     if ($@) {
-	$message = "Failed to store contig in database: " . $@;
-
+	$message = "putContig failed to store contig $contigname: " . $@;
+	
 	eval {
 	    $dbh->rollback;
 	};
 	if ($@) {
 	    $message .= "; ***** ROLLBACK FAILED: " . $@ . " *****";
 	}
-
-        $contig->setContigID(0);
-
-        $contigid = 0;
+	
+	$contig->setContigID(0);
+	$contigid = 0;
     }
-
+    
     $dbh->{RaiseError} = 0;
 
     return $contigid, $message;
@@ -916,6 +940,7 @@ sub allocateContigToProject {
 sub putMetaDataForContig {
 # private method only
     my $dbh = shift; # database handle
+		my $log = shift;
     my $contig = shift; # Contig instance
     my $readhash = shift;
     my $creator = shift;
@@ -927,6 +952,41 @@ sub putMetaDataForContig {
               . "(gap4name,length,ncntgs,nreads,newreads,cover,creator"
               . ",origin,created,readnamehash,project_id) "
               . "VALUES (?,?,?,?,?,?,?,?,now(),?,?)";
+
+	my $retry_in_secs = RETRY_IN_SECS;
+	my $retry_counter = 0.25;
+	my $counter = 1;
+	my $max_retries = 4;
+
+  my $contigid = $contig->getContigID();
+  my $contigname = $contig->getGap4Name();
+ 	my $contig_savepoint = "BeforeMetaData".$contigid;
+ 
+##############################
+# make the savepoint 
+##############################
+
+ 	$log->debug("Creating savepoint $contig_savepoint");
+
+	eval {
+		my $savepoint_handle = $dbh->prepare("SAVEPOINT ".$contig_savepoint);
+    $savepoint_handle->execute();
+		#$dbh->savepoint($contig_savepoint);
+  };
+	if ($@) {
+	 	$log->warning("Failed to create savepoint $contig_savepoint: ".$DBI::errstr);
+	}
+
+	############################
+	# start the retry 
+	###########################
+
+  until ($counter > ($max_retries )) {
+
+	#####################################
+	# start the eval block
+	#####################################
+		eval {
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -944,10 +1004,49 @@ sub putMetaDataForContig {
     my $rc = $sth->execute(@data) || &queryFailed($query,@data); 
 
     $sth->finish();
+		};
 
-    return 0 unless ($rc == 1);
-    
-    return $dbh->{'mysql_insertid'}; # the contig_id
+		if ($@) {
+			if ($DBI::err == 1205) {
+				$log->severe("Some other process has locked CONTIG table so unable to insert metadata");
+				$log->special("Some other process has locked CONTIG table so unable to insert metadata");
+  			$retry_counter = $retry_counter * 4;
+	 			$retry_in_secs = $retry_in_secs * $retry_counter;
+	 			if ($counter < $max_retries) {
+	   			$log->warning("\tContig $contigname is locked by another process so wait for $retry_in_secs seconds");
+	   			sleep($retry_in_secs);
+	 				$counter++;
+				}
+				else { #retry has ended so report the timeout
+					$log->severe("\tStatement(s) failed $counter times as some other process has locked contig $contigname");
+  				$log->error("\tRolling back to savepoint $contig_savepoint");
+					eval {
+						my $savepoint_handle = $dbh->do("ROLLBACK TO SAVEPOINT ".$contig_savepoint);
+		  			$savepoint_handle = $dbh->do("RELEASE SAVEPOINT ".$contig_savepoint);
+					};
+					if ($@) {
+  					$log->severe("Failed to rollback to savepoint $contig_savepoint: ".$DBI::errstr);
+					}
+			  	return 0;
+				}
+			}
+			else { # some other database error has occurred
+    		$log->severe("Error occurred preparing or executing the insert: \n".$DBI::errstr);
+  			$log->special("\tRolling back to savepoint $contig_savepoint because $DBI::errstr");
+				eval {
+					my $savepoint_handle = $dbh->do("ROLLBACK TO SAVEPOINT ".$contig_savepoint);
+		  		$savepoint_handle = $dbh->do("RELEASE SAVEPOINT ".$contig_savepoint);
+				};
+				if ($@) {
+  				$log->severe("Failed to rollback to savepoint $contig_savepoint: ".$DBI::errstr);
+				}
+			  return 0;
+			}
+		}
+		else {
+    	return $dbh->{'mysql_insertid'}; # the contig_id
+		}
+} # end retry
 }
 
 #----------------------------------------
@@ -1243,28 +1342,55 @@ sub getContigMappingsForContig {
     return $generation;
 }
 
+#------------------------------------------------------------------------------
+# eval version of putMappingsForContig
+# -----------------------------------------------------------------------------
+
 sub putMappingsForContig {
+# if $option = "read" there can be several million rows spread across a number of mappings
+# if option is "contig" then there are tens of inserts instead.
+# the savepoint is created and released within putMappingsForContig
+# the savepoint is within an eval tried four times, with a 1,4,16 minute backoff
+# If all four tries fail, then an RT ticket is raised.
+
 # private method, write mapping contents to (C2C)MAPPING & (C2C)SEGMENT tables
+
     my $dbh = shift; # database handle
     my $contig = shift;
     my $log = shift;
     my %option = @_;
 
-    &verifyPrivate($dbh,"putMappingsForContig");
+	my $retry_in_secs = RETRY_IN_SECS;
+	my $retry_counter = 0.25;
+	my $counter = 1;
+	my $max_retries = 4;
+ 
+    $log->setPrefix("putMappingsForContig $option{type}");
 
+    my $contigid = $contig->getContigID();
+    my $contigname = $contig->getGap4Name();
+ 		my $contig_savepoint = "BeforeMapping".$option{type}.$contigid;
+
+	  $dbh->{RaiseError} = 1;
+	  eval {
+    	&verifyPrivate($dbh,"putMappingsForContig");
+    };
+		if ($@) {
+      $log->severe("Unable to verify mappings: ".$DBI::errstr);
+		}
 # this is a dual-purpose method writing mappings to the MAPPING and SEGMENT
 # tables (read-to-contig mappings) or the C2CMAPPING and CSCSEGMENT tables 
 # (contig-to-contig mapping) depending on the parameters option specified
 
 # this method inserts mapping segments in blocks of 100
-           
-    $log->setPrefix("putMappingsForContig $option{type}");
-
 # define the queries and the mapping source
 
     my $mquery; # for insert on the (C2C)MAPPING table 
     my $squery; # for insert on the (C2C)SEGMENT table
+    my $accumulatedQuery;
     my $mappings; # for the array of Mapping instances
+		my $sth; # the statement handle, re-used for several queries
+		my @data; # for the data array
 
     if ($option{type} eq "read") {
 # for read-to-contig mappings
@@ -1279,6 +1405,7 @@ sub putMappingsForContig {
 # for contig-to-contig mappings
         $mappings = $contig->getContigToContigMappings();
         return 1 unless $mappings; # MAY have contig-to-contig mappings
+
         $mquery = "insert into C2CMAPPING " .
 	          "(contig_id,parent_id,cstart,cfinish,direction) ";
         $squery = "insert into C2CSEGMENT " .
@@ -1287,58 +1414,73 @@ sub putMappingsForContig {
     else {
         $option{type} = 'missing' unless $option{type};
         $log->severe("Missing or invalid 'type' parameter $option{type}");
-        return 0; # or die ?
+        return 0; 
     }
 
     $mquery .= "values (?,?,?,?,?)";
 
-    my $sth = $dbh->prepare_cached($mquery);
+##############################
+# make the savepoint 
+##############################
 
-    my $contigid = $contig->getContigID();
+ 	$log->debug("Creating savepoint $contig_savepoint");
+
+	eval {
+		my $savepoint_handle = $dbh->prepare("SAVEPOINT ".$contig_savepoint);
+    $savepoint_handle->execute();
+		#$dbh->savepoint($contig_savepoint);
+  };
+	if ($@) {
+	 	$log->warning("Failed to create savepoint $contig_savepoint: ".$DBI::errstr);
+	}
+
+	############################
+	# start the retry 
+	###########################
+
+  until ($counter > ($max_retries )) {
+
+	#####################################
+	# start the eval block
+	#####################################
+
+	eval {
+    $sth = $dbh->prepare_cached($mquery);
 
 # 1) the overall mapping
 
     my $mapping;
-    my $success = 1;
     foreach $mapping (@$mappings) {
 
 # optionally scan against empty mappings
 
-        unless ($mapping->hasSegments()) {
-	    next if $option{notallowemptymapping};
-	}
+    	unless ($mapping->hasSegments()) {
+	    	next if $option{notallowemptymapping};
+			}	
 
-        my ($cstart, $cfinish) = $mapping->getContigRange();
+	$mapping->removeInvalidSegments();
 
-        my @data = ($contigid,
+    	my ($cstart, $cfinish) = $mapping->getContigRange();
+
+    	@data = ($contigid,
                     $mapping->getSequenceID(),
                     $cstart,
                     $cfinish,
                     $mapping->getAlignmentDirection());
+    $sth->execute(@data);
 
-        my $rc = $sth->execute(@data) || &queryFailed($mquery,@data);
-
-        if ($rc == 1) {
-            $mapping->setMappingID($dbh->{'mysql_insertid'});
-	}
-        else {
-	    $success = 0;
-	}
-        
-    }
+    $mapping->setMappingID($dbh->{'mysql_insertid'});
     $sth->finish();
+		} # end foreach mapping
 
-    unless ($success) {
-	$log->severe("Failed to insert one or more sequence-to-contig mappings");
-        return 0;
-    }
-
+        
 # 2) the individual segments (in block mode)
 
-    my $block = 100;
-    my $accumulated = 0;
-    my $accumulatedQuery = $squery;
-    foreach my $mapping (@$mappings) {
+  my $block = 100;
+  my $accumulated = 0;
+  $accumulatedQuery = $squery;
+
+	foreach my $mapping (@$mappings) {
 # test existence of segments
         next unless $mapping->hasSegments();
 # test existence of mappingID
@@ -1351,43 +1493,96 @@ sub putMappingsForContig {
                 my $length = $segment->getSegmentLength();
                 my $cstart = $segment->getXstart();
                 my $rstart = $segment->getYstart();
+
+		next if ($cstart < 0 || $rstart < 0);
+
                 $accumulatedQuery .= "," if $accumulated++;
                 $accumulatedQuery .= "($mappingid,$cstart,$rstart,$length)";
 # dump the accumulated query if a number of inserts has been reached
 # $log->debug("Insert mapping block (mapping loop) $accumulated\n($block)");
                 if ($accumulated >= $block) {
-                    $sth = $dbh->prepare($accumulatedQuery); 
-                    my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
-                    $sth->finish();
-                    $success = 0 unless $rc;
-                    $accumulatedQuery = $squery;
-                    $accumulated = 0;
-		}
-            }
+                    	$sth = $dbh->prepare($accumulatedQuery); 
+                    	my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
+                    	$sth->finish();
+                    	$accumulatedQuery = $squery;
+                    	$accumulated = 0;
+										}
+            	} # end foreach segment
         }
         else {
-            $log->severe("Mapping ".$mapping->getMappingName().
-		        " unexpectedly has no mapping_id");
-            $success = 0;
+            die "Mapping ".$mapping->getMappingName().
+		        " unexpectedly has no mapping_id";
         }
-    }
+    } # end foreach mapping
 # dump any remaining accumulated query after the last mapping has been processed
     if ($accumulated) {
 # $log->debug("Insert mapping block (mapping loop) $accumulated\n($block)");
         $sth = $dbh->prepare($accumulatedQuery); 
         my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
         $sth->finish();
-        $success = 0 unless $rc;
     }
-
 # we now update the contig-to-contig mappings by adding the parent range
 # this is kept separate from the basic inserts because this is derived data
 # which may or may not be transparently defined, hence may be missing (undef)
 
-    &updateMappingsForContig ($dbh,$mappings) if ($option{type} eq "contig");
+   &updateMappingsForContig ($dbh,$mappings) if ($option{type} eq "contig");
 
-    return $success;
-}
+	}; 
+#####################################
+# End of the eval block
+#####################################
+
+		if ($@) {
+   		$log->warning("\tAttempt $counter for the insert statement for $option{type} mapping for contig $contigname: $@");
+			if ($DBI::err == 1205) {
+  			$retry_counter = $retry_counter * 4;
+	 			$retry_in_secs = $retry_in_secs * $retry_counter;
+	 			if ($counter < $max_retries) {
+	   			$log->warning("\tContig $contigname is locked by another process so wait for $retry_in_secs seconds");
+	   			sleep($retry_in_secs);
+	 				$counter++;
+	 			}
+				else { #retry has ended so report the timeout
+					$log->severe("\tStatement(s) failed $counter times as some other process has locked contig $contigname");
+  				$log->error("\tRolling back to savepoint $contig_savepoint");
+					eval {
+						my $savepoint_handle = $dbh->do("ROLLBACK TO SAVEPOINT ".$contig_savepoint);
+		  			$savepoint_handle = $dbh->do("RELEASE SAVEPOINT ".$contig_savepoint);
+					};
+					if ($@) {
+  					$log->severe("Failed to rollback to savepoint $contig_savepoint: ".$DBI::errstr);
+					}
+			  	return 0;
+				}
+			}
+			else { # some other database error has occurred
+    		$log->severe("Error occurred preparing or executing the insert: \n".$DBI::errstr);
+  			$log->error("\tRolling back to savepoint $contig_savepoint");
+				eval {
+					my $savepoint_handle = $dbh->do("ROLLBACK TO SAVEPOINT ".$contig_savepoint);
+		  		$savepoint_handle = $dbh->do("RELEASE SAVEPOINT ".$contig_savepoint);
+				};
+				if ($@) {
+  				$log->severe("Failed to rollback to savepoint $contig_savepoint: ".$DBI::errstr);
+				}
+			  return 0;
+			}
+		}
+		else { # the savepoint can be released here as the insert is successful
+    	$log->debug("Insert is successful so releasing savepoint for contig $contigid");
+			eval {
+				my $savepoint_handle = $dbh->do("RELEASE SAVEPOINT ".$contig_savepoint);
+			};
+			if ($@) {
+				$log->error ("Failed to release savepoint $contig_savepoint: ".$DBI::errstr);
+			}
+    	return 1;
+		}
+	} 
+#####################################
+# End of the retry
+#####################################
+} # end 
 
 sub addMappingsForContig {
 # public interface for update of contig mappings
@@ -3532,7 +3727,4 @@ sub verifyPrivate {
 	exit 1;
     }
 }
-
-#------------------------------------------------------------------------------
-
 1;

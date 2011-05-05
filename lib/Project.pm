@@ -119,8 +119,18 @@ sub markExport {
 
     my $ADB = $this->{ADB} || return undef;
 
-    return $ADB->putExportMarkForProject($this); # insert ID
+    return $ADB->putExportMarkForProject($this, @_); # insert ID
 }
+
+sub getImportExportAlreadyRunning {
+# public
+    my $this = shift;
+
+    my $ADB = $this->{ADB} || return undef;
+
+    my ($username, $action, $starttime, $endtime) = $ADB->getImportExportStart($this, @_);
+}
+
 
 #-------------------------------------------------------------------
 # comparison

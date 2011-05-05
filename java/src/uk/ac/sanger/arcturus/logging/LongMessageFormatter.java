@@ -13,8 +13,6 @@ public class LongMessageFormatter extends AbstractFormatter {
 	public String format(LogRecord record) {
 		StringBuffer sb = new StringBuffer(16384);
 		
-		sb.append("An Arcturus Java exception has occurred\n\n");
-		
 		String hostname = null;
 		
 		try {
@@ -22,6 +20,19 @@ public class LongMessageFormatter extends AbstractFormatter {
 		} catch (UnknownHostException e) {
 			hostname = "[InetAddress.getLocalHost().getHostName() failed : " + e.getMessage() + "]";
 		}
+		
+		if (record.getThrown() != null)
+			formatForException(sb, record, hostname);
+		else
+			formatForMessage(sb, record, hostname);
+				
+		sb.append(SEPARATOR);
+
+		return sb.toString();
+	}
+
+	private void formatForException(StringBuffer sb, LogRecord record, String hostname) {
+		sb.append("An Arcturus Java exception has occurred\n\n");
 		
 		sb.append("Hostname: " + hostname + "\n\n");
 		
@@ -55,11 +66,22 @@ public class LongMessageFormatter extends AbstractFormatter {
 				
 				cause = cause.getCause();
 			}
-		}
-		
-		sb.append(SEPARATOR);
-
-		return sb.toString();
+		}		
 	}
 
+	private void formatForMessage(StringBuffer sb, LogRecord record, String hostname) {
+		Date timestamp = new Date(record.getMillis());
+		
+		sb.append(timestamp);
+		sb.append(" : ");
+		sb.append(record.getSourceClassName());
+		sb.append(" : ");
+		sb.append(record.getSourceMethodName());
+		sb.append("\n");
+		
+		sb.append(record.getLevel());
+		sb.append(" : ");
+		sb.append(record.getMessage());
+		sb.append("\n");
+	}
 }

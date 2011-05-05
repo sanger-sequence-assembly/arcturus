@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.gui.scaffoldmanager;
 
 import java.io.*;
 import java.sql.*;
+import java.util.zip.InflaterInputStream;
 
 import org.xml.sax.*;
 
@@ -17,7 +18,7 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 public class ScaffoldXMLDataParser {
 	private static final String SCAFFOLD_TREE_TYPE = "scaffold";
-	private static final String SCAFFOLD_TREE_FORMAT = "text/xml";
+	private static final String COMPRESSED_FORMAT = "application/deflate"; 
 	
 	public TreeModel buildTreeModel(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		TreeModel model = null;
@@ -51,12 +52,11 @@ public class ScaffoldXMLDataParser {
 	}
 	
 	private int findIDForLatestScaffold(Connection conn) throws SQLException {
-		String query = "select id from NOTE where type = ? and format = ? order by created desc limit 1";
+		String query = "select id from NOTE where type = ? order by created desc limit 1";
 		
 		PreparedStatement pstmt = conn.prepareStatement(query);
 		
 		pstmt.setString(1, SCAFFOLD_TREE_TYPE);
-		pstmt.setString(2, SCAFFOLD_TREE_FORMAT);
 
 		ResultSet rs = pstmt.executeQuery();
 
@@ -71,7 +71,9 @@ public class ScaffoldXMLDataParser {
 	
 	private TreeModel createTreeModel(Connection conn, int id, ArcturusDatabase adb)
 		throws SQLException, ParserConfigurationException, SAXException, IOException {
-		String query = "select content from NOTE where id = ?";
+		TreeModel model = null;
+		
+		String query = "select content,format from NOTE where id = ?";
 
 		PreparedStatement pstmt = conn.prepareStatement(query);
 		
@@ -79,11 +81,18 @@ public class ScaffoldXMLDataParser {
 
 		ResultSet rs = pstmt.executeQuery();
 
-		InputStream is = rs.next() ? rs.getBinaryStream(1) : null;
+		if (rs.next()) {
+			InputStream is = rs.getBinaryStream(1);
+			String format = rs.getString(2);
+			
+			if (format != null && format.equalsIgnoreCase(COMPRESSED_FORMAT))
+				is = new InflaterInputStream(is);
 
-		TreeModel model = parseXMLStream(is, adb);
+			model = parseXMLStream(is, adb);
 
-		is.close();
+			is.close();
+		}
+		
 		rs.close();
 		pstmt.close();
 	

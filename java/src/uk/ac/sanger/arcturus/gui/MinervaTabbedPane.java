@@ -22,6 +22,7 @@ import uk.ac.sanger.arcturus.gui.readfinder.ReadFinderPanel;
 import uk.ac.sanger.arcturus.gui.scaffoldmanager.ScaffoldManagerPanel;
 import uk.ac.sanger.arcturus.gui.siblingreadfinder.SiblingReadFinderPanel;
 import uk.ac.sanger.arcturus.gui.contigfinder.ContigFinderPanel;
+import uk.ac.sanger.arcturus.gui.reportrunner.ReportRunnerPanel;
 
 public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	protected ArcturusDatabase adb;
@@ -192,6 +193,15 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 					"Check the consistency of the database",
 					KeyEvent.VK_D,
 					KeyStroke.getKeyStroke(KeyEvent.VK_D, ActionEvent.CTRL_MASK),
+					false),
+			
+			new PermanentView(
+					ReportRunnerPanel.class,
+					"Run reports about projects",
+					"Project reports",
+					"Run reports about projects",
+					KeyEvent.VK_U,
+					KeyStroke.getKeyStroke(KeyEvent.VK_U, ActionEvent.CTRL_MASK),
 					false)
 	};
 

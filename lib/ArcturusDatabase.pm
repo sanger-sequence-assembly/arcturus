@@ -74,6 +74,8 @@ sub init {
 
     return unless $this->{Connection};
 
+    $this->prepareStatements();
+
     $this->{inited} = 1;
 }
 
@@ -86,6 +88,35 @@ sub getConnection {
     }
 
     return $this->{Connection};
+}
+
+sub prepareStatements {
+    my $this = shift;
+
+    return if defined($this->{'statements'});
+
+    $this->{'statements'} = {};
+
+    my $dbh = $this->{Connection};
+
+    my $stmt = $dbh->prepare("select value from METADATA where name = ?");
+
+    $this->{'statements'}->{'getMetadata'} = $stmt;
+
+    $stmt = $dbh->prepare("select name,value from METADATA");
+
+    $this->{'statements'}->{'listMetadata'} = $stmt;
+
+    $stmt = $dbh->prepare("insert into METADATA(name, value) values (?,?) on duplicate key update value=VALUES(value)");
+
+    $this->{'statements'}->{'putMetadata'} = $stmt;
+}
+
+sub getStatement {
+    my $this = shift;
+    my $name = shift;
+
+    return $this->{'statements'}->{$name};
 }
 
 sub getInstance {
@@ -131,6 +162,10 @@ sub errorStatus {
 sub disconnect {
 # disconnect from the database
     my $this = shift;
+
+    foreach my $key (keys(%{$this->{'statements'}})) {
+	$this->{'statements'}->{$key}->finish();
+    }
 
     my $dbh = $this->{Connection};
 
@@ -784,6 +819,49 @@ sub setLogger {
 
     &verifyLogger(); # creates a default if $logger undefined
 }
+
+#-----------------------------------------------------------------------------
+# Metadata support
+#-----------------------------------------------------------------------------
+
+sub getMetadata {
+    my $this = shift;
+    my $name = shift;
+
+    if (defined($name)) {
+	my $stmt = $this->getStatement('getMetadata');
+
+	$stmt->execute($name);
+
+	my ($value) = $stmt->fetchrow_array();
+
+	return $value;
+    } else {
+	my $stmt = $this->getStatement('listMetadata');
+
+	$stmt->execute();
+
+	my $hr = {};
+
+	while (my ($name, $value) = $stmt->fetchrow_array()) {
+	    $hr->{$name} = $value;
+	}
+
+	return $hr;
+    }
+}
+
+sub putMetadata {
+    my $this = shift;
+    my $name = shift;
+    my $value = shift;
+
+    my $stmt = $this->getStatement('putMetadata');
+
+    my $rc = $stmt->execute($name, $value);
+
+    return $rc;
+}   
 
 #-----------------------------------------------------------------------------
 

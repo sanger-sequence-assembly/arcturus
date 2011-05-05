@@ -164,7 +164,23 @@ $logger->info("Database $URL opened succesfully");
 #----------------------------------------------------------------
  
 $fofn = &getNamesFromFile($fofn) if $fofn;
- 
+  
+#-----------------------------------------------------------------------------
+# check that there is not an export or import already running for this project
+#-----------------------------------------------------------------------------
+
+my $dbh = $adb->getConnection();
+my ($username, $action, $starttime, $endtime) = $project->getImportExportAlreadyRunning($dbh);
+my $projectname = $project->getProjectName();
+
+print "Checking if project $projectname already has a $action running started by $username at $starttime\n";
+
+if ($endtime eq 'NULL') {            
+	$logger->severe("Project $projectname already has a $action running started by $username at $starttime so this import has been ABORTED");
+  $adb->disconnect();
+  exit 1;
+}
+
 #----------------------------------------------------------------
 # MAIN
 #----------------------------------------------------------------
@@ -356,6 +372,14 @@ $fhDNA->close() if $fhDNA;
 
 $fhQTY->close() if $fhQTY;
 
+my $status = $project->endImportExport($dbh);
+unless ($status) {
+		$logger->severe("Unable to set end time for project $projectname  by $username ");
+  	$adb->disconnect();
+  	exit 1;
+}
+
+$
 $adb->disconnect();
 
 # TO BE DONE: message and error testing

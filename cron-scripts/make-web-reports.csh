@@ -5,17 +5,36 @@ echo ------------------------------------------------------------
 echo
 echo Making Arcturus web reports at `date` on `hostname`
 
-set ARCTURUS=/software/arcturus
-set REPORTSCRIPT=${ARCTURUS}/utils/make-web-report
-set WEBFOLDER=/nfs/WWWdev/INTWEB_docs/htdocs/Software/Arcturus/reports
-set WEBPUBLISH=/software/bin/webpublish
+if ( ! $?ARCTURUS_HOME ) then
+    set ARCTURUS_HOME=/software/arcturus
+endif
+
+if ( ! $?WEBREPORTSCRIPT ) then
+    set WEBREPORTSCRIPT=${ARCTURUS_HOME}/utils/make-web-report
+endif
+
+if ( ! $?WEBFOLDER ) then
+    set WEBFOLDER=/nfs/WWWdev/INTWEB_docs/htdocs/Software/Arcturus/reports
+endif
+
+if ( ! $?WEBPUBLISH ) then
+    set WEBPUBLISH=/software/bin/webpublish
+endif
+
+if ( ! $?ACTIVE_ORGANISMS_LIST ) then
+    set ACTIVE_ORGANISMS_LIST=${HOME}/active-organisms.list
+endif
+
+if ( ! -f $ACTIVE_ORGANISMS_LIST ) then
+    echo Cannot find active organisms list file $ACTIVE_ORGANISMS_LIST
+    exit 1
+endif
+
 set LOGFILE=reports.log
 
 cd ${WEBFOLDER}
 
-foreach ORG (`cat ~/active-organisms.list`)
-  set ORG=`echo $ORG | awk -F : '{print $1}'`
-
+foreach ORG (`cat ${ACTIVE_ORGANISMS_LIST}`)
   echo Making report for $ORG
 
   if  ( ! -d $ORG ) then
@@ -24,7 +43,7 @@ foreach ORG (`cat ~/active-organisms.list`)
 
   pushd $ORG
 
-  ${REPORTSCRIPT} -instance pathogen -organism $ORG > index.html
+  ${WEBREPORTSCRIPT} -instance pathogen -organism $ORG > index.html
 
   popd
 end

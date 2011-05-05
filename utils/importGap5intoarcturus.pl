@@ -221,29 +221,27 @@ if ($rundir && $rundir ne $pwd) {
 # check existence and accessibility of gap database to be imported
 #------------------------------------------------------------------------------
 
-my $extension = ".g5d";
-
-unless ( -f "${gapname}.$version.$extension") {
-    print STDOUT "!! -- Project $gapname version $version stored in file $gapname.$version.$extension"
+unless ( -f "${gapname}.$version") {
+    print STDOUT "!! -- Project $gapname version $version"
                      ." does not exist in $pwd --\n";
     exit 1;
 }
 
 if ( -f "${gapname}.$version.BUSY") {
     print STDOUT "!! -- Import of project $gapname aborted:"
-                     ." version $version is BUSY as Gap is using this database--\n";
+                     ." version $version is BUSY --\n";
     exit 1;
 }
 
 if ( -f "${gapname}.A.BUSY") {
     print STDOUT "!! -- Import of project $gapname WARNING:"
-                     ." version A is BUSY as Gap is using this database--\n";
+                     ." version A is BUSY --\n";
     exit 1 if $abortonwarning;
 }
 
 if ( -f "${gapname}.B.BUSY") {
     print STDOUT "!! -- Import of project $gapname aborted:"
-                     ." version B is BUSY as Gap is using this database --\n";
+                     ." version B is BUSY --\n";
     exit 1;
 }
 
@@ -332,27 +330,27 @@ unless ($version eq "B" || $nonstandard) {
                         ." version B is BUSY; backup cannot be made --\n";
             exit 1;
         }
-        system ("rmdb $gapname B");
+        &mySystem ("rmdb $gapname B");
         unless ($? == 0) {
             print STDERR "!! -- FAILED to remove existing $gapname.B ($?) --\n"; 
             print STDERR "!! -- Import of $gapname.$version aborted --\n";
             exit 1;
         }
-        system ("rmdb $gapname $version~");
+        &mySystem ("rmdb $gapname $version~");
         unless ($? == 0) {
             print STDERR "!! -- FAILED to remove existing $gapname.$version~ ($?) --\n"; 
             print STDERR "!! -- Import of $gapname.$version aborted --\n";
             exit 1;
         }
     }
-    system ("cpdb $gapname $version $gapname B");
+    &mySystem ("cpdb $gapname $version $gapname B");
     unless ($? == 0) {
         print STDERR "!! -- WARNING: failed to back up $gapname.$version ($?) --\n";
         if ($abortonwarning) {
             print STDERR "!! -- Import of $gapname.$version aborted --\n";
             exit 1;
         }
-    		system ("cpdb $gapname $version $gapname $version~");
+    		&mySystem ("cpdb $gapname $version $gapname $version~");
     		unless ($? == 0) {
         	print STDERR "!! -- WARNING: failed to back up $gapname.$version to $gapname.$version~ ($?) --\n";
         	if ($abortonwarning) {

@@ -2,6 +2,8 @@ package Mapping;
 
 use strict;
 
+use Carp;
+
 use Segment;
 
 #-------------------------------------------------------------------
@@ -1201,6 +1203,32 @@ sub getSegments {
     $this->{mySegments} = [] if !$this->{mySegments};
 
     return $this->{mySegments}; # array reference
+}
+
+sub removeInvalidSegments {
+    my $this = shift;
+
+    my $segments = $this->{mySegments};
+
+    return unless defined($segments);
+
+    my $newSegments = [];
+
+    my $dirty = 0;
+
+    foreach my $segment (@$segments) {
+	if ($segment->getXstart() > 0 && $segment->getYstart() > 0) {
+	    push @{$newSegments}, $segment;
+	} else {
+	    $dirty = 1;
+	}
+    }
+
+    if ($dirty) {
+	$this->{mySegments} = $newSegments;
+
+	undef $this->{objectrange};
+    }
 }
 
 sub setSegmentTracker {

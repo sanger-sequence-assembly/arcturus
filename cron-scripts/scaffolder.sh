@@ -1,15 +1,38 @@
 #!/bin/sh
 
-ARCTURUS=/software/arcturus
-SCAFFOLDER=${ARCTURUS}/test/scaffolder
+if [ "x${ARCTURUS_HOME}" == "x" ]
+then
+    ARCTURUS_HOME=/software/arcturus
+fi
+
+if [ "x${SCAFFOLDER}" == "x" ]
+then
+    SCAFFOLDER=${ARCTURUS_HOME}/test/scaffolder
+fi
+
 OPTIONS='-instance pathogen -out /dev/null -xml DATABASE -puclimit 15000 -shownames'
-NOTIFY_TO=arcturus-help@sanger.ac.uk
+
+if [ "x${NOTIFY_TO}" == "x" ]
+then
+    NOTIFY_TO=arcturus-help@sanger.ac.uk
+fi
+
+if [ "x$ACTIVE_ORGANISMS_LIST" == "x" ]
+then
+    ACTIVE_ORGANISMS_LIST=${HOME}/active-organisms.list
+fi
+
+if [ ! -f $ACTIVE_ORGANISMS_LIST ]
+then
+    echo Cannot find active organisms list file $ACTIVE_ORGANISMS_LIST
+    exit 1
+fi
 
 let failed=0
 
-for ORG in `cat ~/active-organisms.list`
+for ORG in `cat ${ACTIVE_ORGANISMS_LIST}`
 do
-  PARAMS=`echo $ORG | awk -F : '{org=$1; group= (NF>1) ? $2 : $1; printf "-organism %s -group %s",org,group}'`
+  PARAMS="-organism $ORG"
 
   ${SCAFFOLDER} ${OPTIONS} ${PARAMS}
 

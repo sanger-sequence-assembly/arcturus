@@ -29,6 +29,7 @@ my $c2sfile;
 my $fastaminlen = 5000;
 my $contig_name_format = 'normal';
 my $depad = 0;
+my $compressxml = 0;
 
 ###
 ### Parse arguments
@@ -69,6 +70,8 @@ while (my $nextword = shift @ARGV) {
     $contig_name_format = shift @ARGV if ($nextword eq '-contignameformat');
 
     $depad = 1 if ($nextword eq '-depad');
+
+    $compressxml = 1 if ($nextword eq '-compressxml');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -202,6 +205,7 @@ $myprojectid = $projectname2id->{$myproject} if defined($myproject);
 ###
 
 my $contiglength = {};
+my $contigreads = {};
 my $contigname = {};
 my @contiglist;
 my $project = {};
@@ -221,8 +225,9 @@ if (defined($onlyproject)) {
     $sth->execute($minlen);
 }
 
-while (my ($ctgid, $ctgname, $ctglen, $ctgproject) = $sth->fetchrow_array()) {
+while (my ($ctgid, $ctgname, $ctglen, $ctgreads, $ctgproject) = $sth->fetchrow_array()) {
     $contiglength->{$ctgid} = $ctglen;
+    $contigreads->{$ctgid} = $ctgreads;
 
     if ($contig_name_format eq 'gap4') {
 	$contigname->{$ctgid} = $ctgname;
@@ -687,6 +692,8 @@ my $scaffoldtosuperscaffold = {};
 
 my $newproject = 0;
 
+my $scaffolded_contigs = {};
+
 for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid++) {
     next if defined($scaffoldtosuperscaffold->{$seedscaffoldid});
 
@@ -819,7 +826,11 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 		foreach my $entry (@{$scaffold}) {
 		    if ($isContig) {
 			my ($contigid, $sense) = @{$entry};
+
+			$scaffolded_contigs->{$contigid} = 1;
+
 			my $ctglen = $contiglength->{$contigid};
+			my $ctgreads = $contigreads->{$contigid};
 
 			my $projid = $updateproject ? $newproject : $project->{$contigid};
 
@@ -830,7 +841,7 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 			$projid = $projectid2name->{$projid} if $shownames;
 
 			push @{$xmldata}, "\t\t\t<contig id=\"$contigid\" $contigname size=\"$ctglen\"" .
-			    " project=\"$projid\" sense=\"$sense\" />\n";
+			    " reads=\"$ctgreads\" project=\"$projid\" sense=\"$sense\" />\n";
 		    } else {
 			my ($gapsize, $bridges) = @{$entry};
 			push @{$xmldata}, "\t\t\t<gap size=\"$gapsize\">\n";
@@ -921,9 +932,38 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 $sth_templates->finish();
 
 if ($xmldata) {
+    push @{$xmldata}, "\t<unallocated-contigs>\n";
+
+    foreach my $contigid (sort @contiglist) {
+	next if defined($scaffolded_contigs->{$contigid});
+
+	my $ctglen = $contiglength->{$contigid};
+	my $ctgreads = $contigreads->{$contigid};
+
+	my $projid = $updateproject ? $newproject : $project->{$contigid};
+
+	$projid = 0 unless defined($projid);
+
+	my $contigname = $shownames ? "name=\"$contigname->{$contigid}\"" : "";
+
+	$projid = $projectid2name->{$projid} if $shownames;
+
+	$scaffoldid++;
+
+	push @{$xmldata}, "\t\t<superscaffold id=\"$scaffoldid\" size=\"$ctglen\">\n";
+	push @{$xmldata}, "\t\t\t<scaffold id=\"$scaffoldid\" sense=\"F\">\n";
+	push @{$xmldata}, "\t\t\t\t<contig id=\"$contigid\" $contigname size=\"$ctglen\"" .
+	    " reads=\"$ctgreads\" project=\"$projid\" sense=\"F\" />\n";
+	push @{$xmldata}, "\t\t\t</scaffold>\n\t\t</superscaffold>\n";
+    }
+
+    push @{$xmldata}, "\t</unallocated-contigs>\n";
+
     push @{$xmldata}, "</assembly>\n";
 
     my $xmltext = join("", @{$xmldata});
+
+    $xmltext = compress($xmltext) if $compressxml;
 
     if ($xmlfile eq 'DATABASE') {
 	my $query = "insert into NOTE(creator,created,type,format,content) " .
@@ -933,7 +973,9 @@ if ($xmldata) {
 
 	my $username = getpwuid($>);
 
-	$sth->execute($username, 'scaffold', 'text/xml', $xmltext);
+	my $format = $compressxml ? 'application/deflate' : 'text/xml';
+
+	$sth->execute($username, 'scaffold', $format, $xmltext);
 
 	$sth->finish();
     } else {
@@ -954,7 +996,9 @@ sub generateDTD {
 
     push @{$fdata}, <<END_OF_DTD;
 <!DOCTYPE assembly [
-<!ELEMENT assembly (superscaffold*) >
+<!ELEMENT assembly (superscaffold*,unallocated-contigs) >
+
+<!ELEMENT unallocated-contigs (superscaffold*) >
 
 <!ATTLIST assembly
             instance    CDATA       #REQUIRED
@@ -982,6 +1026,7 @@ sub generateDTD {
             id      CDATA       #REQUIRED
             name    CDATA       #IMPLIED
             size    CDATA       #REQUIRED
+	    reads   CDATA       #REQUIRED
             project CDATA       #REQUIRED
             sense   (F|R)       #REQUIRED
 >
@@ -1102,18 +1147,12 @@ sub CreateStatements {
     my $dbh = shift;
 
     my %queries = ("currentcontigs",
-		   "select CONTIG.contig_id,gap4name,CONTIG.length,CONTIG.project_id" .
-		   "  from CONTIG left join C2CMAPPING" .
-		   "    on CONTIG.contig_id = C2CMAPPING.parent_id" .
-		   " where C2CMAPPING.parent_id is null and CONTIG.nreads > 1 and CONTIG.length >= ?" .
-		   " order by CONTIG.length desc",
+		   "select contig_id,gap4name,length,nreads,project_id from CURRENTCONTIGS" .
+		   " where nreads > 1 and length >= ?",
 
 		   "currentcontigsfromproject",
-		   "select CONTIG.contig_id,gap4name,CONTIG.length,CONTIG.project_id" .
-		   "  from CONTIG left join C2CMAPPING" .
-		   "    on CONTIG.contig_id = C2CMAPPING.parent_id" .
-		   " where C2CMAPPING.parent_id is null and CONTIG.nreads > 1 and project_id= ? and CONTIG.length >= ?" .
-		   " order by CONTIG.length desc",
+		   "select contig_id,gap4name,length,nreads,project_id from CURRENTCONTIGS" .
+		   " where nreads > 1 and project_id= ? and length >= ?",
 
 		   "leftendreads", 
 		   "select read_id,cstart,cfinish,direction from" .
@@ -1414,4 +1453,5 @@ sub showUsage {
     print STDERR "-fastaminlen\tMinimum scaffold length for FASTA output\n";
     print STDERR "-contigmap\tScaffold-contig mapping file\n";
     print STDERR "-contignameformat\tHow to display the contig name [normal|short|gap4]\n";
+    print STDERR "-compressxml\tCompress the XML data\n";
 }

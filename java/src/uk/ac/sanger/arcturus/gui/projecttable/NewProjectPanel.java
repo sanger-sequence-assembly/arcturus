@@ -338,8 +338,10 @@ public class NewProjectPanel extends JPanel {
 			Arcturus.logWarning("An error occurred during a repository lookup on \"" + text + "\"", e);
 		}
 		
-		if (autocompleteAssemblySuffix)
-			txtAssemblySuffix.setText("/split/" + text);
+		txtAssemblySuffix.setEditable(false);
+		if (autocompleteAssemblySuffix) {
+				txtAssemblySuffix.setText(this.getAssemblySuffix() + text);
+		}
 	}
 	
 	private void validateAssembly() {
@@ -423,7 +425,8 @@ public class NewProjectPanel extends JPanel {
 		setDefaultDirectoryButton();
 		
 		if (btnRelativeToAssembly.isEnabled()) {
-			txtAssemblySuffix.setText("/split/");
+			
+			txtAssemblySuffix.setText(getAssemblySuffix());
 			autocompleteAssemblySuffix = true;
 		}
 		
@@ -468,6 +471,23 @@ public class NewProjectPanel extends JPanel {
 			cbxAssembly.setEnabled(cbxAssembly.getItemCount() > 1);
 		} catch (ArcturusDatabaseException e) {
 			Arcturus.logSevere("An error occurred whilst enumerating assemblies", e);
+		}
+	}
+	
+	private String getAssemblySuffix() {
+		
+		// make the default pathname dependent on the organism being used to avoid overwriting live data
+		String organism = adb.getName();
+		//txtAbsolutePath.setText("organism is " + organism);
+		
+		if (organism.startsWith("TEST")) {
+			return("/test/");
+		}
+		else if (organism.startsWith("TRAIN")) {
+			return("/training/");
+		}
+		else {
+			return("/split/");
 		}
 	}
 }

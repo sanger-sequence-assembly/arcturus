@@ -8,9 +8,9 @@ use ArcturusDatabase;
 use constant WORKING_VERSION => '0';
 use constant BACKUP_VERSION => 'Z';
 
-# export a single project or a scaffold from arcturus into a gap database
+# export a single project or a scaffold from arcturus into a gap5 database
 
-# script to be run from directory where gap database is to be created 
+# script to be run from directory where gap5 database is to be created 
 
 # for input parameter description use help
 
@@ -21,7 +21,7 @@ my $pwd = cwd();
 my $basedir = `dirname $0`; chomp $basedir; # directory of the script
 my $arcturus_home = "${basedir}/..";
 
-my $gaproot = "/software/badger/bin";
+my $gap5root = "/software/badger/bin";
 
 my $export_script = "${arcturus_home}/java/scripts/exportsamfile";
 
@@ -31,14 +31,14 @@ my $java_opts = defined($ENV{'JAVA_DEBUG'}) ? "-Ddebugging=true -Dtesting=true -
 # command line input parser
 #------------------------------------------------------------------------------
 
-my ($instance,$organism,$projectname,$assembly,$gapname,$version,$scaffold);
+my ($instance,$organism,$projectname,$assembly,$gap5name,$version,$scaffold);
 
 my ($nolock,$rundir,$create,$superuser,$keep,$debug);
 
 my $minerva = '';
 
 my $validkeys = "instance|i|organism|o|project|p|assembly|a|scaffold|c|"
-              . "gapname|g|version|v|nolock|nl|"
+              . "gap5name|g|version|v|nolock|nl|"
               . "script|rundir|rd|create|superuser|su|"
               . "keep|minerva|m|passon|po|help|h|java_opts";
 
@@ -64,7 +64,7 @@ while (my $nextword = shift @ARGV) {
         die "You can't re-define project" if $projectname;
         $projectname   = shift @ARGV;
         $version = "A" unless defined($version);   #? somewhere else
-        $gapname = uc($projectname) unless $gapname; #? somewhere else
+        $gap5name = uc($projectname) unless $gap5name; #? somewhere else
     }
 
     if ($nextword eq '-assembly' || $nextword eq '-a') {
@@ -75,8 +75,8 @@ while (my $nextword = shift @ARGV) {
         $scaffold      = shift @ARGV; # agp file or ' separated list
     }
 
-    if ($nextword eq '-gapname' || $nextword eq '-g') {
-        $gapname      = shift @ARGV;
+    if ($nextword eq '-gap5name' || $nextword eq '-g') {
+        $gap5name      = shift @ARGV;
     }
 
     if ($nextword eq '-version'  || $nextword eq '-v') {
@@ -150,13 +150,13 @@ if (defined($java_opts)) {
     $ENV{'JAVA_OPTS'} = $java_opts;
 }
 
-# if no scaffold is defined, the project will be exported to gapname
-# if  a scaffold is defined, the contigs will be exported to gapname, which
-# must be different from projectname; if no gapname explicitly defined
+# if no scaffold is defined, the project will be exported to gap5name
+# if  a scaffold is defined, the contigs will be exported to gap5name, which
+# must be different from projectname; if no gap5name explicitly defined
 # generate one like "projectscaffold<n>" ?
 
-if (defined($scaffold) && $projectname eq $gapname) {
-    print STDERR "!! -- No (valid) gapname specified --\n";
+if (defined($scaffold) && $projectname eq $gap5name) {
+    print STDERR "!! -- No (valid) gap5name specified --\n";
     &showusage(); # and exit
 }
 
@@ -228,12 +228,12 @@ if ($rundir) {
 }
 
 #------------------------------------------------------------------------------
-# check if target gap database is accessible
+# check if target gap5 database is accessible
 #------------------------------------------------------------------------------
 
-if ( -f "${gapname}.$version.BUSY") {
-    print STDERR "!! -- Project $gapname version $version is BUSY --\n";
-    print STDERR "!! -- Export of $gapname.$version aborted --\n";
+if ( -f "${gap5name}.$version.BUSY") {
+    print STDERR "!! -- Project $gap5name version $version is BUSY --\n";
+    print STDERR "!! -- Export of $gap5name.$version aborted --\n";
 # or, change name?
     exit 1;
 }
@@ -242,11 +242,11 @@ if ( -f "${gapname}.$version.BUSY") {
 # backup working version (zero)
 #------------------------------------------------------------------------------
 
-my $backup_db = $gapname . '.' . BACKUP_VERSION;
+my $backup_db = $gap5name . '.' . BACKUP_VERSION;
 my $backup_busy_file = $backup_db . '.BUSY';
 my $backup_aux_file = $backup_db . '.aux';
 
-my $working_db = $gapname . '.' . WORKING_VERSION;
+my $working_db = $gap5name . '.' . WORKING_VERSION;
 my $working_busy_file = $working_db . '.BUSY';
 
 if (-f $working_db && $version ne BACKUP_VERSION) {
@@ -254,31 +254,31 @@ if (-f $working_db && $version ne BACKUP_VERSION) {
 
     if (-f $working_busy_file) {
 	print STDERR "!! -- Version " . WORKING_VERSION . " is BUSY; backup cannot be made --\n";
-            print STDERR "!! -- Export of $gapname.$version aborted --\n";
+            print STDERR "!! -- Export of $gap5name.$version aborted --\n";
             exit 1;
     }
 
     if (-f $backup_db) {
         if ( -f $backup_busy_file) {
             print STDERR "!! -- Version " . BACKUP_VERSION . " is BUSY; backup cannot be made --\n";
-            print STDERR "!! -- Export of $gapname.$version aborted --\n";
+            print STDERR "!! -- Export of $gap5name.$version aborted --\n";
             exit 1;
         }
 
-        system ("rmdb $gapname " . BACKUP_VERSION);
+        system ("rmdb $gap5name " . BACKUP_VERSION);
 
         unless ($? == 0) {
             print STDERR "!! -- FAILED to remove existing $backup_db ($?) --\n"; 
-            print STDERR "!! -- Export of $gapname.$version aborted --\n";
+            print STDERR "!! -- Export of $gap5name.$version aborted --\n";
             exit 1;
         }
     }
 
-    system ("cpdb $gapname " . WORKING_VERSION . " $gapname " . BACKUP_VERSION);
+    system ("cpdb $gap5name " . WORKING_VERSION . " $gap5name " . BACKUP_VERSION);
 
     unless (-f $backup_db && -f $backup_aux_file) {
-        print STDERR "!! -- WARNING: failed to back up $gapname " . WORKING_VERSION . " --\n";
-	print STDERR "!! -- Export of $gapname.$version aborted --\n";
+        print STDERR "!! -- WARNING: failed to back up $gap5name " . WORKING_VERSION . " --\n";
+	print STDERR "!! -- Export of $gap5name.$version aborted --\n";
 	exit 1;
     }
 
@@ -312,7 +312,7 @@ unless ($nolock) {
 # export the project or scaffold as a samfile SAM file
 #------------------------------------------------------------------------------
 
-my $samfile = "/tmp/${gapname}.$$.samfile.sam";
+my $samfile = "/tmp/${gap5name}.$$.samfile.sam";
 
 my $command = "$export_script -instance $instance -organism $organism -out $samfile";
 
@@ -322,8 +322,8 @@ if ($scaffold) {
     $command .= " -minerva" if $minerva;
 
     $command .= " -scaffold $scaffold"; # processing of $scaffold in export script
-    unless ($gapname) {
-# if gapname defined, use that, else generate one project_scaffold_NN
+    unless ($gap5name) {
+# if gap5name defined, use that, else generate one project_scaffold_NN
 # to be developed (or function in export script?)
     }
     $command .= " @ARGV" if @ARGV;
@@ -346,35 +346,35 @@ if ($rc) {
 }
 
 #------------------------------------------------------------------------------
-# converting SAM file into gap database
+# converting SAM file into gap5 database
 #------------------------------------------------------------------------------
 
-print STDERR "${minerva}Converting SAM file into Gap database\n";
+print STDERR "${minerva}Converting SAM file into Gap5 database\n";
 
-# for both projects and scaffolds remove existing gap db version
+# for both projects and scaffolds remove existing gap5 db version
 
-if ( -f "${gapname}.$version.BUSY") {
-    print STDERR "!! -- Project $gapname version $version is BUSY --\n";
-    print STDERR "!! -- Export of $gapname.$version aborted --\n";
+if ( -f "${gap5name}.$version.BUSY") {
+    print STDERR "!! -- Project $gap5name version $version is BUSY --\n";
+    print STDERR "!! -- Export of $gap5name.$version aborted --\n";
 # or, change name?
     exit 1;
 }
 
-if ( -f "${gapname}.$version") {
-    system ("rmdb $gapname $version");
+if ( -f "${gap5name}.$version") {
+    system ("rmdb $gap5name $version");
     unless ($? == 0) {
-        print STDERR "!! -- FAILED to remove existing $gapname.$version ($?) --\n"; 
-        print STDERR "!! -- Export of $gapname.$version aborted --\n";
+        print STDERR "!! -- FAILED to remove existing $gap5name.$version ($?) --\n"; 
+        print STDERR "!! -- Export of $gap5name.$version aborted --\n";
 # or, change name?
         exit 1;
     }
 }
 
-system ("${gaproot}/tg_index -s $samfile -o $gapname.$version");
+system ("${gap5root}/tg_index -test -s $samfile -o $gap5name.$version");
 
 unless ($? == 0) {
-    print STDERR "!! -- FAILED to create a Gap database ($?) --\n";
-    print STDERR "!! -- Export of $gapname.$version aborted --\n";
+    print STDERR "!! -- FAILED to create a Gap5 database ($?) --\n";
+    print STDERR "!! -- Export of $gap5name.$version aborted --\n";
     exit 1;
 }
 
@@ -382,24 +382,24 @@ unless ($? == 0) {
 # changing access privileges on newly created database
 #------------------------------------------------------------------------------
 
-print STDERR "Changing access provileges on Gap database\n";
+print STDERR "Changing access provileges on Gap5 database\n";
 
-&mySystem ("chmod ug-w ${gapname}.$version");
+&mySystem ("chmod ug-w ${gap5name}.$version");
 
-&mySystem ("chmod ug-w ${gapname}.$version.aux");
+&mySystem ("chmod ug-w ${gap5name}.$version.aux");
 
 #------------------------------------------------------------------------------
 # marking project as exported (only in standard export mode)
 #------------------------------------------------------------------------------
 
-unless ($scaffold || uc($projectname) ne uc($gapname) || $version ne 'A') {
+unless ($scaffold || uc($projectname) ne uc($gap5name) || $version ne 'A') {
 
     print STDERR "Marking project $projectname as exported\n";
 
     my $marker_script =  "${arcturus_home}/utils/project-export-marker";
     $marker_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
-    system ("$marker_script -i $instance -o $organism -p ${gapname} "
-	   ."-file $pwd/${gapname}.$version");
+    system ("$marker_script -i $instance -o $organism -p ${gap5name} "
+	   ."-file $pwd/${gap5name}.$version");
 
     if ($?) {
 	print STDERR "!! -- No export mark written ($?) --\n";
@@ -436,31 +436,31 @@ unless ($nolock) { # possibly completely different, what about scaffolds?
 # cleaning up only standard project export 
 #------------------------------------------------------------------------------
 
-unless ($scaffold || $projectname ne $gapname || $version ne 'A') {
+unless ($scaffold || $projectname ne $gap5name || $version ne 'A') {
 
     print STDERR "Cleaning up database directory\n";
 
-    if ( !( -e "${gapname}.B")) {
-        print STDERR "!! -- version ${gapname}.0 kept because no "
-            . "back-up B version found --\n" if (-f "${gapname}.0");
+    if ( !( -e "${gap5name}.B")) {
+        print STDERR "!! -- version ${gap5name}.0 kept because no "
+            . "back-up B version found --\n" if (-f "${gap5name}.0");
     }
 
-    elsif ( -z "{gapname}.B") {
-        print STDERR "!! -- version ${gapname}.0 kept because "
-	    . "corrupted B version found --\n" if (-f "${gapname}.0");
+    elsif ( -z "{gap5name}.B") {
+        print STDERR "!! -- version ${gap5name}.0 kept because "
+	    . "corrupted B version found --\n" if (-f "${gap5name}.0");
     }
 
-    elsif ( -f "${gapname}.0") {
+    elsif ( -f "${gap5name}.0") {
 # delete version 0 if it is older than B
-        my @vstat = stat "$gapname.0";
-        my @bstat = stat "$gapname.B";
+        my @vstat = stat "$gap5name.0";
+        my @bstat = stat "$gap5name.B";
 
         if ($vstat[9] <= $bstat[9]) {
-            print STDERR "Deleting project version ${gapname}.0\n";
-            &mySystem ("rmdb ${gapname} 0");
+            print STDERR "Deleting project version ${gap5name}.0\n";
+            &mySystem ("rmdb ${gap5name} 0");
 	}
 	else {
-            print STDERR "!! -- version ${gapname}.0 kept because "
+            print STDERR "!! -- version ${gap5name}.0 kept because "
 		       . "no valid B version was found\n";
         }
     }
@@ -519,7 +519,7 @@ sub showusage {
     print STDERR "\n";
     print STDERR "Export a project or scaffold from Arcturus project to a specified Gap database\n";
     print STDERR "\n";
-    print STDERR "The script must be run in the directory containing the Gap database\n";
+    print STDERR "The script must be run in the directory containing the Gap5 database\n";
     print STDERR "\n";
     print STDERR "Default export is of database 'project.0'\n";
     print STDERR "\n";
@@ -538,14 +538,14 @@ sub showusage {
     print STDERR "\n";
     print STDERR "-assembly\t(a) needed to resolve ambiguous project name\n";
     print STDERR "\n";
-    print STDERR "-gapname\t(g) Gap database if different from default "
+    print STDERR "-gap5name\t(g) Gap5 database if different from default "
                 ."'project'\n";
-    print STDERR "-version\t(v) Gap database version if different from 0\n";
+    print STDERR "-version\t(v) Gap5 database version if different from 0\n";
     print STDERR "\n";
     print STDERR "-scaffold\t(s) comma-separated list of contigs (with sign)\n\t\t"
                . "    or '.apg' file name (NOT YET OPERATIONAL)\n\n";
     print STDERR "\t\tContigs of the scaffold must all belong to the specified\n"
-               . "\t\tproject; the gapname must be different from the project\n"
+               . "\t\tproject; the gap5name must be different from the project\n"
                . "\t\tname; in its absence a name will be autogenerated\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS (control):\n";

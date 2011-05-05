@@ -26,21 +26,32 @@ public class ContigTransferAction extends AbstractAction {
 	}
 	
 	public void actionPerformed(ActionEvent event) {
+		Arcturus.logInfo("Entered ContigTransferAction.actionPerformed from source " + source);
+		
 		ArcturusDatabase adb = targetProject.getArcturusDatabase();
 		
 		List<Contig> contigs = source.getSelectedContigs();
 		
 		if (contigs == null)
 			return;
+		
+		Arcturus.logInfo("Preparing transfer requests for " + contigs.size() +
+				" contigs to " + targetProject.getName());
 	
 		for (Contig contig : contigs) {
 			try {
-				if (!targetProject.equals(contig.getProject()))
+				if (targetProject.equals(contig.getProject())) {
+					Arcturus.logInfo("\tContig #" + contig.getID() + " is ALREADY in the target project!");
+				} else {
+					Arcturus.logInfo("\tCreating transfer request for contig #" + contig.getID());
 					adb.createContigTransferRequest(contig, targetProject);
+				}
 			} catch (ContigTransferRequestException e) {
 				String message = "Failed to create a request to transfer contig " + contig.getID()
 					+ " to project " + targetProject.getName() + ".\n"
 					+ "Reason: " + e.getTypeAsString();
+				
+				Arcturus.logInfo(message);
 				
 				Component parent = (source instanceof Component) ? (Component)source : null;
 				

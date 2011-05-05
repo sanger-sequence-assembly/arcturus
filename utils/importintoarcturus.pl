@@ -27,8 +27,10 @@ my $javabasedir   = "${arcturus_home}/utils";
 
 my $badgerbin = "$ENV{BADGER}/bin";
 
-my $gaptoSam = "$badgerbin/gap5_export -test "; # test to be disabled later
-my $gapconsensus = "$badgerbin/gap5_consensus ";
+my $gap5_test_mode = "-test";
+
+my $gaptoSam = "$badgerbin/gap5_export $gap5_test_mode ";
+my $gapconsensus = "$badgerbin/gap5_consensus $gap5_test_mode ";
 
 
 my $samtools = "/software/solexa/bin/aligners/samtools/current/samtools";
@@ -446,15 +448,15 @@ unless ($version eq "B" || $nonstandard) {
             print STDERR "!! -- Import of $gapname.$version aborted --\n";
             exit 1;
         }
-				system ("cpdb $gapname $version $gapname $version~");
-				unless ($? == 0) {
-					print STDERR "!! -- WARNING: failed to back up $gapname.$version to $gapname.$version~ ($?    ) --\n";
-        	if ($abortonwarning) {
-            print STDERR "!! -- Import of $gapname.$version aborted --\n";
-            exit 1;
-        	}
-				}
-    }       
+		}
+		&mySystem ("cpdb $gapname $version $gapname $version~");
+		unless ($? == 0) {
+			print STDERR "!! -- WARNING: failed to back up $gapname.$version to $gapname.$version~ ($?    ) --\n";
+    	if ($abortonwarning) {
+        print STDERR "!! -- Import of $gapname.$version aborted --\n";
+        exit 1;
+     	}
+		}
 }
 
 #------------------------------------------------------------------------------
@@ -500,8 +502,6 @@ if ($gap_version == 4 && $project->hasNewContigs()) {
     my $allocation_script = "${arcturus_home}/utils/read-allocation-test";
 
     my $username = $ENV{'USER'};
-# if script is run in test mode add .pl to bypass the wrapper
-    $allocation_script .= ".pl" if (defined($username) && $basedir =~ /$username/);
 
 # first we test between projects, then inside, because inside test may reallocate
 
@@ -540,7 +540,7 @@ $adb->disconnect();
 
 unless ($keep) {
 
-		print STDOUT "Cleaning up original version $gapname.$version ($gapname.$version~ remains for you    r convenience)\n";
+		print STDOUT "Cleaning up original version $gapname.$version ($gapname.$version~ remains for your convenience)\n";
 		     system ("rmdb $gapname $version");
 		     unless ($? == 0) {
 		        print STDERR "!! -- WARNING: failed to remove $gapname.$version ($?) --\n";
