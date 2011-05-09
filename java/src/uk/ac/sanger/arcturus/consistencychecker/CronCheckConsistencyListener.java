@@ -109,7 +109,7 @@ import uk.ac.sanger.arcturus.ArcturusEmailer;
 					for(int i=0;i<emailNamesSize;i++)
 		        	{
 						if (first) {
-							this.sender = emailNames.get(i);
+							this.sender = emailNames.get(i)  + restOfEmailAddress;
 							first = false;
 							firstcc = true;
 						}
