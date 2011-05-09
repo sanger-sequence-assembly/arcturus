@@ -10,7 +10,7 @@ my $port;
 my $dbname;
 my $username;
 my $password;
-my $fix = 0;
+my $single = 0;
 
 while (my $nextword = shift @ARGV) {
     if ($nextword eq '-host') {
@@ -23,8 +23,8 @@ while (my $nextword = shift @ARGV) {
 	$username = shift @ARGV;
     } elsif ($nextword eq '-password') {
 	$password = shift @ARGV;
-    } elsif ($nextword eq '-fix') {
-	$fix = 1;
+    } elsif ($nextword eq '-single') {
+	$single = shift @ARGV;
     } elsif ($nextword eq '-help') {
 	&showHelp();
 	exit(0);
@@ -46,8 +46,14 @@ my $url = "DBI:mysql:$dbname;host=$host;port=$port";
 
 my $dbh = DBI->connect($url, $username, $password, { RaiseError => 1 , PrintError => 0});
 
-my $query = "select r.readname, min(t.rstart), sum(t.length),  r.strand, c.contig_id, min(t.cstart) from SEQUENCE s, SEQ2READ  q, MAPPING m, SEGMENT t, READINFO r, CURRENTCONTIGS c where  m.mapping_id = t.mapping_id and m.seq_id = q.seq_id and s.seq_id = q.seq_id and q.read_id = r.read_id and m.contig_id = c.contig_id  and c.contig_id = 57699 group by t.mapping_id order by c.contig_id, m.cstart";
-    
+my $query = "";
+if ($single > 0) {
+# single contig query useful to check data
+	$query = "select r.readname, min(t.rstart), sum(t.length),  r.strand, c.contig_id, min(t.cstart) from SEQUENCE s, SEQ2READ  q, MAPPING m, SEGMENT t, READINFO r, CURRENTCONTIGS c where  m.mapping_id = t.mapping_id and m.seq_id = q.seq_id and s.seq_id = q.seq_id and q.read_id = r.read_id and m.contig_id = c.contig_id  and c.contig_id = $single group by t.mapping_id order by c.contig_id, m.cstart";
+}
+else {
+	$query = "select r.readname, min(t.rstart), sum(t.length),  r.strand, c.contig_id, min(t.cstart) from SEQUENCE s, SEQ2READ  q, MAPPING m, SEGMENT t, READINFO r, CURRENTCONTIGS c where  m.mapping_id = t.mapping_id and m.seq_id = q.seq_id and s.seq_id = q.seq_id and q.read_id = r.read_id and m.contig_id = c.contig_id group by t.mapping_id order by c.contig_id, m.cstart";
+    }
 my $contigreads = $dbh->selectall_arrayref($query) || die "Cannot run query $query: $DBI::errstr";
     
 # contigread holds (readname, rstart, seqlen, strand, contig name, cstart)
@@ -113,4 +119,5 @@ sub showHelp {
     print STDERR "\t-db\t\tDatabase\n";
     print STDERR "\t-username\tUsername to connect to server\n";
     print STDERR "\t-password\tPassword to connect to server\n";
+    print STDERR "\t-single\tRun the report just for this contig\n";
 }
