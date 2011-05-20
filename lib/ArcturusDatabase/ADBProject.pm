@@ -2236,11 +2236,24 @@ sub stopImportExport {
 # private
     my ($dbh, $project_id, $action, $username)  = @_;
 
-    my $query = "update IMPORTEXPORT set endtime = now() where project_id = ? and action = ? and username = ?";
+		my $import_id_query = "select max(id) from IMPORTEXPORT where project_id = ? and action = ? and username = ?";
 
+    my $query = "update IMPORTEXPORT set endtime = now() where id = ?";
+
+    my $sthi = $dbh->prepare_cached($import_id_query);
     my $sth = $dbh->prepare_cached($query);
 
-    my $rc = ($sth->execute($project_id, $action, $username) || &queryFailed($query, $project_id, $action, $username));
+    my $irc = ($sthi->execute($project_id, $action, $username) || &queryFailed($import_id_query, $project_id, $action, $username));
+
+		my $import_id = 0;
+
+    my @import_line = $sthi->fetchrow_array();
+    $import_id = $import_line[0];
+		$sthi->finish();
+		
+		print STDERR "\nFound import id $import_id\n\n";
+
+    my $rc = ($sth->execute($import_id) || &queryFailed($query, $import_id));
 
     $sth->finish();
 
