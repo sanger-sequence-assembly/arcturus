@@ -248,9 +248,6 @@ foreach my $contigid (@contigids) {
 	length($sequence),"\n";
     }
 
-    # convert all - into n 
-	  $sequence =~ s/\-/n/g	;
-
     my $contigname;
 
     if ($contig_name_mode eq 'projectprefix') {
@@ -279,8 +276,8 @@ foreach my $contigid (@contigids) {
     }
 
     if ($paddingmode == DEPAD) {
-	# Depad Xx *  only
-	$sequence =~ s/[Xx\*]//g;
+	# Depad Xx *   and -
+	$sequence =~ s/[Xx\*\-]//g;
     } elsif ($paddingmode == PAD_IS_N) {
 	# Convert pads to N ...
 	$sequence =~ s/[\*\-]/N/g;
