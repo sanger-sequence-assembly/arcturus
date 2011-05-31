@@ -4,6 +4,7 @@ use strict;
 
 use Cwd;
 use File::Path;
+use Mail::Send;
 
 use ArcturusDatabase;
 use RepositoryManager;
@@ -19,6 +20,8 @@ use constant BACKUP_VERSION => 'B';
 
 my $pwd = cwd();
 
+my $username = $ENV{'USER'};
+
 my $basedir = `dirname $0`; chomp $basedir; # directory of the script
 
 my $arcturus_home = "${basedir}/..";
@@ -31,7 +34,7 @@ my $gap5_test_mode = "-test";
 
 my $gaptoSam = "$badgerbin/gap5_export $gap5_test_mode ";
 my $gapconsensus = "$badgerbin/gap5_consensus $gap5_test_mode ";
-
+my $gapconsistency = "$badgerbin/gap4_check_db";
 
 my $samtools = "/software/solexa/bin/aligners/samtools/current/samtools";
 
@@ -325,6 +328,30 @@ if ($?) {
     exit 1;
 }
 
+#------------------------------------------------------------------------------
+# check the state of the GAP 4 database before importing it
+#------------------------------------------------------------------------------
+
+my $check_command = " $gapconsistency $gapname $version";
+&mySystem($check_command);
+
+if ($?) {
+# the database fails the consistency check
+	my $mail_message = 
+		"\nYour GAP4 database $gapname.$version is inconsistent so import into Arcturus is ABORTED.\n\n
+ You will need to resolve your problems in GAP before trying to import into Arcturus again. \n\n
+ A Help Desk ticket has been raised, so we can offer help if you need it.  One possible cause is that you may have over-trimmed a contig to make a gap in your Gap project.\n";
+	
+	my $message = 
+    "\n!! ----------------------------------------------------------------------------------------------!!\n
+		$mail_message 
+		\n!! ----------------------------------------------------------------------------------------------!!\n";
+    
+		print STDOUT $message;
+		&sendMessage($username, $mail_message, $gapname, $instance, $organism);
+    exit 1;
+}
+
 my $import_command;
 
 if ($gap_version == 4) {
@@ -501,8 +528,6 @@ if ($gap_version == 4 && $project->hasNewContigs()) {
 
     my $allocation_script = "${arcturus_home}/utils/read-allocation-test";
 
-    my $username = $ENV{'USER'};
-
 # first we test between projects, then inside, because inside test may reallocate
 
     print STDOUT "Testing read allocation for possible duplicates between projects\n";
@@ -545,9 +570,9 @@ unless ($keep) {
 		     unless ($? == 0) {
 		        print STDERR "!! -- WARNING: failed to remove $gapname.$version ($?) --\n";
 		}
-
-    print STDOUT "Cleaning up temporary files in $tmpdir\n";
-    &mySystem("rm -r -f $tmpdir");
+# retain the CAF files for comparison with previous work
+    #print STDOUT "Cleaning up temporary files in $tmpdir\n";
+    #&mySystem("rm -r -f $tmpdir");
 }
 
 print STDOUT "\n\nIMPORT OF $projectname HAS FINISHED.\n";
@@ -641,4 +666,31 @@ sub showUsage {
 }
 
 #------------------------------------------------------------------------------
+
+sub sendMessage {
+    my ($user, $message, $projectname, $instance, $organism) = @_;
+  
+    my $fulluser = $user.'@sanger.ac.uk' if defined($user);
+    my $to = "";
+		my $cc = "Nobody";
+  
+    if ($instance eq 'test') {
+        $to = $fulluser;
+     }
+     else {
+       $to = 'arcturus-help@sanger.ac.uk';
+       $cc = $fulluser;
+     }
+  
+     print STDOUT "Sending message to $to cc $cc\n";
+  
+     my $mail = new Mail::Send;
+      $mail->to($to);
+      $mail->cc($cc);
+      $mail->subject("Project $projectname in $organism in the $instance LDAP instance has failed the Gap4 database check");
+      my $handle = $mail->open;
+      print $handle "$message\n";
+      $handle->close or die "Problems sending mail to $to cc to $cc: $!\n";
+  
+ }
 

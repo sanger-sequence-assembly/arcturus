@@ -67,6 +67,7 @@ $sth->finish();
 printf "%-20s %20s  %10s %10s %10s %10s\n", 'SCHEMA', 'UPDATED', 'IMPORTS', 'CONTIGS', 'READS', 'SEQLEN';
 
 foreach my $schema (@dblist) {
+		#print STDERR "Looking at schema $schema\n";
     $query = "select max(created) from " . $schema . ".CONTIG";
 
     $sth = $dbh->prepare($query);
@@ -76,8 +77,7 @@ foreach my $schema (@dblist) {
 
     $created = "0000-00-00 00:00:00" unless defined($created);
 
-    $query = "select count(*) from " . $schema . ".IMPORTEXPORT" .
-	" where action = ? and date > date_sub(now(), interval $since day)";
+    $query = "select count(*) from $schema.IMPORTEXPORT where action = ? and starttime > date_sub(now(), interval $since day)";
 
     $sth = $dbh->prepare($query);
     $sth->execute('import');
