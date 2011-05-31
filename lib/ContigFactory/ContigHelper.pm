@@ -3417,11 +3417,21 @@ sub newpropagateTagsToContig {
 
     my $unique = $options{unique} || 0; # default accept all matching mappings
 
-    my @mapping = &getMappingFromParentToContig($parent,$target,unique=>$unique);
+    my @mapping = ();
+		@mapping = &getMappingFromParentToContig($parent,$target,unique=>$unique);
+
+		# for @mapping to fail later on, this must return a something, but not a valid mapping
+		# so now is a good place to test and die.  As I am in the contig transaction, the database will rollback
+	
     my $pname = $parent->getContigName();
     my $tname = $target->getContigName();
 
-    unless (@mapping) {
+		my $mapping_count = scalar @mapping;
+    unless ($mapping_count > 0) {
+	    $logger->info("Failed to determine parent to target mapping between $pname and $tname");
+            return 0;
+		}
+	    unless (@mapping) {
         $logger->info("Finding mapping from scratch");
         return 0 if $options{norerun}; # prevent endless loop
         my %loptions; # to be refined (e.g. banded?)
@@ -3433,7 +3443,6 @@ sub newpropagateTagsToContig {
 # now that we have a mapping use recursion
         return $class->propagateTagsToContig($parent,$target,norerun=>1,%options);
     }
-		my $mapping_count = scalar @mapping;
 		$logger->info("Found $mapping_count parent to target mapping between $pname and $tname");
 
 #--------------------------- test the mapping ---------------------------
@@ -3881,6 +3890,7 @@ sub getMappingFromParentToContig {
 
     my $target_id = $target->getContigID() || 0;
 
+    $logger->info("in getMappingFromParentToContig for parent ($parent_id) and contig ($target_id)");
 # if parents are specified on the $target then test if $parent is among them
 # if no parents specified on $target then accept the the current $parent
 
@@ -3975,7 +3985,7 @@ sub getMappingFromParentToContig {
         }
         if (@mapping > 1 && $options{unique}) {
   	    $logger->warning("ambiguous parent-to-contig mapping: several (reserve) matches");
-            return 0; # this case is unrecoverable
+            return 0; # this case is unrecoverable 
 	}
     }
     elsif (scalar(@reserve) == 1) {
