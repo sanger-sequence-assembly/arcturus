@@ -33,7 +33,7 @@ case mcs6:
 
 	echo
 	echo Renaming TASMANIAN_DEVIL to TASMANIAN for LDAP lookup
-	sed '/^ZGTC_[0-9]*/d' $HOME/tmp_pathogen_active_organisms.list | sed 's/_DEVIL//' > pathogen_active_organisms.list
+	sed '/^ZGTC_[0-9]*/d' $HOME/tmp_pathogen_active_organisms.list | sed 's/_DEVIL//' >> pathogen_active_organisms.list
 	echo Pathogen list built in $HOME/pathogen_active_organisms.list:
 	cat $HOME/pathogen_active_organisms.list
 	echo
