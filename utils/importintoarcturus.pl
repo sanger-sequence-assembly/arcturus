@@ -328,14 +328,17 @@ if ($?) {
     exit 1;
 }
 
+my $import_command;
+print STDOUT "!! -- Arcturus project $projectname is a Gap$gap_version project --\n";
+
 #------------------------------------------------------------------------------
 # check the state of the GAP 4 database before importing it
 #------------------------------------------------------------------------------
+if ($gap_version == 4) {
+	my $check_command = " $gapconsistency $gapname $version";
+	&mySystem($check_command);
 
-my $check_command = " $gapconsistency $gapname $version";
-&mySystem($check_command);
-
-if ($?) {
+	if ($?) {
 # the database fails the consistency check
 	my $mail_message = 
 		"\nYour GAP4 database $gapname.$version is inconsistent so import into Arcturus is ABORTED.\n\n
@@ -352,9 +355,7 @@ if ($?) {
     exit 1;
 }
 
-my $import_command;
 
-if ($gap_version == 4) {
 #------------------------------------------------------------------------------
 # Import the database via a depadded CAF file
 #------------------------------------------------------------------------------
