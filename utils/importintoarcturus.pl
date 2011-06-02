@@ -329,6 +329,7 @@ if ($?) {
 }
 
 my $import_command;
+print STDOUT "!! -- Arcturus project $projectname is a Gap$gap_version project --\n";
 
 #------------------------------------------------------------------------------
 # check the state of the GAP 4 database before importing it
