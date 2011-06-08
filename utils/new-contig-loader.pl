@@ -6,6 +6,8 @@
 
 use strict; # Constraint variables declaration before using them
 
+use constant DEFAULT_HELPDESK_EMAIL => 'arcturus-help@sanger.ac.uk';
+
 use ContigFactory::ContigFactory;
 use ReadFactory::TraceServerReadFactory;
 
@@ -539,6 +541,28 @@ unless ($projectinheritance{$pinherit}) {
     exit 0;
 }
 
+#-----------------------------------------------------------------------------
+# check that there is not an export or import already running for this project
+#-----------------------------------------------------------------------------
+print STDERR "Checking if project  $pidentifier already has an import or export running    \n";
+
+my ($username, $action, $starttime, $endtime) = $project->getImportExportAlreadyRunning();
+
+unless (defined($endtime)) {
+	$logger->error("Project $pidentifier already has a $action running started by $username at $starttime so this import has been ABORTED");
+  $adb->disconnect();
+  exit 1;
+}
+else {
+	print STDERR "Marking this import start time\n";
+	my $status = $project->markImport("start");
+	unless ($status) {
+		$logger->error("Unable to set start time for project $pidentifier  by $username at $starttime so this import has been ABORTED");
+  	$adb->disconnect();
+  	exit 1;
+	}
+}
+
 #----------------------------------------------------------------
 # acquire a lock on the project
 #----------------------------------------------------------------
@@ -585,6 +609,16 @@ $scaffold = &scaffoldfileparser($scaffoldfile) if $scaffoldfile;
 #----------------------------------------------------------------
 # MAIN
 #----------------------------------------------------------------
+
+# hash for recording foreign reads
+my %projectreadhash;
+
+# hash for recording contigs that did not load for the RT ticket
+my %missedcontighash;
+
+# user to email, in addition to arcturus-help.  If this is a test instance, the email is sent to the user ONLY.
+ 
+my $user = getlogin();
 
 # set-up tag selection
 
@@ -739,7 +773,10 @@ if ($frugal) { # this whole block should go to a contig "factory"
 #  	        $adb->disconnect();
 #	        exit 1;
 #            }
-            if ($rejectreadname && $objectname =~ /$rejectreadname/) {
+        # check that the read is not already in another project
+            &checkprojectforread($objectname, $pidentifier);
+
+            if (defined($rejectreadname) && $objectname =~ /$rejectreadname/) {
 		$logger->warning("read $objectname was rejected");
                 next;
 	    }
@@ -814,14 +851,38 @@ if ($frugal) { # this whole block should go to a contig "factory"
         }
     }
     else {
-        $logger->warning("CAF file $caffilename has no reads");
-	$adb->disconnect();
-	exit 1;
+        $logger->warning("Arcturus import of $gap4dbname NOT STARTED as CAF file $caffilename has no reads");
+			$adb->disconnect();
+			print STDERR "Marking this import end time\n";
+			my $status = $project->markImport("end");
+
+			unless ($status) {
+				$logger->error("Unable to set end time for import of project $pidentifier  by $username");
+			}
+			exit 1;
     }
 
     @contiginventory = @contignames;
 
     $logger->monitor("after inventory",memory=>1,timing=>1) if $usage;
+}
+
+# if there are any reads found in another project, finish now
+ if (keys(%projectreadhash) > 0) {
+		$logger->severe("Loading is aborted");
+		my $projectreadmessage = &printprojectreadhash(%projectreadhash);
+		$logger->severe($projectreadmessage);
+		my $subject = "Arcturus import of $gap4dbname NOT STARTED as reads already exist elsewhere in  $organism in $instance";
+		print STDERR "Marking this import end time\n";
+		my $status = $project->markImport("end");
+
+		unless ($status) {
+			$logger->error("Unable to set end time for import of project $pidentifier  by $username");
+		}
+
+		&sendMessage($user, $subject, $projectreadmessage); 
+		$adb->disconnect();
+		exit 1;
 }
 
 $logger->flush();
@@ -1012,7 +1073,7 @@ print STDOUT " end no frugal scan\n";
 
         my $nr = $contig->getNumberOfReads();
 
-        $logger->warning("Processing contig $identifier with $nr reads ... ") if ($nr > 1);
+        $logger->warning("\n\nProcessing contig $identifier with $nr reads ... ") if ($nr > 1);
 
         if ($nr < $minnrofreads) {
             $logger->warning("$identifier has less than $minnrofreads reads");
@@ -1081,6 +1142,7 @@ print STDOUT " end no frugal scan\n";
 
 # &testeditedconsensusreads($contig); 
 
+
         if ($contigload) {
 
 	    $logger->info("Loading contig into database");
@@ -1099,15 +1161,18 @@ print STDOUT " end no frugal scan\n";
             $logger->monitor("before loading ($nr) ",memory=>1,timing=>1) if $usage;
             my ($added,$msg) = $adb->putContig($contig, $project,%loptions);
             $logger->monitor("after loading ($nr) ",memory=>1,timing=>1) if $usage;
+						#$logger->warning("putContig has returned ($added, $msg)");
 
             if ($added) {
                 $loaded++;
                 $lastinsertedcontig = $added;
                 push @insertedcontigids, $added;
-                $logger->info("Contig $identifier with $nr reads :"
-                             ." status $added, $msg");
-                $logger->special("Contig $identifier with $nr reads :"
-                                ." status $added, $msg");
+
+		my $logmessage = "Contig $identifier with $nr reads : status $added, $msg";
+
+                $logger->info($logmessage);
+		$logger->warning($logmessage);
+                $logger->special($logmessage);
             # Record the mapping from CAF contig name to Arcturus ID, if 
             # the user specified a map file
 		print $fhMapfile "$identifier $added\n" if defined($fhMapfile);
@@ -1115,7 +1180,7 @@ print STDOUT " end no frugal scan\n";
 # replace the input rank by the scaffold ranking, or, if absent by the nextrank count
                 if ($scaffold) {
                     $rank = $scaffold->{$rank} || $nextrank++;
-		}
+								}
                 push @scaffoldlist,[($added,$rank,'forward')] unless $noscaffold;
 # here : putScaffoldInfo; if 
 # does this require an extra state method? Or just add to Scaffold instance?
@@ -1135,7 +1200,14 @@ print STDOUT " end no frugal scan\n";
 
                 $logger->warning("WARNING! Contig $identifier with $nr reads was NOT ADDED :"
                                 ."\n$msg",preskip=>1);
+                $logger->special("WARNING! Contig $identifier with $nr reads was NOT ADDED :"
+                                ."\n$msg",preskip=>1);
                 $missed++;
+
+								# KATE: put this contig in the hash ready for the RT ticket: there are $missed of these
+								# which can be added by re-running the import once the locks are released or other errors fixed
+		    	      $missedcontighash{$contigname}= $msg;
+
 # for discontinuous contigs: try break
                 if ($msg =~ /discontinuity/i) {
 
@@ -1166,20 +1238,12 @@ print STDOUT " end no frugal scan\n";
                     $contig->writeToCaf(*STDOUT);
 	        }
 
-# FAILED to insert a contig for whatever reason; default ABORT the whole session and remove inserted contigs
+# Now we are catching the timeouts, the default is to go on to the next contig 
+			next;
 
-                next if $noabort;
-
-                # ABORT TO BE COMPLETED
-
-                foreach my $contig_id (@insertedcontigids) {
-#                   $adb->deleteContig($contig_id);
-		}
-
-                exit 2;
-            }
+           }
 #$logger->monitor("memory usage after loading contig ".$contig->getContigName(),memory=>1);
-        }
+        } # END while contig 
 
         elsif ($contigtest || $loadcontigtags || $testcontigtags) {
 
@@ -1297,6 +1361,8 @@ if ($loaded && $project) {
         chomp $gap4dbname;
     }
     $project->setGap4Name($gap4dbname);
+		
+		#
     my $Scaffold = \@scaffoldlist; # to be replaced by a new Class ?
     $project->markImport($Scaffold,type=>'finisher project'
 		        	  ,source=>"Arcturus contig-loader");
@@ -1332,15 +1398,27 @@ unless ($lockstatusfound && $autolockmode) {
     $project->releaseLock() || $logger->severe("could not release lock");
 }
 
+print STDERR "Marking this import end time\n";
+my $status = $project->markImport("end");
+
+unless ($status) {
+		$logger->error("Unable to set end time for import of project $pidentifier  by $username");
+}
+
 $adb->disconnect();
 
 # send messages to users, if any
+my $missedcontigmessage = "";
 
-my $addressees = $adb->getMessageAddresses(1);
+my $message = $adb->getMessageForUser($user);
+my $subject = "Arcturus import $gap4dbname has FAILED for $organism in $instance";
+&sendMessage($user, $subject, $message) if $message;
 
-foreach my $user (@$addressees) {
-    my $message = $adb->getMessageForUser($user);
-    &sendMessage($user, $message, $instance) if $message;
+if ($missed > 0) {
+	my $subject = "Arcturus import $gap4dbname has MISSED CONTIGS for $organism in $instance";
+	$missedcontigmessage = &printmissedcontighash(%missedcontighash);
+	$logger->severe($missedcontigmessage);
+	&sendMessage($user, $subject, $missedcontigmessage); 
 }
 
 # Close the CAF contig name to Arcturus ID map file, if it was opened
@@ -1353,6 +1431,86 @@ exit 1; # no errors but no contigs loaded
 #------------------------------------------------------------------------
 # subroutines
 #------------------------------------------------------------------------
+
+sub checkprojectforread { 
+# if the project for the read is different, add it to the projectreadhash
+# to be printed out when the run is aborted
+    my ($readname, $projectnametoload) = @_ ;   # readname and projectname from the import file currently being looked at
+    my $contigname = "";
+		my $projectname = "";
+
+# find the current project in the latest contig for this read already stored in Arcturus
+# convert all project names to upper case
+
+    my $dbh = $adb->getConnection();
+    
+    #print STDERR "Checking that read $readname does not already exist in another project\n";
+
+	  my $projectcontigsquery = "select PROJECT.name,  READINFO.read_id, CURRENTCONTIGS.gap4name from 
+						 PROJECT, CURRENTCONTIGS, MAPPING, SEQUENCE, SEQ2READ, READINFO where
+						 PROJECT.project_id = CURRENTCONTIGS.project_id and
+						 SEQ2READ.read_id = READINFO.read_id and
+						 SEQ2READ.`seq_id` = SEQUENCE.seq_id and
+						 MAPPING.seq_id = SEQUENCE.seq_id and
+						 MAPPING.contig_id = CURRENTCONTIGS.contig_id and 
+						 READINFO.readname = '$readname'";
+			    
+	  my $projectcontigs = $dbh->selectall_arrayref($projectcontigsquery)||
+	  	die("Failed to create or execute query \"$projectcontigsquery\": $?");
+
+		foreach my $projectcontig (@{$projectcontigs}) {
+				$projectname = @$projectcontig[0];
+				$contigname = @$projectcontig[1];
+    		unless ($projectname eq ""){
+				  if (uc ($projectnametoload) ne uc($projectname) ) {
+        	  print STDERR "Read $readname being loaded from $projectnametoload already exists in project $projectname\n" ;
+		    	  $projectreadhash{$projectname}{$readname} = $contigname;
+					}
+				}
+		}
+}
+
+#-------------------------------------------------------------------------------
+
+sub printprojectreadhash {
+# returns a message to warn the user before aborting the import
+
+    my $message = "The import has NOT been started because some reads in the import file you are using already exist in other projects:\n";
+
+    while (my ($project, $reads) = each %projectreadhash) {
+    # each line has project -> (readname -> contig)*
+      $message = $message."\nproject $project already holds: \n";
+      while (my ($readname, $contigid) = each (%$reads)) {
+        $message = $message."\tread $readname in contig $contigid\n";
+      }
+    }
+
+    $message .= "\nThe import has NOT been started because some reads in the input file you are using already exist in these projects:\n";
+
+    while (my ($project, $reads) = each %projectreadhash) {
+			my $readcount = scalar keys(%$reads);
+			$message .= "\tproject $project has $readcount reads\n";
+		}
+
+    $message .= "\nThe import has NOT been started because some reads in the input file you are using already exist in the above projects\n";
+
+	return $message;
+}
+
+#-------------------------------------------------------------------------------
+sub printmissedcontighash {
+# returns a message to warn the user before aborting the import
+
+    my $message = "This is to let you know that the import will need to be run again as some contigs have not been loaded:\n";
+
+    while (my ($contig, $reason) = each %missedcontighash) {
+      $message = $message."\n Contig $contig failed to load because $reason\n";
+    }
+
+	return $message;
+}
+
+#-------------------------------------------------------------------------------
 
 sub testreadsindatabase {
 # returns number of reads (still) ,missing after tries to load them
@@ -1697,33 +1855,31 @@ sub scaffoldfileparser { # TO BE TESTED
 }
 
 #------------------------------------------------------------------------
-
 sub sendMessage {
-    my ($user,$message,$instance) = @_;
-
-    if ($instance eq 'test') {
-	print STDOUT "TEST MODE -- This message would be mailed user $user:\n$message\n\n";
-	return;
+   my ($user, $subject, $message) = @_;
+ 
+   my $to = "";
+   my $cc = "";
+ 
+   if ($instance eq 'test') {
+       $to = $user;
     }
-
-    print STDOUT "message to be emailed to user $user:\n$message\n\n";
-
-#    This does not work the way Ed thinks it does, because arcturus-help is
-#    a key in the mail.aliases NIS map and the +suffix trick cannot be used.
-#
-#    my $helpdesk = "'arcturus-help'";
-#    $user="$helpdesk+$user";
-#    $user="$helpdesk+ejz"; # temporary redirect
-
+    else {
+		  $to = DEFAULT_HELPDESK_EMAIL;
+      $cc = $user if defined($user);
+    }
+ 
+    print STDOUT "Sending message to $to\n";
+ 
     my $mail = new Mail::Send;
-    $mail->to($user);
-    $mail->subject("Arcturus contig transfer requests");
-    $mail->add("X-Arcturus", "contig-transfer-manager");
-    my $handle = $mail->open;
-    print $handle "$message\n";
-    $handle->close;
-    
-}
+     $mail->to($to);
+     $mail->cc($cc);
+     $mail->subject($subject);
+     my $handle = $mail->open;
+     print $handle "$message\n";
+     $handle->close or die "Problems sending mail $subject with content $message to $to cc to $cc: $!\n";
+ 
+ }
 
 #------------------------------------------------------------------------
 

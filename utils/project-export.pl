@@ -5,6 +5,7 @@ use strict;
 use FileHandle;
 
 use ArcturusDatabase;
+use Project;
 
 use Logging;
 
@@ -236,9 +237,9 @@ if (!$adb || $adb->errorStatus()) {
 }
  
 my $URL = $adb->getURL;
+my $dbh = $adb->getConnection();
 
 $logger->info("Database $URL opened succesfully");
- 
 #----------------------------------------------------------------
 # get an include list from a FOFN (replace name by array reference)
 #----------------------------------------------------------------
@@ -367,23 +368,53 @@ foreach my $identifier (@identifiers) {
         $logger->warning("Unknown project $identifier");
     }
 }
+#-----------------------------------------------------------------------------
+# check that there is not an export or import already running for this project
+#-----------------------------------------------------------------------------
+my $pi = 0;
+foreach my $project (@projects) {
+	my $project_id = $project->getProjectID();
+	my $projectname = $project->getProjectName();
+	print STDERR "Checking if project $pi $projectname ($project_id) already has an import or export running\n";
+	my ($username, $action, $starttime, $endtime) = $project->getImportExportAlreadyRunning();
+
+	unless (defined($endtime)) {            
+		$logger->severe("Project $projectname ($project_id) already has a $action running started by $username at $starttime so this export has been ABORTED");
+    splice @projects,$pi,1; # remove project from list
+	}
+	else {
+		print STDERR "Last $action was run by $username at $starttime finishing at $endtime\n";
+		print STDERR "Marking this export start time\n";
+		my $status = $project->markExport("start");
+		unless ($status) {
+			$logger->severe("Status is $status so unable to set start time for project export for $projectname");
+  		$adb->disconnect();
+  		exit 1;
+		}
+	}
+	$pi++;
+}
 
 # if the projects should be locked: acquire the lock here
-
 my $i = 0;
 # acquire the lock on the projects
 while ($lock && $i < scalar(@projects)) {
-    my $project = $projects[$i];
-    my ($status,$msg) = $project->acquireLock();
-    if ($status && $status == 2) { # success
-        $i++;
-        next;
+	print STDERR "Obtaining a lock for the $i th project ...";
+  my $project = $projects[$i];
+  my ($status,$msg) = $project->acquireLock();
+  if ($status && $status == 2) { # success
+    $i++;
+		print STDERR " lock acquired.\n";
+    next;
     }
+ 
+	print STDERR " skipping project\n";
+	my $projectname = $project->getProjectName();
  # failed to acquirelock on project
     $logger->severe("Failed to acquire lock on project "
-		   .$project->getProjectName()." : $msg");
+		   .$projectname." : $msg");
     splice @projects,$i,1; # remove project from list
-}
+}   
 
 # okay, here we have collected all projects to be exported
 
@@ -507,7 +538,15 @@ foreach my $project (@projects) {
 # no contigs dumped, but no errors either
         $logger->warning("no contigs exported for project $projectname");
     }
-}
+
+	print STDERR "Marking this export end time\n";
+	my $status = $project->markExport("end");
+	unless ($status) {
+		$logger->severe("Status is $status so unable to set end time for project export for $projectname");
+  	$adb->disconnect();
+  	exit 1;
+	}
+} # end foreach project
 
 $adb->disconnect();
 

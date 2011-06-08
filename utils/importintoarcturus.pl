@@ -2,33 +2,55 @@
 
 use strict;
 
+use Cwd;
+use File::Path;
+use Mail::Send;
+
 use ArcturusDatabase;
+use RepositoryManager;
 
-# import a single gap4 database into arcturus
+use constant WORKING_VERSION => '0';
+use constant BACKUP_VERSION => 'B';
 
-# script to be run from directory of gap4 database to be imported 
+# import a single gap database into arcturus
 
 # for input parameter description use help
 
 #------------------------------------------------------------------------------
 
-my $pwd = `pwd`; chomp $pwd; # the current directory
-   $pwd =~ s?.*automount.*/nfs?/nfs?;
-   $pwd =~ s?.*automount.*/root?/nfs?;
+my $pwd = cwd();
+
+my $username = $ENV{'USER'};
+
 my $basedir = `dirname $0`; chomp $basedir; # directory of the script
+
 my $arcturus_home = "${basedir}/..";
-$arcturus_home =~ s?/utils/\.\.??;
+
 my $javabasedir   = "${arcturus_home}/utils";
+
+my $badgerbin = "$ENV{BADGER}/bin";
+
+my $gaptoSam = "$badgerbin/gap5_export -test "; # test to be disabled later
+my $gapconsensus = "$badgerbin/gap5_consensus ";
+
+my $gapconsistency = "$badgerbin/gap4_check_db";
+
+my $samtools = "/software/solexa/bin/aligners/samtools/current/samtools";
+
+my $java_opts = defined($ENV{'JAVA_DEBUG'}) ?
+    "-Ddebugging=true -Dtesting=true -Xmx4000M" : "-Xmx4000M";
 
 #------------------------------------------------------------------------------
 # command line input parser
 #------------------------------------------------------------------------------
 
-my ($instance,$organism,$projectname,$assembly,$gap4name,$version);
+my ($instance,$organism,$projectname,$assembly,$gapname,$version);
+
+my $gap_version = 0;
 
 my $problemproject = 'PROBLEMS'; # default
 
-my $import_script = "${arcturus_home}/utils/new-contig-loader";
+my $import_script;
 
 my $scaffold_script = "${arcturus_home}/utils/contigorder.sh";
 
@@ -36,9 +58,9 @@ my $repair = "-movetoproblems";
 
 my ($forcegetlock,$keep,$abortonwarning,$noagetest,$rundir,$debug);
 
-my $validkeys = "instance|i|organism|o|project|p|assembly|a|gap4name|g|"
+my $validkeys = "instance|i|organism|o|project|p|assembly|a|gapname|g|"
               . "version|v|superuser|su|problem|script|abortonwarning|aow|"
-              . "noagetest|nat|keep|rundir|rd|debug|help|h|passon|po";
+              . "noagetest|nat|keep|rundir|rd|debug|help|h|passon|po|java_opts|gap4|gap5";
 
 #------------------------------------------------------------------------------
 
@@ -64,15 +86,15 @@ while (my $nextword = shift @ARGV) {
         die "You can't re-define project" if $projectname;
         $projectname  = shift @ARGV;
         $version = "0" unless defined($version);
-        $gap4name = uc($projectname) unless $gap4name;
+        $gapname = uc($projectname) unless $gapname;
     }
 
     if ($nextword eq '-assembly' || $nextword eq '-a') { # optional
         $assembly = shift @ARGV;
     }
 
-    if ($nextword eq '-gap4name' || $nextword eq '-g') { # optional, default project
-        $gap4name = shift @ARGV;
+    if ($nextword eq '-gapname' || $nextword eq '-g') { # optional, default project
+        $gapname = shift @ARGV;
     }
 
     if ($nextword eq '-version'  || $nextword eq '-v') { # optional, default 0
@@ -104,6 +126,14 @@ while (my $nextword = shift @ARGV) {
         $keep = 1;
     }
 
+    if ($nextword eq '-gap4') {
+        $gap_version   = 4;
+    }
+
+    if ($nextword eq '-gap5') {
+        $gap_version   = 5;
+    }
+
     if ($nextword eq '-superuser' || $nextword eq '-su') {
         $forcegetlock = 1;
     }
@@ -116,8 +146,13 @@ while (my $nextword = shift @ARGV) {
         $debug = 1;
     }
 
+    if ($nextword eq '-java_opts') {
+	$java_opts = shift @ARGV; # abort input parsing here
+    }
+
     if ($nextword eq '-help' || $nextword eq '-h') {
-        &showusage(); # and exit
+        &showUsage();
+	exit 0;
     }
 
     if ($nextword eq '-passon' || $nextword eq '-po') {
@@ -125,21 +160,46 @@ while (my $nextword = shift @ARGV) {
     }
 }
 
+$version = "A" unless defined($version);
+
 #------------------------------------------------------------------------------
-# test input
+# Check input parameters
 #------------------------------------------------------------------------------
 
-unless (defined($instance) && defined($organism)) {
-    print STDOUT "\n";
-    print STDOUT "!! -- No database instance specified --\n" unless $instance;
-    print STDOUT "!! -- No organism database specified --\n" unless $organism;
-    &showusage(); # and exit
+unless (defined($instance)) {
+    &showUsage("No instance name specified");
+    exit 1;
+}
+
+unless (defined($organism)) {
+    &showUsage("No organism name specified");
+    exit 1;
 }
 
 unless (defined($projectname)) {
-    print STDOUT "\n";
-    print STDOUT "!! -- No project name specified --\n";
-    &showusage(); # and exit
+    &showUsage("No project name specified");
+    exit 1;
+}
+
+unless ($gap_version > 0) {
+    &showUsage("You must specify either -gap4 or -gap5");
+    exit 1;
+}
+
+#------------------------------------------------------------------------------
+# Create a temporary working directory
+#------------------------------------------------------------------------------
+
+my $tmpdir = "/tmp/" . $instance . "-" . $organism . "-" . $$;
+
+mkpath($tmpdir) or die "Failed to create temporary working directory $tmpdir";
+
+#------------------------------------------------------------------------------
+# Set the JVM options
+#------------------------------------------------------------------------------
+
+if (defined($java_opts)) {
+    $ENV{'JAVA_OPTS'} = $java_opts;
 }
 
 #------------------------------------------------------------------------------
@@ -148,24 +208,23 @@ unless (defined($projectname)) {
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
+
 if (!$adb || $adb->errorStatus()) {
-# abort with error message
-     &showusage("Invalid organism '$organism' on instance '$instance'");
+     &showUsage("Invalid organism '$organism' on instance '$instance'");
+     exit 2;
 }
 
 my ($projects,$msg);
+
 if ($projectname =~ /\D/) {
    ($projects,$msg) = $adb->getProject(projectname=>$projectname);
 }
 else {
    ($projects,$msg) = $adb->getProject(project_id=>$projectname);
 } 
-
-# test uniqueness    
-     
-unless ($projects && @$projects == 1) {
-    &showusage("Invalid or ambiguous project specification: $msg");
-}
+    
+die "Failed to find project $projectname"
+    unless (defined($projects) && ref($projects) eq 'ARRAY' && scalar(@{$projects}) > 0);
 
 my $project = $projects->[0];
 
@@ -174,71 +233,76 @@ my $project = $projects->[0];
 #------------------------------------------------------------------------------
 
 unless (defined($rundir)) {
-# try to pick up the directory from the database
-     $rundir = $project->getDirectory();
-     print STDERR "Undefined directory for project $projectname\n" unless $rundir;
+     my $metadir = $project->getDirectory();
+
+     print STDERR "Undefined meta-directory for project $projectname\n" unless $metadir;
+
+     my $rm = new RepositoryManager();
+
+     my $assembly = $project->getAssembly();
+
+     die "Undefined assembly for project $projectname" unless defined($assembly);
+
+     my $assemblyname = $assembly->getAssemblyName();
+
+     die "Undefined assembly name for project $projectname" unless defined($assemblyname);
+
+     $rundir = $rm->convertMetaDirectoryToAbsolutePath($metadir,
+						       'assembly' => $assemblyname,
+						       'project' => $projectname);
+
+     die "Failed to convert meta-directory $metadir to absolute path" unless defined($rundir);
 }
 
-if ($rundir && $rundir ne $pwd) {
-    print STDOUT "Changing work directory from $pwd to $rundir\n";
-    unless (chdir($rundir)) {
-# failed to change directory, try to recover by staggering the change
-        unless (chdir ("/nfs/repository") && chdir($rundir)) {
-            print STDERR "|| -- Failed to change work directory : "
-                              ."possible automount failure\n";
-	    exit 1;
-	}
-	print STDOUT "chdir recovered from automount failure\n";
-    }
- # get current directory
-    $pwd = `pwd`; chomp $pwd;
-    $pwd =~ s?.*automount.*/nfs?/nfs?;
-    $pwd =~ s?.*automount.*/root?/nfs?;
-}
+die "Directory $rundir is not a valid directory" unless -d $rundir;
+
+die "Failed to chdir to $rundir" unless chdir($rundir);
+
+$pwd = cwd();
 
 #------------------------------------------------------------------------------
-# check existence and accessibility of gap4 database to be imported
+# check existence and accessibility of gap database to be imported
 #------------------------------------------------------------------------------
 
-unless ( -f "${gap4name}.$version") {
-    print STDOUT "!! -- Project $gap4name version $version"
+unless ( -f "${gapname}.$version") {
+    print STDOUT "!! -- Project $gapname version $version"
                      ." does not exist in $pwd --\n";
     exit 1;
 }
 
-if ( -f "${gap4name}.$version.BUSY") {
-    print STDOUT "!! -- Import of project $gap4name aborted:"
+if ( -f "${gapname}.$version.BUSY") {
+    print STDOUT "!! -- Import of project $gapname aborted:"
                      ." version $version is BUSY --\n";
     exit 1;
 }
 
-if ( -f "${gap4name}.A.BUSY") {
-    print STDOUT "!! -- Import of project $gap4name WARNING:"
+if ( -f "${gapname}.A.BUSY") {
+    print STDOUT "!! -- Import of project $gapname WARNING:"
                      ." version A is BUSY --\n";
     exit 1 if $abortonwarning;
 }
 
-if ( -f "${gap4name}.B.BUSY") {
-    print STDOUT "!! -- Import of project $gap4name aborted:"
+if ( -f "${gapname}.B.BUSY") {
+    print STDOUT "!! -- Import of project $gapname aborted:"
                      ." version B is BUSY --\n";
     exit 1;
 }
 
 # determine if script run in standard mode
 
-my $nonstandard = (uc($gap4name) ne uc($projectname) || $version ne '0') ? 1 : 0;
+my $nonstandard = (uc($gapname) ne uc($projectname) || $version ne '0') ? 1 : 0;
 print STDOUT "$0 running in non-standard mode\n" if $nonstandard;
 
 # check age
 
 unless ($version eq "A" || $nonstandard) {
-    my @astat = stat "$gap4name.A";
-    my @vstat = stat "$gap4name.$version";
+    my @astat = stat "$gapname.A";
+    my @vstat = stat "$gapname.$version";
     if (@vstat && @astat && $vstat[9] <= $astat[9]) {
-        print STDERR "!! -- Import of project $gap4name WARNING:"
+        print STDERR "!! -- Import of project $gapname WARNING:"
                      ." version $version is older than version A --\n";
         unless ($noagetest) {
-	    print STDERR "!! -- Import of $gap4name.$version skipped --\n";
+	    print STDERR "!! -- Import of $gapname.$version skipped --\n";
             exit 0;
 	}
     }
@@ -255,7 +319,7 @@ my $command = "$lock_script -i $instance -o $organism -p $projectname -confirm";
 
 $command .= " -su" if $forcegetlock; # (try to) invoke privilege (if user has it)
 
-system ($command);
+&mySystem($command);
 
 if ($?) {
 # project lock cannot be acquired by the current user 
@@ -263,32 +327,119 @@ if ($?) {
     exit 1;
 }
 
+my $import_command;
+print STDOUT "!! -- Arcturus project $projectname is a Gap$gap_version project --\n";
+
+#------------------------------------------------------------------------------
+# check the state of the GAP 4 database before importing it
+#------------------------------------------------------------------------------
+if ($gap_version == 4) {
+	my $check_command = " $gapconsistency $gapname $version";
+	&mySystem($check_command);
+
+	if ($?) {
+# the database fails the consistency check
+	my $mail_message = 
+		"\nYour GAP4 database $gapname.$version is inconsistent so import into Arcturus is ABORTED.\n\n
+ You will need to resolve your problems in GAP before trying to import into Arcturus again. \n\n
+ A Help Desk ticket has been raised, so we can offer help if you need it.  One possible cause is that you may have over-trimmed a contig to make a gap in your Gap project.\n";
+	
+	my $message = 
+    "\n!! ----------------------------------------------------------------------------------------------!!\n
+		$mail_message 
+		\n!! ----------------------------------------------------------------------------------------------!!\n";
+    
+		print STDOUT $message;
+		&sendMessage($username, $mail_message, $gapname, $instance, $organism);
+    exit 1;
+}
+
+
+#------------------------------------------------------------------------------
+# Import the database via a depadded CAF file
+#------------------------------------------------------------------------------
+    $import_script = "${arcturus_home}/utils/new-contig-loader" unless defined($import_script);
+
+    my $padded   = "$tmpdir/${projectname}.padded.caf";
+
+    my $depadded = "$tmpdir/${projectname}.depadded.caf";
+
+    print STDOUT "Converting Gap database $gapname.$version to CAF\n";
+
+    &mySystem("gap2caf -project $gapname -version $version -maxqual 100 -ace $padded");
+
+    unless ($? == 0) {
+	print STDERR "!! -- FAILED to create a CAF file from $gapname.$version ($?) --\n";
+	print STDERR "!! -- Import of $gapname.$version aborted --\n";
+	exit 1;
+    }
+   
+    print STDOUT "Depadding CAF file\n";
+
+    &mySystem("caf_depad < $padded > $depadded");
+
+    unless ($? == 0) {
+	print STDERR "!! -- FAILED to depad CAF file $padded ($?) --\n";
+	print STDERR "!! -- Import of $gapname.$version aborted --\n";
+	exit 1;
+    }
+
+#------------------------------------------------------------------------------
+# extract contig order from the Gap database
+#------------------------------------------------------------------------------
+
+    my $scaffoldfile = "$tmpdir/".lc($gapname.".".$version.".$$.sff");
+    &mySystem("$scaffold_script $gapname $version > $scaffoldfile");
+
+    $import_command  = "$import_script -instance $instance -organism $organism "
+	. "-caf $depadded -defaultproject $projectname "
+#          . "-gapname ${pwd}/$gapname.$version "
+	. "-gap4name ${pwd}/$gapname.$version -scaffoldfile $scaffoldfile "
+	. "-minimum 1 -dounlock -consensusreadname all";
+
+    $import_command .= " @ARGV" if @ARGV; # pass on any remaining input
+} else {
 #------------------------------------------------------------------------------
 # export the database as a depadded CAF file
 #------------------------------------------------------------------------------
+    $import_script = "${arcturus_home}/java/scripts/importbamfile" unless defined($import_script);
 
-my $padded   = "/tmp/${gap4name}.$$.padded.caf";
+    my $samfile = "$tmpdir/${projectname}.sam";
 
-my $depadded = "/tmp/${gap4name}.$$.depadded.caf";
+    my $bamroot = "$tmpdir/${projectname}.bamfile";
+    my $bamfile = "$bamroot.bam";
+    my $idxfile = "$bamroot.bai";
+    
+    my $tmpfile = "$tmpdir/${projectname}.tmpfile.bam"; # intermediate
+    
+    my $consensus = "$tmpdir/${projectname}.consensus.faq";
 
-print STDOUT "Converting Gap4 database $gap4name.$version to CAF\n";
+    print STDOUT "Converting Gap database $gapname.$version to indexed BAM\n";
 
-system ("gap2caf -project $gap4name -version $version -maxqual 100 -ace $padded");
+    &mySystem("$gaptoSam -out $samfile  $gapname.$version"); # create sam file
 
-unless ($? == 0) {
-    print STDERR "!! -- FAILED to create a CAF file from $gap4name.$version ($?) --\n";
-    print STDERR "!! -- Import of $gap4name.$version aborted --\n";
-    exit 1;
-}
-   
-print STDOUT "Depadding CAF file\n";
+    print STDOUT "using samtools to convert SAM to BAM\n";
 
-system ("caf_depad < $padded > $depadded");
+    &mySystem("$samtools view -S -b -u $samfile > $tmpfile") if ($? == 0);    # create raw bam file
 
-unless ($? == 0) {
-    print STDERR "!! -- FAILED to depad CAF file $padded ($?) --\n";
-    print STDERR "!! -- Import of $gap4name.$version aborted --\n";
-    exit 1;
+    print STDOUT "using samtools to sort and index\n";
+
+    &mySystem("$samtools sort $tmpfile $bamroot")            if ($? == 0);    # sort bam file
+
+    &mySystem("$samtools index $bamfile $idxfile")           if ($? == 0);    # index bam file
+
+    print STDOUT "Writing Gap consensus for database $gapname.$version to fastq file\n";
+    
+    &mySystem("$gapconsensus -out $consensus $gapname.$version"); # create fasta file
+    
+    unless ($? == 0) {
+	print STDERR "!! -- FAILED to create a BAM file from $gapname.$version ($?) --\n";
+	print STDERR "!! -- Import of $gapname.$version aborted --\n";
+	exit 1;
+    }
+
+    $import_command  = "$import_script -instance $instance -organism $organism "
+	. "-project $projectname -in $bamfile -consensus $consensus"; 
 }
 
 #------------------------------------------------------------------------------
@@ -296,37 +447,44 @@ unless ($? == 0) {
 #------------------------------------------------------------------------------
 
 unless ($version eq "B" || $nonstandard) {
-    print STDOUT "Backing up version $version to $gap4name.B\n";
-    if (-f "$gap4name.B") {
+    print STDOUT "Backing up version $version to $gapname.B\n";
+    if (-f "$gapname.B") {
 # extra protection against busy B version preventing the backup
-        if ( -f "${gap4name}.B.BUSY") {
-            print STDERR "!! -- Import of project $gap4name ABORTED:"
+        if ( -f "${gapname}.B.BUSY") {
+            print STDERR "!! -- Import of project $gapname ABORTED:"
                         ." version B is BUSY; backup cannot be made --\n";
             exit 1;
         }
-        system ("rmdb $gap4name B");
+        &mySystem("rmdb $gapname B");
         unless ($? == 0) {
-            print STDERR "!! -- FAILED to remove existing $gap4name.B ($?) --\n"; 
-            print STDERR "!! -- Import of $gap4name.$version aborted --\n";
+            print STDERR "!! -- FAILED to remove existing $gapname.B ($?) --\n"; 
+            print STDERR "!! -- Import of $gapname.$version aborted --\n";
+            exit 1;
+        }
+        &mySystem("rmdb $gapname $version~");
+        unless ($? == 0) {
+            print STDERR "!! -- FAILED to remove existing $gapname.$version~ ($?) --\n"; 
+            print STDERR "!! -- Import of $gapname.$version aborted --\n";
             exit 1;
         }
     }
-    system ("cpdb $gap4name $version $gap4name B");
+    &mySystem("cpdb $gapname $version $gapname B");
     unless ($? == 0) {
-        print STDERR "!! -- WARNING: failed to back up $gap4name.$version ($?) --\n";
+        print STDERR "!! -- WARNING: failed to back up $gapname.$version ($?) --\n";
         if ($abortonwarning) {
-            print STDERR "!! -- Import of $gap4name.$version aborted --\n";
+            print STDERR "!! -- Import of $gapname.$version aborted --\n";
             exit 1;
         }
-    }       
+		}
+		&mySystem ("cpdb $gapname $version $gapname $version~");
+		unless ($? == 0) {
+			print STDERR "!! -- WARNING: failed to back up $gapname.$version to $gapname.$version~ ($?    ) --\n";
+    	if ($abortonwarning) {
+        print STDERR "!! -- Import of $gapname.$version aborted --\n";
+        exit 1;
+     	}
+		}
 }
-
-#------------------------------------------------------------------------------
-# extract contig order from the Gap4 database
-#------------------------------------------------------------------------------
-
-my $scaffoldfile = "/tmp/".lc($gap4name.".".$version.".$$.sff");
-&mySystem ("$scaffold_script $gap4name $version > $scaffoldfile");
 
 #------------------------------------------------------------------------------
 # change the data in Arcturus
@@ -337,28 +495,19 @@ $project->fetchContigIDs(); # load the current contig IDs before import
 
 print STDOUT "Importing into Arcturus\n";
 
-$command  = "$import_script -instance $instance -organism $organism "
-          . "-caf $depadded -defaultproject $projectname "
-#          . "-gap4name ${pwd}/$gap4name.$version "
-          . "-gap4name ${pwd}/$gap4name.$version -scaffoldfile $scaffoldfile "
-          . "-minimum 1 -dounlock -consensusreadname all";
-$command .= " @ARGV" if @ARGV; # pass on any remaining input
-
-#print STDERR "$command\n" if @ARGV; # list command if parms transfer (temporary)
-
-my $rc = &mySystem ($command);
+my $rc = &mySystem($import_command);
 
 # exit status 0 for no errors with or without new contigs imported
 #             1 (or 256) for an error status 
 
 if ($rc) {
-    print STDERR "!! -- FAILED to import from CAF file $depadded ($?) --\n";
+    print STDERR "!! -- FAILED to import project ($?) --\n";
     exit 1;
 }
 
 # decide if new contigs were imported by probing the project again
 
-elsif ($project->hasNewContigs()) {
+if ($gap_version == 4 && $project->hasNewContigs()) {
 
 #------------------------------------------------------------------------------
 # consensus calculation
@@ -371,7 +520,7 @@ elsif ($project->hasNewContigs()) {
         $database = "-instance $instance -organism $organism";
     }
  
-    &mySystem ("$consensus_script $database -project $projectname");
+    &mySystem("$consensus_script $database -project $projectname");
 
 #------------------------------------------------------------------------------
 # consistence tests after import
@@ -379,19 +528,15 @@ elsif ($project->hasNewContigs()) {
 
     my $allocation_script = "${arcturus_home}/utils/read-allocation-test";
 
-    my $username = $ENV{'USER'};
-# if script is run in test mode add .pl to bypass the wrapper
-    $allocation_script .= ".pl" if (defined($username) && $basedir =~ /$username/);
-
 # first we test between projects, then inside, because inside test may reallocate
 
     print STDOUT "Testing read allocation for possible duplicates between projects\n";
 
 # do not use repair mode for inconsistencies between projects, just record them
 
-    my $allocation_b_log = "readallocation-b-.$$.${gap4name}.log"; # between projects
+    my $allocation_b_log = "readallocation-b-.$$.${gapname}.log"; # between projects
 
-    &mySystem ("$allocation_script -instance $instance -organism $organism "
+    &mySystem("$allocation_script -instance $instance -organism $organism "
            ."-nr -problemproject $problemproject -workproject $projectname "
            ."-between -log $allocation_b_log -mail arcturus-help");
 
@@ -400,36 +545,38 @@ elsif ($project->hasNewContigs()) {
 
 # use repair mode for inconsistencies inside the project
 
-    my $allocation_i_log = "readallocation-i-.$$.${gap4name}.log"; # inside project
+    my $allocation_i_log = "readallocation-i-.$$.${gapname}.log"; # inside project
 
-    &mySystem ("$allocation_script -instance $instance -organism $organism "
+    &mySystem("$allocation_script -instance $instance -organism $organism "
            ."$repair -problemproject $problemproject -workproject $projectname "
            ."-inside -log $allocation_i_log -mail arcturus-help");
 
-    print STDOUT "New data from database $gap4name.$version successfully processed\n";
+    print STDOUT "New data from database $gapname.$version successfully processed\n";
 }
 
 else {
-    print STDOUT "Database $gap4name.$version successfully processed, "
+    print STDOUT "Database $gapname.$version successfully processed, "
                . "but does not contain new contigs\n";
 }
-     
+
 $adb->disconnect();
 
 #-------------------------------------------------------------------------------
 
 unless ($keep) {
 
-    print STDOUT "Cleaning up\n";
-
-    &mySystem ("rm -f $padded $depadded $scaffoldfile");
-
-# purge readallocation logs older than a given date  TO BE COMPLETED
-# "find . -mtime +30 -type f -exec rm -f {} \;"
-# cleanup files of name "readallocation*log"
+		print STDOUT "Cleaning up original version $gapname.$version ($gapname.$version~ remains for your convenience)\n";
+		     system ("rmdb $gapname $version");
+		     unless ($? == 0) {
+		        print STDERR "!! -- WARNING: failed to remove $gapname.$version ($?) --\n";
+		}
+# retain the CAF files for comparison with previous work
+    #print STDOUT "Cleaning up temporary files in $tmpdir\n";
+    #&mySystem("rm -r -f $tmpdir");
 }
 
 print STDOUT "\n\nIMPORT OF $projectname HAS FINISHED.\n";
+print STDOUT "The Gap" . $gap_version . " database was imported from $rundir\n";
 
 exit 0;
 
@@ -438,10 +585,14 @@ exit 0;
 sub mySystem {
     my ($cmd) = @_;
 
+    print STDERR "Executing system($cmd)\n";
+
+    return 0 if $ENV{'DUMMY_RUN'};
+
     my $res = 0xffff & system($cmd);
+
     return 0 if ($res == 0); # success
 
-    print STDERR "$cmd\n";
     printf STDERR "system(%s) returned %#04x: ", $cmd, $res;
 
     if ($res == 0xff00) {
@@ -458,24 +609,20 @@ sub mySystem {
 	if ($res & 0x80) {print STDERR " (core dumped)"; }
 	print STDERR "\n";
     }
-    exit 1;
+
+    return $res;
 }
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 
-sub showusage {
-    my $code = shift || 0;
+sub showUsage {
+    my $code = shift;
 
     print STDERR "\n";
-    print STDERR "\nParameter input ERROR for $0: $code \n" if $code;
+    print STDERR "\nERROR for $0: $code \n" if defined($code);
     print STDERR "\n";
-    print STDERR "Import a Gap4 database into Arcturus for a specified project\n";
-    print STDERR "\n";
-    print STDERR "script to run in directory of Gap4 database\n";
-    print STDERR "\n";
-    $version = "0" unless defined($version);
-    print STDERR "import will be from database 'project.$version'\n";
+    print STDERR "Import a Gap database into Arcturus for a specified project\n";
     print STDERR "\n";
     print STDERR "MANDATORY PARAMETERS:\n";
     unless ($organism && $instance) {
@@ -486,17 +633,22 @@ sub showusage {
     print STDERR "\n";
     print STDERR "-project\t(p) unique project identifier (number or name)\n";
     print STDERR "\n";
+    print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n";
+    print STDERR "\n";
+    print STDERR "-gap4\t\tImport the assembly as a Gap4 database\n";
+    print STDERR "-gap5\t\tImport the assembly as a Gap5 database\n";
+    print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-assembly\t(a) needed to resolve ambiguous project name\n";
     print STDERR "\n";
-    print STDERR "-gap4name\t(g) Gap4 database if different from default "
+    print STDERR "-gapname\t(g) Gap database if different from default "
                 ."project.0\n";
-    print STDERR "-version\t(v) Gap4 database version if different from 0\n";
+    print STDERR "-version\t(v) Gap database version if different from 0\n";
     print STDERR "\n";
     print STDERR "-rundir\t\t(rd) explicitly set directory where script will run\n";
     print STDERR "\n";
-    print STDERR "-script\t\t(default contig-loader) name of loader script used\n";
+    print STDERR "-script\t\tname of loader script to use\n";
     print STDERR "\n";
     print STDERR "-superuser\t(su) (try to) lock the database using su privilege\n";
     print STDERR "\n";
@@ -504,14 +656,41 @@ sub showusage {
                . "parent contigs\n";
     print STDERR "\n";
     print STDERR "-aow\t\t(abortonwarning) stop if any db is BUSY or backup fails\n";
-    print STDERR "-nat\t\t(noagetest) skip age test on Gap4 database(s)\n";
+    print STDERR "-nat\t\t(noagetest) skip age test on Gap database(s)\n";
     print STDERR "-keep\t\t keep temporary files\n";
     print STDERR "\n";
     print STDERR "-debug\n";
     print STDERR "\n";
-    print STDERR "\nParameter input ERROR for $0: $code \n" if $code;
+    print STDERR "\nERROR for $0: $code \n" if defined($code);
     exit 1;
 }
 
 #------------------------------------------------------------------------------
+
+sub sendMessage {
+    my ($user, $message, $projectname, $instance, $organism) = @_;
+  
+    my $fulluser = $user.'@sanger.ac.uk' if defined($user);
+    my $to = "";
+		my $cc = "Nobody";
+  
+    if ($instance eq 'test') {
+        $to = $fulluser;
+     }
+     else {
+       $to = 'arcturus-help@sanger.ac.uk';
+       $cc = $fulluser;
+     }
+  
+     print STDOUT "Sending message to $to cc $cc\n";
+  
+     my $mail = new Mail::Send;
+      $mail->to($to);
+      $mail->cc($cc);
+      $mail->subject("Project $projectname in $organism in the $instance LDAP instance has failed the Gap4 database check");
+      my $handle = $mail->open;
+      print $handle "$message\n";
+      $handle->close or die "Problems sending mail to $to cc to $cc: $!\n";
+  
+ }
 
