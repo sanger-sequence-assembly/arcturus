@@ -264,10 +264,21 @@ $pwd = cwd();
 # check existence and accessibility of gap database to be imported
 #------------------------------------------------------------------------------
 
-unless ( -f "${gapname}.$version") {
+if ($gap_version == 4) {
+	unless ( -f "${gapname}.$version") {
     print STDOUT "!! -- Project $gapname version $version"
                      ." does not exist in $pwd --\n";
     exit 1;
+	}
+}
+else {
+	my $extension = "g5d";
+
+	unless ( -f "${gapname}.$version.$extension") {
+	    print STDOUT "!! -- Project $gapname version $version stored in file $gapname.$version.$extension"
+			                     ." does not exist in $pwd --\n";					     
+			 exit 1;
+	 }
 }
 
 if ( -f "${gapname}.$version.BUSY") {
