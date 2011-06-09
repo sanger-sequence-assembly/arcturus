@@ -523,9 +523,9 @@ if ($gap_version == 4) {
 
 print STDERR "Changing access privileges on Gap database\n";
 
-&mySystem ("chmod ug-w ${gapname}.$version");
+&mySystem ("chmod ug-w ${gapname}.$version.g5d");
 
-&mySystem ("chmod ug-w ${gapname}.$version.aux");
+&mySystem ("chmod ug-w ${gapname}.$version.g5x");
 
 #------------------------------------------------------------------------------
 # marking project as exported (only in standard export mode) is now done in contig-export and new-contig-loader using ADBProject routines, not a seperate PERL script

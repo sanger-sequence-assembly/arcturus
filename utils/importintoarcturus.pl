@@ -31,7 +31,7 @@ my $javabasedir   = "${arcturus_home}/utils";
 my $badgerbin = "$ENV{BADGER}/bin";
 
 my $gaptoSam = "$badgerbin/gap5_export -test "; # test to be disabled later
-my $gapconsensus = "$badgerbin/gap5_consensus ";
+my $gapconsensus = "$badgerbin/gap5_consensus -test ";
 
 my $gapconsistency = "$badgerbin/gap4_check_db";
 
@@ -574,6 +574,8 @@ $adb->disconnect();
 
 #-------------------------------------------------------------------------------
 
+# retain the CAF files for comparison with previous work
+$keep = 1;
 unless ($keep) {
 
 		print STDOUT "Cleaning up original version $gapname.$version ($gapname.$version~ remains for your convenience)\n";
@@ -581,9 +583,8 @@ unless ($keep) {
 		     unless ($? == 0) {
 		        print STDERR "!! -- WARNING: failed to remove $gapname.$version ($?) --\n";
 		}
-# retain the CAF files for comparison with previous work
-    #print STDOUT "Cleaning up temporary files in $tmpdir\n";
-    #&mySystem("rm -r -f $tmpdir");
+    print STDOUT "Cleaning up temporary files in $tmpdir\n";
+    &mySystem("rm -r -f $tmpdir");
 }
 
 print STDOUT "\n\nIMPORT OF $projectname HAS FINISHED.\n";
