@@ -14,4 +14,6 @@ source ${basedir}/setup.csh
 set ARCTURUS_JAR=${ARCTURUS_HOME}/../arcturus2.jar
 echo Arcturus JAR file is $ARCTURUS_JAR
 
+set ARCTURUS_APPS_PACKAGE=uk/ac/sanger/arcturus/apps
+
 ${JAVA_HOME}/bin/java ${JAVA_OPTS} -classpath ${ARCTURUS_JAR} ${ARCTURUS_APPS_PACKAGE}.ContigLoader $*
