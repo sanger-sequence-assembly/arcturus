@@ -210,8 +210,11 @@ if ($nolock && $version eq 'A') {
 # change to the right directory; use current if rundir is defined but 0
 #------------------------------------------------------------------------------
 
+my $adb;
+my $project;
+
 unless (defined($rundir)) {
-     my $adb = new ArcturusDatabase (-instance => $instance,
+     $adb = new ArcturusDatabase (-instance => $instance,
 			             -organism => $organism);
 
      if (!$adb || $adb->errorStatus()) {
@@ -231,7 +234,7 @@ unless (defined($rundir)) {
      die "Failed to find project $projectname"
 	 unless (defined($projects) && ref($projects) eq 'ARRAY' && scalar(@{$projects}) > 0);
 
-     my $project = $projects->[0];
+     $project = $projects->[0];
 
      my $metadir = $project->getDirectory();
 
@@ -427,7 +430,7 @@ if ($gap_version == 4) {
     }
 
     if ( -f "${gapname}.$version") {
-	mySystem("rmdb $gapname $version");
+	&mySystem("rmdb $gapname $version");
 	unless ($? == 0) {
 	    print STDERR "!! -- FAILED to remove existing $gapname.$version ($?) --\n"; 
 	    print STDERR "!! -- Export of $gapname.$version aborted --\n";
@@ -447,6 +450,28 @@ if ($gap_version == 4) {
 #------------------------------------------------------------------------------
 # export the project via a SAM file
 #------------------------------------------------------------------------------
+ 
+ 	my $username = $ENV{'USER'};
+	my $dbh = $adb->getConnection();
+	my ($other_username, $action, $starttime, $endtime) = $project->getImportExportAlreadyRunning($dbh);
+ 
+	print "Checking if project $projectname already has an IMPORT or EXPORT running in the $organism database\n";
+
+	unless (defined($endtime)) {
+   	print STDERR "Project $projectname already has a $action running started by $other_username at $starttime so this export has been ABORTED";
+   	$adb->disconnect();
+   	exit 1;
+	}
+	else {
+   	print STDERR "Project $projectname last $action started by $other_username at $starttime finished at $endtime";
+  	print STDERR "Marking this export start time\n";
+  	my $status = $project->markExport("start");
+		unless ($status) {
+  		print STDERR "Unable to set start time for project $projectname by $username at $starttime so this export has been ABORTED";
+  		$adb->disconnect();
+  		exit 1;
+		}
+	}
     $export_script = "${arcturus_home}/java/scripts/exportsamfile" unless defined($export_script);
 
     my $samfile = "$tmpdir/$projectname.sam";
@@ -477,10 +502,20 @@ if ($gap_version == 4) {
     print STDERR "Command: $command\n";
     my $rc = &mySystem ($command);
 
-    if ($rc) {
-	print STDERR "!! -- FAILED to create valid SAM file $samfile ($?) --\n";
-	exit 1;
-    }
+   if ($rc) {
+		print STDERR "!! -- FAILED to create valid SAM file $samfile ($?) --\n";
+		exit 1;
+   }
+
+	print STDERR "Marking this export end time\n";
+	my $status = $project->markExport("end");
+
+	unless ($status) {
+    print STDERR "Unable to set end time for project $projectname by $username";
+    $adb->disconnect();
+     exit 1;
+	}
+
 
 #------------------------------------------------------------------------------
 # converting SAM file into gap database

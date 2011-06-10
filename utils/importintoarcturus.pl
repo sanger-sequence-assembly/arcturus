@@ -7,6 +7,7 @@ use File::Path;
 use Mail::Send;
 
 use ArcturusDatabase;
+use Project;
 use RepositoryManager;
 
 use constant WORKING_VERSION => '0';
@@ -411,7 +412,7 @@ if ($gap_version == 4) {
     $import_command .= " @ARGV" if @ARGV; # pass on any remaining input
 } else {
 #------------------------------------------------------------------------------
-# export the database as a depadded CAF file
+# import the database as a BAM file
 #------------------------------------------------------------------------------
     $import_script = "${arcturus_home}/java/scripts/importbamfile" unless defined($import_script);
 
@@ -504,17 +505,52 @@ unless ($version eq "B" || $nonstandard) {
 $project->fetchContigIDs(); # load the current contig IDs before import
 #$project->fetchContigIDs(noscaffold=>1); # load the current contig IDs before import
 
+#-----------------------------------------------------------------------------
+# check that there is not an export or import already running for this project
+#-----------------------------------------------------------------------------
+ 
+my $dbh = $adb->getConnection();
+my ($other_username, $action, $starttime, $endtime) = $project->getImportExportAlreadyRunning($dbh);
+ 
+print "Checking if project $projectname already has an IMPORT or EXPORT running in the $organism database\n";
+
+unless (defined($endtime)) {
+   	print STDERR "Project $projectname already has a $action running started by $other_username at $starttime so this import has been ABORTED";
+   	$adb->disconnect();
+   	exit 1;
+}
+else {
+  print STDERR "Marking this import start time\n";
+  my $status = $project->markImport("start");
+	unless ($status) {
+  	print STDERR "Unable to set start time for project $projectname by $username at $starttime so this import has been ABORTED";
+  	$adb->disconnect();
+  	exit 1;
+	}
+}
+
 print STDOUT "Importing into Arcturus\n";
 
 my $rc = &mySystem($import_command);
 
+#-----------------------------------------------------------------------------
 # exit status 0 for no errors with or without new contigs imported
 #             1 (or 256) for an error status 
-
+#-----------------------------------------------------------------------------
 if ($rc) {
     print STDERR "!! -- FAILED to import project ($?) --\n";
     exit 1;
 }
+
+print STDERR "Marking this import end time\n";
+my $status = $project->markImport("end");
+
+unless ($status) {
+    print STDERR "Unable to set end time for project $projectname by $username";
+    $adb->disconnect();
+     exit 1;
+}
+
 
 # decide if new contigs were imported by probing the project again
 
