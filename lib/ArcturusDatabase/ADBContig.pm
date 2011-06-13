@@ -20,8 +20,7 @@ our @EXPORT = qw(getCurrentContigs); # DEPRECATE when view can be used
 
 use ArcturusDatabase::ADBRoot qw(queryFailed);
 
-use constant RETRY_IN_SECS => 60;
-
+use constant RETRY_IN_SECS => 0.0001 * 60;
 #-----------------------------------------------------------------------------
 # constructor and initialisation via constructor of superclass
 #-----------------------------------------------------------------------------
@@ -653,74 +652,74 @@ sub putContig {
     my $contigid = 0;
 
     eval {
-	$dbh->begin_work;
-	$contigid = &putMetaDataForContig($dbh,$log,$contig,$checksum,$user_id,$problems_project_id);
+			$dbh->begin_work;
+			$contigid = &putMetaDataForContig($dbh,$log,$contig,$checksum,$user_id,$problems_project_id);
 
-	unless ($contigid > 0) {
-	    $log->severe("putContig failed to insert metadata for $contigname");
-	    die "failed to insert metadata for $contigname\n\n";
-	    #$message = "failed to insert metadata for $contigname";
-	    #return (0, $message);
-	}
+			unless ($contigid > 0) {
+				$log->severe("putContig failed to insert metadata for $contigname");
+				die "failed to insert metadata for $contigname\n\n";
+				#$message = "failed to insert metadata for $contigname";
+				#return (0, $message);
+			}
 
-	$this->{lastinsertedcontigid} = $contigid;
-	$contig->setContigID($contigid);
+			$this->{lastinsertedcontigid} = $contigid;
+			$contig->setContigID($contigid);
 
 # then load the overall mappings (and put the mapping ID's in the instances)
 
-	unless (&putMappingsForContig($dbh,$contig,$log,type=>'read') ) {
-	    $log->severe("putContig failed to insert contig-to-read mappings for $contigname: rolling back database");
-	    die "failed to insert contig-to-read mappings for $contigname\n\n";
-	    #$message = "failed to insert contig-to-read mappings for $contigname";
-	    #return (0, $message);
-	}
-	
+	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'read') ) {
+			  $log->severe("putContig failed to insert contig-to-read mappings for $contigname: rolling back database");
+				die "failed to insert contig-to-read mappings for $contigname\n\n";
+				#$message = "failed to insert contig-to-read mappings for $contigname";
+				#return (0, $message);
+			}
+
 # the CONTIG2CONTIG mappings
-	
-	unless (&putMappingsForContig($dbh,$contig,$log,type=>'contig')) {
-	    $log->severe("failed to insert contig-to-contig mappings for $contigname: rolling back database");
-	    die "failed to insert contig-to-contig mappings for $contigname\n\n";
-	    #$message = "failed to insert contig-to-contig mappings for $contigname";
-	    #return (0, $message);
-	}
-	
+
+	    unless (&putMappingsForContig($dbh,$contig,$log,type=>'contig')) {
+			  $log->severe("failed to insert contig-to-contig mappings for $contigname: rolling back database");
+				die "failed to insert contig-to-contig mappings for $contigname\n\n";
+				#$message = "failed to insert contig-to-contig mappings for $contigname";
+				#return (0, $message);
+			}
+
 # and contig tags?
-	
-	my %ctoptions = (notestexisting => 1); # it's a new contig
-	
+
+			my %ctoptions = (notestexisting => 1); # it's a new contig
+
 # TODO ? add tagtype selection ? register number opf tags added in Project object
-	unless ($this->putTagsForContig($contig,%ctoptions) ){
-	    $log->severe("failed to insert tags for $contigname: rolling back database");
-	    die "failed to insert tags for $contigname\n\n";
-	    #$message = "Failed to insert tags for $contigname";
-	    #return 0, $message;
-	}
-	
+	    unless ($this->putTagsForContig($contig,%ctoptions) ){
+			  $log->severe("failed to insert tags for $contigname: rolling back database");
+				die "failed to insert tags for $contigname\n\n";
+				#$message = "Failed to insert tags for $contigname";
+				#return 0, $message;
+			}
+
 # update the age counter in C2CMAPPING table (at very end of this insert)
-	
-	$this->buildHistoryTreeForContig($contigid);
-	
+
+			$this->buildHistoryTreeForContig($contigid);
+
 # and assign the contig to the specified project (if possible)
-	
-	$message .= "; ".$this->allocateContigToProject($contig,$project) if $project;
-	
-	$dbh->commit;
+
+			$message .= "; ".$this->allocateContigToProject($contig,$project) if $project;
+
+			$dbh->commit;
     };
-    
+
     if ($@) {
-	$message = "putContig failed to store contig $contigname: " . $@;
-	
-	eval {
-	    $dbh->rollback;
-	};
-	if ($@) {
-	    $message .= "; ***** ROLLBACK FAILED: " . $@ . " *****";
-	}
-	
-	$contig->setContigID(0);
-	$contigid = 0;
+			$message = "putContig failed to store contig $contigname: " . $@;
+
+			eval {
+	    	$dbh->rollback;
+			};
+			if ($@) {
+	    	$message .= "; ***** ROLLBACK FAILED: " . $@ . " *****";
+			}
+
+      $contig->setContigID(0);
+      $contigid = 0;
     }
-    
+
     $dbh->{RaiseError} = 0;
 
     return $contigid, $message;

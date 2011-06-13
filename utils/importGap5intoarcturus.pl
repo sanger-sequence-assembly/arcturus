@@ -22,7 +22,7 @@ my $arcturus_home = "${basedir}/..";
 my $gaproot = "/software/badger/bin";
 
 my $gaptoSam = "$gaproot/gap_export -test "; # test to be disabled later
-my $gapconsensus = "$gaproot/gap_consensus ";
+my $gapconsensus = "$gaproot/gap_consensus -test ";
 my $samtools = "/software/solexa/bin/aligners/samtools/current/samtools";
 
 my $import_script = "${arcturus_home}/java/scripts/importbamfile";
@@ -220,12 +220,13 @@ if ($rundir && $rundir ne $pwd) {
 #------------------------------------------------------------------------------
 # check existence and accessibility of gap database to be imported
 #------------------------------------------------------------------------------
+my $extension = ".g5d";
 
-unless ( -f "${gapname}.$version") {
-    print STDOUT "!! -- Project $gapname version $version"
-                     ." does not exist in $pwd --\n";
-    exit 1;
-}
+unless ( -f "${gapname}.$version.$extension") {
+    print STDOUT "!! -- Project $gapname version $version stored in file $gapname.$version.$extension"
+		                     ." does not exist in $pwd --\n";
+												     exit 1;
+ }
 
 if ( -f "${gapname}.$version.BUSY") {
     print STDOUT "!! -- Import of project $gapname aborted:"
@@ -330,21 +331,35 @@ unless ($version eq "B" || $nonstandard) {
                         ." version B is BUSY; backup cannot be made --\n";
             exit 1;
         }
-        system ("rmdb $gapname B");
+        &mySystem ("rmdb $gapname B");
         unless ($? == 0) {
             print STDERR "!! -- FAILED to remove existing $gapname.B ($?) --\n"; 
             print STDERR "!! -- Import of $gapname.$version aborted --\n";
             exit 1;
         }
+        &mySystem ("rmdb $gapname $version~");
+        unless ($? == 0) {
+            print STDERR "!! -- FAILED to remove existing $gapname.$version~ ($?) --\n"; 
+            print STDERR "!! -- Import of $gapname.$version aborted --\n";
+            exit 1;
+        }
     }
-    system ("cpdb $gapname $version $gapname B");
+    &mySystem ("cpdb $gapname $version $gapname B");
     unless ($? == 0) {
         print STDERR "!! -- WARNING: failed to back up $gapname.$version ($?) --\n";
         if ($abortonwarning) {
             print STDERR "!! -- Import of $gapname.$version aborted --\n";
             exit 1;
         }
-    }       
+    		&mySystem ("cpdb $gapname $version $gapname $version~");
+    		unless ($? == 0) {
+        	print STDERR "!! -- WARNING: failed to back up $gapname.$version to $gapname.$version~ ($?) --\n";
+        	if ($abortonwarning) {
+            print STDERR "!! -- Import of $gapname.$version aborted --\n";
+            exit 1;
+        	}
+				}
+			}
 }
 
 #------------------------------------------------------------------------------
@@ -432,10 +447,14 @@ else {
 $adb->disconnect();
 
 #-------------------------------------------------------------------------------
-
+$keep = 1;
 unless ($keep) {
 
-    print STDOUT "Cleaning up\n";
+    print STDOUT "Cleaning up original version $gapname.$version ($gapname.$version~ remains for your convenience)\n";
+  	system ("rmdb $gapname $version");
+   	unless ($? == 0) {
+      	print STDERR "!! -- WARNING: failed to remove $gapname.$version ($?) --\n";
+    }       
 
 #    &mySystem ("rm -f $samfile $bamfile $scaffoldfile");
 }

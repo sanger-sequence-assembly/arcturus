@@ -382,11 +382,11 @@ unless ($? == 0) {
 # changing access privileges on newly created database
 #------------------------------------------------------------------------------
 
-print STDERR "Changing access provileges on Gap database\n";
+print STDERR "Changing access privileges on Gap database\n";
 
-&mySystem ("chmod ug-w ${gapname}.$version");
+&mySystem ("chmod ug-w ${gapname}.$version.g5d");
 
-&mySystem ("chmod ug-w ${gapname}.$version.aux");
+&mySystem ("chmod ug-w ${gapname}.$version.g5x");
 
 #------------------------------------------------------------------------------
 # marking project as exported (only in standard export mode)

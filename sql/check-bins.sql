@@ -11,7 +11,7 @@ select
     and P.project_id = C.project_id; 
 
 select 
-	sum(C.nreads) 'READS IN CONTIGS WITH MORE THAN 1 READ IN PROJECTS TRASH, FREEASSEMBLY and BIN'
+	sum(C.nreads) 'READS IN CONTIGS WITH MORE THAN 1 READ NOT IN PROJECTS TRASH, FREEASSEMBLY and BIN'
 	from CONTIG as C,PROJECT as P  
 	where C.contig_id in 
      (select distinct CA.contig_id from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)

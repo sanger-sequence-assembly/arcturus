@@ -541,6 +541,7 @@ unless ($projectinheritance{$pinherit}) {
     exit 0;
 }
 
+
 #----------------------------------------------------------------
 # acquire a lock on the project
 #----------------------------------------------------------------
@@ -754,7 +755,7 @@ if ($frugal) { # this whole block should go to a contig "factory"
         # check that the read is not already in another project
             &checkprojectforread($objectname, $pidentifier);
 
-            if ($rejectreadname && $objectname =~ /$rejectreadname/) {
+            if (defined($rejectreadname) && $objectname =~ /$rejectreadname/) {
 		$logger->warning("read $objectname was rejected");
                 next;
 	    }
@@ -829,9 +830,9 @@ if ($frugal) { # this whole block should go to a contig "factory"
         }
     }
     else {
-        $logger->warning("CAF file $caffilename has no reads");
-	$adb->disconnect();
-	exit 1;
+        $logger->warning("Arcturus import of $gap4dbname NOT STARTED as CAF file $caffilename has no reads");
+			$adb->disconnect();
+			exit 1;
     }
 
     @contiginventory = @contignames;
@@ -844,7 +845,8 @@ if ($frugal) { # this whole block should go to a contig "factory"
 		$logger->severe("Loading is aborted");
 		my $projectreadmessage = &printprojectreadhash(%projectreadhash);
 		$logger->severe($projectreadmessage);
-		&sendMessage($user,$projectreadmessage, $instance, $organism); 
+		my $subject = "Arcturus import of $gap4dbname NOT STARTED as reads already exist elsewhere in  $organism in $instance";
+		&sendMessage($user, $subject, $projectreadmessage); 
 		$adb->disconnect();
 		exit 1;
 }
@@ -1207,7 +1209,7 @@ print STDOUT " end no frugal scan\n";
 
            }
 #$logger->monitor("memory usage after loading contig ".$contig->getContigName(),memory=>1);
-        } # END while contig KATE
+        } # END while contig 
 
         elsif ($contigtest || $loadcontigtags || $testcontigtags) {
 
@@ -1368,12 +1370,14 @@ $adb->disconnect();
 my $missedcontigmessage = "";
 
 my $message = $adb->getMessageForUser($user);
-&sendMessage($user, $message, $instance, $organism) if $message;
+my $subject = "Arcturus import $gap4dbname has FAILED for $organism in $instance";
+&sendMessage($user, $subject, $message) if $message;
 
 if ($missed > 0) {
+	my $subject = "Arcturus import $gap4dbname has MISSED CONTIGS for $organism in $instance";
 	$missedcontigmessage = &printmissedcontighash(%missedcontighash);
 	$logger->severe($missedcontigmessage);
-	&sendMessage($user,$missedcontigmessage, $instance, $organism); 
+	&sendMessage($user, $subject, $missedcontigmessage); 
 }
 
 # Close the CAF contig name to Arcturus ID map file, if it was opened
@@ -1811,7 +1815,7 @@ sub scaffoldfileparser { # TO BE TESTED
 
 #------------------------------------------------------------------------
 sub sendMessage {
-   my ($user,$message,$instance, $organism) = @_;
+   my ($user, $subject, $message) = @_;
  
    my $to = "";
    my $cc = "";
@@ -1829,10 +1833,10 @@ sub sendMessage {
     my $mail = new Mail::Send;
      $mail->to($to);
      $mail->cc($cc);
-     $mail->subject("Arcturus project import FAILED for instance=$instance organism=$organism");
+     $mail->subject($subject);
      my $handle = $mail->open;
      print $handle "$message\n";
-     $handle->close or die "Problems sending mail to $to cc to $cc: $!\n";
+     $handle->close or die "Problems sending mail $subject with content $message to $to cc to $cc: $!\n";
  
  }
 

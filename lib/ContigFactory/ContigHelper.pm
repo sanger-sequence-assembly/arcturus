@@ -3418,6 +3418,8 @@ sub newpropagateTagsToContig {
     my $unique = $options{unique} || 0; # default accept all matching mappings
 
     my @mapping = &getMappingFromParentToContig($parent,$target,unique=>$unique);
+    my $pname = $parent->getContigName();
+    my $tname = $target->getContigName();
 
     unless (@mapping) {
         $logger->info("Finding mapping from scratch");
@@ -3425,12 +3427,14 @@ sub newpropagateTagsToContig {
         my %loptions; # to be refined (e.g. banded?)
         my ($nrofsegments,$deallocated) = $target->linkToContig($parent,%loptions);
         unless ($nrofsegments) {
-	    $logger->info("Failed to determine parent to target mapping");
+	    $logger->info("Failed to determine parent to target mapping between $pname and $tname");
             return 0;
 	}
 # now that we have a mapping use recursion
         return $class->propagateTagsToContig($parent,$target,norerun=>1,%options);
     }
+		my $mapping_count = scalar @mapping;
+		$logger->info("Found $mapping_count parent to target mapping between $pname and $tname");
 
 #--------------------------- test the mapping ---------------------------
 

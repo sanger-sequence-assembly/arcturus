@@ -7,10 +7,10 @@ create temporary table oldc2cmapping (
 insert into oldc2cmapping(parent_id,contig_id)
 	 select C2CMAPPING.contig_id,parent_id
 	 from C2CMAPPING left join CONTIG using(contig_id)
-	 where created < @cutoff;
+	 where created < '2011-03-11';
 
 create temporary table oldcontigs as
 select CONTIG.contig_id,nreads,ncntgs,length,created,updated,project_id
   from CONTIG left join oldc2cmapping
   on CONTIG.contig_id = oldc2cmapping.parent_id
-  where oldc2cmapping.parent_id is null and created < @cutoff;
+  where oldc2cmapping.parent_id is null and created < '2011-03-11';

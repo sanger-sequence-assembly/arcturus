@@ -2159,16 +2159,28 @@ sub setUnLockedStatus {
 sub putImportMarkForProject {
     my $this = shift;
     my $project = shift;
+		my $action = shift;
     my $scaffold = shift;
 
-    &verifyParameter($project,'putImportForProject');
+		my $id;
 
-    my $id = &addImportExport ($this->getConnection(),
+    &verifyParameter($project,'putImportForProject') ;
+		my $projectname = "not defined";
+		$projectname = $project->getDirectory()."/".$project->getProjectName().".0";
+
+		if ($action eq "start") {
+    	$id = &startImportExport ($this->getConnection(),
                                $project->getProjectID(),
                                'import',
                                $this->getArcturusUser(),
-                               $project->getGap4Name() || 'not specified');
-
+                  						 $projectname);
+		}
+		else {
+    	$id = &stopImportExport ($this->getConnection(),
+                               $project->getProjectID(),
+                               'import',
+                               $this->getArcturusUser());
+		}
     return $id unless $scaffold;
 
     return 0 unless (ref($scaffold) eq 'ARRAY'); # replace by Scaffold instance ?
@@ -2179,33 +2191,69 @@ sub putImportMarkForProject {
 sub putExportMarkForProject {
     my $this = shift;
     my $project = shift;
+		my $action = shift;
 
     &verifyParameter($project,'putExportForProject');
+		my $projectname = "not defined";
+		$projectname = $project->getDirectory()."/".$project->getProjectName().".A";
 
-    return &addImportExport ($this->getConnection(),
+		if ($action eq "start") {
+    	return &startImportExport ($this->getConnection(),
                              $project->getProjectID(),
                              'export',
                              $this->getArcturusUser(),
-                             $project->getGap4Name() || 'not specified');
+                  					 $projectname);
+		}
+		else {
+    	return &stopImportExport ($this->getConnection(),
+                             $project->getProjectID(),
+                             'export',
+                             $this->getArcturusUser());
+		}
 }
 
-sub addImportExport {
+sub startImportExport {
 # private
-    my $dbh = shift;
-
-    &verifyPrivate($dbh,"addImportExport");
+    my ($dbh, $project_id, $action, $username, $file)  = @_;
 
     my $query = "insert into IMPORTEXPORT "
-              . "(project_id,action,username,file,date) "
-              . "values (?,?,?,?,now())";
+              . "(project_id,action,username,file,starttime, endtime) "
+              . "values (?,?,?,?,now(), NULL)";
 
     my $sth = $dbh->prepare_cached($query);
 
-    my $rc = ($sth->execute(@_) || &queryFailed($query,@_));
+    my $rc = ($sth->execute($project_id, $action, $username, $file) || &queryFailed($query,$project_id, $action, $username, $file));
 
     $sth->finish();
 
     $rc = $dbh->{'mysql_insertid'} if ($rc+0);
+
+    return $rc+0; # true for entry inserted; false for failure
+}
+
+
+sub stopImportExport {
+# private
+    my ($dbh, $project_id, $action, $username)  = @_;
+
+		my $import_id_query = "select max(id) from IMPORTEXPORT where project_id = ? and action = ? and username = ?";
+
+    my $query = "update IMPORTEXPORT set endtime = now() where id = ?";
+
+    my $sthi = $dbh->prepare_cached($import_id_query);
+    my $sth = $dbh->prepare_cached($query);
+
+    my $irc = ($sthi->execute($project_id, $action, $username) || &queryFailed($import_id_query, $project_id, $action, $username));
+
+		my $import_id = 0;
+
+    my @import_line = $sthi->fetchrow_array();
+    $import_id = $import_line[0];
+		$sthi->finish();
+		
+    my $rc = ($sth->execute($import_id) || &queryFailed($query, $import_id));
+
+    $sth->finish();
 
     return $rc+0; # true for entry inserted; false for failure
 }
@@ -2225,7 +2273,7 @@ sub getLastExportOfProject {
 }
 
 sub getLastImportOfProject {
-# get the last import date (of running the import process)
+# get the last import completion date (of running the import process)
     my $this = shift;
     my $project = shift;
 
@@ -2240,11 +2288,11 @@ sub getImportExport {
 # private
     my $dbh = shift;
 
-    my $query = "select max(date) from IMPORTEXPORT"
+    my $query = "select max(endtime) from IMPORTEXPORT"
   	      . " where project_id = ?"
               . "   and action = ?";
     if (scalar(@_) > 2) {
-        $query   .= "   and date >= ?" if ($_[2]);
+        $query   .= "   and endtime >= ?" if ($_[2]);
         pop @_ unless $_[2];
     }
 
@@ -2258,6 +2306,30 @@ sub getImportExport {
 
     return $result;
 }
+
+sub getImportExportStart {
+    my $this = shift;
+		my $project = shift;
+
+    my $dbh = $this->getConnection();
+
+    my $pid = $project->getProjectID();
+
+		my $query  = "select username, action, starttime, endtime from IMPORTEXPORT"
+		. " where project_id = ? and starttime = "
+		. "(select max(starttime) from IMPORTEXPORT where project_id = ?)";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute($pid, $pid) || &queryFailed($query,$pid, $pid);
+
+    my ($username, $action, $starttime, $endtime)  = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    return ($username, $action, $starttime, $endtime);
+}
+
 
 #--------------------------------------------------------------------
 
@@ -2275,7 +2347,7 @@ sub getLastChangeOfProject {
     my $query = "select max(updated) as changed from CONTIG"
 	      . " where project_id = $pid" 
               . " union "
-              . "select max(date) as changed from IMPORTEXPORT"
+              . "select max(endtime) as changed from IMPORTEXPORT"
 	      . " where project_id = $pid"
               . "   and action = 'import'"
               . " union "
@@ -2289,7 +2361,7 @@ sub getLastChangeOfProject {
 
     $sth->execute() || &queryFailed($query);
 
-    (my $result,$pid) = $sth->fetchrow_array();
+    my $result = $sth->fetchrow_array();
 
     $sth->finish();
 

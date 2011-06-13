@@ -1,40 +1,13 @@
-<?xml version='1.0' encoding='utf-8'?>
+-- check_consistency.sql
+-- SQL taken from java/src/resources/xml/checkconsistency.sql
 
-<!DOCTYPE testset [
-	<!ELEMENT description (#PCDATA) >
+--	Do all contigs have the correct number of mappings?
 
-	<!ELEMENT query (#PCDATA) >
-
-	<!ELEMENT format (#PCDATA) >
-
-	<!ELEMENT test (description, query, format) >
-
-	<!ATTLIST test
-			critical (YES|NO) #REQUIRED
-	>
-	
-	<!ELEMENT testset (test*) >
-]>
-
-<testset>
-
-	<test critical="YES">
-		<description>
-			Do all contigs have the correct number of mappings?
-		</description>
-
-		<query>
-            select C.contig_id,nreads,count(distinct mapping_id) as mapping_count
-            from CONTIG C left join MAPPING M using(contig_id)
-            group by contig_id having nreads != mapping_count
-		</query>
-		
-		<format>
-			Contig {0,number,#} has nreads={1,number,#} but {2,number,#} mappings
-		</format>
-	</test>
-
-	<test critical="YES">
+select C.contig_id,nreads,count(distinct mapping_id) as mapping_count
+from CONTIG C left join MAPPING M using(contig_id)
+group by contig_id having nreads != mapping_count
+--			Contig {0,number,#} has nreads={1,number,#} but {2,number,#} mappings
+	est critical="YES">
 		<description>
 			Are there any orphan contigs?
 		</description>
