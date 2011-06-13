@@ -7,6 +7,7 @@ use File::Path;
 use Mail::Send;
 
 use ArcturusDatabase;
+use Project;
 use RepositoryManager;
 
 use constant WORKING_VERSION => '0';
@@ -17,7 +18,7 @@ use constant BACKUP_VERSION => 'B';
 # for input parameter description use help
 
 #------------------------------------------------------------------------------
-
+	
 my $pwd = cwd();
 
 my $username = $ENV{'USER'};
@@ -30,10 +31,9 @@ my $javabasedir   = "${arcturus_home}/utils";
 
 my $badgerbin = "$ENV{BADGER}/bin";
 
-my $gap5_test_mode = "-test";
+my $gaptoSam = "$badgerbin/gap5_export -test "; # test to be disabled later
+my $gapconsensus = "$badgerbin/gap5_consensus -test ";
 
-my $gaptoSam = "$badgerbin/gap5_export $gap5_test_mode ";
-my $gapconsensus = "$badgerbin/gap5_consensus $gap5_test_mode ";
 my $gapconsistency = "$badgerbin/gap4_check_db";
 
 my $samtools = "/software/solexa/bin/aligners/samtools/current/samtools";
@@ -193,6 +193,9 @@ unless ($gap_version > 0) {
 
 my $tmpdir = "/tmp/" . $instance . "-" . $organism . "-" . $$;
 
+my $friendly_message = "A Help Desk ticket has been raised.  \n\n
+ The cause of the error will appear in the Arcturus import window and in the log of the import in your .arcturus directory under your home directory.\n";
+
 mkpath($tmpdir) or die "Failed to create temporary working directory $tmpdir";
 
 #------------------------------------------------------------------------------
@@ -265,10 +268,21 @@ $pwd = cwd();
 # check existence and accessibility of gap database to be imported
 #------------------------------------------------------------------------------
 
-unless ( -f "${gapname}.$version") {
+if ($gap_version == 4) {
+	unless ( -f "${gapname}.$version") {
     print STDOUT "!! -- Project $gapname version $version"
                      ." does not exist in $pwd --\n";
     exit 1;
+	}
+}
+else {
+	my $extension = "g5d";
+
+	unless ( -f "${gapname}.$version.$extension") {
+	    print STDOUT "!! -- Project $gapname version $version stored in file $gapname.$version.$extension"
+			                     ." does not exist in $pwd --\n";					     
+			 exit 1;
+	 }
 }
 
 if ( -f "${gapname}.$version.BUSY") {
@@ -342,16 +356,15 @@ if ($gap_version == 4) {
 # the database fails the consistency check
 	my $mail_message = 
 		"\nYour GAP4 database $gapname.$version is inconsistent so import into Arcturus is ABORTED.\n\n
- You will need to resolve your problems in GAP before trying to import into Arcturus again. \n\n
- A Help Desk ticket has been raised, so we can offer help if you need it.  One possible cause is that you may have over-trimmed a contig to make a gap in your Gap project.\n";
-	
+ You will need to resolve your problems in GAP before trying to import into Arcturus again. \n\n".$friendly_message;
 	my $message = 
     "\n!! ----------------------------------------------------------------------------------------------!!\n
 		$mail_message 
 		\n!! ----------------------------------------------------------------------------------------------!!\n";
     
 		print STDOUT $message;
-		&sendMessage($username, $mail_message, $gapname, $instance, $organism);
+		my $subject = "Project $projectname in $organism in the $instance LDAP instance has failed the Gap4 database check";
+		&sendMessage($username, $subject, $mail_message, $gapname, $instance, $organism);
     exit 1;
 }
 
@@ -401,7 +414,7 @@ if ($gap_version == 4) {
     $import_command .= " @ARGV" if @ARGV; # pass on any remaining input
 } else {
 #------------------------------------------------------------------------------
-# export the database as a depadded CAF file
+# import the database as a BAM file
 #------------------------------------------------------------------------------
     $import_script = "${arcturus_home}/java/scripts/importbamfile" unless defined($import_script);
 
@@ -494,17 +507,63 @@ unless ($version eq "B" || $nonstandard) {
 $project->fetchContigIDs(); # load the current contig IDs before import
 #$project->fetchContigIDs(noscaffold=>1); # load the current contig IDs before import
 
+#-----------------------------------------------------------------------------
+# check that there is not an export or import already running for this project
+#-----------------------------------------------------------------------------
+ 
+my $dbh = $adb->getConnection();
+my ($other_username, $action, $starttime, $endtime) = $project->getImportExportAlreadyRunning($dbh);
+ 
+print "Checking if project $projectname already has an IMPORT or EXPORT running in the $organism database\n";
+
+unless (defined($endtime)) {
+   	print STDERR "Project $projectname already has a $action running started by $other_username at $starttime so this import has been ABORTED";
+   	$adb->disconnect();
+   	exit 1;
+}
+else {
+  print STDERR "Marking this import start time\n";
+  my $status = $project->markImport("start");
+	unless ($status) {
+  	print STDERR "Unable to set start time for project $projectname by $username at $starttime so this import has been ABORTED";
+  	$adb->disconnect();
+  	exit 1;
+	}
+}
+
 print STDOUT "Importing into Arcturus\n";
 
 my $rc = &mySystem($import_command);
 
+#-----------------------------------------------------------------------------
 # exit status 0 for no errors with or without new contigs imported
 #             1 (or 256) for an error status 
-
+#-----------------------------------------------------------------------------
 if ($rc) {
+ 	my $mail_message = 
+		"\nYour GAP$gap_version database $gapname.$version has encountered a problem during loading so the import into Arcturus is ABORTED.\n\n". $friendly_message;
+	
+	my $message = 
+    "\n!! ----------------------------------------------------------------------------------------------!!\n
+		$mail_message 
+		\n!! ----------------------------------------------------------------------------------------------!!\n";
+    
+		print STDOUT $message;
+    my $subject = "Project $projectname in $organism in the $instance LDAP instance failed to load from its Gap$gap_version data file";
+		&sendMessage($username, $subject, $mail_message, $gapname, $instance, $organism);
     print STDERR "!! -- FAILED to import project ($?) --\n";
     exit 1;
 }
+
+print STDERR "Marking this import end time\n";
+my $status = $project->markImport("end");
+
+unless ($status) {
+    print STDERR "Unable to set end time for project $projectname by $username";
+    $adb->disconnect();
+     exit 1;
+}
+
 
 # decide if new contigs were imported by probing the project again
 
@@ -564,6 +623,8 @@ $adb->disconnect();
 
 #-------------------------------------------------------------------------------
 
+# retain the CAF files for comparison with previous work
+$keep = 1;
 unless ($keep) {
 
 		print STDOUT "Cleaning up original version $gapname.$version ($gapname.$version~ remains for your convenience)\n";
@@ -571,9 +632,8 @@ unless ($keep) {
 		     unless ($? == 0) {
 		        print STDERR "!! -- WARNING: failed to remove $gapname.$version ($?) --\n";
 		}
-# retain the CAF files for comparison with previous work
-    #print STDOUT "Cleaning up temporary files in $tmpdir\n";
-    #&mySystem("rm -r -f $tmpdir");
+    print STDOUT "Cleaning up temporary files in $tmpdir\n";
+    &mySystem("rm -r -f $tmpdir");
 }
 
 print STDOUT "\n\nIMPORT OF $projectname HAS FINISHED.\n";
@@ -669,7 +729,7 @@ sub showUsage {
 #------------------------------------------------------------------------------
 
 sub sendMessage {
-    my ($user, $message, $projectname, $instance, $organism) = @_;
+    my ($user, $subject, $message, $projectname, $instance, $organism) = @_;
   
     my $fulluser = $user.'@sanger.ac.uk' if defined($user);
     my $to = "";
@@ -688,7 +748,7 @@ sub sendMessage {
      my $mail = new Mail::Send;
       $mail->to($to);
       $mail->cc($cc);
-      $mail->subject("Project $projectname in $organism in the $instance LDAP instance has failed the Gap4 database check");
+			$mail->subject($subject);
       my $handle = $mail->open;
       print $handle "$message\n";
       $handle->close or die "Problems sending mail to $to cc to $cc: $!\n";

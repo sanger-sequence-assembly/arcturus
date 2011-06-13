@@ -2251,8 +2251,6 @@ sub stopImportExport {
     $import_id = $import_line[0];
 		$sthi->finish();
 		
-		print STDERR "\nFound import id $import_id\n\n";
-
     my $rc = ($sth->execute($import_id) || &queryFailed($query, $import_id));
 
     $sth->finish();
