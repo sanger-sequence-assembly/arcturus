@@ -18,7 +18,7 @@ use constant BACKUP_VERSION => 'B';
 # for input parameter description use help
 
 #------------------------------------------------------------------------------
-
+	
 my $pwd = cwd();
 
 my $username = $ENV{'USER'};
@@ -193,6 +193,9 @@ unless ($gap_version > 0) {
 
 my $tmpdir = "/tmp/" . $instance . "-" . $organism . "-" . $$;
 
+my $friendly_message = "A Help Desk ticket has been raised.  \n\n
+ The cause of the error will appear in the Arcturus import window and in the log of the import in your .arcturus directory under your home directory.\n";
+
 mkpath($tmpdir) or die "Failed to create temporary working directory $tmpdir";
 
 #------------------------------------------------------------------------------
@@ -353,16 +356,15 @@ if ($gap_version == 4) {
 # the database fails the consistency check
 	my $mail_message = 
 		"\nYour GAP4 database $gapname.$version is inconsistent so import into Arcturus is ABORTED.\n\n
- You will need to resolve your problems in GAP before trying to import into Arcturus again. \n\n
- A Help Desk ticket has been raised, so we can offer help if you need it.  One possible cause is that you may have over-trimmed a contig to make a gap in your Gap project.\n";
-	
+ You will need to resolve your problems in GAP before trying to import into Arcturus again. \n\n".$friendly_message;
 	my $message = 
     "\n!! ----------------------------------------------------------------------------------------------!!\n
 		$mail_message 
 		\n!! ----------------------------------------------------------------------------------------------!!\n";
     
 		print STDOUT $message;
-		&sendMessage($username, $mail_message, $gapname, $instance, $organism);
+		my $subject = "Project $projectname in $organism in the $instance LDAP instance has failed the Gap4 database check";
+		&sendMessage($username, $subject, $mail_message, $gapname, $instance, $organism);
     exit 1;
 }
 
@@ -538,6 +540,17 @@ my $rc = &mySystem($import_command);
 #             1 (or 256) for an error status 
 #-----------------------------------------------------------------------------
 if ($rc) {
+ 	my $mail_message = 
+		"\nYour GAP$gap_version database $gapname.$version has encountered a problem during loading so the import into Arcturus is ABORTED.\n\n". $friendly_message;
+	
+	my $message = 
+    "\n!! ----------------------------------------------------------------------------------------------!!\n
+		$mail_message 
+		\n!! ----------------------------------------------------------------------------------------------!!\n";
+    
+		print STDOUT $message;
+    my $subject = "Project $projectname in $organism in the $instance LDAP instance failed to load from its Gap$gap_version data file";
+		&sendMessage($username, $subject, $mail_message, $gapname, $instance, $organism);
     print STDERR "!! -- FAILED to import project ($?) --\n";
     exit 1;
 }
@@ -716,7 +729,7 @@ sub showUsage {
 #------------------------------------------------------------------------------
 
 sub sendMessage {
-    my ($user, $message, $projectname, $instance, $organism) = @_;
+    my ($user, $subject, $message, $projectname, $instance, $organism) = @_;
   
     my $fulluser = $user.'@sanger.ac.uk' if defined($user);
     my $to = "";
@@ -735,7 +748,7 @@ sub sendMessage {
      my $mail = new Mail::Send;
       $mail->to($to);
       $mail->cc($cc);
-      $mail->subject("Project $projectname in $organism in the $instance LDAP instance has failed the Gap4 database check");
+			$mail->subject($subject);
       my $handle = $mail->open;
       print $handle "$message\n";
       $handle->close or die "Problems sending mail to $to cc to $cc: $!\n";
