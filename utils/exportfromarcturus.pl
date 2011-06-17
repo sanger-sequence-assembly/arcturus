@@ -457,14 +457,25 @@ if ($gap_version == 4) {
  
 	print "Checking if project $projectname already has an IMPORT or EXPORT running in the $organism database\n";
 
-	unless (defined($endtime)) {
+	my $first_time = 0;
+
+	unless( defined($other_username) && defined($action) && defined($starttime) && defined($endtime)){
+		$first_time = 1;
+	}
+
+	unless (defined($endtime) || ($first_time == 1)) {
    	print STDERR "Project $projectname already has a $action running started by $other_username at $starttime so this export has been ABORTED";
    	$adb->disconnect();
    	exit 1;
 	}
 	else {
-   	print STDERR "Project $projectname last $action started by $other_username at $starttime finished at $endtime";
-  	print STDERR "Marking this export start time\n";
+		if ($first_time) {
+			print STDERR "Project $projectname is being exported for the first time\n";
+		}
+		else {
+   		print STDERR "Project $projectname last $action started by $other_username at $starttime finished at $endtime";
+  	}
+		print STDERR "Marking this export start time\n";
   	my $status = $project->markExport("start");
 		unless ($status) {
   		print STDERR "Unable to set start time for project $projectname by $username at $starttime so this export has been ABORTED";
