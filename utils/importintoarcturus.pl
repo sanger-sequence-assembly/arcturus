@@ -531,7 +531,7 @@ else {
 	}
 }
 
-print STDOUT "Importing into Arcturus\n";
+print STDOUT "Importing into Arcturus using the command *$import_command*\n";
 
 my $rc = &mySystem($import_command);
 

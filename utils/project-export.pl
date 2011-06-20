@@ -375,15 +375,28 @@ my $pi = 0;
 foreach my $project (@projects) {
 	my $project_id = $project->getProjectID();
 	my $projectname = $project->getProjectName();
+
+	my $first_time = 0;
+
 	print STDERR "Checking if project $pi $projectname ($project_id) already has an import or export running\n";
 	my ($username, $action, $starttime, $endtime) = $project->getImportExportAlreadyRunning();
 
-	unless (defined($endtime)) {            
+	unless( defined($username) && defined($action) && defined($starttime) && defined($endtime)){
+	     $first_time = 1;
+	}
+
+	unless (defined($endtime) || ($first_time ==1)) {            
 		$logger->severe("Project $projectname ($project_id) already has a $action running started by $username at $starttime so this export has been ABORTED");
     splice @projects,$pi,1; # remove project from list
 	}
 	else {
-		print STDERR "Last $action was run by $username at $starttime finishing at $endtime\n";
+	  if ($first_time) {
+	      print STDERR "Project $projectname is being exported for the first time\n";
+	   }
+		else {
+			print STDERR "Last $action was run by $username at $starttime finishing at $endtime\n";
+		}
+
 		print STDERR "Marking this export start time\n";
 		my $status = $project->markExport("start");
 		unless ($status) {
