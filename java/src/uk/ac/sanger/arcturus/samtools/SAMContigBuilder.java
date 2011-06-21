@@ -67,8 +67,22 @@ public class SAMContigBuilder {
 	 		
 	    contig.setSequenceToContigMappings(M.toArray(new SequenceToContigMapping[0]));
     }
-	  
 	
+	private byte[] intToByteArray(int value) {
+        return new byte[] {
+                (byte)(value >>> 24),
+                (byte)(value >>> 16),
+                (byte)(value >>> 8),
+                (byte)value};
+	}
+	
+	private int byteArrayToInt(byte [] b) {
+        return (b[0] << 24)
+                + ((b[1] & 0xFF) << 16)
+                + ((b[2] & 0xFF) << 8)
+                + (b[3] & 0xFF);
+	}
+
 	private SequenceToContigMapping buildSequenceToContigMapping(SAMRecord record, Contig contig) throws ArcturusDatabaseException {	    
 	    String cigar = record.getCigarString();
 		int contigStartPosition = record.getAlignmentStart();
@@ -80,7 +94,7 @@ public class SAMContigBuilder {
 		Sequence sequence = brl.findOrCreateSequence(record);
 
 		sequence.setDNA(null);
-		sequence.setQuality(null);
+		sequence.setQuality(intToByteArray(record.getMappingQuality()));
 
 		Direction direction = record.getReadNegativeStrandFlag() ? Direction.REVERSE : Direction.FORWARD;
 		
