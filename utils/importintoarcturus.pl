@@ -36,7 +36,7 @@ my $gapconsensus = "$badgerbin/gap5_consensus -test ";
 
 my $gapconsistency = "$badgerbin/gap4_check_db";
 
-my $samtools = "/software/solexa/bin/aligners/samtools/current/samtools";
+my $samtools = "/software/solexa/bin/aligners/samtools/samtools-0.1.7/samtools";
 
 my $java_opts = defined($ENV{'JAVA_DEBUG'}) ?
     "-Ddebugging=true -Dtesting=true -Xmx4000M" : "-Xmx4000M";
