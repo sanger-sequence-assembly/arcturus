@@ -31,9 +31,14 @@ public class SAMContigBuilder {
 	}
 	
 	public void addMappingsToContig(Contig contig,SAMFileReader reader) throws ArcturusDatabaseException {
+		
+		reportProgress("addMappingsToContig: working with contig " + contig.getName() + " which has " + contig.getParentContigCount() + " parents and " + contig.getReadCount() + " reads.");
+		
 		if (contig.getContigToParentMappings() != null)
 			return;
 		
+		reportProgress("addMappingsToContig: adding mappings for contig" + contig.getName());
+
 		String referenceName = contig.getName();
 		    	    	
 	    CloseableIterator<SAMRecord> iterator = reader.query(referenceName, 0, 0, false);
@@ -46,6 +51,7 @@ public class SAMContigBuilder {
 	 	int count = 0;
 	    while (iterator.hasNext()) {
 	 	    SAMRecord record = iterator.next();
+	 		reportProgress("\taddMappingsToContig: adding sequence for SAMRecord" + record.getReadName());
 	 		SequenceToContigMapping mapping = buildSequenceToContigMapping(record,contig);
 	 	    M.add(mapping);
 	 	    
@@ -84,7 +90,10 @@ public class SAMContigBuilder {
 	}
 
 	private SequenceToContigMapping buildSequenceToContigMapping(SAMRecord record, Contig contig) throws ArcturusDatabaseException {	    
-	    String cigar = record.getCigarString();
+	    
+		reportProgress("\tbuildSequenceToContigMapping: working with SAMRecord " + record.getReadName() + " and contig " + contig.getName());
+		
+		String cigar = record.getCigarString();
 		int contigStartPosition = record.getAlignmentStart();
         int span = record.getAlignmentEnd() - contigStartPosition + 1;
 	    
@@ -92,13 +101,21 @@ public class SAMContigBuilder {
 		CanonicalMapping cached = adb.findOrCreateCanonicalMapping(mapping);
 
 		Sequence sequence = brl.findOrCreateSequence(record);
-
+		
 		sequence.setDNA(null);
-		sequence.setQuality(intToByteArray(record.getMappingQuality()));
+		
+		int quality = record.getMappingQuality();
+		reportProgress("buildSequenceToContigMapping: got quality of " + quality + " for record" + record.getReadName());
+		sequence.setQuality(intToByteArray(quality));
 
 		Direction direction = record.getReadNegativeStrandFlag() ? Direction.REVERSE : Direction.FORWARD;
 		
 		return new SequenceToContigMapping(sequence,contig,cached,contigStartPosition,1,direction);
+	}
+
+    protected void reportProgress(String message) {
+    	System.out.println(message);
+    	Arcturus.logInfo(message);
 	}
 	   
     private String memoryUsage() {
