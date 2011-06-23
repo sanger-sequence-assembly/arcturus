@@ -105,9 +105,12 @@ public class SAMContigBuilder {
 		sequence.setDNA(null);
 		
 		int quality = record.getMappingQuality();
-		reportProgress("buildSequenceToContigMapping: got quality of " + quality + " for record" + record.getReadName());
+		reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + quality + " from record" + record.getReadName());
 		sequence.setQuality(intToByteArray(quality));
-
+		
+		int stored_quality = (byteArrayToInt(sequence.getQuality()));
+		reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + stored_quality + " from database\n");
+		
 		Direction direction = record.getReadNegativeStrandFlag() ? Direction.REVERSE : Direction.FORWARD;
 		
 		return new SequenceToContigMapping(sequence,contig,cached,contigStartPosition,1,direction);
