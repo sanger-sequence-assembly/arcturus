@@ -238,7 +238,7 @@ public class BAMContigLoader {
     private void storeChildContigs(Set<Contig> contigs, SAMFileReader reader, Map<String, Integer> nameToID)
     	throws ArcturusDatabaseException {	
     	for (Contig contig : contigs) {
-    		String message = "Contig " + contig.getName() + 
+    		String message = "storeChildContigs: Contig " + contig.getName() + 
 				" (" + contig.getLength() + " bp, " + contig.getReadCount() +
 				" reads) will be stored in the database.";
     		
@@ -252,7 +252,7 @@ public class BAMContigLoader {
     	    
     	    nameToID.put(contig.getName(), contig.getID());
     	    
-    	    message = "Stored contig " + contig.getName() + " with Arcturus ID " + contig.getID();
+    	    message = "storeChildContigs: Stored contig " + contig.getName() + " with Arcturus ID " + contig.getID();
     	    
     	    Utility.reportMemory(message);
     	    
