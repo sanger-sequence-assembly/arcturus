@@ -119,6 +119,18 @@ public class SAMContigExporter {
 			adb.handleSQLException(e, "An error occurred when exporting a contig", conn, this);
 		}
 	}
+	  
+	protected void reportProgress(String message) {
+	    	System.out.println(message);
+	    	Arcturus.logInfo(message);
+		}
+	  
+	private int byteArrayToInt(byte [] b) {
+        return (b[0] << 24)
+                + ((b[1] & 0xFF) << 16)
+                + ((b[2] & 0xFF) << 8)
+                + (b[3] & 0xFF);
+	}
 	
 	private void writeAlignment(ResultSet rs, String contigName, PrintWriter pw) throws SQLException, ArcturusDatabaseException {
 		int column = 1;
@@ -131,7 +143,7 @@ public class SAMContigExporter {
 		int seq_id = rs.getInt(column++);
 		int seqlen = rs.getInt(column++);
 		byte[] sequence = rs.getBytes(column++);
-		byte[] quality = rs.getBytes(column++);
+		byte[] byte_quality = rs.getBytes(column++);
 		
 		if (sequence != null) {
 			try {
@@ -142,24 +154,18 @@ public class SAMContigExporter {
 		} else
 			throw new ArcturusDatabaseException("Missing DNA data for sequence ID=" + seq_id);
 		
-		if (quality != null) {
-			try {
-				quality = Utility.decodeCompressedData(quality, seqlen);
-			} catch (DataFormatException e) {
-				Arcturus.logSevere("Failed to decompress quality data for sequence ID=" + seq_id, e);
-			}
-		} else
-			throw new ArcturusDatabaseException("Missing quality data for sequence ID=" + seq_id);
-		
 		boolean forward = direction.equalsIgnoreCase("Forward");
 		
 		if (!forward) {
 			sequence = Utility.reverseComplement(sequence);
-			quality = Utility.reverseQuality(quality);
+			byte_quality = Utility.reverseQuality(byte_quality);
 		}
 		
-		for (int i = 0; i < quality.length; i++)
-			quality[i] += FASTQ_QUALITY_OFFSET;
+		if (byte_quality != null) {
+			int quality = byteArrayToInt(byte_quality);
+			reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + quality + " from database\n");
+		} else
+			throw new ArcturusDatabaseException("Missing quality data for sequence ID=" + seq_id);
 		
 		flags = Utility.maskReadFlags(flags);
 		
@@ -177,10 +183,14 @@ public class SAMContigExporter {
 		String qualityString = null;
 		
 		try {
-			qualityString = new String(quality, "US-ASCII");
+			qualityString = new String(byte_quality, "US-ASCII");
 		} catch (UnsupportedEncodingException e) {
 			e.printStackTrace();
 		}
+		
+		reportProgress("Writing line:\n" + readname + TAB + flags + TAB + contigName + TAB + contigOffset +
+				TAB + DEFAULT_MAPPING_QUALITY +
+				TAB + cigar + TAB + "*\t0\t0\t" + DNA + TAB + qualityString);
 		
 		pw.println(readname + TAB + flags + TAB + contigName + TAB + contigOffset +
 				TAB + DEFAULT_MAPPING_QUALITY +
