@@ -202,11 +202,14 @@ public class SAMContigExporter {
 		// construct mappingQuality to replace DEFAULT_MAPPING_QUALITY
 		
 		Sequence thisSequence = adb.getSequenceBySequenceID(seq_id);
-		
 		if (thisSequence == null) 
 			throw new ArcturusDatabaseException("writeAlignment: Cannot find sequence for sequence ID=" + seq_id);
 		
-		int mapping_quality = (byteArrayToInt(thisSequence.getQuality()));
+		byte[] byte_mapping_quality = thisSequence.getQuality();
+		if (byte_mapping_quality == null) 
+			throw new ArcturusDatabaseException("writeAlignment: Cannot get mapping quality for sequence ID=" + seq_id);
+		
+		int mapping_quality = byteArrayToInt(byte_mapping_quality);
 		
 		if (mapping_quality > 0) {
 			reportProgress("\t\twriteAlignment: got quality of " + mapping_quality + " from database\n");
