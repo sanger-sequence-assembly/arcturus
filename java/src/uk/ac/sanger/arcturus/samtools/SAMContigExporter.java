@@ -151,25 +151,25 @@ public class SAMContigExporter {
 			try {
 				sequence = Utility.decodeCompressedData(sequence, seqlen);
 			} catch (DataFormatException e) {
-				Arcturus.logSevere("Failed to decompress DNA for sequence ID=" + seq_id, e);
+				Arcturus.logSevere("writeAlignment: Failed to decompress DNA for sequence ID=" + seq_id, e);
 			}
 		} else
-			throw new ArcturusDatabaseException("Missing DNA data for sequence ID=" + seq_id);
+			throw new ArcturusDatabaseException("writeAlignment: Missing DNA data for sequence ID=" + seq_id);
 		
 		 if (quality != null) {	 
              try {	 
                      quality = Utility.decodeCompressedData(quality, seqlen);	 
              } catch (DataFormatException e) {	 
-                     Arcturus.logSevere("Failed to decompress quality data for sequence ID=" + seq_id, e);	 
+                     Arcturus.logSevere("writeAlignment: Failed to decompress quality data for sequence ID=" + seq_id, e);	 
              }	 
 		 } else	 
-             throw new ArcturusDatabaseException("Missing quality data for sequence ID=" + seq_id);	 
+             throw new ArcturusDatabaseException("writeAlignment: Missing quality data for sequence ID=" + seq_id);	 
 
 
 		boolean forward = direction.equalsIgnoreCase("Forward");
 		
 		if (!forward) {
-			reportProgress("\t\tbuildSequenceToContigMapping: reversing sequence and quality");
+			reportProgress("\t\twriteAlignment: reversing sequence and quality");
 			sequence = Utility.reverseComplement(sequence);
 			quality = Utility.reverseQuality(quality);
 		}
@@ -200,21 +200,25 @@ public class SAMContigExporter {
 		}
 		
 		// construct mappingQuality to replace DEFAULT_MAPPING_QUALITY
-		int mappingQuality = 0;
-		byte[] byteMappingQuality =  adb.getSequenceBySequenceID(seq_id).getQuality();
 		
-		if (byteMappingQuality != null) {
-			mappingQuality = byteArrayToInt(quality);
-			reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + mappingQuality + " from database\n");
+		Sequence thisSequence = adb.getSequenceBySequenceID(seq_id);
+		
+		if (thisSequence == null) 
+			throw new ArcturusDatabaseException("writeAlignment: Cannot find sequence for sequence ID=" + seq_id);
+		
+		int mapping_quality = (byteArrayToInt(thisSequence.getQuality()));
+		
+		if (mapping_quality > 0) {
+			reportProgress("\t\twriteAlignment: got quality of " + mapping_quality + " from database\n");
 		} else
-			throw new ArcturusDatabaseException("Missing mapping quality data for sequence ID=" + seq_id);
+			throw new ArcturusDatabaseException("writeAlignment: Missing mapping quality data for sequence ID=" + seq_id);
 		
-		reportProgress("Writing line:\n" + readname + TAB + flags + TAB + contigName + TAB + contigOffset +
-				TAB + mappingQuality +
+		reportProgress("writeAlignment: Writing line:\n" + readname + TAB + flags + TAB + contigName + TAB + contigOffset +
+				TAB + mapping_quality +
 				TAB + cigar + TAB + "*\t0\t0\t" + DNA + TAB + qualityString);
 		
 		pw.println(readname + TAB + flags + TAB + contigName + TAB + contigOffset +
-				TAB + mappingQuality +
+				TAB + mapping_quality +
 				TAB + cigar + TAB + "*\t0\t0\t" + DNA + TAB + qualityString);
 	}
 	
