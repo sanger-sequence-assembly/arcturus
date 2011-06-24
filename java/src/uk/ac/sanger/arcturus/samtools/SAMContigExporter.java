@@ -12,6 +12,8 @@ import java.util.zip.DataFormatException;
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Project;
+import uk.ac.sanger.arcturus.data.Sequence;
+import uk.ac.sanger.arcturus.data.SequenceToContigMapping;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.samtools.SAMContigExporterEvent.Type;
@@ -143,7 +145,7 @@ public class SAMContigExporter {
 		int seq_id = rs.getInt(column++);
 		int seqlen = rs.getInt(column++);
 		byte[] sequence = rs.getBytes(column++);
-		byte[] byte_quality = rs.getBytes(column++);
+		byte[] quality = rs.getBytes(column++);
 		
 		if (sequence != null) {
 			try {
@@ -154,19 +156,28 @@ public class SAMContigExporter {
 		} else
 			throw new ArcturusDatabaseException("Missing DNA data for sequence ID=" + seq_id);
 		
+		 if (quality != null) {	 
+             try {	 
+                     quality = Utility.decodeCompressedData(quality, seqlen);	 
+             } catch (DataFormatException e) {	 
+                     Arcturus.logSevere("Failed to decompress quality data for sequence ID=" + seq_id, e);	 
+             }	 
+		 } else	 
+             throw new ArcturusDatabaseException("Missing quality data for sequence ID=" + seq_id);	 
+
+
 		boolean forward = direction.equalsIgnoreCase("Forward");
 		
 		if (!forward) {
+			reportProgress("\t\tbuildSequenceToContigMapping: reversing sequence and quality");
 			sequence = Utility.reverseComplement(sequence);
-			byte_quality = Utility.reverseQuality(byte_quality);
+			quality = Utility.reverseQuality(quality);
 		}
 		
-		if (byte_quality != null) {
-			int quality = byteArrayToInt(byte_quality);
-			reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + quality + " from database\n");
-		} else
-			throw new ArcturusDatabaseException("Missing quality data for sequence ID=" + seq_id);
-		
+        for (int i = 0; i < quality.length; i++)	
+        	quality[i] += FASTQ_QUALITY_OFFSET;
+	
+   
 		flags = Utility.maskReadFlags(flags);
 		
 		if (!forward)
@@ -183,17 +194,27 @@ public class SAMContigExporter {
 		String qualityString = null;
 		
 		try {
-			qualityString = new String(byte_quality, "US-ASCII");
+			qualityString = new String(sequence, "US-ASCII");
 		} catch (UnsupportedEncodingException e) {
 			e.printStackTrace();
 		}
 		
+		// construct mappingQuality to replace DEFAULT_MAPPING_QUALITY
+		int mappingQuality = 0;
+		byte[] byteMappingQuality =  adb.getSequenceBySequenceID(seq_id).getQuality();
+		
+		if (byteMappingQuality != null) {
+			mappingQuality = byteArrayToInt(quality);
+			reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + mappingQuality + " from database\n");
+		} else
+			throw new ArcturusDatabaseException("Missing mapping quality data for sequence ID=" + seq_id);
+		
 		reportProgress("Writing line:\n" + readname + TAB + flags + TAB + contigName + TAB + contigOffset +
-				TAB + DEFAULT_MAPPING_QUALITY +
+				TAB + mappingQuality +
 				TAB + cigar + TAB + "*\t0\t0\t" + DNA + TAB + qualityString);
 		
 		pw.println(readname + TAB + flags + TAB + contigName + TAB + contigOffset +
-				TAB + DEFAULT_MAPPING_QUALITY +
+				TAB + mappingQuality +
 				TAB + cigar + TAB + "*\t0\t0\t" + DNA + TAB + qualityString);
 	}
 	
