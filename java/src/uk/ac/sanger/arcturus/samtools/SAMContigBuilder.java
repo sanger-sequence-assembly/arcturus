@@ -51,7 +51,7 @@ public class SAMContigBuilder {
 	 	int count = 0;
 	    while (iterator.hasNext()) {
 	 	    SAMRecord record = iterator.next();
-	 		reportProgress("\taddMappingsToContig: adding sequence for SAMRecord" + record.getReadName());
+	 		reportProgress("\taddMappingsToContig: adding sequence for SAMRecord " + record.getReadName());
 	 		SequenceToContigMapping mapping = buildSequenceToContigMapping(record,contig);
 	 	    M.add(mapping);
 	 	    
@@ -102,13 +102,20 @@ public class SAMContigBuilder {
 
 		Sequence sequence = brl.findOrCreateSequence(record);
 		
+		
+		
 		sequence.setDNA(null);
 		
 		int quality = record.getMappingQuality();
-		reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + quality + " from record" + record.getReadName());
+		reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + quality + " from record " + record.getReadName());
 		sequence.setQuality(intToByteArray(quality));
+		adb.putSequence(sequence);
 		
-		int stored_quality = (byteArrayToInt(sequence.getQuality()));
+		int saved_quality = (byteArrayToInt(sequence.getQuality()));
+		reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + saved_quality + " from Java object");
+		
+		Sequence storedSequence = adb.findOrCreateSequence(sequence);
+		int stored_quality = (byteArrayToInt(storedSequence.getQuality()));
 		reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + stored_quality + " from database\n");
 		
 		Direction direction = record.getReadNegativeStrandFlag() ? Direction.REVERSE : Direction.FORWARD;
