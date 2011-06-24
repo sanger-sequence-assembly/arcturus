@@ -101,20 +101,19 @@ public class SAMContigBuilder {
 		CanonicalMapping cached = adb.findOrCreateCanonicalMapping(mapping);
 
 		Sequence sequence = brl.findOrCreateSequence(record);
-		
-		
+		if (sequence == null) 
+			 throw new ArcturusDatabaseException("buildSequenceToContigMapping: cannot find data for sequence for SAMRecord =" + record.getReadName());	 
 		
 		sequence.setDNA(null);
 		
 		int quality = record.getMappingQuality();
 		reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + quality + " from record " + record.getReadName());
 		sequence.setQuality(intToByteArray(quality));
-		adb.putSequence(sequence);
 		
 		int saved_quality = (byteArrayToInt(sequence.getQuality()));
 		reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + saved_quality + " from Java object");
 		
-		Sequence storedSequence = adb.findOrCreateSequence(sequence);
+		Sequence storedSequence = adb.putSequence(sequence);
 		int stored_quality = (byteArrayToInt(storedSequence.getQuality()));
 		reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + stored_quality + " from database\n");
 		
