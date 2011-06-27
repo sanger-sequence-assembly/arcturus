@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.zip.DataFormatException;
 
 import uk.ac.sanger.arcturus.Arcturus;
+import uk.ac.sanger.arcturus.data.CanonicalMapping;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.data.Sequence;
@@ -32,7 +33,7 @@ public class SAMContigExporter {
 	private final char TAB = '\t';
 	
 	private static final String GET_ALIGNMENT_DATA =
-		" select RN.readname,RN.flags,SC.coffset,SC.direction,CM.cigar,S.seq_id,S.seqlen,S.sequence,S.quality" +
+		" select RN.readname,RN.flags,SC.coffset,SC.direction,CM.cigar,CM.mapping_quality, S.seq_id,S.seqlen,S.sequence,S.quality" +
 		" from SEQ2CONTIG SC left join (CANONICALMAPPING CM,SEQUENCE S,SEQ2READ SR,READNAME RN) using (mapping_id) " +
 		" where SC.contig_id=? and SC.seq_id=S.seq_id and SC.seq_id=SR.seq_id and SR.read_id=RN.read_id" +
 		" order by SC.coffset asc";
@@ -127,12 +128,6 @@ public class SAMContigExporter {
 	    	Arcturus.logInfo(message);
 		}
 	  
-	private int byteArrayToInt(byte [] b) {
-        return (b[0] << 24)
-                + ((b[1] & 0xFF) << 16)
-                + ((b[2] & 0xFF) << 8)
-                + (b[3] & 0xFF);
-	}
 	
 	private void writeAlignment(ResultSet rs, String contigName, PrintWriter pw) throws SQLException, ArcturusDatabaseException {
 		int column = 1;
@@ -142,6 +137,7 @@ public class SAMContigExporter {
 		int contigOffset = rs.getInt(column++);
 		String direction = rs.getString(column++);
 		String cigar = rs.getString(column++);
+		int mapping_quality = rs.getInt(column++);
 		int seq_id = rs.getInt(column++);
 		int seqlen = rs.getInt(column++);
 		byte[] sequence = rs.getBytes(column++);
@@ -198,23 +194,7 @@ public class SAMContigExporter {
 		} catch (UnsupportedEncodingException e) {
 			e.printStackTrace();
 		}
-		
-		// construct mappingQuality to replace DEFAULT_MAPPING_QUALITY
-		
-		Sequence thisSequence = adb.getSequenceBySequenceID(seq_id);
-		if (thisSequence == null) 
-			throw new ArcturusDatabaseException("writeAlignment: Cannot find sequence for sequence ID=" + seq_id);
-		
-		reportProgress("\t\twriteAlignment: retrieved this sequence from database:\n" + thisSequence.toString());
-		
-		byte[] byte_mapping_quality = thisSequence.getQuality();
-		//if (byte_mapping_quality == null) 
-			//throw new ArcturusDatabaseException("writeAlignment: Cannot get mapping quality for sequence ID=" + seq_id);
-		
-		//int mapping_quality = byteArrayToInt(byte_mapping_quality);
-
-		int mapping_quality = byteArrayToInt(quality);
-		
+	
 		if (mapping_quality > 0) {
 			reportProgress("\t\twriteAlignment: got mapping quality of " + mapping_quality + "\n");
 		} else

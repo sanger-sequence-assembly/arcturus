@@ -58,7 +58,7 @@ public class ContigComparator {
 	}
 	
 	public boolean equalsParentContig(Contig contig, Contig parent) throws ArcturusDatabaseException {
-		Arcturus.logFine("Comparing " + contig + " to " + parent);
+		reportProgress("Comparing " + contig + " to " + parent);
 		
 		if (parent.getID() <= 0)
 			return false;
@@ -66,7 +66,7 @@ public class ContigComparator {
 		SequenceToContigMapping[] mappings = contig.getSequenceToContigMappings();
 		
 		if (mappings == null) {
-			Arcturus.logFine("No mappings for child " + contig + ", bailing out");
+			reportProgress("No mappings for child " + contig + ", bailing out");
 			return false;
 		}
 
@@ -106,7 +106,7 @@ public class ContigComparator {
             adb.handleSQLException(e, "An error occurred when comparing parent and child contigs", conn, this);
 		}
 		
-		Arcturus.logFine("Contigs " + contig + " and " + parent + (equal ? " ARE IDENTICAL" : " DIFFER") + " after " + n + " mappings");
+		reportProgress("Contigs " + contig + " and " + parent + (equal ? " ARE IDENTICAL" : " DIFFER") + " after " + n + " mappings");
 
 		return equal;
 	}
@@ -123,5 +123,10 @@ public class ContigComparator {
 			} else
 				return false;
 		}
+	}
+	
+	protected void reportProgress(String message) {
+		System.out.println(message);
+		Arcturus.logFine(message);
 	}
 }

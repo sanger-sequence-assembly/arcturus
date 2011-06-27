@@ -9,6 +9,7 @@ public class CanonicalMapping {
     protected int ID;
     protected int referenceSpan;
     protected int subjectSpan;
+    protected int mapping_quality;
     protected String extendedCigarString;
     protected BasicSegment[] segments;
     protected Integer[] padlist;
@@ -26,12 +27,13 @@ public class CanonicalMapping {
     	this(0,segments);
     }
    
-    public CanonicalMapping(int ID, int rs, int ss, String extendedCigarString) {
+    public CanonicalMapping(int ID, int rs, int ss, String extendedCigarString, int mapping_quality) {
     	// constructor using ID from database and e.g. delayed loading segments
         setMappingID(ID);
         setReferenceSpan(rs);
         setSubjectSpan(ss);
         this.extendedCigarString = extendedCigarString;
+        this.mapping_quality = mapping_quality;
     }
     
     public CanonicalMapping(String extendedCigarString) {
@@ -89,6 +91,14 @@ public class CanonicalMapping {
         if (referenceSpan == 0)
         	initialise();
         return referenceSpan;
+    }  
+    
+    public void setMappingQuality(int mapping_quality) {
+        this.mapping_quality = mapping_quality;
+    }
+    
+    public int getMappingQuality() {
+        return mapping_quality;
     }  
     
     public boolean equals(CanonicalMapping that) {

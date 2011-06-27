@@ -73,21 +73,6 @@ public class SAMContigBuilder {
 	 		
 	    contig.setSequenceToContigMappings(M.toArray(new SequenceToContigMapping[0]));
     }
-	
-	private byte[] intToByteArray(int value) {
-        return new byte[] {
-                (byte)(value >>> 24),
-                (byte)(value >>> 16),
-                (byte)(value >>> 8),
-                (byte)value};
-	}
-	
-	private int byteArrayToInt(byte [] b) {
-        return (b[0] << 24)
-                + ((b[1] & 0xFF) << 16)
-                + ((b[2] & 0xFF) << 8)
-                + (b[3] & 0xFF);
-	}
 
 	private SequenceToContigMapping buildSequenceToContigMapping(SAMRecord record, Contig contig) throws ArcturusDatabaseException {	    
 	    
@@ -97,26 +82,22 @@ public class SAMContigBuilder {
 		int contigStartPosition = record.getAlignmentStart();
         int span = record.getAlignmentEnd() - contigStartPosition + 1;
 	    
-		CanonicalMapping mapping = new CanonicalMapping(0,span,span,cigar);
-		CanonicalMapping cached = adb.findOrCreateCanonicalMapping(mapping);
-
+		
 		Sequence sequence = brl.findOrCreateSequence(record);
 		if (sequence == null) 
 			 throw new ArcturusDatabaseException("buildSequenceToContigMapping: cannot find data for sequence for SAMRecord =" + record.getReadName());	 
 		
 		//sequence.setDNA(null);
 		
-		int quality = record.getMappingQuality();
-		reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + quality + " from record " + record.getReadName());
-		sequence.setQuality(intToByteArray(quality));
+		int mapping_quality = record.getMappingQuality();
+		reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + mapping_quality + " from record " + record.getReadName());
 		
-		int saved_quality = (byteArrayToInt(sequence.getQuality()));
-		reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + saved_quality + " from Java object");
+		CanonicalMapping mapping = new CanonicalMapping(0,span,span,cigar, mapping_quality);
+		CanonicalMapping cached = adb.findOrCreateCanonicalMapping(mapping);
 		
-		Sequence storedSequence = adb.findOrCreateSequence(sequence);
-		//Sequence storedSequence = adb.putSequence(sequence);
-		int stored_quality = (byteArrayToInt(storedSequence.getQuality()));
-		reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + stored_quality + " from database\n");
+		int stored_quality = cached.getMappingQuality();
+		
+		reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + stored_quality + " from database\n");
 		
 		Direction direction = record.getReadNegativeStrandFlag() ? Direction.REVERSE : Direction.FORWARD;
 		
