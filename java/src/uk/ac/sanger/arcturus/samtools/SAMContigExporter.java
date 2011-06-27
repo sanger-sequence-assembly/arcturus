@@ -205,10 +205,11 @@ public class SAMContigExporter {
 		if (thisSequence == null) 
 			throw new ArcturusDatabaseException("writeAlignment: Cannot find sequence for sequence ID=" + seq_id);
 		
+		reportProgress("\t\twriteAlignment: retrieved this seqeunce from database:\n" + thisSequence.toString());
+		
 		byte[] byte_mapping_quality = thisSequence.getQuality();
 		if (byte_mapping_quality == null) 
-			throw new ArcturusDatabaseException("writeAlignment: Cannot get mapping quality for sequence ID=" + seq_id +
-					"\n" + thisSequence.toString());
+			throw new ArcturusDatabaseException("writeAlignment: Cannot get mapping quality for sequence ID=" + seq_id);
 		
 		int mapping_quality = byteArrayToInt(byte_mapping_quality);
 		
