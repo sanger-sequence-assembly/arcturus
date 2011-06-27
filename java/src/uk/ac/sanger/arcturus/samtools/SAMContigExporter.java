@@ -155,8 +155,8 @@ public class SAMContigExporter {
 			}
 		} else
 			throw new ArcturusDatabaseException("writeAlignment: Missing DNA data for sequence ID=" + seq_id);
-		
-		 if (quality != null) {	 
+		 
+		if (quality != null) {	 
              try {	 
                      quality = Utility.decodeCompressedData(quality, seqlen);	 
              } catch (DataFormatException e) {	 
@@ -194,7 +194,7 @@ public class SAMContigExporter {
 		String qualityString = null;
 		
 		try {
-			qualityString = new String(sequence, "US-ASCII");
+			qualityString = new String(quality, "US-ASCII");
 		} catch (UnsupportedEncodingException e) {
 			e.printStackTrace();
 		}
@@ -205,18 +205,20 @@ public class SAMContigExporter {
 		if (thisSequence == null) 
 			throw new ArcturusDatabaseException("writeAlignment: Cannot find sequence for sequence ID=" + seq_id);
 		
-		reportProgress("\t\twriteAlignment: retrieved this seqeunce from database:\n" + thisSequence.toString());
+		reportProgress("\t\twriteAlignment: retrieved this sequence from database:\n" + thisSequence.toString());
 		
 		byte[] byte_mapping_quality = thisSequence.getQuality();
 		if (byte_mapping_quality == null) 
 			throw new ArcturusDatabaseException("writeAlignment: Cannot get mapping quality for sequence ID=" + seq_id);
 		
-		int mapping_quality = byteArrayToInt(byte_mapping_quality);
+		//int mapping_quality = byteArrayToInt(byte_mapping_quality);
+
+		int mapping_quality = byteArrayToInt(quality);
 		
 		if (mapping_quality > 0) {
-			reportProgress("\t\twriteAlignment: got quality of " + mapping_quality + " from database\n");
+			reportProgress("\t\twriteAlignment: got mapping quality of " + mapping_quality + "\n");
 		} else
-			throw new ArcturusDatabaseException("writeAlignment: Missing mapping quality data for sequence ID=" + seq_id);
+			throw new ArcturusDatabaseException("writeAlignment: Improbable mapping quality data for sequence ID=" + seq_id);
 		
 		reportProgress("writeAlignment: Writing line:\n" + readname + TAB + flags + TAB + contigName + TAB + contigOffset +
 				TAB + mapping_quality +
