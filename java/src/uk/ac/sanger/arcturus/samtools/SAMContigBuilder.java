@@ -104,7 +104,7 @@ public class SAMContigBuilder {
 		if (sequence == null) 
 			 throw new ArcturusDatabaseException("buildSequenceToContigMapping: cannot find data for sequence for SAMRecord =" + record.getReadName());	 
 		
-		sequence.setDNA(null);
+		//sequence.setDNA(null);
 		
 		int quality = record.getMappingQuality();
 		reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + quality + " from record " + record.getReadName());
