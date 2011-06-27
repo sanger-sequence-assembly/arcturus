@@ -113,7 +113,8 @@ public class SAMContigBuilder {
 		int saved_quality = (byteArrayToInt(sequence.getQuality()));
 		reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + saved_quality + " from Java object");
 		
-		Sequence storedSequence = adb.putSequence(sequence);
+		Sequence storedSequence = adb.findOrCreateSequence(sequence);
+		//Sequence storedSequence = adb.putSequence(sequence);
 		int stored_quality = (byteArrayToInt(storedSequence.getQuality()));
 		reportProgress("\t\tbuildSequenceToContigMapping: got quality of " + stored_quality + " from database\n");
 		
