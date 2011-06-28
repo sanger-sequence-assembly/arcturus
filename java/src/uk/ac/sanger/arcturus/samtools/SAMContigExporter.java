@@ -195,11 +195,6 @@ public class SAMContigExporter {
 			e.printStackTrace();
 		}
 	
-		if (mapping_quality > 0) {
-			reportProgress("\t\twriteAlignment: got mapping quality of " + mapping_quality + "\n");
-		} else
-			throw new ArcturusDatabaseException("writeAlignment: Improbable mapping quality data for sequence ID=" + seq_id);
-		
 		reportProgress("writeAlignment: Writing line:\n" + readname + TAB + flags + TAB + contigName + TAB + contigOffset +
 				TAB + mapping_quality +
 				TAB + cigar + TAB + "*\t0\t0\t" + DNA + TAB + qualityString);
