@@ -34,6 +34,7 @@ public class ProjectManager extends AbstractManager {
 	private PreparedStatement pstmtSetProjectOwner;
 	private PreparedStatement pstmtCreateNewProject;
 	private PreparedStatement pstmtChangeProjectStatus;
+	private PreparedStatement pstmtGetLastImportId;
 
 	/**
 	 * Creates a new ProjectManager to provide project management services to an
@@ -112,8 +113,29 @@ public class ProjectManager extends AbstractManager {
 		query = "update PROJECT set status = ? where project_id = ?";
 		
 		pstmtChangeProjectStatus = conn.prepareStatement(query);
+		
+		query = "select max(id) from IMPORTEXPORT where action = 'import' and project_id = ?";
+		
+		pstmtGetLastImportId = prepareStatement(query);
 	}
 
+	public int getLastImportId(Project p) throws ArcturusDatabaseException{
+		int last_import_id = 0;
+		int project_id = p.getID();
+		
+		try {
+			pstmtGetLastImportId.setInt(1,project_id);
+			ResultSet rs = pstmtGetLastImportId.executeQuery();
+			last_import_id = rs.next() ? rs.getInt(1) : -1;
+			rs.close();
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to get last import id for project" + project_id, conn, this);
+		}
+		
+		return last_import_id;
+	}
+	
 	public void clearCache() {
 		hashByID.clear();
 	}
@@ -132,7 +154,7 @@ public class ProjectManager extends AbstractManager {
 
 		return project;
 	}
-
+	
 	private Project loadProjectByID(int id) throws ArcturusDatabaseException {
 		Project project = null;
 

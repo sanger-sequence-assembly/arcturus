@@ -18,6 +18,7 @@ import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Ligation;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.data.Read;
+import uk.ac.sanger.arcturus.data.ReadGroup;
 import uk.ac.sanger.arcturus.data.Sequence;
 import uk.ac.sanger.arcturus.data.Template;
 import uk.ac.sanger.arcturus.data.CanonicalMapping;
@@ -217,6 +218,10 @@ public interface ArcturusDatabase {
 	public Read findOrCreateRead(Read read) throws ArcturusDatabaseException;
 
 	public Read putRead(Read read) throws ArcturusDatabaseException;
+	
+	public void addReadGroup(ReadGroup readGroup) throws ArcturusDatabaseException;
+		
+	public Set<ReadGroup> findReadGroupsFromLastImport(int project_id) throws ArcturusDatabaseException;
 
 	public int[] getUnassembledReadIDList() throws ArcturusDatabaseException;
 	
@@ -545,4 +550,6 @@ public interface ArcturusDatabase {
 	public boolean putSequenceToContigMappings(Contig contig) throws ArcturusDatabaseException;
 
 	public boolean putContigToParentMappings(Contig contig) throws ArcturusDatabaseException;
+
+	public int getLastImportId(int id);
 }

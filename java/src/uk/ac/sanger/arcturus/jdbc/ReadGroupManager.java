@@ -5,6 +5,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Set;
 
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Project;
@@ -43,14 +46,6 @@ public class ReadGroupManager  extends AbstractManager{
 		hashByLineId = new  HashMap<Integer, ReadGroup>();
 		hashByReadTag = new HashMap<String, ReadGroup>();
 
-		try {
-			setConnection(adb.getDefaultConnection());
-
-			findReadGroupsFromLastImport();
-		}
-		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to initialise the read group manager", conn, adb);
-		}
 	}
 
 	public void clearCache() {
@@ -83,19 +78,16 @@ public class ReadGroupManager  extends AbstractManager{
 		
 		pstmtGetReadGroupByLineId = prepareStatement(query);
 		
-		query = "select max(id) from IMPORTEXPORT where action = 'import'";
-		
-		pstmtGetLastImportId = prepareStatement(query);
+	
 
 	}
 	
 	protected void addReadGroup(ReadGroup readGroup) throws SQLException, ArcturusDatabaseException{
 		
-		pstmtCreateReadGroup.setInt(1, readGroup.getRead_group_id());
-		pstmtCreateReadGroup.setInt(2, readGroup.getRead_group_line_id());
-		pstmtCreateReadGroup.setInt(3, readGroup.getImport_id());
+		pstmtCreateReadGroup.setInt(1, readGroup.getRead_group_line_id());
+		pstmtCreateReadGroup.setInt(2, readGroup.getImport_id());
 		pstmtCreateReadGroup.setString(3, readGroup.getTag_name());
-		pstmtCreateReadGroup.setString(3, readGroup.getTag_value());
+		pstmtCreateReadGroup.setString(4, readGroup.getTag_value());
 		
 		try {
 			pstmtCreateReadGroup.executeQuery();
@@ -105,30 +97,25 @@ public class ReadGroupManager  extends AbstractManager{
 		}
 	}
 	
-	protected void addReadGroupsFromThisImport(HashMap<Integer, ReadGroup> readGroups) throws SQLException, ArcturusDatabaseException {
+	protected void addReadGroupsFromThisImport(Set<ReadGroup> readGroups) throws SQLException, ArcturusDatabaseException {
 		
-		ReadGroup thisReadGroup;
-		
-		for (int i = 0; i< readGroups.size(); i++) {
-			addReadGroup( readGroups.get(i));
+		Iterator it = readGroups.iterator();
+		while (it.hasNext()) {
+		    // Get element
+			addReadGroup((ReadGroup) it.next());
 		}
 		
 	}
 	
-	protected HashMap<Integer, ReadGroup> findReadGroupsFromLastImport() throws SQLException, ArcturusDatabaseException {
+	protected Set<ReadGroup> findReadGroupsFromLastImport(Project project) throws SQLException, ArcturusDatabaseException {
 		
 		int last_import_id = 0;
 		
-		try {
-			ResultSet rs = pstmtGetLastImportId.executeQuery();
-			last_import_id = rs.next() ? rs.getInt(1) : -1;
-			rs.close();
-		}
-		catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to get last import id", conn, this);
-		}
+		HashSet hashSet = new HashSet();
+		Set<ReadGroup> readGroups = hashSet;
 		
 		try {
+			last_import_id = adb.getLastImportId(project.getID());
 			pstmtGetReadGroupByImportId.setInt(1, last_import_id);
 
 			ResultSet rs = pstmtGetReadGroupByImportId.executeQuery();
@@ -151,14 +138,14 @@ public class ReadGroupManager  extends AbstractManager{
 			 */
 
 			while (rs.next()) {
-				int read_group_id = rs.getInt(1);
+			
 				int read_group_line_id = rs.getInt(2);
 				int import_id = rs.getInt(3);
-				String tag_name = rs.getString(4);
+			String tag_name = rs.getString(4);
 				String tag_value = rs.getString(5);
 
-				ReadGroup readGroup = new ReadGroup( read_group_id, read_group_line_id, import_id, tag_name, tag_value);
-				this.hashById.put(read_group_id, readGroup);
+				ReadGroup readGroup = new ReadGroup(read_group_line_id, import_id, tag_name, tag_value);
+				readGroups.add(readGroup);
 			} 
 
 			rs.close();
@@ -167,7 +154,7 @@ public class ReadGroupManager  extends AbstractManager{
 			adb.handleSQLException(e, "Failed to get read group for last import", conn, this);
 		}
 
-			return this.hashById;
+			return readGroups;
 	}
 
 	@Override

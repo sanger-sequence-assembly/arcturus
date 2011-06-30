@@ -140,6 +140,52 @@ public class BAMContigLoader {
 		System.out.println(message);
 	}
 
+	/**
+	 * @param record
+	 * @param import_id
+	 * @param line_no
+	 * @return
+	 */
+	protected Set<ReadGroup> readReadGroupRecord(SAMReadGroupRecord record, int import_id, int line_no){
+        
+		Set<ReadGroup> readGroupsForThisSAMLine = new HashSet<ReadGroup>();
+		 
+		// ID and SM must be present ? does anything check this ?
+        String IDvalue = record.getId();
+        ReadGroup IDReadGroup = new ReadGroup(line_no, import_id, "ID", IDvalue);
+        readGroupsForThisSAMLine.add(IDReadGroup);
+    	
+    	String SMvalue = record.getSample();
+    	ReadGroup SMReadGroup =  new ReadGroup(line_no, import_id, "SM", SMvalue);
+    	readGroupsForThisSAMLine.add(SMReadGroup);
+    	 
+    	 // now any others that may be present
+		return readGroupsForThisSAMLine;
+		
+	}
+	
+	protected Set<ReadGroup> readReadGroupRecords(SAMFileReader reader, Project project) {
+        SAMFileHeader header = reader.getFileHeader();
+        
+        reportProgress("Loading the Read groups from the SAM Header");
+        
+        int import_id =adb.getLastImportId(project.getID());
+        
+        // need to build the ReadGroups here
+        List<SAMReadGroupRecord> readgroups = header.getReadGroups();
+       
+        Set<ReadGroup> readGroups = new HashSet<ReadGroup>();
+        int line_no = 1;
+        for (SAMReadGroupRecord record : readgroups) {
+            reportProgress("Loading the Read groups from line " + line_no + " in the SAM Header");
+        	readGroups.addAll(readReadGroupRecord(record, import_id, line_no));
+        	line_no++;
+        }
+        
+        return readGroups;
+        
+	}
+	
 	protected Set<Contig> getContigs(SAMFileReader reader) {
         SAMFileHeader header = reader.getFileHeader();
          

@@ -4,6 +4,8 @@ import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.utils.ProjectSummary;
 import uk.ac.sanger.arcturus.people.*;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.*;
 //import java.util.zip.DataFormatException;
 
@@ -374,4 +376,5 @@ public class Project extends Core {
 		else
 			return false;
 	}
+	
 }

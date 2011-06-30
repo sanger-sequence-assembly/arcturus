@@ -1431,4 +1431,24 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	public synchronized boolean putContigToParentMappings(Contig contig) throws ArcturusDatabaseException {
 		return mappingManager.putContigToParentMappings(contig);
 	}
+
+	@Override
+	public void addReadGroup(ReadGroup readGroup)
+			throws ArcturusDatabaseException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public Set<ReadGroup> findReadGroupsFromLastImport(int project_id)
+			throws ArcturusDatabaseException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public int getLastImportId(int id) {
+		// TODO Auto-generated method stub
+		return 0;
+	}
 }
