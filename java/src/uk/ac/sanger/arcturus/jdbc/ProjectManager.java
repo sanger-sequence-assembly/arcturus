@@ -119,9 +119,9 @@ public class ProjectManager extends AbstractManager {
 		pstmtGetLastImportId = prepareStatement(query);
 	}
 
-	public int getLastImportId(Project p) throws ArcturusDatabaseException{
+	public int getLastImportId(Project project) throws ArcturusDatabaseException{
 		int last_import_id = 0;
-		int project_id = p.getID();
+		int project_id = project.getID();
 		
 		try {
 			pstmtGetLastImportId.setInt(1,project_id);

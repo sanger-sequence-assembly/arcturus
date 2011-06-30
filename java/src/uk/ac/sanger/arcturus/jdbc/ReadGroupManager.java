@@ -66,11 +66,11 @@ public class ReadGroupManager  extends AbstractManager{
 		
 		pstmtGetReadGroupByImportId = prepareStatement(query);
 		
-		query = "select read_group_line_id, tag_name, tag_value from READGROUP where tag_name = ?";
+		query = "select read_group_line_id, tag_name, tag_value from READGROUP where tag_name = ? and import_id = ?";
 		
 		pstmtGetReadGroupByReadTag = prepareStatement(query);
 		
-		query = "select read_group_line_id, tag_name, tag_value from READGROUP where tag_name = 'ID' and tag_value = ?"; 
+		query = "select read_group_line_id, tag_name, tag_value from READGROUP where tag_name = 'ID' and tag_value = ? and import_id = ?"; 
 			
 		pstmtGetReadGroupById = prepareStatement(query);
 		
@@ -115,7 +115,7 @@ public class ReadGroupManager  extends AbstractManager{
 		Set<ReadGroup> readGroups = hashSet;
 		
 		try {
-			last_import_id = adb.getLastImportId(project.getID());
+			last_import_id = adb.getLastImportId(project);
 			pstmtGetReadGroupByImportId.setInt(1, last_import_id);
 
 			ResultSet rs = pstmtGetReadGroupByImportId.executeQuery();
@@ -139,10 +139,10 @@ public class ReadGroupManager  extends AbstractManager{
 
 			while (rs.next()) {
 			
-				int read_group_line_id = rs.getInt(2);
-				int import_id = rs.getInt(3);
-			String tag_name = rs.getString(4);
-				String tag_value = rs.getString(5);
+				int read_group_line_id = rs.getInt(1);
+				int import_id = rs.getInt(2);
+			String tag_name = rs.getString(3);
+				String tag_value = rs.getString(4);
 
 				ReadGroup readGroup = new ReadGroup(read_group_line_id, import_id, tag_name, tag_value);
 				readGroups.add(readGroup);

@@ -9,10 +9,15 @@ import java.sql.SQLException;
 import java.util.Set;
 import java.util.zip.DataFormatException;
 
+import net.sf.samtools.SAMReadGroupRecord;
+
+import com.sun.tools.javac.util.List;
+
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.CanonicalMapping;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Project;
+import uk.ac.sanger.arcturus.data.ReadGroup;
 import uk.ac.sanger.arcturus.data.Sequence;
 import uk.ac.sanger.arcturus.data.SequenceToContigMapping;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
@@ -55,7 +60,16 @@ public class SAMContigExporter {
 		
 		Set<Contig> contigSet = adb.getContigsByProject(project.getID(), ArcturusDatabase.CONTIG_BASIC_DATA);
 		
+		List<SAMReadGroupRecord> readGroups = (List<SAMReadGroupRecord>) adb.findReadGroupsFromLastImport(project);
+		
 		exportContigSet(contigSet, pw);
+	}
+	
+	private void exportReadGroupSet(List<SAMReadGroupRecord> readGroups, PrintWriter pw) throws ArcturusDatabaseException {
+		//@RG	ID:GE6QGXJ01.sff	SM:unknown	LB:GE6QGXJ01.sff
+		for (SAMReadGroupRecord readGroup : readGroups)
+			pw.println("@RG\tID:" + readGroup.getId() + "\tSM:" + readGroup.getSample() + "\tLB:" + readGroup.getLibrary() + "\n");
+		// add in optional fields here
 	}
 	
 	private String getNameForContig(Contig contig) {

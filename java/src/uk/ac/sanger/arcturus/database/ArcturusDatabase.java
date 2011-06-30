@@ -5,6 +5,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Map;
 import java.util.Set;
+import java.util.List;
 import java.util.logging.Logger;
 
 import javax.sql.DataSource;
@@ -18,7 +19,7 @@ import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Ligation;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.data.Read;
-import uk.ac.sanger.arcturus.data.ReadGroup;
+import net.sf.samtools.SAMReadGroupRecord;
 import uk.ac.sanger.arcturus.data.Sequence;
 import uk.ac.sanger.arcturus.data.Template;
 import uk.ac.sanger.arcturus.data.CanonicalMapping;
@@ -219,9 +220,9 @@ public interface ArcturusDatabase {
 
 	public Read putRead(Read read) throws ArcturusDatabaseException;
 	
-	public void addReadGroup(ReadGroup readGroup) throws ArcturusDatabaseException;
+	public void addReadGroupsFromThisImport(List<SAMReadGroupRecord> readGroups, int import_id) throws ArcturusDatabaseException;
 		
-	public Set<ReadGroup> findReadGroupsFromLastImport(int project_id) throws ArcturusDatabaseException;
+	public List<SAMReadGroupRecord> findReadGroupsFromLastImport(Project project) throws ArcturusDatabaseException;
 
 	public int[] getUnassembledReadIDList() throws ArcturusDatabaseException;
 	
@@ -551,5 +552,5 @@ public interface ArcturusDatabase {
 
 	public boolean putContigToParentMappings(Contig contig) throws ArcturusDatabaseException;
 
-	public int getLastImportId(int id);
+	public int getLastImportId(Project p);
 }

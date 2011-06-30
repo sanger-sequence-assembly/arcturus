@@ -12,13 +12,18 @@ import java.sql.SQLException;
 
 import javax.sql.DataSource;
 
+import net.sf.samtools.SAMReadGroupRecord;
+
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Set;
 import java.util.Vector;
+import java.util.List;
 import java.util.zip.DataFormatException;
 
 import com.mysql.jdbc.jdbc2.optional.MysqlDataSource;
+
 import oracle.jdbc.pool.OracleDataSource;
 
 import java.util.logging.*;
@@ -322,6 +327,7 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 	protected LigationManager ligationManager;
 	protected TemplateManager templateManager;
 	protected ReadManager readManager;
+	protected SAMReadGroupRecordManager readGroupManager;
 	protected SequenceManager sequenceManager;
 	protected ContigManager contigManager;
 	protected ProjectManager projectManager;
@@ -345,6 +351,8 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		templateManager = new TemplateManager(this);
 		
 		readManager = new ReadManager(this);
+		
+		readGroupManager = new SAMReadGroupRecordManager(this);
 		
 		sequenceManager = new SequenceManager(this);
 		
@@ -1432,23 +1440,40 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		return mappingManager.putContigToParentMappings(contig);
 	}
 
-	@Override
-	public void addReadGroup(ReadGroup readGroup)
-			throws ArcturusDatabaseException {
-		// TODO Auto-generated method stub
+	public void addReadGroupsFromThisImport(List<SAMReadGroupRecord> readGroups, int import_id) throws ArcturusDatabaseException {
+		try {
+			readGroupManager.addReadGroupsFromThisImport(readGroups, import_id);
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		
 	}
 
-	@Override
-	public Set<ReadGroup> findReadGroupsFromLastImport(int project_id)
+	public List<SAMReadGroupRecord> findReadGroupsFromLastImport(Project project)
 			throws ArcturusDatabaseException {
-		// TODO Auto-generated method stub
-		return null;
+		
+		List<SAMReadGroupRecord> readGroups = new LinkedList();
+		
+		try {
+			readGroups =  readGroupManager.findReadGroupsFromLastImport(project);
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return readGroups;
 	}
 
-	@Override
-	public int getLastImportId(int id) {
-		// TODO Auto-generated method stub
-		return 0;
+	public int getLastImportId(Project p) {
+		
+		int last_import_id = 0;
+		try {
+			last_import_id =  projectManager.getLastImportId(p);
+		} catch (ArcturusDatabaseException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		return last_import_id;
 	}
 }
