@@ -1,15 +1,15 @@
 -- data taken from LITTLEMURIS first TRICHURIS conti
 insert into SAMREADGROUPRECORD(read_group_line_id, import_id, 
 IDvalue, SMvalue, LBvalue, DSvalue, PUvalue, PIvalue, CNvalue, DTvalue, PLvalue) 
-values ( 1, 52, 'GI1YXNO01.sff', 'unknown', 'GI1YXNO01.sff', NULL, NULL, NULL, NULL, NULL, NULL);
+values ( 1, 52, 'GI1YXNO01.sff', 'unknown', 'GI1YXNO01.sff', NULL, NULL, 0, NULL, NULL, NULL);
 
 insert into SAMREADGROUPRECORD(read_group_line_id, import_id, 
 IDvalue, SMvalue, LBvalue, DSvalue, PUvalue, PIvalue, CNvalue, DTvalue, PLvalue) 
-values ( 2, 52, 'GWSHH1C01.sff', 'unknown', 'GWSHH1C01.sff', NULL, NULL, NULL, NULL, NULL, NULL);
+values ( 2, 52, 'GWSHH1C01.sff', 'unknown', 'GWSHH1C01.sff', NULL, NULL, 0, NULL, NULL, NULL);
 
 insert into SAMREADGROUPRECORD(read_group_line_id, import_id, 
 IDvalue, SMvalue, LBvalue, DSvalue, PUvalue, PIvalue, CNvalue, DTvalue, PLvalue) 
-values ( 3, 52, 'GE6QGXJ01.sff', 'unknown', 'GE6QGXJ01.sff', NULL, NULL, NULL, NULL, NULL, NULL);
+values ( 3, 52, 'GE6QGXJ01.sff', 'unknown', 'GE6QGXJ01.sff', NULL, NULL, 0, NULL, NULL, NULL);
 
 --@RG	ID:GI1YXNO01.sff	SM:unknown	LB:GI1YXNO01.sff
 --@RG	ID:GWSHH1C01.sff	SM:unknown	LB:GWSHH1C01.sff
