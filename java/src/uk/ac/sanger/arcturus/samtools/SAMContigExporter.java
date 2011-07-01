@@ -3,6 +3,7 @@ package uk.ac.sanger.arcturus.samtools;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -67,9 +68,39 @@ public class SAMContigExporter {
 	
 	private void exportReadGroupSet(List<SAMReadGroupRecord> readGroups, PrintWriter pw) throws ArcturusDatabaseException {
 		//@RG	ID:GE6QGXJ01.sff	SM:unknown	LB:GE6QGXJ01.sff
-		for (SAMReadGroupRecord readGroup : readGroups)
-			pw.println("@RG\tID:" + readGroup.getId() + "\tSM:" + readGroup.getSample() + "\tLB:" + readGroup.getLibrary() + "\n");
+		for (SAMReadGroupRecord readGroup : readGroups){
+			pw.println("@RG\tID:" + readGroup.getId() + "\tSM:" + readGroup.getSample());
 		// add in optional fields here
+			String library =  readGroup.getLibrary();
+			if (library != null ) 
+				pw.println("\tLB:" + library);
+			
+			String description =  readGroup.getDescription();
+			if (description != null ) 
+				pw.println("\tLB:" + description);
+			
+			String platform_unit =  readGroup.getPlatformUnit();
+			if (platform_unit != null ) 
+				pw.println("\tLB:" + platform_unit);
+			
+			int predicted_median_insert_size =  readGroup.getPredictedMedianInsertSize();
+			if (predicted_median_insert_size != 0 ) 
+				pw.println("\tLB:" + predicted_median_insert_size);
+			
+			String sequencing_center =  readGroup.getSequencingCenter();
+			if (sequencing_center != null ) 
+				pw.println("\tLB:" + sequencing_center);
+			
+			Date run_date =  (Date) readGroup.getRunDate();
+			if (run_date != null ) 
+				pw.println("\tLB:" + run_date);
+			
+			String platform =  readGroup.getPlatform();
+			if (platform != null ) 
+				pw.println("\tLB:" + platform);
+			
+			pw.println("\n");
+		}
 	}
 	
 	private String getNameForContig(Contig contig) {
