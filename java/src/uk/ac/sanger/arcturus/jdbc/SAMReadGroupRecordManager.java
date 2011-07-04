@@ -35,6 +35,8 @@ public class SAMReadGroupRecordManager  extends AbstractManager{
 	private HashMap<Integer, SAMReadGroupRecord> hashByLineId;
 	private HashMap<String, SAMReadGroupRecord> hashByReadTag;
 	
+	private boolean testing;
+	
 	/**
 	 * Creates a new ReadGroupManager to provide read tag group management services to an
 	 * ArcturusDatabase object.  Called to process or produce a SAMFileHeader record 
@@ -131,10 +133,13 @@ public class SAMReadGroupRecordManager  extends AbstractManager{
 		}
 		
 		try {
-			pstmtCreateReadGroup.setInt(8, readGroup.getPredictedMedianInsertSize());
+			//pstmtCreateReadGroup.setInt(8, readGroup.getPredictedMedianInsertSize());
+			pstmtCreateReadGroup.setInt(8, 0);
 		}
 		catch (NullPointerException e){
-			Arcturus.logSevere("Failed to read the the Predicted Median Insert Size(PI) tag");
+			reportProgress("Failed to read the the Predicted Median Insert Size(PI) tag");
+			SQLException s = new SQLException("Failed to read the the Predicted Median Insert Size(PI) tag");
+			throw s;
 		}
 		
 		try {
@@ -167,7 +172,9 @@ public class SAMReadGroupRecordManager  extends AbstractManager{
 	}
 	
 	protected void reportProgress(String message) {
-    	System.out.println(message);
+		if (testing) {
+			System.out.println(message);
+		}
     	Arcturus.logInfo(message);
 	}
 	
