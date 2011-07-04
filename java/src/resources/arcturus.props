@@ -9,7 +9,7 @@ arcturus.default.instance=pathogen,vertebrates
 
 arcturus.update.url=http://intweb.sanger.ac.uk/Software/Arcturus/arcturus.zip
 
-jdbcloghandler.host=mcs6
+jdbcloghandler.host=mcs8
 jdbcloghandler.port=15003
 jdbcloghandler.database=arcturus
 jdbcloghandler.username=arcturus
@@ -21,7 +21,7 @@ mail.smtp.auth=false
 mailhandler.to=arcturus-help@sanger.ac.uk
 mailhandler.domain=sanger.ac.uk
 
-jmxdb.url=jdbc:mysql://mcs6:15003/arcturus
+jmxdb.url=jdbc:mysql://mcs8:15003/arcturus
 jmxdb.username=arcturus
 jmxdb.password=***REMOVED***
 
