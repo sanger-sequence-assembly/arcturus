@@ -49,6 +49,13 @@ public class SAMReadGroupRecordManager  extends AbstractManager{
 		hashByImportId = new HashMap<Integer, SAMReadGroupRecord>();
 		hashByLineId = new  HashMap<Integer,SAMReadGroupRecord>();
 		hashByReadTag = new HashMap<String, SAMReadGroupRecord>();
+		
+		try {
+			setConnection(adb.getDefaultConnection());
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e, "Failed to initialise the SAMReadGroupRecord manager", conn, adb);
+		}
 
 	}
 
