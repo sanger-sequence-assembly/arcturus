@@ -91,17 +91,72 @@ public class SAMReadGroupRecordManager  extends AbstractManager{
 	
 	protected void addReadGroup(SAMReadGroupRecord readGroup, int line_no, int import_id) throws SQLException, ArcturusDatabaseException{
 		
+
 		pstmtCreateReadGroup.setInt(1, line_no);
 		pstmtCreateReadGroup.setInt(2, import_id);
-		pstmtCreateReadGroup.setString(3, readGroup.getId());
-		pstmtCreateReadGroup.setString(4, readGroup.getSample());
-		pstmtCreateReadGroup.setString(5, readGroup.getLibrary());
-		pstmtCreateReadGroup.setString(6, readGroup.getDescription());
-		pstmtCreateReadGroup.setString(7, readGroup.getPlatformUnit());
-		pstmtCreateReadGroup.setInt(8, readGroup.getPredictedMedianInsertSize());
-		pstmtCreateReadGroup.setString(9, readGroup.getSequencingCenter());
-		pstmtCreateReadGroup.setDate(10, (Date) readGroup.getRunDate());
-		pstmtCreateReadGroup.setString(11, readGroup.getPlatform());
+	
+		try {
+			pstmtCreateReadGroup.setString(3, readGroup.getId());
+		}
+		catch (NullPointerException e){
+			Arcturus.logSevere("Failed to read the the Read Group Identifier(ID) tag");
+		}
+		
+		try {
+			pstmtCreateReadGroup.setString(4, readGroup.getSample());
+		}
+		catch (NullPointerException e){
+			Arcturus.logSevere("Failed to read the the Sample(SM) tag");
+		}
+		
+		try {
+			pstmtCreateReadGroup.setString(5, readGroup.getLibrary());
+		}
+		catch (NullPointerException e){
+			Arcturus.logSevere("Failed to read the the Library(LB) tag");
+		}
+		
+		try {
+			pstmtCreateReadGroup.setString(6, readGroup.getDescription());
+		}
+		catch (NullPointerException e){
+			Arcturus.logSevere("Failed to read the the Description(DS) tag");
+		}
+		
+		try {
+			pstmtCreateReadGroup.setString(7, readGroup.getPlatformUnit());
+		}
+		catch (NullPointerException e){
+			Arcturus.logSevere("Failed to read the the Platform Unit(PU) tag");
+		}
+		
+		try {
+			pstmtCreateReadGroup.setInt(8, readGroup.getPredictedMedianInsertSize());
+		}
+		catch (NullPointerException e){
+			Arcturus.logSevere("Failed to read the the Predicted Median Insert Size(PI) tag");
+		}
+		
+		try {
+			pstmtCreateReadGroup.setString(9, readGroup.getSequencingCenter());
+		}
+		catch (NullPointerException e){
+			Arcturus.logSevere("Failed to read the the Sequencing Center(CN) tag");
+		}
+		
+		try {
+			pstmtCreateReadGroup.setDate(10, (Date) readGroup.getRunDate());
+		}
+		catch (NullPointerException e){
+			Arcturus.logSevere("Failed to read the the Run Date(DT) tag");
+		}
+
+		try {
+			pstmtCreateReadGroup.setString(11, readGroup.getPlatform());
+		}
+		catch (NullPointerException e){
+			Arcturus.logSevere("Failed to read the the Platform(PL) tag");
+		}
 		
 		try {
 			pstmtCreateReadGroup.executeQuery();
