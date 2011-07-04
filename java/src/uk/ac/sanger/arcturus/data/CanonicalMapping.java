@@ -11,6 +11,7 @@ public class CanonicalMapping {
     protected int subjectSpan;
     protected int mapping_quality;
     protected String extendedCigarString;
+    protected String readGroupIDvalue;
     protected BasicSegment[] segments;
     protected Integer[] padlist;
     protected byte[] checksum;
@@ -27,13 +28,14 @@ public class CanonicalMapping {
     	this(0,segments);
     }
    
-    public CanonicalMapping(int ID, int rs, int ss, String extendedCigarString, int mapping_quality) {
+    public CanonicalMapping(int ID, int rs, int ss, String extendedCigarString, int mapping_quality, String readGroupIDvalue) {
     	// constructor using ID from database and e.g. delayed loading segments
         setMappingID(ID);
         setReferenceSpan(rs);
         setSubjectSpan(ss);
         this.extendedCigarString = extendedCigarString;
         this.mapping_quality = mapping_quality;
+        this.readGroupIDvalue = readGroupIDvalue;
     }
     
     public CanonicalMapping(String extendedCigarString) {
@@ -123,6 +125,17 @@ public class CanonicalMapping {
     		initialise();
         return extendedCigarString;
     }
+    
+    public void setReadGroupIDvalue(String readGroupIDvalue) {
+    	this.readGroupIDvalue =  readGroupIDvalue;
+    }
+    
+    public String getReadGroupIDvalueg() {
+    	if (readGroupIDvalue == null)
+    		initialise();
+        return readGroupIDvalue;
+    }
+    
     
     public void setCheckSum(byte[] checksum) {
         this.checksum = checksum;

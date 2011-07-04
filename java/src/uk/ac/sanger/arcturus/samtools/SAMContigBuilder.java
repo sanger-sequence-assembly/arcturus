@@ -20,6 +20,8 @@ public class SAMContigBuilder {
 	private DecimalFormat format = null;
 	protected long t0;
 	
+	private boolean testing = true;
+	
 	public SAMContigBuilder(ArcturusDatabase adb, BAMReadLoader brl) {
 		this.adb = adb;
 		this.brl = brl;
@@ -51,10 +53,11 @@ public class SAMContigBuilder {
 	 	int count = 0;
 	    while (iterator.hasNext()) {
 	 	    SAMRecord record = iterator.next();
+	 	    
 	 		reportProgress("\taddMappingsToContig: adding sequence for SAMRecord " + record.getReadName());
 	 		SequenceToContigMapping mapping = buildSequenceToContigMapping(record,contig);
 	 	    M.add(mapping);
-	 	    
+	 	   
 	 	    count++;
 	 	    
 	 	    if (diagnostics && (count%10000) == 0) {
@@ -81,6 +84,7 @@ public class SAMContigBuilder {
 		String cigar = record.getCigarString();
 		int contigStartPosition = record.getAlignmentStart();
         int span = record.getAlignmentEnd() - contigStartPosition + 1;
+        
 	    
 		
 		Sequence sequence = brl.findOrCreateSequence(record);
@@ -92,7 +96,12 @@ public class SAMContigBuilder {
 		int mapping_quality = record.getMappingQuality();
 		reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + mapping_quality + " from record " + record.getReadName());
 		
-		CanonicalMapping mapping = new CanonicalMapping(0,span,span,cigar, mapping_quality);
+	   
+ 	    SAMReadGroupRecord readGroup = record.getReadGroup();
+ 	    String readGroupIDvalue = readGroup.getId();
+ 	    reportProgress("\taddMappingsToContig: adding ID " + readGroupIDvalue + " for read group " + readGroup + " for contig " + contig.getName());
+		
+		CanonicalMapping mapping = new CanonicalMapping(0,span,span,cigar, mapping_quality, readGroupIDvalue);
 		CanonicalMapping cached = adb.findOrCreateCanonicalMapping(mapping);
 		
 		int stored_quality = cached.getMappingQuality();
@@ -105,7 +114,9 @@ public class SAMContigBuilder {
 	}
 
     protected void reportProgress(String message) {
-    	System.out.println(message);
+    	if (testing) {
+    		System.out.println(message);
+    	}
     	Arcturus.logInfo(message);
 	}
 	   

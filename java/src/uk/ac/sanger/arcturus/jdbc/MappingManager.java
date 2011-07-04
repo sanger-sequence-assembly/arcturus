@@ -109,7 +109,7 @@ public class MappingManager extends AbstractManager {
         	    int subSpan = rs.getInt(3);
         	    String cigar = rs.getString(4);
 
-	    	    CanonicalMapping mapping = new CanonicalMapping(mapping_id,refSpan,subSpan,cigar, 0);
+	    	    CanonicalMapping mapping = new CanonicalMapping(mapping_id,refSpan,subSpan,cigar, 0, null);
         	    cacheByChecksum.put(cigar,mapping);
 		    }
 		    rs.close();

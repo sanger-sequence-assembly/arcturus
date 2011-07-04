@@ -1,7 +1,6 @@
 package uk.ac.sanger.arcturus.samtools;
 
 import java.util.*;
-import java.util.List;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
@@ -49,7 +48,7 @@ public class BAMContigLoader {
 	    }
 	    
 	    reportProgress("===== WELCOME TO THE ARCTURUS 2 CONTIG LOADER =====");
-	    
+	        
 	    reportProgress("\nFound " + contigs.size() + " contigs in the input file.");
 	    
 	    for (Contig contig : contigs)
@@ -122,7 +121,11 @@ public class BAMContigLoader {
 			    reportProgress("DONE.");
 
 				Utility.reportMemory("After loading canonical mappings");
-
+				
+				reportProgress("\nPreparing to import read groups.");
+				
+				importSAMReadGroupRecords(reader, project);
+				
 				reportProgress("\nPreparing to import any new child contigs.");
 
 				for (SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> subgraph : subGraphs)
@@ -138,10 +141,11 @@ public class BAMContigLoader {
     }
 	
 	protected void reportProgress(String message) {
-		System.out.println(message);
+    	System.out.println(message);
+    	Arcturus.logInfo(message);
 	}
 	
-	protected void getSAMReadGroupRecords(SAMFileReader reader, Project project) {
+	protected void importSAMReadGroupRecords(SAMFileReader reader, Project project) {
         SAMFileHeader header = reader.getFileHeader();
         
         reportProgress("Loading the Read groups from the SAM Header");

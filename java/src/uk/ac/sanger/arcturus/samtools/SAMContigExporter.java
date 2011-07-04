@@ -38,8 +38,10 @@ public class SAMContigExporter {
 	
 	private final char TAB = '\t';
 	
+	private boolean testing = true;
+	
 	private static final String GET_ALIGNMENT_DATA =
-		" select RN.readname,RN.flags,SC.coffset,SC.direction,CM.cigar,CM.mapping_quality, S.seq_id,S.seqlen,S.sequence,S.quality" +
+		" select RN.readname,RN.flags,SC.coffset,SC.direction,CM.cigar,CM.mapping_quality, CM.read_group_IDvalue, S.seq_id,S.seqlen,S.sequence,S.quality" +
 		" from SEQ2CONTIG SC left join (CANONICALMAPPING CM,SEQUENCE S,SEQ2READ SR,READNAME RN) using (mapping_id) " +
 		" where SC.contig_id=? and SC.seq_id=S.seq_id and SC.seq_id=SR.seq_id and SR.read_id=RN.read_id" +
 		" order by SC.coffset asc";
@@ -169,7 +171,9 @@ public class SAMContigExporter {
 	}
 	  
 	protected void reportProgress(String message) {
-	    	System.out.println(message);
+	    	if (testing) {
+	    		System.out.println(message);
+	    	}
 	    	Arcturus.logInfo(message);
 		}
 	  
@@ -182,6 +186,7 @@ public class SAMContigExporter {
 		int contigOffset = rs.getInt(column++);
 		String direction = rs.getString(column++);
 		String cigar = rs.getString(column++);
+		String readGroupIDvalue = rs.getString(column++);
 		int mapping_quality = rs.getInt(column++);
 		int seq_id = rs.getInt(column++);
 		int seqlen = rs.getInt(column++);
@@ -246,7 +251,7 @@ public class SAMContigExporter {
 		
 		pw.println(readname + TAB + flags + TAB + contigName + TAB + contigOffset +
 				TAB + mapping_quality +
-				TAB + cigar + TAB + "*\t0\t0\t" + DNA + TAB + qualityString);
+				TAB + cigar + TAB + "*\t0\t0\t" + DNA + TAB + qualityString + "RG:Z:" + readGroupIDvalue);
 	}
 	
 	private void checkConnection() throws SQLException, ArcturusDatabaseException {

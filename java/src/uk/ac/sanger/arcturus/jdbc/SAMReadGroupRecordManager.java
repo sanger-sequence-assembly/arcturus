@@ -12,6 +12,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
@@ -103,13 +104,20 @@ public class SAMReadGroupRecordManager  extends AbstractManager{
 		}
 	}
 	
+	protected void reportProgress(String message) {
+    	System.out.println(message);
+    	Arcturus.logInfo(message);
+	}
+	
 	protected void addReadGroupsFromThisImport(List<SAMReadGroupRecord> readGroups, int import_id) throws SQLException, ArcturusDatabaseException {
 		
 		Iterator it = readGroups.iterator();
 		int line_no = 1;
 		
 		while (it.hasNext()) {
-			addReadGroup((SAMReadGroupRecord) it.next(), line_no, import_id);
+			SAMReadGroupRecord  readGroup = (SAMReadGroupRecord) it.next();
+			reportProgress("/tAdding read group " + line_no + ": " + readGroup.getId());
+			addReadGroup(readGroup, line_no, import_id);
 			line_no ++;
 		}
 		
@@ -147,7 +155,7 @@ public class SAMReadGroupRecordManager  extends AbstractManager{
 				readGroup.setSequencingCenter(rs.getString(10));
 				readGroup.setRunDate( rs.getDate(11));
 				readGroup.setPlatform(rs.getString(12));
-				
+				reportProgress("/tFound read group " + read_group_line_id + ": " + readGroup.getId());
 				readGroups.add(readGroup);
 			} 
 
