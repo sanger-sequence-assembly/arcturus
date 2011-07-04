@@ -75,7 +75,7 @@ public class SAMReadGroupRecordManager  extends AbstractManager{
 		query = "insert into SAMREADGROUPRECORD(read_group_line_id, import_id, IDvalue, SMvalue, LBvalue, DSvalue, PUvalue, PIvalue, CNvalue, DTvalue, PLvalue) " + 
 		"values ( ?, ? , ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-		pstmtCreateReadGroup = prepareStatement(query);
+		pstmtCreateReadGroup = prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
 		
 		query = "select * from SAMREADGROUPRECORD where import_id = ? order by read_group_line_id ASC";
 		
@@ -163,8 +163,14 @@ public class SAMReadGroupRecordManager  extends AbstractManager{
 			Arcturus.logSevere("Failed to read the the Platform(PL) tag");
 		}
 		
-		try {
-			pstmtCreateReadGroup.executeQuery();
+		try {	
+			int rc = pstmtCreateReadGroup.executeUpdate();		
+			if (rc == 1) {
+				ResultSet rs =pstmtCreateReadGroup.getGeneratedKeys();	
+				int read_group_id = rs.next() ? rs.getInt(1) : -1;	
+				rs.close();
+				reportProgress("Added new SAMReadGroupRecord to database with read_group_id = " + read_group_id);
+				}
 		}
 		catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to add ReadGroup", conn, this);
