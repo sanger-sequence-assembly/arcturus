@@ -112,15 +112,21 @@ public class SAMReadGroupRecordManager  extends AbstractManager{
 	protected void addReadGroupsFromThisImport(List<SAMReadGroupRecord> readGroups, int import_id) throws SQLException, ArcturusDatabaseException {
 		
 		Iterator it = readGroups.iterator();
-		int line_no = 1;
+		int line_no = 0;
+		int readGroupsToLoad = readGroups.size();
+		
+		reportProgress("\tLoading " + readGroupsToLoad + " read groups for import id " + import_id);
 		
 		while (it.hasNext()) {
-			SAMReadGroupRecord  readGroup = (SAMReadGroupRecord) it.next();
-			reportProgress("/tAdding read group " + line_no + ": " + readGroup.getId());
-			addReadGroup(readGroup, line_no, import_id);
 			line_no ++;
+			SAMReadGroupRecord  readGroup = (SAMReadGroupRecord) it.next();
+			reportProgress("\tAdding read group " + line_no + ": " + readGroup.getId());
+			addReadGroup(readGroup, line_no, import_id);
 		}
 		
+		if (readGroups.size() != line_no ) {
+			Arcturus.logSevere("*** Mismatch between read groups loaded (" + line_no + ") and read groups found to load (" + readGroupsToLoad + ")");
+		}
 	}
 	
 	protected List<SAMReadGroupRecord> findReadGroupsFromLastImport(Project project) throws SQLException, ArcturusDatabaseException {
