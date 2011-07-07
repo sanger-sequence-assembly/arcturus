@@ -130,7 +130,7 @@ public class CanonicalMapping {
     	this.readGroupIDvalue =  readGroupIDvalue;
     }
     
-    public String getReadGroupIDvalueg() {
+    public String getReadGroupIDvalue() {
     	if (readGroupIDvalue == null)
     		initialise();
         return readGroupIDvalue;
