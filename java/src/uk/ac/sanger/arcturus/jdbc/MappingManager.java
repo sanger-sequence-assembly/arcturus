@@ -167,6 +167,7 @@ public class MappingManager extends AbstractManager {
 			pstmtInsertCanonicalMapping.setInt(2, mapping.getSubjectSpan());
 			pstmtInsertCanonicalMapping.setString(3, cigar);
 			pstmtInsertCanonicalMapping.setInt(4, mapping.getMappingQuality());
+			pstmtInsertCanonicalMapping.setString(5, mapping.getReadGroupIDvalue());
 			
 			int rc = pstmtInsertCanonicalMapping.executeUpdate();
 						
