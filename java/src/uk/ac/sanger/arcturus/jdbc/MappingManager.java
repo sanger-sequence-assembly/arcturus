@@ -54,7 +54,7 @@ public class MappingManager extends AbstractManager {
 	protected void prepareConnection() throws SQLException {
 		String query;
 
-        query = "insert into CANONICALMAPPING (cspan,rspan,cigar, mapping_quality) values (?,?,?,?)";
+        query = "insert into CANONICALMAPPING (cspan,rspan,cigar, mapping_quality, read_group_IDValue) values (?,?,?,?,?)";
         pstmtInsertCanonicalMapping = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
 
 		query = "insert into SEQ2CONTIG (contig_id,seq_id,mapping_id,coffset,roffset,direction) "
