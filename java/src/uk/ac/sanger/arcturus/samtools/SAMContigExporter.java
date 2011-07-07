@@ -187,8 +187,8 @@ public class SAMContigExporter {
 		int contigOffset = rs.getInt(column++);
 		String direction = rs.getString(column++);
 		String cigar = rs.getString(column++);
-		String readGroupIDvalue = rs.getString(column++);
 		int mapping_quality = rs.getInt(column++);
+		String readGroupIDvalue = rs.getString(column++);
 		int seq_id = rs.getInt(column++);
 		int seqlen = rs.getInt(column++);
 		byte[] sequence = rs.getBytes(column++);
