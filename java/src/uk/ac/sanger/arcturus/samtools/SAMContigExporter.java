@@ -12,7 +12,7 @@ import java.util.zip.DataFormatException;
 
 import net.sf.samtools.SAMReadGroupRecord;
 
-import com.sun.tools.javac.util.List;
+import java.util.List;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.CanonicalMapping;
@@ -65,6 +65,7 @@ public class SAMContigExporter {
 		
 		List<SAMReadGroupRecord> readGroups = (List<SAMReadGroupRecord>) adb.findReadGroupsFromLastImport(project);
 		
+		exportReadGroupSet(readGroups, pw);
 		exportContigSet(contigSet, pw);
 	}
 	
