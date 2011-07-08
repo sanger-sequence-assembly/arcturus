@@ -38,7 +38,7 @@ public class SAMContigExporter {
 	
 	private final char TAB = '\t';
 	
-	private boolean testing = true;
+	private boolean testing = false;
 	
 	private static final String GET_ALIGNMENT_DATA =
 		" select RN.readname,RN.flags,SC.coffset,SC.direction,CM.cigar,CM.mapping_quality, CM.read_group_IDvalue, S.seq_id,S.seqlen,S.sequence,S.quality" +

@@ -49,7 +49,7 @@ public class BAMContigLoader {
 	    
 	    reportProgress("===== WELCOME TO THE ARCTURUS 2 CONTIG LOADER =====");
 	        
-	    reportProgress("\nFound " + contigs.size() + " contigs in the input file.");
+	    reportProgress("\nFound " + contigs.size() + " contigs in the input file for project " + project.getName());
 	    
 	    for (Contig contig : contigs)
 	    	contig.setProject(project);
@@ -147,16 +147,22 @@ public class BAMContigLoader {
 	
 	protected void importSAMReadGroupRecords(SAMFileReader reader, Project project) {
         SAMFileHeader header = reader.getFileHeader();
-        
-        reportProgress("Loading the Read groups from the SAM Header");
-        
-        int import_id =adb.getLastImportId(project);
-        try {
-			adb.addReadGroupsFromThisImport(header.getReadGroups(), import_id);
-		} catch (ArcturusDatabaseException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+       
+        int import_id = 0;
+        import_id = adb.getLastImportId(project);
+         
+        reportProgress("Loading the Read groups from the SAM Header for import id " + import_id);
+       
+        if (import_id == 0){
+        	Arcturus.logSevere("Cannot find the last import for project " + project.getID());
+        }
+        else {
+        	try {
+        		adb.addReadGroupsFromThisImport(header.getReadGroups(), import_id);
+        	} catch (ArcturusDatabaseException e) {
+        		e.printStackTrace();
+        	}
+        }
 	}
 	
 	protected Set<Contig> getContigs(SAMFileReader reader) {
