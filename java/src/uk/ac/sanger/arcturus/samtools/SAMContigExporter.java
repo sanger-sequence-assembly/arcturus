@@ -254,7 +254,7 @@ public class SAMContigExporter {
 		
 		pw.println(readname + TAB + flags + TAB + contigName + TAB + contigOffset +
 				TAB + mapping_quality +
-				TAB + cigar + TAB + "*\t0\t0\t" + DNA + TAB + qualityString + "RG:Z:" + TAB + readGroupIDvalue);
+				TAB + cigar + TAB + "*\t0\t0\t" + DNA + TAB + qualityString + TAB + "RG:Z:" + readGroupIDvalue);
 	}
 	
 	private void checkConnection() throws SQLException, ArcturusDatabaseException {
