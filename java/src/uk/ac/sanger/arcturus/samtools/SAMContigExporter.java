@@ -71,38 +71,42 @@ public class SAMContigExporter {
 	
 	private void exportReadGroupSet(List<SAMReadGroupRecord> readGroups, PrintWriter pw) throws ArcturusDatabaseException {
 		//@RG	ID:GE6QGXJ01.sff	SM:unknown	LB:GE6QGXJ01.sff
+		
+		pw.println("@PG\tID:" + getClass().getName());
+		
 		for (SAMReadGroupRecord readGroup : readGroups){
-			pw.println("@RG\tID:" + readGroup.getId() + "\tSM:" + readGroup.getSample());
-		// add in optional fields here
+			
+			String lineToPrint = "@RG\tID:" + readGroup.getId() + "\tSM:" + readGroup.getSample();
+			
 			String library =  readGroup.getLibrary();
 			if (library != null ) 
-				pw.println("\tLB:" + library);
+				lineToPrint = lineToPrint + "\tLB:" + library;
 			
 			String description =  readGroup.getDescription();
 			if (description != null ) 
-				pw.println("\tLB:" + description);
+				lineToPrint = lineToPrint + "\tDS:" + description;
 			
 			String platform_unit =  readGroup.getPlatformUnit();
 			if (platform_unit != null ) 
-				pw.println("\tLB:" + platform_unit);
+				lineToPrint = lineToPrint + "\tPU:" + platform_unit;
 			
 			int predicted_median_insert_size =  readGroup.getPredictedMedianInsertSize();
 			if (predicted_median_insert_size != 0 ) 
-				pw.println("\tLB:" + predicted_median_insert_size);
+				lineToPrint = lineToPrint + "\tPI:" + predicted_median_insert_size;
 			
 			String sequencing_center =  readGroup.getSequencingCenter();
 			if (sequencing_center != null ) 
-				pw.println("\tLB:" + sequencing_center);
+				lineToPrint = lineToPrint + "\tCN:" + sequencing_center;
 			
 			Date run_date =  (Date) readGroup.getRunDate();
 			if (run_date != null ) 
-				pw.println("\tLB:" + run_date);
+				lineToPrint = lineToPrint + "\tDT:" + run_date;
 			
 			String platform =  readGroup.getPlatform();
 			if (platform != null ) 
-				pw.println("\tLB:" + platform);
+				lineToPrint = lineToPrint + "\tPL:" + platform;
 			
-			pw.println("\n");
+			pw.println(lineToPrint);
 		}
 	}
 	
@@ -112,9 +116,7 @@ public class SAMContigExporter {
 	
 	public void exportContigSet(Set<Contig> contigSet, PrintWriter pw) throws ArcturusDatabaseException {
 		notifyEvent(Type.START_CONTIG_SET, 0);
-		
-		pw.println("@PG\tID:" + getClass().getName());
-		
+	
 		for (Contig contig : contigSet)
 			pw.println("@SQ\tSN:" + getNameForContig(contig) + "\tLN:" + contig.getLength());
 		
@@ -252,7 +254,7 @@ public class SAMContigExporter {
 		
 		pw.println(readname + TAB + flags + TAB + contigName + TAB + contigOffset +
 				TAB + mapping_quality +
-				TAB + cigar + TAB + "*\t0\t0\t" + DNA + TAB + qualityString + "RG:Z:" + readGroupIDvalue);
+				TAB + cigar + TAB + "*\t0\t0\t" + DNA + TAB + qualityString + "RG:Z:" + TAB + readGroupIDvalue);
 	}
 	
 	private void checkConnection() throws SQLException, ArcturusDatabaseException {
