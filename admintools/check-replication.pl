@@ -6,12 +6,12 @@ use DBI;
 
 my $slaves = [
 	      { 'host' => 'mcs3a',
-		'port' => 15004,
+		'port' => 15003,
 		'username' => 'monitor',
 		'password' => 'WhoWatchesTheWatchers' },
 
 	      { 'host' => 'mcs3a',
-		'port' => 15002,
+		'port' => 15001,
 		'username' => 'monitor',
 		'password' => 'WhoWatchesTheWatchers' },
 

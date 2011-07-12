@@ -516,12 +516,24 @@ my ($other_username, $action, $starttime, $endtime) = $project->getImportExportA
  
 print "Checking if project $projectname already has an IMPORT or EXPORT running in the $organism database\n";
 
-unless (defined($endtime)) {
+my $first_time = 0;
+ 	 	 
+unless( defined($other_username) && defined($action) && defined($starttime) && defined($endtime)){
+	$first_time = 1;
+}
+ 	 	 
+unless (defined($endtime) || ($first_time == 1)) {
    	print STDERR "Project $projectname already has a $action running started by $other_username at $starttime so this import has been ABORTED";
    	$adb->disconnect();
    	exit 1;
 }
 else {
+	if ($first_time) {
+		print STDERR "Project $projectname is being imported for the first time\n";
+	}
+	else {
+		print STDERR "Project $projectname last $action started by $other_username at $starttime finished at $endtime";
+	}
   print STDERR "Marking this import start time\n";
   my $status = $project->markImport("start");
 	unless ($status) {
@@ -623,7 +635,7 @@ $adb->disconnect();
 
 #-------------------------------------------------------------------------------
 
-# retain the CAF files for comparison with previous work
+# retain the CAF/SAM files for comparison with previous work
 $keep = 1;
 unless ($keep) {
 
