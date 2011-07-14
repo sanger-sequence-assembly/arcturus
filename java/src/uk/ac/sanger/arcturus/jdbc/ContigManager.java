@@ -1112,7 +1112,7 @@ public class ContigManager extends AbstractManager {
 		contig.setConsensus(dna, qual);
 	}
 
-	private void loadTagsForContig(Contig contig) throws ArcturusDatabaseException {
+	public void loadTagsForContig(Contig contig) throws ArcturusDatabaseException {
 		int contig_id = contig.getID();
 
 		Vector<Tag> tags = contig.getTags();
@@ -1550,6 +1550,9 @@ public class ContigManager extends AbstractManager {
 		        
 		    if (success)
  		        success = adb.putContigToParentMappings(contig);
+		    
+		    if (success) 
+		    	success = adb.putTags(contig);
 		        
 		    if (success)
  		        commitTransaction();
@@ -1715,5 +1718,17 @@ public class ContigManager extends AbstractManager {
 		catch (SQLException e) {
 			adb.handleSQLException(e, "Failed to set consensus for contig " + contig, conn, this);
 		}
+	}
+	
+	public boolean putTags(Contig contig) throws ArcturusDatabaseException {
+		if (contig == null)
+			throw new ArcturusDatabaseException("Cannot store tags for a null contig");
+		
+		int contig_id = contig.getID();
+		
+		if (contig_id <= 0)
+			throw new ArcturusDatabaseException("Cannot store tags for a contig that is not yet in the database");
+		
+		return true;
 	}
 }

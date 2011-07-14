@@ -553,4 +553,8 @@ public interface ArcturusDatabase {
 	public boolean putContigToParentMappings(Contig contig) throws ArcturusDatabaseException;
 
 	public int getLastImportId(Project p);
+
+	public boolean putTags(Contig contig)throws ArcturusDatabaseException;
+
+	public void loadTagsForContig(Contig contig) throws ArcturusDatabaseException;
 }

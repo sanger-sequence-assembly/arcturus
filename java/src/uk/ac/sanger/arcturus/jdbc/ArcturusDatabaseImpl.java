@@ -1440,11 +1440,18 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		return mappingManager.putContigToParentMappings(contig);
 	}
 
+	public synchronized boolean putTags(Contig contig) throws ArcturusDatabaseException{
+		return contigManager.putTags(contig);
+	}
+	
+	public synchronized void loadTagsForContig(Contig contig) throws ArcturusDatabaseException{
+		contigManager.loadTagsForContig(contig);
+	}
+	
 	public void addReadGroupsFromThisImport(List<SAMReadGroupRecord> readGroups, int import_id) throws ArcturusDatabaseException {
 		try {
 			readGroupManager.addReadGroupsFromThisImport(readGroups, import_id);
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		
@@ -1458,7 +1465,6 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		try {
 			readGroups =  readGroupManager.findReadGroupsFromLastImport(project);
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		return readGroups;
@@ -1470,10 +1476,10 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		try {
 			last_import_id =  projectManager.getLastImportId(p);
 		} catch (ArcturusDatabaseException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		
 		return last_import_id;
 	}
+	
 }

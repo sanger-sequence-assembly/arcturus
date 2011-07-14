@@ -13,6 +13,7 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.SequenceToContigMapping;
 import uk.ac.sanger.arcturus.data.GenericMapping.Direction;
+import uk.ac.sanger.arcturus.data.Tag;
 
 public class ContigComparator {
 	private ArcturusDatabase adb;
@@ -55,6 +56,51 @@ public class ContigComparator {
 				ResultSet.CONCUR_READ_ONLY);
 		
 	    pstmtGetAlignmentData.setFetchSize(Integer.MIN_VALUE);
+	}
+	
+	private String printTagSet(ResultSet tagSet) {
+		
+		String text = "";
+		try {
+			while (tagSet.next()) {
+				text = text + tagSet.getString(1) + "\t";
+				text = text + tagSet.getInt(2)  + "\t";
+				text = text + tagSet.getInt(3)  + "\t";
+				text = text + tagSet.getString(4)  + "\n";
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		return text;
+	}
+	
+	public boolean equalsParentContigTags(Contig contig, Contig parent) throws ArcturusDatabaseException {
+		
+		boolean equal = true;
+		
+		reportProgress("Checking if the tags stored in the database match the tags being imported...");
+		try {
+			checkConnection();
+			
+			equal = true;
+			
+			adb.loadTagsForContig(parent);
+			
+			ResultSet newTags= (ResultSet) contig.getTags();
+			reportProgress("Contig " + contig + " has tags: " + printTagSet(newTags));
+			ResultSet oldTags = (ResultSet) parent.getTags();
+			reportProgress("Contig " + parent + " has tags: " + printTagSet(oldTags));
+			
+			equal = newTags.equals(oldTags);
+			
+			reportProgress("Contigs " + contig + " and " + parent + " have " + (equal ? " IDENTICAL" : " DIFFERENT") + " tag sets.");
+			
+		}
+		catch (SQLException e) {
+            adb.handleSQLException(e, "An error occurred when comparing the tags for parent contig and child contigs", conn, this);
+		}
+		
+		return equal;
 	}
 	
 	public boolean equalsParentContig(Contig contig, Contig parent) throws ArcturusDatabaseException {

@@ -218,6 +218,10 @@ public class BAMContigLoader {
  			doImport = !contigComparator.equalsParentContig(child, parent);
  			
  			if (!doImport) {
+ 				doImport = !contigComparator.equalsParentContigTags(child, parent);
+ 			}
+ 			
+ 			if (!doImport) {
  				child.setSequenceToContigMappings(null);
  				
  				nameToID.put(child.getName(), parent.getID());
