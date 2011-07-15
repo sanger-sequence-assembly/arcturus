@@ -11,11 +11,10 @@ CREATE TABLE `SAMCONTIGTAG` (
   `tag_id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `SAMtagtype` ENUM('A', 'i', 'f', 'Z', 'H', 'B'),
   `GAPtagtype` varchar(4) CHARACTER SET latin1 COLLATE latin1_bin NOT NULL DEFAULT 'COMM',
-  `systematic_id` varchar(32) CHARACTER SET latin1 COLLATE latin1_bin DEFAULT NULL,
   `tag_seq_id` mediumint(8) unsigned NOT NULL DEFAULT '0',
   `tagcomment` text,
   PRIMARY KEY (`tag_id`),
-  KEY `systematic_id` (`systematic_id`)
+  KEY `GAPtagtype` (`GAPtagtype`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1; 
 
 CREATE TABLE `TAG2CONTIG` (
@@ -51,13 +50,14 @@ CREATE TABLE `TAGSEQUENCE` (
 DROP TABLE IF EXISTS `READTAG`;
 CREATE TABLE `READTAG` (
   `seq_id` int(10) unsigned NOT NULL DEFAULT '0',
-  `tagtype` varchar(4) CHARACTER SET latin1 COLLATE latin1_bin NOT NULL DEFAULT '',
+  `SAMtagtype` ENUM('A', 'i', 'f', 'Z', 'H', 'B'),
+  `GAPtagtype` varchar(4) CHARACTER SET latin1 COLLATE latin1_bin NOT NULL DEFAULT 'COMM',
   `tag_seq_id` mediumint(8) unsigned NOT NULL DEFAULT '0',
   `pstart` int(11) NOT NULL,
   `plength` int(11) NOT NULL,
 	`strand` enum('F','R','U') DEFAULT 'U',
-  `deprecated` enum('N','Y','X') DEFAULT 'N',
-  `comment` text,
+  `tagcomment` text,
   KEY `readtag_index` (`seq_id`),
+  KEY `GAPtagtype` (`GAPtagtype`),
   CONSTRAINT `READTAG_FK_SEQUENCE` FOREIGN KEY (`seq_id`) REFERENCES `SEQUENCE` (`seq_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
