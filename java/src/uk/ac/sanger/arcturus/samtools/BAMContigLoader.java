@@ -151,10 +151,10 @@ public class BAMContigLoader {
         int import_id = 0;
         import_id = adb.getLastImportId(project);
          
-        reportProgress("Loading the Read groups from the SAM Header for import id " + import_id);
+        reportProgress("BAMContigLoader:  Loading the Read groups from the SAM Header for import id " + import_id);
        
         if (import_id == 0){
-        	Arcturus.logSevere("Cannot find the last import for project " + project.getID());
+        	Arcturus.logSevere("BAMContigLoader:  Cannot find the last import for project " + project.getID());
         }
         else {
         	try {
@@ -173,7 +173,7 @@ public class BAMContigLoader {
       	List<SAMSequenceRecord> seqs = dictionary.getSequences();
       	
       	if (seqs.isEmpty())
-     		throw new IllegalArgumentException("The input file is empty");
+     		throw new IllegalArgumentException("BAMContigLoader:  The input file is empty");
       	
         Set<Contig> contigs = new HashSet<Contig>();
         
@@ -186,7 +186,7 @@ public class BAMContigLoader {
       		
       		contigs.add(contig);
 
-      		Arcturus.logFine("Added contig " + contig);
+      		Arcturus.logFine("BAMContigLoader:  Added contig " + contig);
      	}
      	
         return contigs;      	
@@ -218,6 +218,7 @@ public class BAMContigLoader {
  			doImport = !contigComparator.equalsParentContig(child, parent);
  			
  			if (!doImport) {
+ 				reportProgress("BAMContigLoader:  about to check if the tag sets are equal");
  				doImport = !contigComparator.equalsParentContigTags(child, parent);
  			}
  			
@@ -226,7 +227,7 @@ public class BAMContigLoader {
  				
  				nameToID.put(child.getName(), parent.getID());
  				
- 				reportProgress("\nChild contig " + child.getName() + 
+ 				reportProgress("\nBAMContigLoader:  Child contig " + child.getName() + 
  						" (" + child.getLength() + " bp, " + child.getReadCount() + " reads)" + 
  						" is identical to parent contig " + parent.getName() +
 						" (Arcturus ID " + parent.getID() + ", " + parent.getLength() + " bp, " + parent.getReadCount() + " reads, created " +
@@ -245,7 +246,7 @@ public class BAMContigLoader {
     			Contig parent = graph.getEdgeTarget(edge);
     			
     			int mapping_id = adb.setChildContig(parent, child);
-    			Arcturus.logFine("Parent contig #" + parent.getID() +
+    			Arcturus.logFine("BAMContigLoader:  Parent contig #" + parent.getID() +
     					" has child contig #" + child.getID() +
     					" with mapping ID " + mapping_id);
     		}

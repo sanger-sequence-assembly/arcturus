@@ -78,7 +78,7 @@ public class ContigComparator {
 		
 		boolean equal = true;
 		
-		reportProgress("Checking if the tags stored in the database match the tags being imported...");
+		reportProgress("ContigComparator: checking if the tags stored in the database match the tags being imported...");
 		try {
 			checkConnection();
 			
@@ -104,7 +104,7 @@ public class ContigComparator {
 	}
 	
 	public boolean equalsParentContig(Contig contig, Contig parent) throws ArcturusDatabaseException {
-		reportProgress("Comparing " + contig + " to " + parent);
+		reportProgress("ContigComparator: comparing " + contig + " to " + parent);
 		
 		if (parent.getID() <= 0)
 			return false;
@@ -112,7 +112,7 @@ public class ContigComparator {
 		SequenceToContigMapping[] mappings = contig.getSequenceToContigMappings();
 		
 		if (mappings == null) {
-			reportProgress("No mappings for child " + contig + ", bailing out");
+			reportProgress("ContigComparator: no mappings for child " + contig + ", bailing out");
 			return false;
 		}
 
@@ -149,10 +149,10 @@ public class ContigComparator {
 		    rs.close();	
 		}
 		catch (SQLException e) {
-            adb.handleSQLException(e, "An error occurred when comparing parent and child contigs", conn, this);
+            adb.handleSQLException(e, "ContigComparator: an error occurred when comparing parent and child contigs", conn, this);
 		}
 		
-		reportProgress("Contigs " + contig + " and " + parent + (equal ? " ARE IDENTICAL" : " DIFFER") + " after " + n + " mappings");
+		reportProgress("ContigComparator: contigs " + contig + " and " + parent + (equal ? " ARE IDENTICAL" : " DIFFER") + " after " + n + " mappings");
 
 		return equal;
 	}

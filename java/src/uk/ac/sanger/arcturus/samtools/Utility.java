@@ -115,6 +115,10 @@ public class Utility {
 		Arcturus.logFine(message + " ; Memory used " + format.format(usedMemory) + " kb, free " +
 				format.format(freeMemory) + " kb, total " + format.format(totalMemory) +
 				" kb ; dt = " + format.format(dt) + " ms");
+		
+		System.out.println(message + " ; Memory used " + format.format(usedMemory) + " kb, free " +
+				format.format(freeMemory) + " kb, total " + format.format(totalMemory) +
+				" kb ; dt = " + format.format(dt) + " ms");
 	}
 	   
     public static void displayGraph(String caption, SimpleDirectedWeightedGraph<Contig, DefaultWeightedEdge> graph) {
