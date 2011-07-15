@@ -1127,11 +1127,11 @@ public class ContigManager extends AbstractManager {
 			while (rs.next()) {
 				String type = rs.getString(1);
 				int cstart = rs.getInt(2);
-				int cfinal = rs.getInt(3);
+				int clength = rs.getInt(3);
 				String comment = rs.getString(4);
 
-				Tag tag = new Tag(type, cstart, cfinal, comment);
-
+				Tag tag = new Tag("Zs", 'Z', type, cstart, clength, comment);
+	
 				contig.addTag(tag);
 			}
 

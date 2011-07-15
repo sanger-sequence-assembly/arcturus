@@ -460,7 +460,7 @@ public class Sequence extends Core {
 		
 		if (tags != null) {
 			for (Tag tag : tags)
-				buffer.append(tag.toCAFString() + "\n");
+				buffer.append(tag.toSAMString() + "\n");
 		}
 
 		return buffer.toString();

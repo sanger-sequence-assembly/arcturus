@@ -736,10 +736,10 @@ public class SequenceManager extends AbstractManager {
 			while (rs.next()) {
 				String type = rs.getString(1);
 				int pstart = rs.getInt(2);
-				int pfinal = rs.getInt(3);
+				int plength = rs.getInt(3);
 				String comment = rs.getString(4);
 
-				Tag tag = new Tag(type, pstart, pfinal, comment);
+				Tag tag = new Tag("Zs", 'Z', type, pstart, plength, comment);
 
 				sequence.addTag(tag);
 			}
