@@ -643,6 +643,7 @@ unless ($scaffold || $projectname ne $gapname || $version ne 'A') {
 
 #-------------------------------------------------------------------------------
 
+$keep = 1;
 unless ($keep) {
     print STDERR "Cleaning up temporary files\n";
     &mySystem("rm -r -f $tmpdir");
