@@ -1112,6 +1112,7 @@ public class ContigManager extends AbstractManager {
 		contig.setConsensus(dna, qual);
 	}
 
+	
 	public void loadTagsForContig(Contig contig) throws ArcturusDatabaseException {
 		int contig_id = contig.getID();
 

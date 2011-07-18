@@ -11,6 +11,7 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.data.GenericMapping.Direction;
 
 import net.sf.samtools.*;
+import net.sf.samtools.SAMRecord.SAMTagAndValue;
 import net.sf.samtools.util.CloseableIterator;
 
 public class SAMContigBuilder {
@@ -30,6 +31,87 @@ public class SAMContigBuilder {
 	public void setRuntimeDiagnostics() {
 	    diagnostics = true;
 		format = new DecimalFormat();
+	}
+	
+	public void addTagToContig (Contig contig, String samTagType, SAMRecord record) {
+		
+		if (record != null) {
+			
+			char samType = 'Z';
+			samType = record.getCharacterAttribute(samTagType);
+			
+			String gapTagType = "POLY";
+			gapTagType = record.getStringAttribute(samTagType);
+		
+			int start = 0;
+			start = record.getIntegerAttribute(samTagType);
+		
+			int length = 0;
+			length = record.getIntegerAttribute(samTagType);
+		
+			String comment = "comment";
+			comment = record.getStringAttribute(samTagType);
+		
+			Tag tag = new Tag(samTagType, samType, gapTagType, start, length, comment);
+			contig.addTag(tag);
+			
+			reportProgress("\t\taddTagToContig: added tag " + tag.toString());
+		}
+	}
+	
+	/**
+	 * @param contig
+	 * @param record
+	 * Sequence (consensus) tag looks like Zs:Z:REPT|5|1|Tag inserted at position 25 at start of AAAA 
+	 * @return
+	 * Contig tag looks like Zc:Z:POLY|31|42|weird Ns
+	 */
+	public void addTagsToContig(Contig contig, SAMRecord record) {
+		reportProgress("addTagsToContig: adding tags for contig" + contig.getName() + " from SAMRecord " + record.getReadName());
+		
+		String samTagType = "";
+		
+		short count = 0;
+		
+		Iterator<SAMTagAndValue> iterator = (Iterator<SAMTagAndValue>) record.getAttributes();
+		
+		while (iterator.hasNext()) {
+			SAMTagAndValue thisObject = iterator.next();
+			samTagType = "Zc";
+			
+			Object objectAttributes = record.getAttribute(samTagType);
+				
+			if (objectAttributes == null) {
+				samTagType = "Zs";
+				objectAttributes = record.getAttribute(samTagType);
+			}
+				
+			if (objectAttributes != null) {
+				reportProgress("\taddTagsToContig: adding tag " + count + " of type " + samTagType);
+				addTagToContig(contig, samTagType, record);
+			}
+			else {
+				reportProgress("addTagsToContig: unexpectedly found null tag or invalid tag (not Zc or Zs) at position " + count + " for contig" + contig.getName() + " from SAMRecord " + record.getReadName());
+			}
+			
+			count++;
+		}
+		
+		
+	 	if (diagnostics)
+	 		t0 = System.currentTimeMillis();
+	 	    
+	 		if (diagnostics && (count%10000) == 0) {
+	 	    	long dt = System.currentTimeMillis() - t0;
+	 	    	Arcturus.logFine("addTagsToContig: " + format.format(count) + " reads; " +
+	 	    			format.format(dt) + " ms; memory " + memoryUsage());
+	 	    }
+
+	    if (diagnostics) {
+	        long dt = System.currentTimeMillis() - t0;
+ 	        Arcturus.logFine("addTagsToContig: " + count + " " + dt + " ms");
+	    }
+		
 	}
 	
 	public void addMappingsToContig(Contig contig,SAMFileReader reader) throws ArcturusDatabaseException {
@@ -62,7 +144,15 @@ public class SAMContigBuilder {
 	 	    
 	 	    if (diagnostics && (count%10000) == 0) {
 	 	    	long dt = System.currentTimeMillis() - t0;
-	 	    	Arcturus.logFine("addMappingsToContig: " + format.format(count) + " reads; " +
+	 	    	Arcturus.logFine("addMappingsToContig: before adding tags" + format.format(count) + " reads; " +
+	 	    			format.format(dt) + " ms; memory " + memoryUsage());
+	 	    }
+	 	    
+	 	   addTagsToContig(contig, record);
+	 	   
+	 	  if (diagnostics && (count%10000) == 0) {
+	 	    	long dt = System.currentTimeMillis() - t0;
+	 	    	Arcturus.logFine("addMappingsToContig: after adding tags" + format.format(count) + " reads; " +
 	 	    			format.format(dt) + " ms; memory " + memoryUsage());
 	 	    }
 	    }
@@ -132,5 +222,7 @@ public class SAMContigBuilder {
     		format.format(freeMemory) + " kb, total = " +
     		format.format(totalMemory) + " kb";
     }
+
+	
 	
 }

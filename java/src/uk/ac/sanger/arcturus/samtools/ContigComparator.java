@@ -84,8 +84,6 @@ public class ContigComparator {
 			
 			equal = true;
 			
-			adb.loadTagsForContig(parent);
-			
 			ResultSet newTags= (ResultSet) contig.getTags();
 			reportProgress("Contig " + contig + " has tags: " + printTagSet(newTags));
 			ResultSet oldTags = (ResultSet) parent.getTags();

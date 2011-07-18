@@ -277,7 +277,7 @@ public class BAMContigLoader {
     		reportProgress("\n" + message);
     		
      		contigBuilder.addMappingsToContig(contig, reader);
-    	    
+     		    	    
     	    adb.putContig(contig);
     	    
     	    nameToID.put(contig.getName(), contig.getID());
