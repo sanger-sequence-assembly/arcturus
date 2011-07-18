@@ -1,5 +1,9 @@
 package uk.ac.sanger.arcturus.data;
 
+/**
+ * @author kt6
+ *
+ */
 public class Tag extends Core {
 	protected int start;
 	protected int length;
@@ -41,17 +45,24 @@ public class Tag extends Core {
 		return comment;
 	}
 	
+	/**
+	 * Sequence (consensus) tag looks like Zs:Z:REPT|5|1|Tag inserted at position 25 at start of AAAA 
+	 * @return
+	 * Contig tag looks like Zc:Z:POLY|31|42|weird Ns
+	 */
 	public String toSAMString() {
-		
-		// Zs:Z:REPT|5|1|Tag inserted at position 25 at start of AAAA 
-		// Zs:Z:COMM|28|1|Tag inserted at position 48 as a comment at the start of AAAAAA
 		
 		return gapTagType + ":" + samType + ":" + samTagType + "|" + start + "|" + length
 		+ (comment == null ? "" : "|" + comment + "|");
 		
 	}
 	
+	/**
+	 * Tag DONE 1945220 1945242 "polymorphisms linked/unique"
+	 * @return
+	 */
 	public String toCAFString() {
+		
 			return "Tag " + gapTagType + " " + start + " " + (start + length)
 					+ (comment == null ? "" : " \"" + comment + "\"");
 		

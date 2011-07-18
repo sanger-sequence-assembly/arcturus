@@ -93,11 +93,11 @@ public class ContigComparator {
 			
 			equal = newTags.equals(oldTags);
 			
-			reportProgress("Contigs " + contig + " and " + parent + " have " + (equal ? " IDENTICAL" : " DIFFERENT") + " tag sets.");
+			reportProgress("ContigComparator: contigs " + contig + " and " + parent + " have " + (equal ? " IDENTICAL" : " DIFFERENT") + " tag sets.");
 			
 		}
 		catch (SQLException e) {
-            adb.handleSQLException(e, "An error occurred when comparing the tags for parent contig and child contigs", conn, this);
+            adb.handleSQLException(e, "ContigComparator: an error occurred when comparing the tags for parent contig and child contigs", conn, this);
 		}
 		
 		return equal;
@@ -175,4 +175,5 @@ public class ContigComparator {
 		System.out.println(message);
 		Arcturus.logFine(message);
 	}
+	
 }

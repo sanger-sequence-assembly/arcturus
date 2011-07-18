@@ -163,7 +163,7 @@ public class ContigManager extends AbstractManager {
 
 		pstmtConsensus = prepareStatement(query);
 
-		query = "select tagtype,cstart,cfinal,tagcomment"
+		query = "select tagtype,cstart,clength,tagcomment"
 				+ " from TAG2CONTIG left join CONTIGTAG using(tag_id)"
 				+ " where contig_id = ?";
 
