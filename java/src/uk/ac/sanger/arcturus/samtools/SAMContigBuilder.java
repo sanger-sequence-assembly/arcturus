@@ -41,7 +41,8 @@ public class SAMContigBuilder {
 			stt = record.getStringAttribute(samTagType);
 			
 			char samType = 'Z';
-			samType = record.getCharacterAttribute(samTagType);
+			String samTypeAsString = record.getStringAttribute(samTagType);
+			//samType = record.getCharacterAttribute(samTagType);
 			
 			String gapTagType = "POLY";
 			gapTagType = record.getStringAttribute(samTagType);
