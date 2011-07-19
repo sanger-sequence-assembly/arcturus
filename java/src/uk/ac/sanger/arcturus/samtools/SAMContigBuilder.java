@@ -73,10 +73,11 @@ public class SAMContigBuilder {
 		
 		short count = 0;
 		
-		Iterator<SAMTagAndValue> iterator = (Iterator<SAMTagAndValue>) record.getAttributes();
+		ArrayList<SAMTagAndValue> tagList= (ArrayList<SAMTagAndValue>) record.getAttributes();
+		
+		Iterator<SAMTagAndValue> iterator = tagList.iterator();
 		
 		while (iterator.hasNext()) {
-			SAMTagAndValue thisObject = iterator.next();
 			samTagType = "Zc";
 			
 			Object objectAttributes = record.getAttribute(samTagType);
