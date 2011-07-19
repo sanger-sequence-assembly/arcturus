@@ -208,7 +208,7 @@ public class Arcturus {
 			System.err
 					.println("Bind exception whilst initialising JMX remote server on "
 							+ hostname);
-			reportBindException("adh@sanger.ac.uk", be);
+			reportBindException("arcturus-help@sanger.ac.uk", be);
 		} catch (Exception e) {
 			logWarning("Error whilst initialising JMX remote server", e);
 		}
@@ -417,7 +417,12 @@ public class Arcturus {
 	}
 
 	public static void logSevere(String message) {
+		if (isTesting() ) {
+			logger.log(Level.WARNING, message);
+		}
+		else {
 		logger.log(Level.SEVERE, message);
+		}
 	}
 
 	public static void logSevere(Throwable throwable) {
