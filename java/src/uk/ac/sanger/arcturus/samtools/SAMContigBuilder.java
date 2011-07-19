@@ -17,7 +17,7 @@ import net.sf.samtools.util.CloseableIterator;
 public class SAMContigBuilder {
 	protected ArcturusDatabase adb = null;
 	protected BAMReadLoader brl = null;
-	private boolean diagnostics = false;
+	private boolean diagnostics = true;
 	private DecimalFormat format = null;
 	protected long t0;
 	
@@ -97,7 +97,6 @@ public class SAMContigBuilder {
 			
 			count++;
 		}
-		
 		
 	 	if (diagnostics)
 	 		t0 = System.currentTimeMillis();
