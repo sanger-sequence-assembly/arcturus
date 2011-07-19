@@ -60,7 +60,7 @@ public class SequenceManager extends AbstractManager {
 		"select cvleft,cvright from CLONEVEC where seq_id = ?";
 	
 	private static final String GET_TAGS =
-		"select tagtype,pstart,pfinal,comment from READTAG where seq_id = ? and deprecated='N'";
+		"select GAPtagtype,start,final,comment from SAMTAG where seq_id = ? and SAMtagtype = ?";
 	
 	private static final String GET_SEQUENCE_BY_READNAME_FLAGS_AND_HASH =
 		"select RN.read_id,S.seq_id from READNAME RN,SEQ2READ SR,SEQUENCE S" +
@@ -734,13 +734,16 @@ public class SequenceManager extends AbstractManager {
 			ResultSet rs = pstmtGetTags.executeQuery();
 
 			while (rs.next()) {
-				String type = rs.getString(1);
-				int pstart = rs.getInt(2);
-				int plength = rs.getInt(3);
-				String comment = rs.getString(4);
-
-				Tag tag = new Tag("Zs", 'Z', type, pstart, plength, comment);
-
+				char samType = (rs.getString(1)).charAt(0);
+				String samTagType = rs.getString(2);
+				String gapTagType = rs.getString(3);
+				int cstart = rs.getInt(4);
+				int clength = rs.getInt(5);
+				String comment = rs.getString(6);
+				int sequence_id = rs.getInt(7);
+				char strand = (rs.getString(8)).charAt(0);
+				
+				Tag tag = new Tag(samTagType, samType, gapTagType, cstart, clength, comment, sequence_id, strand);
 				sequence.addTag(tag);
 			}
 

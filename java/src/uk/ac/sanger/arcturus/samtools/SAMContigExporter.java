@@ -7,7 +7,10 @@ import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.Set;
+import java.util.Vector;
 import java.util.zip.DataFormatException;
 
 import net.sf.samtools.SAMReadGroupRecord;
@@ -21,6 +24,7 @@ import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.data.ReadGroup;
 import uk.ac.sanger.arcturus.data.Sequence;
 import uk.ac.sanger.arcturus.data.SequenceToContigMapping;
+import uk.ac.sanger.arcturus.data.Tag;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.samtools.SAMContigExporterEvent.Type;
@@ -156,7 +160,7 @@ public class SAMContigExporter {
 			notifyEvent(Type.READ_COUNT_UPDATE, count);
 			
 			while (rs.next()) {
-				writeAlignment(rs, contigName, pw);
+				writeAlignment(rs, contigName, contig, pw);
 			
 				count++;
 				
@@ -181,7 +185,7 @@ public class SAMContigExporter {
 		}
 	  
 	
-	private void writeAlignment(ResultSet rs, String contigName, PrintWriter pw) throws SQLException, ArcturusDatabaseException {
+	private void writeAlignment(ResultSet rs, String contigName, Contig contig, PrintWriter pw) throws SQLException, ArcturusDatabaseException {
 		int column = 1;
 		
 		String readname = rs.getString(column++);
@@ -195,6 +199,20 @@ public class SAMContigExporter {
 		int seqlen = rs.getInt(column++);
 		byte[] sequence = rs.getBytes(column++);
 		byte[] quality = rs.getBytes(column++);
+		
+		try {
+			adb.loadTagsForContig(contig);
+			Vector<Tag>  tagList = contig.getTags();
+			Iterator<Tag> iterator = tagList.iterator();	
+			String tagString = "";
+			
+			while (iterator.hasNext()) {
+				tagString = tagString + (iterator.next()).toSAMString() + " ";
+			}
+		}
+		catch (ArcturusDatabaseException e){
+			Arcturus.logSevere("writeAlignment: unable to find tags for contig "+ contigName);
+		}
 		
 		if (sequence != null) {
 			try {

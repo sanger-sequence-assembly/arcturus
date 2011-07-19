@@ -7,30 +7,45 @@ package uk.ac.sanger.arcturus.data;
 public class Tag extends Core {
 	protected int start;
 	protected int length;
+	protected int sequence_id;
 	protected String samTagType;
 	protected String gapTagType;
 	protected String comment;
+	protected char strand;
 	protected char samType;
 
-	public Tag(String samTagType, char samType, String gapTagType, int start, int length, String comment) {
+	public Tag(String samTagType, char samType, String gapTagType, int start, int length, 
+			String comment, int sequence_id, char strand) {
 		this.start = start;
 		this.length = length;
 		this.samType = samType;
 		this.gapTagType = gapTagType;
 		this.samTagType = samTagType;
 		this.comment = comment;
+		this.strand = strand;
+		this.sequence_id = sequence_id;
 	}
 
 	public int getStart() {
 		return start;
 	}
 
-	public int getEnd() {
+	public int getLength() {
 		return length;
 	}
-
+	
+	public int getEnd() {
+		return (start + length);
+	}
+	
 	public char getSAMType() {
 		return samType;
+	}
+	
+	public String getSAMTypeAsString() {
+		
+		String samTypeString = "" + samType;
+		return samTypeString;
 	}
 	
 	public String getSAMTagType() {
@@ -43,6 +58,18 @@ public class Tag extends Core {
 
 	public String getComment() {
 		return comment;
+	}
+	
+	public char getStrand() {
+		return strand;
+	}
+	
+	public int getSequenceId() {
+		return sequence_id;
+	}
+	
+	public boolean isContigTag(){
+		return (gapTagType.equals("Zc"));
 	}
 	
 	/**

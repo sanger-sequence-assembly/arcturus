@@ -33,7 +33,7 @@ public class SAMContigBuilder {
 		format = new DecimalFormat();
 	}
 	
-	public void addTagToContig (Contig contig, String samTagType, SAMRecord record) {
+	public void addTagToContig (Contig contig, String samTagType, SAMRecord record) throws ArcturusDatabaseException {
 		
 		if (record != null) {
 			
@@ -51,11 +51,20 @@ public class SAMContigBuilder {
 		
 			String comment = "comment";
 			comment = record.getStringAttribute(samTagType);
-		
-			Tag tag = new Tag(samTagType, samType, gapTagType, start, length, comment);
+			
+			Sequence sequence = brl.findOrCreateSequence(record);
+			if (sequence == null) 
+				 throw new ArcturusDatabaseException("addTagToContig: cannot find data for sequence for SAMRecord =" + record.getReadName());	 
+			
+			char strand =  record.getReadNegativeStrandFlag() ? 'R': 'F';
+				
+			Tag tag = new Tag(samTagType, samType, gapTagType, start, length, comment, sequence.getID(), strand );
 			contig.addTag(tag);
 			
 			reportProgress("\t\taddTagToContig: added tag " + tag.toString());
+		}
+		else {
+			reportProgress("\t\taddTagToContig: cannot add tags to null SAMRecord " + record.getReadName());
 		}
 	}
 	
@@ -89,7 +98,11 @@ public class SAMContigBuilder {
 				
 			if (objectAttributes != null) {
 				reportProgress("\taddTagsToContig: adding tag " + count + " of type " + samTagType);
-				addTagToContig(contig, samTagType, record);
+				try {
+					addTagToContig(contig, samTagType, record);
+				} catch (ArcturusDatabaseException e) {
+					e.printStackTrace();
+				}
 			}
 			else {
 				reportProgress("addTagsToContig: unexpectedly found null tag or invalid tag (not Zc or Zs) at position " + count + " for contig" + contig.getName() + " from SAMRecord " + record.getReadName());

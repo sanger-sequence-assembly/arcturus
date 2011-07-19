@@ -55,6 +55,8 @@ public class ContigManager extends AbstractManager {
 	
 	protected PreparedStatement pstmtStoreConsensus = null;
 
+	protected PreparedStatement pstmtStoreSAMTag = null;
+
 	protected ManagerEvent event = null;
 
 	private transient Vector<ManagerEventListener> eventListeners = new Vector<ManagerEventListener>();
@@ -163,9 +165,9 @@ public class ContigManager extends AbstractManager {
 
 		pstmtConsensus = prepareStatement(query);
 
-		query = "select tagtype,cstart,clength,tagcomment"
-				+ " from TAG2CONTIG left join CONTIGTAG using(tag_id)"
-				+ " where contig_id = ?";
+		query = "select SAMtagtype, SAMtype, Gaptagtype, cstart,clength,tagcomment, tag_seq_id, strand"
+				+ " from SAMTAG"
+				+ " where contig_id = ? and SAMtagtype = ?";
 
 		pstmtTags = prepareStatement(query);
 
@@ -224,6 +226,11 @@ public class ContigManager extends AbstractManager {
 			+ " sequence=VALUES(sequence), quality=VALUES(quality), length=VALUES(length)";
 	
 		pstmtStoreConsensus = prepareStatement(query);	
+		
+		query = "insert into SAMTAG...";
+		
+		pstmtStoreSAMTag = prepareStatement(query);	
+		
 	}
 
 	protected void preloadSequencingVectors() throws SQLException {
@@ -1118,21 +1125,25 @@ public class ContigManager extends AbstractManager {
 
 		Vector<Tag> tags = contig.getTags();
 		
-		if (tags != null)
-			tags.clear();
-
+		// SAMtagtype, SAMtype, Gaptagtype, cstart, clength, tagcomment, tag_seq_id, strand
+		
 		try {
 			pstmtTags.setInt(1, contig_id);
+			pstmtTags.setString(2, "Zc");
 			ResultSet rs = pstmtTags.executeQuery();
 
 			while (rs.next()) {
-				String type = rs.getString(1);
-				int cstart = rs.getInt(2);
-				int clength = rs.getInt(3);
-				String comment = rs.getString(4);
-
-				Tag tag = new Tag("Zs", 'Z', type, cstart, clength, comment);
-	
+				char samType = (rs.getString(1)).charAt(0);
+				String samTagType = rs.getString(2);
+				String gapTagType = rs.getString(3);
+				int cstart = rs.getInt(4);
+				int clength = rs.getInt(5);
+				String comment = rs.getString(6);
+				int sequence_id = rs.getInt(7);
+				char strand = (rs.getString(8)).charAt(0);
+				
+				Tag tag = new Tag(samTagType, samType, gapTagType, cstart, clength, comment, sequence_id, strand);
+				
 				contig.addTag(tag);
 			}
 
@@ -1729,6 +1740,35 @@ public class ContigManager extends AbstractManager {
 		
 		if (contig_id <= 0)
 			throw new ArcturusDatabaseException("Cannot store tags for a contig that is not yet in the database");
+		
+		Vector<Tag> tags = contig.getTags();
+		Tag tag = null;
+		Iterator iterator = tags.iterator();
+		
+		try {
+			while (iterator.hasNext()) {		
+				tag = (Tag) iterator.next();
+				pstmtStoreSAMTag.setString(1, tag.getSAMTypeAsString());
+				pstmtStoreSAMTag.setString(2, tag.getSAMTagType());
+				pstmtStoreSAMTag.setString(3, tag.getGAPTagType());
+				
+				pstmtStoreSAMTag.setString(4, tag.getComment());
+				pstmtStoreSAMTag.setInt(5, contig_id); 
+				pstmtStoreSAMTag.setInt(6, tag.getStart()); 
+				pstmtStoreSAMTag.setInt(7, tag.getLength()); 
+				pstmtStoreSAMTag.setInt(8, contig_id); 
+				pstmtStoreSAMTag.setInt(9,99); //sequence_id needs to go here
+				pstmtStoreSAMTag.setString(10, "U"); 
+
+				pstmtStoreSAMTag.executeUpdate();
+			}
+
+		}
+		catch (SQLException e) {
+			adb.handleSQLException(e,
+					"Failed to store tags to contig mappings (TAG2CONTIG) for contig ID=" + contig.getID(),
+					conn, this);											
+		}
 		
 		return true;
 	}
