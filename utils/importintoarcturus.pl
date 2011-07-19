@@ -10,7 +10,7 @@ use ArcturusDatabase;
 use Project;
 use RepositoryManager;
 
-my $friendly_message = "A Help Desk ticket has been raised.  \n The cause of the error will appear in this import window and in the log of the import in your .arcturus directory under your home directory.  (Where possible, a HelpDesk ticket is raised automatically, but if you do not receive an email within five minutes of encountering a problem, please cut and paste the entire contents of this window into an email and send it to arcturus-help.  Thank you for your help with this.)\n";
+my $friendly_message = "A Help Desk ticket has been raised.  \n\nThe cause of the error will appear in this import window and in the log of the import in your .arcturus directory under your home directory.  \n\n(Where possible, a HelpDesk ticket is raised automatically, but if you do not receive an email within five minutes of encountering a problem, please cut and paste the entire contents of this window into an email and send it to arcturus-help.  Thank you for your help with this.)\n";
 
 my $rm_permissions_string = "please check that your file permissions allow group file delete using ls -l"; 
 my $create_permissions_string = "please check that your file permissions allow group file create using ls -l"; 
@@ -500,17 +500,19 @@ my $first_time = 0;
 my $dbh = $adb->getConnection();
 my ($other_username, $action, $starttime, $endtime) = $project->getImportExportAlreadyRunning($dbh);
  
-print "Checking if project $projectname already has an IMPORT or EXPORT running in the $organism database\n";
+print STDERR "Checking if project $projectname already has an IMPORT or EXPORT running in the $organism database\n";
 
 if ( defined($other_username) && defined($action) && defined($starttime) && defined($endtime)){
-	$first_time = 0;
-}
-else {
-	$first_time = 1;
+	if ($other_username eq "" ) {
+		$first_time = 1;
+	}	
+	else {
+		$first_time = 0;
+	}
 }
 
 unless (defined($endtime) || ($first_time == 1)) {
-   	print STDERR "Project $projectname already has a $action running started by $other_username at $starttime so this import has been ABORTED";
+   	print STDERR "Project $projectname already has a $action running started by $other_username at $starttime so this import has been ABORTED\n";
    	$adb->disconnect();
    	exit 1;
 }
@@ -519,12 +521,12 @@ else {
 		print STDERR "Project $projectname is being imported for the first time\n";
 	}
 	else {
-		print STDERR "Project $projectname last $action started by $other_username at $starttime finished at $endtime";
+		print STDERR "Project $projectname last $action started by $other_username at $starttime finished at $endtime\n";
 	}
   print STDERR "Marking this import start time\n";
   my $status = $project->markImport("start");
 	unless ($status) {
-  	print STDERR "Unable to set start time for project $projectname by $username at $starttime so this import has been ABORTED";
+  	print STDERR "Unable to set start time for project $projectname by $username at $starttime so this import has been ABORTED\n";
   	$adb->disconnect();
   	exit 1;
 	}
