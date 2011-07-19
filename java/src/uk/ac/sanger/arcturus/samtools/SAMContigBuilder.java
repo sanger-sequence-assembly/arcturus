@@ -37,6 +37,9 @@ public class SAMContigBuilder {
 		
 		if (record != null) {
 			
+			String stt = "samtools read of string starts back at Zs again";
+			stt = record.getStringAttribute(samTagType);
+			
 			char samType = 'Z';
 			samType = record.getCharacterAttribute(samTagType);
 			
