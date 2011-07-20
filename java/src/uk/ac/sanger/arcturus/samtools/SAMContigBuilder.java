@@ -91,29 +91,29 @@ public class SAMContigBuilder {
 		char strand =  record.getReadNegativeStrandFlag() ? 'R': 'F';
 
 		ArrayList<SAMRecord.SAMTagAndValue> tagList= (ArrayList<SAMRecord.SAMTagAndValue>) record.getAttributes();
-		reportProgress("addTagsToContig: found " + tagList.size() + " tags: " + tagList.toString());
+		int tagCount = tagList.size();
 		
-		Iterator<SAMRecord.SAMTagAndValue> iterator = tagList.iterator();
+		reportProgress("addTagsToContig: found " + tagCount + " tags: " + tagList.toString());
 		
-		while (iterator.hasNext()) {
+		while (count > tagCount ) {
 			samTagType = "Zc";
 			
-			String gapTagString = record.getStringAttribute(samTagType);
+			SAMRecord.SAMTagAndValue samTag = tagList.get(count);
+			
+			String gapTagString = samTag.tag;
 				
 			if (gapTagString == null) {
 				samTagType = "Zs";
-				gapTagString = record.getStringAttribute(samTagType);
+				gapTagString = samTag.tag;
 			}
 				
 			if (gapTagString != null) {
 				reportProgress("\taddTagsToContig: adding tag " + count + " of type " + samTagType + " holding " + gapTagString);		
-				addTagToContig(contig, samTagType, gapTagString, sequence_id, strand);
-			
+				addTagToContig(contig, samTagType, gapTagString, sequence_id, strand);	
 			}
 			else {
 				reportProgress("addTagsToContig: unexpectedly found null tag or invalid tag (not Zc or Zs) at position " + count + " for contig" + contig.getName() + " from SAMRecord " + record.getReadName());
-			}
-			
+			}		
 			count++;
 		}
 		
