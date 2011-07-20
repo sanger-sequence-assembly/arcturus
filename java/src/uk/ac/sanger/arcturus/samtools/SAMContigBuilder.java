@@ -43,15 +43,18 @@ public class SAMContigBuilder {
 			char samType = 'Z';
 			String samTypeAsString = record.getStringAttribute(samTagType);
 			//samType = record.getCharacterAttribute(samTagType);
+			reportProgress("\t\t\taddTagToContig: read samType as " + samType);
 			
-			String gapTagType = "POLY";
-			gapTagType = record.getStringAttribute(samTagType);
+			String gapTagType = record.getStringAttribute(samTagType);
+			reportProgress("\t\t\taddTagToContig: read gapTypeTag as " + gapTagType);
 		
 			int start = 0;
-			start = record.getIntegerAttribute(samTagType);
+			String startAsString = record.getStringAttribute(samTagType);
+			reportProgress("\t\t\taddTagToContig: read startAsString as " + startAsString);
 		
 			int length = 0;
-			length = record.getIntegerAttribute(samTagType);
+			String lengthAsString = record.getStringAttribute(samTagType);
+			reportProgress("\t\t\taddTagToContig: read lengthAsString as " + lengthAsString);
 		
 			String comment = "comment";
 			comment = record.getStringAttribute(samTagType);
