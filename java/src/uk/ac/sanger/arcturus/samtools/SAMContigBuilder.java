@@ -37,21 +37,21 @@ public class SAMContigBuilder {
 	 * @param contig
 	 * @param samTagType
 	 * @param record
-	 * @param entireTagString
+	 * @param gapTagString
+	 * holds REPT|5|1|Tag inserted at position 25 at start of AAAA
 	 * @throws ArcturusDatabaseException
 	 * entireTagString needs to be parsed to extract individual fields
 	 */
-	public void addTagToContig (Contig contig, String samTagType, String entireTagString, int sequence_id, char strand){
+	public void addTagToContig (Contig contig, String samTagType, String gapTagString, int sequence_id, char strand){
 		
-		char samType = entireTagString.charAt(3);
-		reportProgress("\t\t\taddTagToContig: read samType as " + samType);
+		char samType = 'Z';
 		
-		String gapTagType = entireTagString.substring(5,8);
+		String gapTagType = gapTagString.substring(0,3);
 		reportProgress("\t\t\taddTagToContig: read gapTypeTag as " + gapTagType);
 	
-		int startOfNumeric = entireTagString.indexOf('|');
-		int endOfNumeric = entireTagString.lastIndexOf('|');
-		String numberString = entireTagString.substring((startOfNumeric + 1), (endOfNumeric -1));
+		int startOfNumeric = gapTagString.indexOf('|');
+		int endOfNumeric = gapTagString.lastIndexOf('|');
+		String numberString = gapTagString.substring((startOfNumeric + 1), (endOfNumeric -1));
 		int endOfStart = numberString.indexOf('|');
 		String startAsString = numberString.substring(0, (endOfStart - 1));
 		reportProgress("\t\t\taddTagToContig: read startAsString as " + startAsString);
@@ -62,7 +62,7 @@ public class SAMContigBuilder {
 		int length = 5;
 		
 		String comment = "comment";
-		comment =entireTagString.substring(endOfNumeric + 1, entireTagString.length());
+		comment =gapTagString.substring(endOfNumeric + 1, gapTagString.length());
 		reportProgress("\t\t\taddTagToContig: read comment as " + comment);
 					
 		Tag tag = new Tag(samTagType, samType, gapTagType, start, length, comment, sequence_id, strand );
@@ -97,19 +97,19 @@ public class SAMContigBuilder {
 		
 		Iterator<SAMRecord.SAMTagAndValue> iterator = tagList.iterator();
 		
-		while (iterator.hasNext()) {
+		//while (iterator.hasNext()) {
 			samTagType = "Zc";
 			
-			String entireTagString = record.getStringAttribute(samTagType);
+			String gapTagString = record.getStringAttribute(samTagType);
 				
-			if (entireTagString == null) {
+			if (gapTagString == null) {
 				samTagType = "Zs";
-				entireTagString = record.getStringAttribute(samTagType);
+				gapTagString = record.getStringAttribute(samTagType);
 			}
 				
-			if (entireTagString != null) {
-				reportProgress("\taddTagsToContig: adding tag " + count + " of type " + samTagType + " holding " + entireTagString);		
-				addTagToContig(contig, samTagType, entireTagString, sequence_id, strand);
+			if (gapTagString != null) {
+				reportProgress("\taddTagsToContig: adding tag " + count + " of type " + samTagType + " holding " + gapTagString);		
+				addTagToContig(contig, samTagType, gapTagString, sequence_id, strand);
 			
 			}
 			else {
@@ -117,7 +117,7 @@ public class SAMContigBuilder {
 			}
 			
 			count++;
-		}
+		//}
 		
 	 	if (diagnostics)
 	 		t0 = System.currentTimeMillis();
