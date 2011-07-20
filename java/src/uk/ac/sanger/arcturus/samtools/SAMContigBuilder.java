@@ -40,7 +40,7 @@ public class SAMContigBuilder {
 	 * @param gapTagString
 	 * holds REPT|5|1|Tag inserted at position 25 at start of AAAA
 	 * @throws ArcturusDatabaseException
-	 * entireTagString needs to be parsed to extract individual fields
+	 * 
 	 */
 	public void addTagToContig (Contig contig, String samTagType, String gapTagString, int sequence_id, char strand){
 		
@@ -51,24 +51,22 @@ public class SAMContigBuilder {
 	
 		int startOfNumeric = 5;
 		int endOfNumeric = gapTagString.lastIndexOf('|');
-		String numberString = gapTagString.substring(startOfNumeric, (endOfNumeric - startOfNumeric));
+		
+		String numberString = gapTagString.substring(startOfNumeric, endOfNumeric);
+		
 		int endOfStart = numberString.indexOf('|');
-		String startAsString = numberString.substring(0, (endOfStart - 1));
-		reportProgress("\t\t\taddTagToContig: read startAsString as " + startAsString);
-		int start = 1;
+		String startAsString = numberString.substring(0, endOfStart);
+		int start = Integer.parseInt(startAsString);
 	
 		String lengthAsString = numberString.substring(endOfStart+1, numberString.length());
-		reportProgress("\t\t\taddTagToContig: read lengthAsString as " + lengthAsString);
-		int length = 5;
+		int length = Integer.parseInt(lengthAsString);
 		
-		String comment = "comment";
-		comment =gapTagString.substring(endOfNumeric + 1, gapTagString.length());
-		reportProgress("\t\t\taddTagToContig: read comment as " + comment);
+		String comment = gapTagString.substring(endOfNumeric + 1, gapTagString.length());
 					
 		Tag tag = new Tag(samTagType, samType, gapTagType, start, length, comment, sequence_id, strand );
 		contig.addTag(tag);
 		
-		reportProgress("\t\taddTagToContig: added tag: " + tag.toSAMString());
+		reportProgress("\t\taddTagToContig: tag stored and retrieved as: " + tag.toSAMString());
 		
 	}
 	
@@ -84,7 +82,7 @@ public class SAMContigBuilder {
 		
 		String samTagType = "";
 		
-		short count = 0;
+		short count = 1;
 		
 		Sequence sequence = brl.findOrCreateSequence(record);
 		if (sequence == null) 
