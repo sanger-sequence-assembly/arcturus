@@ -46,12 +46,12 @@ public class SAMContigBuilder {
 		
 		char samType = 'Z';
 		
-		String gapTagType = gapTagString.substring(0,3);
+		String gapTagType = gapTagString.substring(0,4);
 		reportProgress("\t\t\taddTagToContig: read gapTypeTag as " + gapTagType);
 	
-		int startOfNumeric = gapTagString.indexOf('|');
+		int startOfNumeric = 5;
 		int endOfNumeric = gapTagString.lastIndexOf('|');
-		String numberString = gapTagString.substring((startOfNumeric + 1), (endOfNumeric -1));
+		String numberString = gapTagString.substring(startOfNumeric, (endOfNumeric - startOfNumeric));
 		int endOfStart = numberString.indexOf('|');
 		String startAsString = numberString.substring(0, (endOfStart - 1));
 		reportProgress("\t\t\taddTagToContig: read startAsString as " + startAsString);
@@ -68,7 +68,7 @@ public class SAMContigBuilder {
 		Tag tag = new Tag(samTagType, samType, gapTagType, start, length, comment, sequence_id, strand );
 		contig.addTag(tag);
 		
-		reportProgress("\t\taddTagToContig: added tag " + tag.toString());
+		reportProgress("\t\taddTagToContig: added tag: " + tag.toSAMString());
 		
 	}
 	
@@ -93,11 +93,11 @@ public class SAMContigBuilder {
 		char strand =  record.getReadNegativeStrandFlag() ? 'R': 'F';
 
 		ArrayList<SAMRecord.SAMTagAndValue> tagList= (ArrayList<SAMRecord.SAMTagAndValue>) record.getAttributes();
-		reportProgress("addTagsToContig: found " + tagList.size() + "tags: " + tagList.toString());
+		reportProgress("addTagsToContig: found " + tagList.size() + " tags: " + tagList.toString());
 		
 		Iterator<SAMRecord.SAMTagAndValue> iterator = tagList.iterator();
 		
-		//while (iterator.hasNext()) {
+		while (iterator.hasNext()) {
 			samTagType = "Zc";
 			
 			String gapTagString = record.getStringAttribute(samTagType);
@@ -117,7 +117,7 @@ public class SAMContigBuilder {
 			}
 			
 			count++;
-		//}
+		}
 		
 	 	if (diagnostics)
 	 		t0 = System.currentTimeMillis();
@@ -141,8 +141,6 @@ public class SAMContigBuilder {
 		
 		if (contig.getContigToParentMappings() != null)
 			return;
-		
-		reportProgress("addMappingsToContig: adding mappings for contig" + contig.getName());
 
 		String referenceName = contig.getName();
 		    	    	
@@ -157,7 +155,7 @@ public class SAMContigBuilder {
 	    while (iterator.hasNext()) {
 	 	    SAMRecord record = iterator.next();
 	 	    
-	 		reportProgress("\taddMappingsToContig: adding sequence for SAMRecord " + record.getReadName());
+	 		//reportProgress("\taddMappingsToContig: adding sequence for SAMRecord " + record.getReadName());
 	 		SequenceToContigMapping mapping = buildSequenceToContigMapping(record,contig);
 	 	    M.add(mapping);
 	 	   
@@ -190,7 +188,7 @@ public class SAMContigBuilder {
 
 	private SequenceToContigMapping buildSequenceToContigMapping(SAMRecord record, Contig contig) throws ArcturusDatabaseException {	    
 	    
-		reportProgress("\tbuildSequenceToContigMapping: working with SAMRecord " + record.getReadName() + " and contig " + contig.getName());
+		//reportProgress("\tbuildSequenceToContigMapping: working with SAMRecord " + record.getReadName() + " and contig " + contig.getName());
 		
 		String cigar = record.getCigarString();
 		int contigStartPosition = record.getAlignmentStart();
@@ -205,19 +203,19 @@ public class SAMContigBuilder {
 		//sequence.setDNA(null);
 		
 		int mapping_quality = record.getMappingQuality();
-		reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + mapping_quality + " from record " + record.getReadName());
+		//reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + mapping_quality + " from record " + record.getReadName());
 		
 	   
  	    SAMReadGroupRecord readGroup = record.getReadGroup();
  	    String readGroupIDvalue = readGroup.getId();
- 	    reportProgress("\taddMappingsToContig: adding ID " + readGroupIDvalue + " for read group " + readGroup + " for contig " + contig.getName());
+ 	    //reportProgress("\taddMappingsToContig: adding ID " + readGroupIDvalue + " for read group " + readGroup + " for contig " + contig.getName());
 		
 		CanonicalMapping mapping = new CanonicalMapping(0,span,span,cigar, mapping_quality, readGroupIDvalue);
 		CanonicalMapping cached = adb.findOrCreateCanonicalMapping(mapping);
 		
 		int stored_quality = cached.getMappingQuality();
 		
-		reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + stored_quality + " from database\n");
+		//reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + stored_quality + " from database\n");
 		
 		Direction direction = record.getReadNegativeStrandFlag() ? Direction.REVERSE : Direction.FORWARD;
 		

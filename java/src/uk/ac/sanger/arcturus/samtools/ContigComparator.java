@@ -58,18 +58,15 @@ public class ContigComparator {
 	    pstmtGetAlignmentData.setFetchSize(Integer.MIN_VALUE);
 	}
 	
-	private String printTagSet(ResultSet tagSet) {
+	private String printTagSet(Vector<Tag> tagSet) {
 		
+		Iterator<Tag> iterator = tagSet.iterator();
 		String text = "";
-		try {
-			while (tagSet.next()) {
-				text = text + tagSet.getString(1) + "\t";
-				text = text + tagSet.getInt(2)  + "\t";
-				text = text + tagSet.getInt(3)  + "\t";
-				text = text + tagSet.getString(4)  + "\n";
-			}
-		} catch (SQLException e) {
-			e.printStackTrace();
+		Tag tag = null;;
+		
+		while (iterator.hasNext()) {
+			tag = iterator.next();
+			tag.toSAMString();
 		}
 		return text;
 	}
@@ -84,9 +81,9 @@ public class ContigComparator {
 			
 			equal = true;
 			
-			ResultSet newTags= (ResultSet) contig.getTags();
+			Vector<Tag> newTags= contig.getTags();
 			reportProgress("Contig " + contig + " has tags: " + printTagSet(newTags));
-			ResultSet oldTags = (ResultSet) parent.getTags();
+			Vector<Tag> oldTags =  parent.getTags();
 			reportProgress("Contig " + parent + " has tags: " + printTagSet(oldTags));
 			
 			equal = newTags.equals(oldTags);
