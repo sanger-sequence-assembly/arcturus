@@ -78,7 +78,7 @@ public class SAMContigBuilder {
 	 * Contig tag looks like Zc:Z:POLY|31|42|weird Ns
 	 */
 	public void addTagsToContig(Contig contig, SAMRecord record)  throws ArcturusDatabaseException  {
-		reportProgress("addTagsToContig: adding tags for contig" + contig.getName() + " from SAMRecord " + record.getReadName());
+		//reportProgress("\taddTagsToContig: adding tags for contig " + contig.getName() + " from SAMRecord " + record.getReadName());
 		
 		String samTagType = "";
 		
@@ -95,7 +95,7 @@ public class SAMContigBuilder {
 		
 		reportProgress("addTagsToContig: found " + tagCount + " tags: " + tagList.toString());
 		
-		while (count > tagCount ) {
+		while (count < tagCount ) {
 			samTagType = "Zc";
 			
 			SAMRecord.SAMTagAndValue samTag = tagList.get(count);
