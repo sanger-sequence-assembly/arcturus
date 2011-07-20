@@ -33,46 +33,43 @@ public class SAMContigBuilder {
 		format = new DecimalFormat();
 	}
 	
-	public void addTagToContig (Contig contig, String samTagType, SAMRecord record) throws ArcturusDatabaseException {
+	/**
+	 * @param contig
+	 * @param samTagType
+	 * @param record
+	 * @param entireTagString
+	 * @throws ArcturusDatabaseException
+	 * entireTagString needs to be parsed to extract individual fields
+	 */
+	public void addTagToContig (Contig contig, String samTagType, String entireTagString, int sequence_id, char strand){
 		
-		if (record != null) {
-			
-			String stt = "samtools read of string starts back at Zs again";
-			stt = record.getStringAttribute(samTagType);
-			
-			char samType = 'Z';
-			String samTypeAsString = record.getStringAttribute(samTagType);
-			//samType = record.getCharacterAttribute(samTagType);
-			reportProgress("\t\t\taddTagToContig: read samType as " + samType);
-			
-			String gapTagType = record.getStringAttribute(samTagType);
-			reportProgress("\t\t\taddTagToContig: read gapTypeTag as " + gapTagType);
+		char samType = entireTagString.charAt(3);
+		reportProgress("\t\t\taddTagToContig: read samType as " + samType);
 		
-			int start = 0;
-			String startAsString = record.getStringAttribute(samTagType);
-			reportProgress("\t\t\taddTagToContig: read startAsString as " + startAsString);
+		String gapTagType = entireTagString.substring(5,8);
+		reportProgress("\t\t\taddTagToContig: read gapTypeTag as " + gapTagType);
+	
+		int startOfNumeric = entireTagString.indexOf('|');
+		int endOfNumeric = entireTagString.lastIndexOf('|');
+		String numberString = entireTagString.substring((startOfNumeric + 1), (endOfNumeric -1));
+		int endOfStart = numberString.indexOf('|');
+		String startAsString = numberString.substring(0, (endOfStart - 1));
+		reportProgress("\t\t\taddTagToContig: read startAsString as " + startAsString);
+		int start = 1;
+	
+		String lengthAsString = numberString.substring(endOfStart+1, numberString.length());
+		reportProgress("\t\t\taddTagToContig: read lengthAsString as " + lengthAsString);
+		int length = 5;
 		
-			int length = 0;
-			String lengthAsString = record.getStringAttribute(samTagType);
-			reportProgress("\t\t\taddTagToContig: read lengthAsString as " + lengthAsString);
+		String comment = "comment";
+		comment =entireTagString.substring(endOfNumeric + 1, entireTagString.length());
+		reportProgress("\t\t\taddTagToContig: read comment as " + comment);
+					
+		Tag tag = new Tag(samTagType, samType, gapTagType, start, length, comment, sequence_id, strand );
+		contig.addTag(tag);
 		
-			String comment = "comment";
-			comment = record.getStringAttribute(samTagType);
-			
-			Sequence sequence = brl.findOrCreateSequence(record);
-			if (sequence == null) 
-				 throw new ArcturusDatabaseException("addTagToContig: cannot find data for sequence for SAMRecord =" + record.getReadName());	 
-			
-			char strand =  record.getReadNegativeStrandFlag() ? 'R': 'F';
-				
-			Tag tag = new Tag(samTagType, samType, gapTagType, start, length, comment, sequence.getID(), strand );
-			contig.addTag(tag);
-			
-			reportProgress("\t\taddTagToContig: added tag " + tag.toString());
-		}
-		else {
-			reportProgress("\t\taddTagToContig: cannot add tags to null SAMRecord " + record.getReadName());
-		}
+		reportProgress("\t\taddTagToContig: added tag " + tag.toString());
+		
 	}
 	
 	/**
@@ -82,34 +79,38 @@ public class SAMContigBuilder {
 	 * @return
 	 * Contig tag looks like Zc:Z:POLY|31|42|weird Ns
 	 */
-	public void addTagsToContig(Contig contig, SAMRecord record) {
+	public void addTagsToContig(Contig contig, SAMRecord record)  throws ArcturusDatabaseException  {
 		reportProgress("addTagsToContig: adding tags for contig" + contig.getName() + " from SAMRecord " + record.getReadName());
 		
 		String samTagType = "";
 		
 		short count = 0;
 		
+		Sequence sequence = brl.findOrCreateSequence(record);
+		if (sequence == null) 
+			 throw new ArcturusDatabaseException("addTagToContig: cannot find data for sequence for SAMRecord =" + record.getReadName());	 
+		int sequence_id = sequence.getID();
+		char strand =  record.getReadNegativeStrandFlag() ? 'R': 'F';
+
 		ArrayList<SAMRecord.SAMTagAndValue> tagList= (ArrayList<SAMRecord.SAMTagAndValue>) record.getAttributes();
+		reportProgress("addTagsToContig: found " + tagList.size() + "tags: " + tagList.toString());
 		
 		Iterator<SAMRecord.SAMTagAndValue> iterator = tagList.iterator();
 		
 		while (iterator.hasNext()) {
 			samTagType = "Zc";
 			
-			Object objectAttributes = record.getAttribute(samTagType);
+			String entireTagString = record.getStringAttribute(samTagType);
 				
-			if (objectAttributes == null) {
+			if (entireTagString == null) {
 				samTagType = "Zs";
-				objectAttributes = record.getAttribute(samTagType);
+				entireTagString = record.getStringAttribute(samTagType);
 			}
 				
-			if (objectAttributes != null) {
-				reportProgress("\taddTagsToContig: adding tag " + count + " of type " + samTagType);
-				try {
-					addTagToContig(contig, samTagType, record);
-				} catch (ArcturusDatabaseException e) {
-					e.printStackTrace();
-				}
+			if (entireTagString != null) {
+				reportProgress("\taddTagsToContig: adding tag " + count + " of type " + samTagType + " holding " + entireTagString);		
+				addTagToContig(contig, samTagType, entireTagString, sequence_id, strand);
+			
 			}
 			else {
 				reportProgress("addTagsToContig: unexpectedly found null tag or invalid tag (not Zc or Zs) at position " + count + " for contig" + contig.getName() + " from SAMRecord " + record.getReadName());
