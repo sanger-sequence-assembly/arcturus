@@ -64,9 +64,14 @@ public class ContigComparator {
 		String text = "";
 		Tag tag = null;;
 		
-		while (iterator.hasNext()) {
-			tag = iterator.next();
-			tag.toSAMString();
+		if (tagSet != null) {
+			while (iterator.hasNext()) {
+				tag = iterator.next();
+				tag.toSAMString();
+			}
+		}
+		else {
+			text = "printTagSet: no tags found for this tag set.";
 		}
 		return text;
 	}
