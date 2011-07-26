@@ -79,6 +79,21 @@ public class SAMContigBuilder {
 		return ((gapTagType.equals("Zc")) || (gapTagType.equals("Zs")));
 	}
 	
+	private class GAPTag {
+		/**
+		 * holds the Sanger part of the tag e.g. REPT|5|1|Tag inserted at postion 25 at start of AAAA
+		 */
+		String gapTag = "";
+		
+		String getGapTag() {
+			return(gapTag);
+		}
+		
+		public String toString() {
+			return (getGapTag());
+		}
+	}
+	
 	/**
 	 * @param contig
 	 * @param record
@@ -102,15 +117,17 @@ public class SAMContigBuilder {
 		ArrayList<SAMRecord.SAMTagAndValue> tagList= (ArrayList<SAMRecord.SAMTagAndValue>) record.getAttributes();
 		int tagCount = tagList.size();
 		
-		reportProgress("addTagsToContig: found " + tagCount + " tags: ");
+		//reportProgress("addTagsToContig: found " + tagCount + " tags: ");
 		
 		while (count < tagCount ) {	
 			SAMRecord.SAMTagAndValue samTag = tagList.get(count);
 			
 			gapTagType = samTag.tag;
-						
+			GAPTag tagValue = (GAPTag) samTag.value;
+							
 			if (isValidGapTagType(gapTagType)){
-				gapTagString = record.getStringAttribute(gapTagType);
+				//gapTagString = record.getStringAttribute(gapTagType);  // keeps getting the first of the two Zs tags
+				gapTagString =tagValue.toString();
 				
 				if (gapTagString != null) {
 					reportProgress("\taddTagsToContig: adding tag " + count + " of type " + gapTagType + " holding " + gapTagString);		

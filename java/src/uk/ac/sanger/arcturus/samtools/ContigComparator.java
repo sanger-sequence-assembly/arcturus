@@ -60,18 +60,20 @@ public class ContigComparator {
 	
 	String printTagSet(Vector<Tag> tagSet) {
 		
-		Iterator<Tag> iterator = tagSet.iterator();
 		String text = "";
-		Tag tag = null;;
 		
 		if (tagSet != null) {
+			Iterator<Tag> iterator = tagSet.iterator();
+			
+			Tag tag = null;
+			
 			while (iterator.hasNext()) {
 				tag = iterator.next();
 				text = text + tag.toSAMString();
 			}
 		}
 		else {
-			text = "printTagSet: no tags found for this tag set.";
+			text = "no tags found for this tag set.";
 		}
 		return text;
 	}

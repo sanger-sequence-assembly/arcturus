@@ -1,10 +1,14 @@
 package uk.ac.sanger.arcturus.samtools;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Vector;
 
+import net.sf.samtools.SAMRecord;
+
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Contig;
+import uk.ac.sanger.arcturus.data.Sequence;
 import uk.ac.sanger.arcturus.data.Tag;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
@@ -60,11 +64,90 @@ public class TestSAMRecordTags {
 		reportProgress("\t\taddTagToContig: tag stored and retrieved as: " + tag.toSAMString());
 		
 	}
+ 	
+ 	private boolean isValidGapTagType(String gapTagType){
+		return ((gapTagType.equals("Zc")) || (gapTagType.equals("Zs")));
+	}
+	
+	/**
+	 * @param contig
+	 * @param record
+	 * Sequence (consensus) tag looks like Zs:Z:REPT|5|1|Tag inserted at position 25 at start of AAAA 
+	 * @return
+	 * Contig tag looks like Zc:Z:POLY|31|42|weird Ns
+	 */
+	public void addTagsToContig(Contig contig, SAMRecord record)  throws ArcturusDatabaseException  {
+		//reportProgress("\taddTagsToContig: adding tags for contig " + contig.getName() + " from SAMRecord " + record.getReadName());
+		
+		String gapTagType = null;
+		String gapTagString = null;
+		short count = 1;
+		
+		/*
+		Sequence sequence = brl.findOrCreateSequence(record);
+		if (sequence == null) 
+			 throw new ArcturusDatabaseException("addTagToContig: cannot find data for sequence for SAMRecord =" + record.getReadName());	 
+		int sequence_id = sequence.getID();
+		*/
+		int sequence_id = 74294504;
+		char strand =  record.getReadNegativeStrandFlag() ? 'R': 'F';
+
+		ArrayList<SAMRecord.SAMTagAndValue> tagList= (ArrayList<SAMRecord.SAMTagAndValue>) record.getAttributes();
+		int tagCount = tagList.size();
+		
+		reportProgress("addTagsToContig: found " + tagCount + " tags: ");
+		
+		while (count < tagCount ) {	
+			SAMRecord.SAMTagAndValue samTag = tagList.get(count);
+			
+			gapTagType = samTag.tag;
+						
+			if (isValidGapTagType(gapTagType)){
+				gapTagString = record.getStringAttribute(gapTagType);
+				
+				if (gapTagString != null) {
+					reportProgress("\taddTagsToContig: adding tag " + count + " of type " + gapTagType + " holding " + gapTagString);		
+					addTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
+				}
+				else {
+					throw new ArcturusDatabaseException("addTagsToContig: unexpectedly found null tag information at position " + count + " for tag type " + gapTagType);
+				}		
+				count++;
+			}
+			else
+			{
+				throw new ArcturusDatabaseException("addTagsToContig: unexpectedly found null tag or invalid tag (not Zc or Zs) at position " + count + " for contig" + contig.getName() + " from SAMRecord " + record.getReadName());
+			}
+
+		}
+		
+	}
+	
+static String printTagSet(Vector<Tag> tagSet) {
+		
+	String text = "";
+	
+	if (tagSet != null) {
+		Iterator<Tag> iterator = tagSet.iterator();
+		
+		Tag tag = null;
+		
+		while (iterator.hasNext()) {
+			tag = iterator.next();
+			text = text + tag.toSAMString();
+		}
+	}
+	else {
+		text = "no tags found for this tag set.";
+	}
+	return text;
+	}
+	
 	/**
 	 * @param args
 	 */
 	public static void main(String[] args) {
-		
+
 		String samTagType = "Zs";
 		String gapTagString = "REPT|5|1|Tag inserted at position 25 at start of AAAA";
 		Contig contig = new Contig();
@@ -78,6 +161,10 @@ public class TestSAMRecordTags {
 		while (iterator.hasNext() ) {
 			reportProgress((iterator.next()).toSAMString() + "\n");
 		}
+		
+		reportProgress("Printing this tag set: " + printTagSet(tags));
+		
+		reportProgress("Printing an empty tag set: " + printTagSet(null));
 		
 	}
 
