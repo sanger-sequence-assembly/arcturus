@@ -58,7 +58,7 @@ public class ContigComparator {
 	    pstmtGetAlignmentData.setFetchSize(Integer.MIN_VALUE);
 	}
 	
-	private String printTagSet(Vector<Tag> tagSet) {
+	String printTagSet(Vector<Tag> tagSet) {
 		
 		Iterator<Tag> iterator = tagSet.iterator();
 		String text = "";
@@ -67,7 +67,7 @@ public class ContigComparator {
 		if (tagSet != null) {
 			while (iterator.hasNext()) {
 				tag = iterator.next();
-				tag.toSAMString();
+				text = text + tag.toSAMString();
 			}
 		}
 		else {
