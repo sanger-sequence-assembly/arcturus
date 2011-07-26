@@ -76,7 +76,7 @@ public class SAMContigBuilder {
 	}
 	
 	private boolean isValidGapTagType(String gapTagType){
-		return ((gapTagType == "Zc") || (gapTagType == "Zs"));
+		return ((gapTagType.equals("Zc")) || (gapTagType.equals("Zs")));
 	}
 	
 	/**
