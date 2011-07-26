@@ -202,8 +202,6 @@ public class Sequence extends Core {
 	public void setQuality(byte[] quality) {
 		this.quality = quality;
 		
-		System.out.println("Quality passed in to set is " + quality.toString());
-		
 		qualityHash = digest(quality);
 	}
 	
