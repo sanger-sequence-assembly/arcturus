@@ -123,11 +123,12 @@ public class SAMContigBuilder {
 			SAMRecord.SAMTagAndValue samTag = tagList.get(count);
 			
 			gapTagType = samTag.tag;
-			GAPTag tagValue = (GAPTag) samTag.value;
+			//GAPTag tagValue = (GAPTag) samTag.value;
 							
 			if (isValidGapTagType(gapTagType)){
 				//gapTagString = record.getStringAttribute(gapTagType);  // keeps getting the first of the two Zs tags
-				gapTagString =tagValue.toString();
+				//gapTagString =tagValue.toString();
+				gapTagString = (String) samTag.value;
 				
 				if (gapTagString != null) {
 					reportProgress("\taddTagsToContig: adding tag " + count + " of type " + gapTagType + " holding " + gapTagString);		
