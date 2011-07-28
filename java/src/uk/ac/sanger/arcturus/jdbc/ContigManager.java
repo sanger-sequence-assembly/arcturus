@@ -165,7 +165,7 @@ public class ContigManager extends AbstractManager {
 
 		pstmtConsensus = prepareStatement(query);
 
-		query = "select SAMtagtype, SAMtype, Gaptagtype, cstart,clength,tagcomment, tag_seq_id, strand"
+		query = "select SAMtagtype, SAMtype, Gaptagtype, start,length, tagcomment, tag_seq_id, strand"
 				+ " from SAMTAG"
 				+ " where contig_id = ? and SAMtagtype = ?";
 
@@ -1123,10 +1123,6 @@ public class ContigManager extends AbstractManager {
 	public void loadTagsForContig(Contig contig) throws ArcturusDatabaseException {
 		int contig_id = contig.getID();
 
-		Vector<Tag> tags = contig.getTags();
-		
-		// SAMtagtype, SAMtype, Gaptagtype, cstart, clength, tagcomment, tag_seq_id, strand
-		
 		try {
 			pstmtTags.setInt(1, contig_id);
 			pstmtTags.setString(2, "Zc");
