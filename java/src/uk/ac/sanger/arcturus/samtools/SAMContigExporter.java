@@ -199,15 +199,18 @@ public class SAMContigExporter {
 		int seqlen = rs.getInt(column++);
 		byte[] sequence = rs.getBytes(column++);
 		byte[] quality = rs.getBytes(column++);
+		String tagString = "";
 		
 		try {
 			adb.loadTagsForContig(contig);
 			Vector<Tag>  tagList = contig.getTags();
-			Iterator<Tag> iterator = tagList.iterator();	
-			String tagString = "";
-			
-			while (iterator.hasNext()) {
-				tagString = tagString + (iterator.next()).toSAMString() + " ";
+			if (tagList !=null) {
+				Iterator<Tag> iterator = tagList.iterator();	
+				
+				
+				while (iterator.hasNext()) {
+					tagString = tagString + (iterator.next()).toSAMString() + " ";
+				}
 			}
 		}
 		catch (ArcturusDatabaseException e){
@@ -266,13 +269,26 @@ public class SAMContigExporter {
 			e.printStackTrace();
 		}
 	
-		reportProgress("writeAlignment: Writing line:\n" + readname + TAB + flags + TAB + contigName + TAB + contigOffset +
-				TAB + mapping_quality +
-				TAB + cigar + TAB + "*\t0\t0\t" + DNA + TAB + qualityString);
+		String alignmentString = 
+				readname + TAB + 
+				flags + TAB + 
+				contigName + TAB + 
+				contigOffset + TAB + 
+				mapping_quality + TAB + 
+				cigar + TAB + "*\t0\t0\t" + 
+				DNA + TAB + 
+				qualityString;
 		
-		pw.println(readname + TAB + flags + TAB + contigName + TAB + contigOffset +
-				TAB + mapping_quality +
-				TAB + cigar + TAB + "*\t0\t0\t" + DNA + TAB + qualityString + TAB + "RG:Z:" + readGroupIDvalue);
+		if (readGroupIDvalue != null) {
+			alignmentString = alignmentString +  TAB + "RG:Z:" + readGroupIDvalue;
+		}
+		
+		if (tagString !=null) {
+			alignmentString = alignmentString + TAB + tagString;
+		}
+		
+		reportProgress("writeAlignment: Writing line:\n" + alignmentString);
+		pw.println( alignmentString);
 	}
 	
 	private void checkConnection() throws SQLException, ArcturusDatabaseException {
