@@ -227,8 +227,8 @@ public class ContigManager extends AbstractManager {
 	
 		pstmtStoreConsensus = prepareStatement(query);	
 		
-		query = "insert into SAMTAG...";
-		
+		query = "insert into SAMTAG(SAMtagtype, SAMtype, GAPtagtype, tagcomment, contig_id, start, length, tag_seq_id, strand, comment) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
 		pstmtStoreSAMTag = prepareStatement(query);	
 		
 	}
@@ -1733,6 +1733,9 @@ public class ContigManager extends AbstractManager {
 	}
 	
 	public boolean putTags(Contig contig) throws ArcturusDatabaseException {
+		
+		// ("Zs", 'Z', "REPT", "Tag inserted at postion 25 at start of AAAA", 2005, 5, 1, 74294504, 'U', NULL);
+		
 		if (contig == null)
 			throw new ArcturusDatabaseException("Cannot store tags for a null contig");
 		
@@ -1751,14 +1754,13 @@ public class ContigManager extends AbstractManager {
 				pstmtStoreSAMTag.setString(1, tag.getSAMTypeAsString());
 				pstmtStoreSAMTag.setString(2, tag.getSAMTagType());
 				pstmtStoreSAMTag.setString(3, tag.getGAPTagType());
-				
 				pstmtStoreSAMTag.setString(4, tag.getComment());
 				pstmtStoreSAMTag.setInt(5, contig_id); 
 				pstmtStoreSAMTag.setInt(6, tag.getStart()); 
 				pstmtStoreSAMTag.setInt(7, tag.getLength()); 
-				pstmtStoreSAMTag.setInt(8, contig_id); 
-				pstmtStoreSAMTag.setInt(9,99); //sequence_id needs to go here
-				pstmtStoreSAMTag.setString(10, "U"); 
+				pstmtStoreSAMTag.setInt(8,tag.getSequenceId());
+				pstmtStoreSAMTag.setString(9, tag.getStrandString()); 
+				pstmtStoreSAMTag.setString(10, null);
 
 				pstmtStoreSAMTag.executeUpdate();
 			}
@@ -1766,7 +1768,7 @@ public class ContigManager extends AbstractManager {
 		}
 		catch (SQLException e) {
 			adb.handleSQLException(e,
-					"Failed to store tags to contig mappings (TAG2CONTIG) for contig ID=" + contig.getID(),
+					"Failed to store tags to contig mappings (SAMTAG) for contig ID =" + contig.getID(),
 					conn, this);											
 		}
 		

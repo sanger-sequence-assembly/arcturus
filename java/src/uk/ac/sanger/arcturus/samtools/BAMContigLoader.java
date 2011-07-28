@@ -276,13 +276,14 @@ public class BAMContigLoader {
     		
     		reportProgress("\n" + message);
     		
-     		contigBuilder.addMappingsToContig(contig, reader);
+     		// this has already been done in importChildContigs so that the comparison can be done for mappings and tags
+    		// contigBuilder.addMappingsToContig(contig, reader);
      		    	    
     	    adb.putContig(contig);
     	    
     	    nameToID.put(contig.getName(), contig.getID());
     	    
-    	    message = "storeChildContigs: Stored contig " + contig.getName() + " with Arcturus ID " + contig.getID();
+    	    message = "storeChildContigs: Stored contig " + contig.getName() + " with Arcturus ID " + contig.getID() + " tags: " + contig.getTagCount() + " mappings: " + contig.getSequenceToContigMappingsCount();
     	    
     	    Utility.reportMemory(message);
     	    

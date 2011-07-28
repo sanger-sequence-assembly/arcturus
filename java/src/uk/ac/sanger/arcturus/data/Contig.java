@@ -182,6 +182,9 @@ public class Contig extends Core {
 		return scmappings;
 	}
 	
+	public int getSequenceToContigMappingsCount() {
+		return scmappings.length;
+	}
 	
 	public void setMappings(BasicSequenceToContigMapping[] mappings) {
 		this.mappings = mappings;
@@ -224,6 +227,10 @@ public class Contig extends Core {
 
 	public Vector<Tag> getTags() {
 		return tags;
+	}
+	
+	public int getTagCount() {
+		return tags.size();
 	}
 	
 	public boolean equals(Object o) {

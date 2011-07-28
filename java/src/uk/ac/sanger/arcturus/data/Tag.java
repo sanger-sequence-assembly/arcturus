@@ -64,6 +64,10 @@ public class Tag extends Core {
 		return strand;
 	}
 	
+	public String getStrandString() {
+		return "" + strand;
+	}
+	
 	public int getSequenceId() {
 		return sequence_id;
 	}
