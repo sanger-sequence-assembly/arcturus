@@ -42,8 +42,7 @@ public class Tag extends Core {
 		return samType;
 	}
 	
-	public String getSAMTypeAsString() {
-		
+	public String getSAMTypeAsString() {	
 		String samTypeString = "" + samType;
 		return samTypeString;
 	}
@@ -64,7 +63,7 @@ public class Tag extends Core {
 		return strand;
 	}
 	
-	public String getStrandString() {
+	public String getStrandAsString() {
 		return "" + strand;
 	}
 	

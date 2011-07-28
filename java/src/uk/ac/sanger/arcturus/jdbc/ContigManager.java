@@ -1751,15 +1751,15 @@ public class ContigManager extends AbstractManager {
 		try {
 			while (iterator.hasNext()) {		
 				tag = (Tag) iterator.next();
-				pstmtStoreSAMTag.setString(1, tag.getSAMTypeAsString());
-				pstmtStoreSAMTag.setString(2, tag.getSAMTagType());
+				pstmtStoreSAMTag.setString(1, tag.getSAMTagType());
+				pstmtStoreSAMTag.setString(2, tag.getSAMTypeAsString());
 				pstmtStoreSAMTag.setString(3, tag.getGAPTagType());
 				pstmtStoreSAMTag.setString(4, tag.getComment());
 				pstmtStoreSAMTag.setInt(5, contig_id); 
 				pstmtStoreSAMTag.setInt(6, tag.getStart()); 
 				pstmtStoreSAMTag.setInt(7, tag.getLength()); 
 				pstmtStoreSAMTag.setInt(8,tag.getSequenceId());
-				pstmtStoreSAMTag.setString(9, tag.getStrandString()); 
+				pstmtStoreSAMTag.setString(9, tag.getStrandAsString()); 
 				pstmtStoreSAMTag.setString(10, null);
 
 				pstmtStoreSAMTag.executeUpdate();
