@@ -22,7 +22,7 @@ echo
 echo Building the list of modified Arcturus databases ready for the consistency checker
 
 switch($MYSQL_HOST)
-case mcs6:
+case mcs8:
 # check for a LIVE database used in the last $TIME_IN_DAYS days
 	perl ${SCRIPT_HOME}/$PERL_SCRIPT -host $MYSQL_HOST -port 15001  -username $MYSQL_USER -password $MYSQL_PASSWORD -since $TIME_IN_DAYS > $HOME/pathogen_active_organisms.list
 
@@ -43,10 +43,16 @@ case mcs6:
 	cat $HOME/vertebrates_active_organisms.list
 	rm $HOME/tmp_pathogen_active_organisms.list
 
+	echo
+	echo Zebrafish list built in $HOME/illumina_active_organisms.list
+
+	breaksw
+case mcs7:
+# check for a LIVE MINERVA 2 database used in the last $TIME_IN_DAYS days
 	perl ${SCRIPT_HOME}/$PERL_SCRIPT -host $MYSQL_HOST -port 15005  -username $MYSQL_USER -password $MYSQL_PASSWORD -since $TIME_IN_DAYS > $HOME/illumina_active_organisms.list
 
 	echo
-	echo Zebrafish list built in $HOME/illumina_active_organisms.list
+	echo Minerva2 databases list built in $HOME/illumina_active_organisms.list
 
 	breaksw
 case mcs4a:

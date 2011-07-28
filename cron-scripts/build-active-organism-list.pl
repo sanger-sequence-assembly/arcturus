@@ -54,7 +54,7 @@ my $query = 'select table_schema from information_schema.columns where table_nam
 
 my $sth = $dbh->prepare($query);
 
-$sth->execute('READINFO', 'READNAME');
+$sth->execute('CONTIG', 'GAP4NAME');
 
 my @dblist;
 
