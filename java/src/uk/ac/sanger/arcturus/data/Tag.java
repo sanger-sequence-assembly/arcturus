@@ -82,8 +82,8 @@ public class Tag extends Core {
 	 */
 	public String toSAMString() {
 		
-		return gapTagType + ":" + samType + ":" + samTagType + "|" + start + "|" + length
-		+ (comment == null ? "" : "|" + comment + "|");
+		return samTagType + ":" + samType + ":" + gapTagType + "|" + start + "|" + length
+		+ (comment == null ? "" : "|" + comment);
 		
 	}
 	
