@@ -76,7 +76,7 @@ public class SAMContigBuilder {
 	}
 	
 	private boolean isValidGapTagType(String gapTagType){
-		return ((gapTagType.equals("Zc")) || (gapTagType.equals("Zs")));
+		return ((gapTagType.equals("Zc")) || (gapTagType.equals("Zs")) ||(gapTagType.equals("FS")));
 	}
 	
 	private class GAPTag {
@@ -141,7 +141,7 @@ public class SAMContigBuilder {
 			}
 			else
 			{
-				throw new ArcturusDatabaseException("addTagsToContig: unexpectedly found null tag or invalid tag (not Zc or Zs) at position " + count + " for contig" + contig.getName() + " from SAMRecord " + record.getReadName());
+				throw new ArcturusDatabaseException("addTagsToContig: unexpectedly found null tag or invalid tag (not Zc or Zs or FS) at position " + count + " for contig" + contig.getName() + " from SAMRecord " + record.getReadName());
 			}
 
 			if (diagnostics)

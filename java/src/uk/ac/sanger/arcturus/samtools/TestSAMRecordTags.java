@@ -66,7 +66,7 @@ public class TestSAMRecordTags {
 	}
  	
  	private boolean isValidGapTagType(String gapTagType){
-		return ((gapTagType.equals("Zc")) || (gapTagType.equals("Zs")));
+		return ((gapTagType.equals("Zc")) || (gapTagType.equals("Zs"))||(gapTagType.equals("FS")));
 	}
 	
 	/**
@@ -116,7 +116,7 @@ public class TestSAMRecordTags {
 			}
 			else
 			{
-				throw new ArcturusDatabaseException("addTagsToContig: unexpectedly found null tag or invalid tag (not Zc or Zs) at position " + count + " for contig" + contig.getName() + " from SAMRecord " + record.getReadName());
+				throw new ArcturusDatabaseException("addTagsToContig: unexpectedly found null tag or invalid tag (not Zc or Zs or FS) at position " + count + " for contig" + contig.getName() + " from SAMRecord " + record.getReadName());
 			}
 
 		}
@@ -148,7 +148,7 @@ static String printTagSet(Vector<Tag> tagSet) {
 	 */
 	public static void main(String[] args) {
 
-		String samTagType = "Zs";
+		String samTagType = "Fs";
 		String gapTagString = "REPT|5|1|Tag inserted at position 25 at start of AAAA";
 		Contig contig = new Contig();
 		
