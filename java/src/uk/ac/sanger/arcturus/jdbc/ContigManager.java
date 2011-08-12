@@ -167,7 +167,7 @@ public class ContigManager extends AbstractManager {
 
 		query = "select SAMtagtype, SAMtype, Gaptagtype, start,length, tagcomment, tag_seq_id, strand"
 				+ " from SAMTAG"
-				+ " where contig_id = ? and SAMtagtype = ?";
+				+ " where contig_id = ? and SAMtagtype in ('Zc', 'Zs', 'FS') order by SAMtagtype, start";
 
 		pstmtTags = prepareStatement(query);
 
