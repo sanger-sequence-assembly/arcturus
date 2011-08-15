@@ -215,7 +215,7 @@ public class SAMContigExporter {
 			}
 		}
 		catch (ArcturusDatabaseException e){
-			Arcturus.logSevere("writeAlignment: unable to find tags for contig "+ contigName);
+			Arcturus.logSevere("writeAlignment: unable to create a string version of the tags for contig "+ contigName);
 		}
 		
 		if (sequence != null) {

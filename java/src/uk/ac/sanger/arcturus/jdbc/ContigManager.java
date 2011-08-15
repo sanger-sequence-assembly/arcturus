@@ -1126,11 +1126,14 @@ public class ContigManager extends AbstractManager {
 			pstmtTags.setInt(1, contig_id);
 			pstmtTags.setInt(2, req_tag_seq_id);
 			pstmtTags.setString(3, req_strand);
+System.out.println("Query run with contig _id = " + contig_id + ", seq_id = " + req_tag_seq_id + ", strand = " + req_strand);
 			ResultSet rs = pstmtTags.executeQuery();
-
+			
+System.out.println("Query run");
 			while (rs.next()) {
-				char samType = (rs.getString(1)).charAt(0);
-				String samTagType = rs.getString(2);
+				
+				String samTagType = rs.getString(1);
+				char samType = (rs.getString(2)).charAt(0);
 				String gapTagType = rs.getString(3);
 				int cstart = rs.getInt(4);
 				int clength = rs.getInt(5);

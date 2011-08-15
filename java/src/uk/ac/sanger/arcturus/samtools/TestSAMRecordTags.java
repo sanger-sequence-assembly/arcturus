@@ -93,7 +93,7 @@ public class TestSAMRecordTags {
 			 throw new ArcturusDatabaseException("addTagToContig: cannot find data for sequence for SAMRecord =" + record.getReadName());	 
 		int sequence_id = sequence.getID();
 		*/
-		int sequence_id = 74294504;
+		int sequence_id = 74294853;
 		char strand =  record.getReadNegativeStrandFlag() ? 'R': 'F';
 
 		ArrayList<SAMRecord.SAMTagAndValue> tagList= (ArrayList<SAMRecord.SAMTagAndValue>) record.getAttributes();
@@ -176,8 +176,7 @@ static String printTagSet(Vector<Tag> tagSet) {
 		
 		String tagString = "";
 		String strand = "F";
-		int seq_id = 74294504;
-		int contig_id = contig.getID();
+		int seq_id = 74294853;
 		
 		ArcturusInstance ai = null;
 		try {
@@ -188,21 +187,26 @@ static String printTagSet(Vector<Tag> tagSet) {
 		}
 		ArcturusDatabase adb = null;
 		try {
-			adb = ai.findArcturusDatabase("TRICHURIS");
-		} catch (ArcturusDatabaseException e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
-		}
-		try {
-			contig = adb.getContigByID(contig_id);
+			adb = ai.findArcturusDatabase("TESTCHURIS");
 		} catch (ArcturusDatabaseException e1) {
 			// TODO Auto-generated catch block
 			e1.printStackTrace();
 		}
 		
+		Contig savedContig = null;
+		
 		try {
-			adb.loadTagsForContig(contig, seq_id, strand);
-			Vector<Tag>  tagList = contig.getTags();
+			savedContig = adb.getContigByID(2012);
+		} catch (ArcturusDatabaseException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+	
+		try {
+			adb.loadTagsForContig(savedContig, seq_id, strand);
+			reportProgress("Tags retrieved successfully");
+			
+			Vector<Tag>  tagList = savedContig.getTags();
 			if (tagList !=null) {
 				Iterator<Tag> search_iterator = tagList.iterator();	
 				
@@ -213,7 +217,7 @@ static String printTagSet(Vector<Tag> tagSet) {
 			}
 		}
 		catch (ArcturusDatabaseException e){
-			Arcturus.logSevere("writeAlignment: unable to find tags for contig "+ contig.getName());
+			Arcturus.logSevere("writeAlignment: unable to find tags for contig "+ savedContig.getName());
 		}
 		
 	}
