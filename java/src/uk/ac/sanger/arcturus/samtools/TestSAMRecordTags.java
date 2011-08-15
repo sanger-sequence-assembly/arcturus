@@ -173,6 +173,13 @@ static String printTagSet(Vector<Tag> tagSet) {
 		reportProgress("Printing an empty tag set: " + printTagSet(null));
 		
 		// now try to get it back from the database
+		String direction = "Forwards";
+		//String testStrand = direction.substring(1,1);
+		String testStrand = "";
+		testStrand = direction.substring(0,1);
+		//String testStrand  = direction.charAt(1);
+		
+		reportProgress("Test strand is "+ testStrand);
 		
 		String tagString = "";
 		String strand = "F";
@@ -202,11 +209,13 @@ static String printTagSet(Vector<Tag> tagSet) {
 			e1.printStackTrace();
 		}
 	
+		Vector<Tag> tagList = null;
+		
 		try {
-			adb.loadTagsForContig(savedContig, seq_id, strand);
+			adb.loadTagsForContig(savedContig, seq_id, testStrand);
 			reportProgress("Tags retrieved successfully");
 			
-			Vector<Tag>  tagList = savedContig.getTags();
+			tagList = savedContig.getTags();
 			if (tagList !=null) {
 				Iterator<Tag> search_iterator = tagList.iterator();	
 				
@@ -219,6 +228,8 @@ static String printTagSet(Vector<Tag> tagSet) {
 		catch (ArcturusDatabaseException e){
 			Arcturus.logSevere("writeAlignment: unable to find tags for contig "+ savedContig.getName());
 		}
+		
+		reportProgress("Printing the retrieved tag set: " + printTagSet(tagList));
 		
 	}
 
