@@ -167,7 +167,7 @@ public class ContigManager extends AbstractManager {
 
 		query = "select SAMtagtype, SAMtype, Gaptagtype, start,length, tagcomment, tag_seq_id, strand"
 				+ " from SAMTAG"
-				+ " where contig_id = ? and SAMtagtype in ('Zc', 'Zs', 'FS') order by SAMtagtype, start";
+				+ " where contig_id = ? and and tag_seq_id =  ? and strand = ?' order by SAMtagtype, start";
 
 		pstmtTags = prepareStatement(query);
 
@@ -476,9 +476,8 @@ public class ContigManager extends AbstractManager {
 		if ((options & ArcturusDatabase.CONTIG_CONSENSUS) != 0
 				&& contig.getDNA() == null)
 			loadConsensusForContig(contig);
+		
 
-		if ((options & ArcturusDatabase.CONTIG_TAGS) != 0)
-			loadTagsForContig(contig);
 	}
 
 	private int getMappingCount(int contig_id) throws ArcturusDatabaseException {
@@ -1120,12 +1119,13 @@ public class ContigManager extends AbstractManager {
 	}
 
 	
-	public void loadTagsForContig(Contig contig) throws ArcturusDatabaseException {
+	public void loadTagsForContig(Contig contig, int req_tag_seq_id, String req_strand) throws ArcturusDatabaseException {
 		int contig_id = contig.getID();
 
 		try {
 			pstmtTags.setInt(1, contig_id);
-			pstmtTags.setString(2, "Zc");
+			pstmtTags.setInt(2, req_tag_seq_id);
+			pstmtTags.setString(3, req_strand);
 			ResultSet rs = pstmtTags.executeQuery();
 
 			while (rs.next()) {

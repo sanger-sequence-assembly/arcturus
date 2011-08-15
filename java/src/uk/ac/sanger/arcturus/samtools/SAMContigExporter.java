@@ -200,9 +200,10 @@ public class SAMContigExporter {
 		byte[] sequence = rs.getBytes(column++);
 		byte[] quality = rs.getBytes(column++);
 		String tagString = "";
+		String strand = direction.substring(1,1);
 		
 		try {
-			adb.loadTagsForContig(contig);
+			adb.loadTagsForContig(contig, seq_id, strand);
 			Vector<Tag>  tagList = contig.getTags();
 			if (tagList !=null) {
 				Iterator<Tag> iterator = tagList.iterator();	

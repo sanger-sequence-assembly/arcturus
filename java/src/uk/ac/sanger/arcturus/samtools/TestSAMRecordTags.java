@@ -4,12 +4,16 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Vector;
 
+import javax.naming.NamingException;
+
 import net.sf.samtools.SAMRecord;
 
 import uk.ac.sanger.arcturus.Arcturus;
+import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Sequence;
 import uk.ac.sanger.arcturus.data.Tag;
+import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 public class TestSAMRecordTags {
@@ -148,6 +152,8 @@ static String printTagSet(Vector<Tag> tagSet) {
 	 */
 	public static void main(String[] args) {
 
+		// set up a contig with a tag
+		
 		String samTagType = "Fs";
 		String gapTagString = "REPT|5|1|Tag inserted at position 25 at start of AAAA";
 		Contig contig = new Contig();
@@ -165,6 +171,50 @@ static String printTagSet(Vector<Tag> tagSet) {
 		reportProgress("Printing this tag set: " + printTagSet(tags));
 		
 		reportProgress("Printing an empty tag set: " + printTagSet(null));
+		
+		// now try to get it back from the database
+		
+		String tagString = "";
+		String strand = "F";
+		int seq_id = 74294504;
+		int contig_id = contig.getID();
+		
+		ArcturusInstance ai = null;
+		try {
+			ai = ArcturusInstance.getInstance("test");
+		} catch (NamingException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+		ArcturusDatabase adb = null;
+		try {
+			adb = ai.findArcturusDatabase("TRICHURIS");
+		} catch (ArcturusDatabaseException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+		try {
+			contig = adb.getContigByID(contig_id);
+		} catch (ArcturusDatabaseException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+		
+		try {
+			adb.loadTagsForContig(contig, seq_id, strand);
+			Vector<Tag>  tagList = contig.getTags();
+			if (tagList !=null) {
+				Iterator<Tag> search_iterator = tagList.iterator();	
+				
+				
+				while (search_iterator.hasNext()) {
+					tagString = tagString + (search_iterator.next()).toSAMString() + " ";
+				}
+			}
+		}
+		catch (ArcturusDatabaseException e){
+			Arcturus.logSevere("writeAlignment: unable to find tags for contig "+ contig.getName());
+		}
 		
 	}
 
