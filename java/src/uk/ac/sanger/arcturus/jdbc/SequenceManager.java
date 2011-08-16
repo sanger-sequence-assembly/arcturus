@@ -60,7 +60,8 @@ public class SequenceManager extends AbstractManager {
 		"select cvleft,cvright from CLONEVEC where seq_id = ?";
 	
 	private static final String GET_TAGS =
-		"select GAPtagtype,start,final,comment from SAMTAG where seq_id = ? and SAMtagtype = ?";
+		"select samTagType, samType, GAPtagtype,start, length, tagcomment, tag_seq_id, strand from SAMTAG " +
+		"where tag_seq_id = ? order by SAMtagtype, start";
 	
 	private static final String GET_SEQUENCE_BY_READNAME_FLAGS_AND_HASH =
 		"select RN.read_id,S.seq_id from READNAME RN,SEQ2READ SR,SEQUENCE S" +
@@ -721,21 +722,22 @@ public class SequenceManager extends AbstractManager {
 		return sequence;
 	}
 
-	private void loadTagsForSequence(Sequence sequence) throws ArcturusDatabaseException {
-		int seqid = sequence.getID();
+	public void loadTagsForSequence(Sequence sequence) throws ArcturusDatabaseException {
+		int req_seqid = sequence.getID();
 
 		Vector<Tag> tags = sequence.getTags();
 		
 		if (tags != null)
 			tags.clear();
 
+		
 		try {
-			pstmtGetTags.setInt(1, seqid);
+			pstmtGetTags.setInt(1, req_seqid);
 			ResultSet rs = pstmtGetTags.executeQuery();
 
 			while (rs.next()) {
-				char samType = (rs.getString(1)).charAt(0);
-				String samTagType = rs.getString(2);
+				String samTagType = rs.getString(1);
+				char samType = (rs.getString(2)).charAt(0);
 				String gapTagType = rs.getString(3);
 				int cstart = rs.getInt(4);
 				int clength = rs.getInt(5);
@@ -749,7 +751,8 @@ public class SequenceManager extends AbstractManager {
 
 			rs.close();
 		} catch (SQLException e) {
-			adb.handleSQLException(e, "Failed to set load tags for sequence ID=" + seqid,
+			e.printStackTrace();
+			adb.handleSQLException(e, "Failed to load tags for sequence ID=" + req_seqid,
 					conn, this);
 		}
 	}
@@ -769,6 +772,7 @@ public class SequenceManager extends AbstractManager {
 			
 			return seq_id;
 		} catch (SQLException e) {
+			e.printStackTrace();
 			adb.handleSQLException(e, "Failed to find sequence ID for ID=" + read_id + " and hashes",
 					conn, this);
 		}

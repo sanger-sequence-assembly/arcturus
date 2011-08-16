@@ -1444,8 +1444,12 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		return contigManager.putTags(contig);
 	}
 	
-	public synchronized void loadTagsForContig(Contig contig, int seq_id, String strand) throws ArcturusDatabaseException{
-		contigManager.loadTagsForContig(contig, seq_id, strand);
+	public synchronized void loadTagsForContig(Contig contig) throws ArcturusDatabaseException{
+		contigManager.loadTagsForContig(contig);
+	}
+	
+	public void loadTagsForSequence(Sequence sequence) throws ArcturusDatabaseException{
+		sequenceManager.loadTagsForSequence(sequence);
 	}
 	
 	public void addReadGroupsFromThisImport(List<SAMReadGroupRecord> readGroups, int import_id) throws ArcturusDatabaseException {

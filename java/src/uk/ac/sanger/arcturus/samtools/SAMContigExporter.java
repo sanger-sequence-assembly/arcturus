@@ -202,9 +202,11 @@ public class SAMContigExporter {
 		String tagString = "";
 		String strand = direction.substring(0,1);
 		
+		Sequence seq = adb.getSequenceBySequenceID(seq_id);
+		
 		try {
-			adb.loadTagsForContig(contig, seq_id, strand);
-			Vector<Tag>  tagList = contig.getTags();
+			adb.loadTagsForSequence(seq);
+			Vector<Tag>  tagList = seq.getTags();
 			if (tagList !=null) {
 				Iterator<Tag> iterator = tagList.iterator();	
 				
@@ -288,7 +290,7 @@ public class SAMContigExporter {
 			alignmentString = alignmentString + TAB + tagString;
 		}
 		
-		reportProgress("writeAlignment: Writing line:\n" + alignmentString);
+		reportProgress("writeAlignment: Writing line for sequence " + seq_id + ":\n" + alignmentString);
 		pw.println( alignmentString);
 	}
 	

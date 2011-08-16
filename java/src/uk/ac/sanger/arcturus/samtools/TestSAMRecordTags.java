@@ -211,11 +211,19 @@ static String printTagSet(Vector<Tag> tagSet) {
 	
 		Vector<Tag> tagList = null;
 		
+		Sequence seq = null;
 		try {
-			adb.loadTagsForContig(savedContig, seq_id, testStrand);
+			seq = adb.getSequenceBySequenceID(seq_id);
+		} catch (ArcturusDatabaseException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+		
+		try {
+			adb.loadTagsForSequence(seq);
 			reportProgress("Tags retrieved successfully");
 			
-			tagList = savedContig.getTags();
+			tagList = seq.getTags();
 			if (tagList !=null) {
 				Iterator<Tag> search_iterator = tagList.iterator();	
 				

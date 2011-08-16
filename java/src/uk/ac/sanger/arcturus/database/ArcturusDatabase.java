@@ -558,5 +558,7 @@ public interface ArcturusDatabase {
 
 	public boolean putTags(Contig contig)throws ArcturusDatabaseException;
 
-	public void loadTagsForContig(Contig contig, int seq_id, String strand) throws ArcturusDatabaseException;
+	public void loadTagsForContig(Contig contig) throws ArcturusDatabaseException;
+	
+	public void loadTagsForSequence(Sequence sequence) throws ArcturusDatabaseException;
 }

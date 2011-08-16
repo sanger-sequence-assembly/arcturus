@@ -167,7 +167,7 @@ public class ContigManager extends AbstractManager {
 
 		query = "select SAMtagtype, SAMtype, Gaptagtype, start,length, tagcomment, tag_seq_id, strand"
 				+ " from SAMTAG"
-				+ " where contig_id = ? and tag_seq_id =  ? and strand = ? order by SAMtagtype, start";
+				+ " where contig_id = ? order by SAMtagtype, start";
 
 		pstmtTags = prepareStatement(query);
 
@@ -1119,20 +1119,14 @@ public class ContigManager extends AbstractManager {
 	}
 
 	
-	public void loadTagsForContig(Contig contig, int req_tag_seq_id, String req_strand) throws ArcturusDatabaseException {
+	public void loadTagsForContig(Contig contig) throws ArcturusDatabaseException {
 		
 		int contig_id = contig.getID();
-//System.out.println("Query to be run with with contig _id = " + contig_id + ", seq_id = " + req_tag_seq_id + ", strand = " + req_strand);
 
 		try {
 			pstmtTags.setInt(1, contig_id);
-			pstmtTags.setInt(2, req_tag_seq_id);
-//System.out.println("Integers set up");
-			pstmtTags.setString(3, req_strand);
-//System.out.println("Query about to be run");
 			ResultSet rs = pstmtTags.executeQuery();
 			
-//System.out.println("Query run");
 			while (rs.next()) {
 				
 				String samTagType = rs.getString(1);
