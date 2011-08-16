@@ -639,7 +639,7 @@ unless ($keep) {
 }
 
 print STDOUT "\n\nIMPORT OF $projectname HAS FINISHED SUCCESSFULLY.\n";
-print STDOUT "The Gap" . $gap_version . " database was imported from $rundir: please now copy $gapname.A to $gapname.0 to start work in Gap\n(A backup has been kept in $gapname.0~)\n";
+print STDOUT "The Gap" . $gap_version . " database was imported from $rundir: please now export from Minerva then copy $gapname.A to $gapname.0 to start work in Gap\n(A backup has been kept in $gapname.0~)\n";
 
 exit 0;
 
