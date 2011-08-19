@@ -174,7 +174,12 @@ public class ContigComparator {
 	}
 	
 	protected void reportProgress(String message) {
+		
+		boolean testing = false;
+		
+		if (testing) {
 		System.out.println(message);
+		}
 		Arcturus.logFine(message);
 	}
 	
