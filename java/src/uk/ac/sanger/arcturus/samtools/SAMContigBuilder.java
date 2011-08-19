@@ -21,7 +21,7 @@ public class SAMContigBuilder {
 	private DecimalFormat format = null;
 	protected long t0;
 	
-	private boolean testing = true;
+	private boolean testing = false;
 	
 	public SAMContigBuilder(ArcturusDatabase adb, BAMReadLoader brl) {
 		this.adb = adb;
@@ -29,7 +29,7 @@ public class SAMContigBuilder {
 	}
 
 	public void setRuntimeDiagnostics() {
-	    diagnostics = true;
+	    diagnostics = false;
 		format = new DecimalFormat();
 	}
 	
@@ -181,7 +181,7 @@ public class SAMContigBuilder {
 	    while (iterator.hasNext()) {
 	 	    SAMRecord record = iterator.next();
 	 	    
-	 		//reportProgress("\taddMappingsToContig: adding sequence for SAMRecord " + record.getReadName());
+	 		reportProgress("\taddMappingsToContig: adding sequence for SAMRecord " + record.getReadName());
 	 		SequenceToContigMapping mapping = buildSequenceToContigMapping(record,contig);
 	 	    M.add(mapping);
 	 	   
@@ -214,7 +214,7 @@ public class SAMContigBuilder {
 
 	private SequenceToContigMapping buildSequenceToContigMapping(SAMRecord record, Contig contig) throws ArcturusDatabaseException {	    
 	    
-		//reportProgress("\tbuildSequenceToContigMapping: working with SAMRecord " + record.getReadName() + " and contig " + contig.getName());
+		reportProgress("\tbuildSequenceToContigMapping: working with SAMRecord " + record.getReadName() + " and contig " + contig.getName());
 		
 		String cigar = record.getCigarString();
 		int contigStartPosition = record.getAlignmentStart();

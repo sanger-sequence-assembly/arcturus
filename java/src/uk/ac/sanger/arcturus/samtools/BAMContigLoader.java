@@ -152,17 +152,13 @@ public class BAMContigLoader {
         import_id = adb.getLastImportId(project);
          
         reportProgress("BAMContigLoader:  Loading the Read groups from the SAM Header for import id " + import_id);
+
+        try {
+        	adb.addReadGroupsFromThisImport(header.getReadGroups(), import_id);
+        } catch (ArcturusDatabaseException e) {
+        	e.printStackTrace();
+        }
        
-        if (import_id == 0){
-        	Arcturus.logSevere("BAMContigLoader:  Cannot find the last import for project " + project.getID());
-        }
-        else {
-        	try {
-        		adb.addReadGroupsFromThisImport(header.getReadGroups(), import_id);
-        	} catch (ArcturusDatabaseException e) {
-        		e.printStackTrace();
-        	}
-        }
 	}
 	
 	protected Set<Contig> getContigs(SAMFileReader reader) {
@@ -186,7 +182,7 @@ public class BAMContigLoader {
       		
       		contigs.add(contig);
 
-      		Arcturus.logFine("BAMContigLoader:  Added contig " + contig);
+      		reportProgress("BAMContigLoader:  Added contig " + contig.getID());
      	}
      	
         return contigs;      	
@@ -218,7 +214,7 @@ public class BAMContigLoader {
  			doImport = !contigComparator.equalsParentContig(child, parent);
  			
  			if (!doImport) {
- 				reportProgress("BAMContigLoader:  about to check if the tag sets are equal");
+ 				//reportProgress("BAMContigLoader:  about to check if the tag sets are equal");
  				doImport = !contigComparator.equalsParentContigTags(child, parent);
  			}
  			
@@ -236,6 +232,7 @@ public class BAMContigLoader {
     	}
     	
     	if (doImport) {
+    		
     		storeChildContigs(children, reader, nameToID);
     		
     		Set<DefaultWeightedEdge> edges = graph.edgeSet();
