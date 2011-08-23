@@ -567,12 +567,16 @@ if ($gap_version == 4) {
 # changing access privileges on newly created database
 #------------------------------------------------------------------------------
 
-print STDERR "Changing access privileges on Gap database\n";
+print STDERR "Changing access privileges on Gap $gap_version database\n";
 
-&mySystem ("chmod ug-w ${gapname}.$version.g5d");
-
-&mySystem ("chmod ug-w ${gapname}.$version.g5x");
-
+if ($gap_version == 4) {
+	&mySystem ("chmod ug-w ${gapname}.$version");
+	&mySystem ("chmod ug-w ${gapname}.$version.aux");
+}
+else {
+	&mySystem ("chmod ug-w ${gapname}.$version.g5d");
+	&mySystem ("chmod ug-w ${gapname}.$version.g5x");
+}
 #------------------------------------------------------------------------------
 # marking project as exported (only in standard export mode) is now done in contig-export and new-contig-loader using ADBProject routines, not a seperate PERL script
 # TO DO:  why is this still in use, and not new-contig-export? Tags need to be checked for RT 210374
@@ -654,6 +658,7 @@ unless ($scaffold || $projectname ne $gapname || $version ne 'A') {
 
 #-------------------------------------------------------------------------------
 
+$keep = 1;
 unless ($keep) {
     print STDERR "Cleaning up temporary files\n";
     &mySystem("rm -r -f $tmpdir");

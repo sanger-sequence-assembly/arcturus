@@ -10,8 +10,11 @@ use ArcturusDatabase;
 use Project;
 use RepositoryManager;
 
-use constant WORKING_VERSION => '0';
-use constant BACKUP_VERSION => 'B';
+my $friendly_message = "A Help Desk ticket has been raised.  \n\nThe cause of the error will appear in this import window and in the log of the import in your .arcturus directory under your home directory.  \n\n(Where possible, a HelpDesk ticket is raised automatically, but if you do not receive an email within five minutes of encountering a problem, please cut and paste the entire contents of this window into an email and send it to arcturus-help.  Thank you for your help with this.)\n";
+
+my $rm_permissions_string = "please check that your file permissions allow group file delete using ls -l"; 
+my $create_permissions_string = "please check that your file permissions allow group file create using ls -l"; 
+my $gap_string = "a backup of your Gap project cannot be made until you close the project in Gap";
 
 # import a single gap database into arcturus
 
@@ -36,7 +39,7 @@ my $gapconsensus = "$badgerbin/gap5_consensus -test ";
 
 my $gapconsistency = "$badgerbin/gap4_check_db";
 
-my $samtools = "/software/solexa/bin/aligners/samtools/current/samtools";
+my $samtools = "/software/solexa/bin/aligners/samtools/samtools-0.1.7/samtools";
 
 my $java_opts = defined($ENV{'JAVA_DEBUG'}) ?
     "-Ddebugging=true -Dtesting=true -Xmx4000M" : "-Xmx4000M";
@@ -162,6 +165,7 @@ while (my $nextword = shift @ARGV) {
 }
 
 $version = "A" unless defined($version);
+my $backup_version = $version."~";
 
 #------------------------------------------------------------------------------
 # Check input parameters
@@ -192,10 +196,6 @@ unless ($gap_version > 0) {
 #------------------------------------------------------------------------------
 
 my $tmpdir = "/tmp/" . $instance . "-" . $organism . "-" . $$;
-
-my $friendly_message = "A Help Desk ticket has been raised.  \n\n
- The cause of the error will appear in the Arcturus import window and in the log of the import in your .arcturus directory under your home directory.\n";
-
 mkpath($tmpdir) or die "Failed to create temporary working directory $tmpdir";
 
 #------------------------------------------------------------------------------
@@ -270,7 +270,7 @@ $pwd = cwd();
 
 if ($gap_version == 4) {
 	unless ( -f "${gapname}.$version") {
-    print STDOUT "!! -- Project $gapname version $version"
+    print STDOUT "!! -- Gap4 project $gapname version $version"
                      ." does not exist in $pwd --\n";
     exit 1;
 	}
@@ -279,7 +279,7 @@ else {
 	my $extension = "g5d";
 
 	unless ( -f "${gapname}.$version.$extension") {
-	    print STDOUT "!! -- Project $gapname version $version stored in file $gapname.$version.$extension"
+	    print STDOUT "!! -- Gapp5 project $gapname version $version stored in file $gapname.$version.$extension"
 			                     ." does not exist in $pwd --\n";					     
 			 exit 1;
 	 }
@@ -287,19 +287,19 @@ else {
 
 if ( -f "${gapname}.$version.BUSY") {
     print STDOUT "!! -- Import of project $gapname aborted:"
-                     ." version $version is BUSY --\n";
+                     ." version $version (which you are currently trying to import) is BUSY: $gap_string --\n";
     exit 1;
 }
 
 if ( -f "${gapname}.A.BUSY") {
     print STDOUT "!! -- Import of project $gapname WARNING:"
-                     ." version A is BUSY --\n";
+                     ." version A (your last export from Arcturus) is BUSY: $gap_string --\n";
     exit 1 if $abortonwarning;
 }
 
-if ( -f "${gapname}.B.BUSY") {
+if ( -f "${gapname}.$backup_version.BUSY") {
     print STDOUT "!! -- Import of project $gapname aborted:"
-                     ." version B is BUSY --\n";
+                     ." version $backup_version (the version used to backup the project you are currently trying to export) is BUSY: $gap_string --\n";
     exit 1;
 }
 
@@ -456,50 +456,34 @@ if ($gap_version == 4) {
 	. "-project $projectname -in $bamfile -consensus $consensus"; 
 }
 
-#------------------------------------------------------------------------------
-# change data in the repository: create backup version B  
-#------------------------------------------------------------------------------
-
-unless ($version eq "B" || $nonstandard) {
-    print STDOUT "Backing up version $version to $gapname.B\n";
-    if (-f "$gapname.B") {
+#---------------------------------------------------------------------------------------------------------------------------
+# change data in the repository: create backup version of whatever the user has asked for with ~ on the end for traceability  
+#---------------------------------------------------------------------------------------------------------------------------
+unless ($nonstandard) {
+    print STDOUT "Backing up version $version to $gapname.$backup_version\n";
+    if (-f "$gapname.$backup_version") {
 # extra protection against busy B version preventing the backup
-        if ( -f "${gapname}.B.BUSY") {
+        if ( -f "${gapname}.0~.BUSY") {
             print STDERR "!! -- Import of project $gapname ABORTED:"
-                        ." version B is BUSY; backup cannot be made --\n";
+                        ." version $backup_version is BUSY: $gap_string\n"; 
             exit 1;
         }
-        &mySystem("rmdb $gapname B");
+        &mySystem("rmdb $gapname $backup_version");
         unless ($? == 0) {
-            print STDERR "!! -- FAILED to remove existing $gapname.B ($?) --\n"; 
-            print STDERR "!! -- Import of $gapname.$version aborted --\n";
-            exit 1;
-        }
-        &mySystem("rmdb $gapname $version~");
-        unless ($? == 0) {
-            print STDERR "!! -- FAILED to remove existing $gapname.$version~ ($?) --\n"; 
+            print STDERR "!! -- FAILED to remove existing $gapname.$backup_version ($?): $rm_permissions_string --\n"; 
             print STDERR "!! -- Import of $gapname.$version aborted --\n";
             exit 1;
         }
     }
-    &mySystem("cpdb $gapname $version $gapname B");
-    unless ($? == 0) {
-        print STDERR "!! -- WARNING: failed to back up $gapname.$version ($?) --\n";
-        if ($abortonwarning) {
-            print STDERR "!! -- Import of $gapname.$version aborted --\n";
-            exit 1;
-        }
-		}
-		&mySystem ("cpdb $gapname $version $gapname $version~");
+		&mySystem ("cpdb $gapname $version $gapname $backup_version");
 		unless ($? == 0) {
-			print STDERR "!! -- WARNING: failed to back up $gapname.$version to $gapname.$version~ ($?    ) --\n";
+			print STDERR "!! -- WARNING: failed to back up $gapname.$version to $gapname.$backup_version ($?): crate_permissions_string --\n";
     	if ($abortonwarning) {
         print STDERR "!! -- Import of $gapname.$version aborted --\n";
         exit 1;
      	}
 		}
 }
-
 #------------------------------------------------------------------------------
 # change the data in Arcturus
 #------------------------------------------------------------------------------
@@ -511,19 +495,24 @@ $project->fetchContigIDs(); # load the current contig IDs before import
 # check that there is not an export or import already running for this project
 #-----------------------------------------------------------------------------
  
+my $first_time = 0;
+
 my $dbh = $adb->getConnection();
 my ($other_username, $action, $starttime, $endtime) = $project->getImportExportAlreadyRunning($dbh);
  
-print "Checking if project $projectname already has an IMPORT or EXPORT running in the $organism database\n";
+print STDERR "Checking if project $projectname already has an IMPORT or EXPORT running in the $organism database\n";
 
-my $first_time = 0;
- 	 	 
-unless( defined($other_username) && defined($action) && defined($starttime) && defined($endtime)){
-	$first_time = 1;
+if ( defined($other_username) && defined($action) && defined($starttime) && defined($endtime)){
+	if ($other_username eq "" ) {
+		$first_time = 1;
+	}	
+	else {
+		$first_time = 0;
+	}
 }
- 	 	 
+
 unless (defined($endtime) || ($first_time == 1)) {
-   	print STDERR "Project $projectname already has a $action running started by $other_username at $starttime so this import has been ABORTED";
+   	print STDERR "Project $projectname already has a $action running started by $other_username at $starttime so this import has been ABORTED\n";
    	$adb->disconnect();
    	exit 1;
 }
@@ -532,18 +521,18 @@ else {
 		print STDERR "Project $projectname is being imported for the first time\n";
 	}
 	else {
-		print STDERR "Project $projectname last $action started by $other_username at $starttime finished at $endtime";
+		print STDERR "Project $projectname last $action started by $other_username at $starttime finished at $endtime\n";
 	}
   print STDERR "Marking this import start time\n";
   my $status = $project->markImport("start");
 	unless ($status) {
-  	print STDERR "Unable to set start time for project $projectname by $username at $starttime so this import has been ABORTED";
+  	print STDERR "Unable to set start time for project $projectname by $username at $starttime so this import has been ABORTED\n";
   	$adb->disconnect();
   	exit 1;
 	}
 }
 
-print STDOUT "Importing into Arcturus using the command *$import_command*\n";
+print STDOUT "Importing into Arcturus\n";
 
 my $rc = &mySystem($import_command);
 
@@ -561,7 +550,7 @@ if ($rc) {
 		\n!! ----------------------------------------------------------------------------------------------!!\n";
     
 		print STDOUT $message;
-    my $subject = "Project $projectname in $organism in the $instance LDAP instance failed to load from its Gap$gap_version data file";
+    my $subject = "Project $projectname in $organism in the $instance LDAP instance failed to load from its Gap.$gap_version data file";
 		&sendMessage($username, $subject, $mail_message, $gapname, $instance, $organism);
     print STDERR "!! -- FAILED to import project ($?) --\n";
     exit 1;
@@ -571,15 +560,16 @@ print STDERR "Marking this import end time\n";
 my $status = $project->markImport("end");
 
 unless ($status) {
+    print STDERR "!! -- FAILED to import project ($?) --\n";
     print STDERR "Unable to set end time for project $projectname by $username";
     $adb->disconnect();
      exit 1;
 }
 
-
 # decide if new contigs were imported by probing the project again
 
-if ($gap_version == 4 && $project->hasNewContigs()) {
+if ($gap_version == 4 ) {
+	if ($project->hasNewContigs()) {
 
 #------------------------------------------------------------------------------
 # consensus calculation
@@ -624,11 +614,12 @@ if ($gap_version == 4 && $project->hasNewContigs()) {
            ."-inside -log $allocation_i_log -mail arcturus-help");
 
     print STDOUT "New data from database $gapname.$version successfully processed\n";
-}
+	}
 
-else {
+	else {
     print STDOUT "Database $gapname.$version successfully processed, "
                . "but does not contain new contigs\n";
+	}
 }
 
 $adb->disconnect();
@@ -636,7 +627,6 @@ $adb->disconnect();
 #-------------------------------------------------------------------------------
 
 # retain the CAF/SAM files for comparison with previous work
-$keep = 1;
 unless ($keep) {
 
 		print STDOUT "Cleaning up original version $gapname.$version ($gapname.$version~ remains for your convenience)\n";
@@ -644,12 +634,12 @@ unless ($keep) {
 		     unless ($? == 0) {
 		        print STDERR "!! -- WARNING: failed to remove $gapname.$version ($?) --\n";
 		}
-    print STDOUT "Cleaning up temporary files in $tmpdir\n";
-    &mySystem("rm -r -f $tmpdir");
+    print STDOUT "Keeping temporary input files in $tmpdir\n";
+    #&mySystem("rm -r -f $tmpdir");
 }
 
-print STDOUT "\n\nIMPORT OF $projectname HAS FINISHED.\n";
-print STDOUT "The Gap" . $gap_version . " database was imported from $rundir\n";
+print STDOUT "\n\nIMPORT OF $projectname HAS FINISHED SUCCESSFULLY.\n";
+print STDOUT "The Gap" . $gap_version . " database was imported from $rundir: please now export from Minerva then copy $gapname.A to $gapname.0 to start work in Gap\n(A backup has been kept in $gapname.0~)\n";
 
 exit 0;
 
