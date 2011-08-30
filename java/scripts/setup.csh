@@ -26,7 +26,8 @@ set ARCTURUS_JAR=${ARCTURUS_HOME}/../arcturus.jar
 # Augment heap size if running on a 64-bit cluster machine
 
 if ( `uname -m` == 'x86_64' && $PROGNAME != 'minerva' ) then
-		setenv JAVA_HEAP_SIZE -Xmx8192M
+		setenv JAVA_HEAP_SIZE -Xmx12288M
+		#setenv JAVA_HEAP_SIZE -Xmx8192M
 		#setenv JAVA_HEAP_SIZE -Xmx4096M
     #setenv JAVA_HEAP_SIZE -Xmx2048M
 endif
