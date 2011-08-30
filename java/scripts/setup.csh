@@ -26,7 +26,9 @@ set ARCTURUS_JAR=${ARCTURUS_HOME}/../arcturus.jar
 # Augment heap size if running on a 64-bit cluster machine
 
 if ( `uname -m` == 'x86_64' && $PROGNAME != 'minerva' ) then
-    setenv JAVA_HEAP_SIZE -Xmx4096M
+		setenv JAVA_HEAP_SIZE -Xmx8192M
+		#setenv JAVA_HEAP_SIZE -Xmx4096M
+    #setenv JAVA_HEAP_SIZE -Xmx2048M
 endif
 
 echo Using Java in $JAVA_HOME 
@@ -50,6 +52,11 @@ if (! -d ${HOME}/.arcturus/logging ) then
 endif
 
 set EXTRA_OPTS="${EXTRA_OPTS} -Darcturus.jar=${ARCTURUS_JAR}"
+
+# Sun Java documentation states that this is the default for 2 CPU 64 bit machines but set it anyway 
+# http://java.sun.com/performance/reference/whitepapers/tuning.html
+
+set EXTRA_OPTS="${EXTRA_OPTS} -XX:+UseParallelGC"
 
 # Add the JDBC and JNDI options to the run-time options
 if ( $?JAVA_OPTS ) then
