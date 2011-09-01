@@ -8,15 +8,17 @@ fi
 
 DB=$1
 
-SERVER="-h mcs6 -P 15001"
+SERVER="-h mcs8 -P 15001"
 
 CREDENTIALS="-u arcturus -p***REMOVED***"
 
 OPTIONS="--batch --skip-column-names"
 
 TMPDIR=/tmp/${USER}-${DB}-freereads-$$
-
 mkdir -p ${TMPDIR}
+
+KEEPDIR=${HOME}/free-reads/${DB}
+mkdir -p ${KEEPDIR}
 
 ALLREADS=${TMPDIR}/all-reads.out
 
@@ -45,7 +47,7 @@ echo "`date` : sorting list of assembled reads"
 
 sort -S 500M -b -k1 ${USEDREADS} > ${USEDREADSSORTED}
 
-FREEREADS=${TMPDIR}/free-reads.out
+FREEREADS=${KEEPDIR}/free-reads.out
 
 echo "`date` : making list of free reads"
 
