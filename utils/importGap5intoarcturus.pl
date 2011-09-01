@@ -23,7 +23,7 @@ my $gaproot = "/software/badger/bin";
 
 my $gaptoSam = "$gaproot/gap_export -test "; # test to be disabled later
 my $gapconsensus = "$gaproot/gap_consensus -test ";
-my $samtools = "/software/solexa/bin/aligners/samtools/current/samtools";
+my $samtools = "/software/solexa/bin/aligners/samtools/samtools-0.1.7/samtools";
 
 my $import_script = "${arcturus_home}/java/scripts/importbamfile";
 

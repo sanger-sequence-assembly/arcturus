@@ -33,7 +33,7 @@ my $gap4dbname;             # default 'projectname.0' ??
 
 # caf file processing
 
-my $frugal = 1 ;            # (default) build object instances using minimal memory
+my $frugal = 0 ;            # (default) build object instances using minimal memory
 my $linelimit;              # specifying a line limit implies test mode 
 my $readlimit;              # scan until this number of reads is found
 my $parseonly;              # only parse the file (test mode)
