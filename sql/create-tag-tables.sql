@@ -32,8 +32,7 @@ CREATE TABLE `TAG2CONTIG` (
   PRIMARY KEY (`id`),
   KEY `tag2contig_index` (`contig_id`),
   KEY `tag_id` (`tag_id`),
-  CONSTRAINT `TAG2CONTIG_ibfk_1` FOREIGN KEY (`contig_id`) REFERENCES `CONTIG` (`contig_id`) ON DELETE CASCADE,
-  CONSTRAINT `TAG2CONTIG_ibfk_2` FOREIGN KEY (`tag_id`) REFERENCES `SAMCONTIGTAG` (`tag_id`) ON DELETE CASCADE
+  CONSTRAINT `TAG2CONTIG_ibfk_1` FOREIGN KEY (`contig_id`) REFERENCES `CONTIG` (`contig_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 
