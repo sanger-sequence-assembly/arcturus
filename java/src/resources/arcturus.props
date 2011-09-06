@@ -29,7 +29,7 @@ jobplacer.prefix=ssh
 jobplacer.host=seq1
 jobplacer.command=/software/arcturus/utils/find_a_host.csh
 
-mappingmanager.allowduplicatesequences=true
+mappingmanager.allowduplicatesequences=false
 
 projectimport.command=/nfs/users/nfs_k/kt6/ARCTURUS/arcturus/branches/core-system-migration/utils/importintoarcturus.lsf -gap5
 
