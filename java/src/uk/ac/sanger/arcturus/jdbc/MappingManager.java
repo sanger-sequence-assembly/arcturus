@@ -232,6 +232,9 @@ public class MappingManager extends AbstractManager {
 
 		SequenceToContigMapping[] mappings = contig.getSequenceToContigMappings();
 		
+		if (mappings == null) 
+			throw new ArcturusDatabaseException("No mappings found for contig " + contig.getID() + " with " + contig.getReadCount() + " reads ");
+		
 		int failures = 0;
 
 		for (int i = 0; i < mappings.length; i++) {
