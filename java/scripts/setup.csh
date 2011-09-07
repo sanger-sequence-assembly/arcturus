@@ -27,15 +27,22 @@ setenv JAVA_HOME /software/jdk1.6.0_13
 set ARCTURUS_JAR=${ARCTURUS_HOME}/../arcturus.jar
 
 # Augment heap size if running on a 64-bit cluster machine
-# initial heal size and maximum heap size should match to help garbage collector keep up
+# initial heap size and maximum heap size should match to help garbage collector keep up
+# set a suitable size for the consistency checker then override if doing a direct initial load
 
 if ( `uname -m` == 'x86_64' && $PROGNAME != 'minerva' ) then
+		setenv JAVA_HEAP_SIZE -Xmx4096M
+		set EXTRA_OPTS="${JAVA_HEAP_SIZE} -Xms4096M"
+endif
+
+if ( `uname -m` == 'x86_64' && $PROGNAME == 'importbamfile' ) then
 		setenv JAVA_HEAP_SIZE -Xmx24576M
 		set EXTRA_OPTS="${JAVA_HEAP_SIZE} -Xms24576M"
-		echo ** Here are the extra Java options being used: **
-		echo ${EXTRA_OPTS}
-		echo ***
 endif
+
+#echo ** Here are the extra Java options being used: **
+#echo ${EXTRA_OPTS}
+#echo **
 
 echo Using Java in $JAVA_HOME 
 echo Arcturus JAR file is $ARCTURUS_JAR

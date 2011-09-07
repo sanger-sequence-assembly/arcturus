@@ -279,7 +279,7 @@ else {
 	my $extension = "g5d";
 
 	unless ( -f "${gapname}.$version.$extension") {
-	    print STDOUT "!! -- Gapp5 project $gapname version $version stored in file $gapname.$version.$extension"
+	    print STDOUT "!! -- Gap5 project $gapname version $version stored in file $gapname.$version.$extension"
 			                     ." does not exist in $pwd --\n";					     
 			 exit 1;
 	 }
