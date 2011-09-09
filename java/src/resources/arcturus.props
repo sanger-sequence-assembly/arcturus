@@ -49,7 +49,7 @@ readnamefilter.regex=\\.[a-z]\\d\\w*$
 
 uk.ac.sanger.arcturus.repository.managerclassname=uk.ac.sanger.arcturus.repository.SangerRepositoryManager
 
-sangerrepositorymanager.url=jdbc:oracle:thin:@ocs14:1555:casp
+sangerrepositorymanager.url=jdbc:oracle:thin:@(DESCRIPTION = (ADDRESS = (PROTOCOL = TCP)(HOST = ocs23-scan)(PORT = 1521)) (CONNECT_DATA = (SERVER = DEDICATED) (SERVICE_NAME = casp)))
 sangerrepositorymanager.username=***REMOVED***
 sangerrepositorymanager.password=***REMOVED***
 sangerrepositorymanager.cachelifetime=300
