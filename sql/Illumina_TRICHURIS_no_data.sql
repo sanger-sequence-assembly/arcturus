@@ -80,7 +80,7 @@ CREATE TABLE `C2CMAPPING` (
   KEY `parent_id` (`parent_id`),
   CONSTRAINT `C2CMAPPING_ibfk_1` FOREIGN KEY (`contig_id`) REFERENCES `CONTIG` (`contig_id`) ON DELETE CASCADE,
   CONSTRAINT `C2CMAPPING_ibfk_2` FOREIGN KEY (`parent_id`) REFERENCES `CONTIG` (`contig_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 --
 -- Table structure for table `C2CSEGMENT`
@@ -112,7 +112,7 @@ CREATE TABLE `CANONICALMAPPING` (
   PRIMARY KEY (`mapping_id`),
   UNIQUE KEY `checksum` (`checksum`(8)),
   KEY `cigar` (`cigar`(255))
-) ENGINE=InnoDB AUTO_INCREMENT=4965875 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=9203165 DEFAULT CHARSET=utf8;
 
 --
 -- Table structure for table `CANONICALSEGMENT`
@@ -222,7 +222,7 @@ CREATE TABLE `CONTIG` (
   KEY `rnhash` (`readnamehash`(8)),
   KEY `project_id` (`project_id`),
   CONSTRAINT `CONTIG_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `PROJECT` (`project_id`) ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=2017 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=11078 DEFAULT CHARSET=latin1;
 
 --
 -- Table structure for table `CONTIGORDER`
@@ -262,7 +262,7 @@ CREATE TABLE `CONTIGPADDING` (
 DROP TABLE IF EXISTS `CONTIGTAG`;
 CREATE TABLE `CONTIGTAG` (
   `tag_id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `tagtype` varchar(4) CHARACTER SET latin1 COLLATE latin1_bin NOT NULL DEFAULT '',
+  `tagtype` varchar(4) CHARACTER SET latin1 COLLATE latin1_bin NOT NULL DEFAULT 'COMM',
   `systematic_id` varchar(32) CHARACTER SET latin1 COLLATE latin1_bin DEFAULT NULL,
   `tag_seq_id` mediumint(8) unsigned NOT NULL DEFAULT '0',
   `tagcomment` text,
@@ -340,7 +340,7 @@ CREATE TABLE `IMPORTEXPORT` (
   `starttime` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `project_id` (`project_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=60 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=latin1;
 
 --
 -- Table structure for table `LIGATION`
@@ -433,7 +433,7 @@ CREATE TABLE `PROJECT` (
   PRIMARY KEY (`project_id`),
   UNIQUE KEY `assembly_id` (`assembly_id`,`name`),
   CONSTRAINT `PROJECT_ibfk_1` FOREIGN KEY (`assembly_id`) REFERENCES `ASSEMBLY` (`assembly_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=latin1;
 
 --
 -- Table structure for table `QUALITYCLIP`
@@ -475,7 +475,7 @@ CREATE TABLE `READGROUP` (
   KEY `read_group_id` (`read_group_id`),
   KEY `READGROUP_ibfk_1` (`import_id`),
   CONSTRAINT `READGROUP_ibfk_1` FOREIGN KEY (`import_id`) REFERENCES `IMPORTEXPORT` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 --
 -- Table structure for table `READINFO`
@@ -507,7 +507,7 @@ CREATE TABLE `READNAME` (
   `flags` smallint(5) unsigned NOT NULL DEFAULT '0',
   PRIMARY KEY (`read_id`),
   UNIQUE KEY `readname` (`readname`,`flags`)
-) ENGINE=InnoDB AUTO_INCREMENT=74415488 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=124417045 DEFAULT CHARSET=utf8;
 
 --
 -- Table structure for table `READTAG`
@@ -549,7 +549,31 @@ CREATE TABLE `SAMREADGROUPRECORD` (
   KEY `read_group_id` (`read_group_id`),
   KEY `SAMREADGROUPRECORD_ibfk_1` (`import_id`),
   CONSTRAINT `SAMREADGROUPRECORD_ibfk_1` FOREIGN KEY (`import_id`) REFERENCES `IMPORTEXPORT` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=69 DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=94 DEFAULT CHARSET=latin1;
+
+--
+-- Table structure for table `SAMTAG`
+--
+
+DROP TABLE IF EXISTS `SAMTAG`;
+CREATE TABLE `SAMTAG` (
+  `tag_id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `SAMtagtype` enum('Zc','Zs') NOT NULL,
+  `SAMtype` enum('A','i','f','Z','H','B') NOT NULL,
+  `GAPtagtype` varchar(4) CHARACTER SET latin1 COLLATE latin1_bin NOT NULL DEFAULT 'COMM',
+  `tagcomment` text,
+  `contig_id` mediumint(8) unsigned NOT NULL DEFAULT '0',
+  `start` int(11) unsigned NOT NULL DEFAULT '0',
+  `length` int(11) unsigned NOT NULL DEFAULT '0',
+  `tag_seq_id` int(10) unsigned NOT NULL DEFAULT '0',
+  `strand` enum('F','R','U') NOT NULL DEFAULT 'U',
+  `comment` tinytext,
+  PRIMARY KEY (`tag_id`),
+  KEY `GAPtagtype` (`GAPtagtype`),
+  KEY `contig_id` (`contig_id`),
+  KEY `tag_seq_id` (`tag_seq_id`),
+  CONSTRAINT `SAMTAG_ibfk_1` FOREIGN KEY (`contig_id`) REFERENCES `CONTIG` (`contig_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 --
 -- Table structure for table `SCAFFOLD`
@@ -645,7 +669,7 @@ CREATE TABLE `SEQUENCE` (
   `sequence` mediumblob NOT NULL,
   `quality` mediumblob NOT NULL,
   PRIMARY KEY (`seq_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=74417869 DEFAULT CHARSET=latin1 MAX_ROWS=8000000 AVG_ROW_LENGTH=900;
+) ENGINE=InnoDB AUTO_INCREMENT=124419426 DEFAULT CHARSET=latin1 MAX_ROWS=8000000 AVG_ROW_LENGTH=900;
 
 --
 -- Table structure for table `SEQUENCEVECTOR`
@@ -703,8 +727,7 @@ CREATE TABLE `TAG2CONTIG` (
   PRIMARY KEY (`id`),
   KEY `tag2contig_index` (`contig_id`),
   KEY `tag_id` (`tag_id`),
-  CONSTRAINT `TAG2CONTIG_ibfk_1` FOREIGN KEY (`contig_id`) REFERENCES `CONTIG` (`contig_id`) ON DELETE CASCADE,
-  CONSTRAINT `TAG2CONTIG_ibfk_2` FOREIGN KEY (`tag_id`) REFERENCES `CONTIGTAG` (`tag_id`) ON DELETE CASCADE
+  CONSTRAINT `TAG2CONTIG_ibfk_1` FOREIGN KEY (`contig_id`) REFERENCES `CONTIG` (`contig_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 --
@@ -785,4 +808,4 @@ CREATE TABLE `USER` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2011-07-21 15:51:02
+-- Dump completed on 2011-09-12 13:56:11
