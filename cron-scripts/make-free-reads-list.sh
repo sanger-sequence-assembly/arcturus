@@ -47,11 +47,33 @@ echo "`date` : sorting list of assembled reads"
 
 sort -S 500M -b -k1 ${USEDREADS} > ${USEDREADSSORTED}
 
-FREEREADS=${KEEPDIR}/free-reads.out
+TODAY=/tmp/${DB}-free-reads.out
 
 echo "`date` : making list of free reads"
 
-comm -23 ${ALLREADSSORTED} ${USEDREADSSORTED} > ${FREEREADS}
+comm -23 ${ALLREADSSORTED} ${USEDREADSSORTED} > ${TODAY}
 
-echo "The list of free reads is in the file ${FREEREADS}"
+echo "`date` : the list of free reads is stored in the file ${FREEREADS}"
 
+YESTERDAY=${KEEPDIR}/${DB}-free-reads.out
+
+FREEREADS=${KEEPDIR}/`date +%s --date='yesterday'`-${DB}-free-reads.out
+NEWFREEREADS=${KEEPDIR}/${DB}-new-free-reads.out
+
+echo "`date` : comparing yesterday's and today's free reads with the new reads stored in ${NEWFREEREADS}"
+
+diff ${YESTERDAY} ${TODAY} | awk '{print $2}' > ${NEWFREEREADS}
+
+echo "`date` : new free reads added today "
+
+cat ${NEWFREEREADS}
+
+mv ${YESTERDAY} ${FREEREADS}
+
+echo "`date` : yesterday's free reads saved in ${FREEREADS} for any future checks"
+
+mv ${TODAY} ${YESTERDAY}
+
+echo "`date` : today's free reads saved in ${YESTERDAY} for tomorrow's checks"
+
+exit 0
