@@ -298,8 +298,7 @@ sub checkFreeReadChange {
 				$message .= "\t asped reads = $asped_reads_stats_day\n";
 				$message .= "\t free reads = $free_reads_stats_day\n";
 				$message .= "\t contigs with one read = $lone_contig_count\n\n" ;
-
-				$message .= "The list of names of reads that are free at this point in time has been built in ~arcturus/free-reads/$organism/freereads.out\n\n";
+				$message .= "The list of names of reads that are free at this point in time has been built in ~arcturus/free-reads/$organism/$organism-free-reads.out. The list of names of reads that have become free since yesterday are stored in ~arcturus/free-reads/$organism/$organism-new-free-reads.out\n\n";
 
 				$message .= "The following contigs were created or updated on $previous_date and $statsdate:\n\n";
 
