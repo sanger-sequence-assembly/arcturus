@@ -35,6 +35,12 @@ my $compressxml = 0;
 ### Parse arguments
 ###
 
+my $useInclude = 0;
+my $useExclude = 0;
+my $projectNamesList = "";
+my $quotedProjectNamesList = "";
+my @projectNames;
+
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
@@ -46,6 +52,55 @@ while (my $nextword = shift @ARGV) {
     $outfile = shift @ARGV if ($nextword eq '-out');
     $xmlfile = shift @ARGV if ($nextword eq '-xml');
 
+    $verbose = 1 if ($nextword eq '-verbose');
+    $progress = 1 if ($nextword eq '-progress');
+
+		if ($nextword eq '-include') {
+  		if ($useInclude == 1) {
+    		print STDERR "ERROR: Please use -include only once for your project list.\n\n";
+    		&showUsage();
+    		exit(0);
+			}
+			print STDERR "Using the -include option so";
+			$useInclude = 1;
+  		$projectNamesList = shift @ARGV;
+
+  		@projectNames = split(/,/, $projectNamesList);
+			print STDERR " looking in";
+			print STDERR " projects $projectNamesList\n";
+  		$quotedProjectNamesList = $projectNamesList;
+  		$quotedProjectNamesList =~ s/^/('/;
+  		$quotedProjectNamesList =~ s/$/')/;
+  		$quotedProjectNamesList =~ s/,/','/;
+			print STDERR "For query use $quotedProjectNamesList\n";
+ 		}
+
+		if ($nextword eq '-exclude') {
+			if ($useExclude ==1) {
+    		print STDERR "ERROR: Please use -exclude only once for your project list.\n\n";
+    		&showUsage();
+    		exit(0);
+			}
+			print STDERR "Using the -exclude option so";
+			$useExclude = 1;
+  		$projectNamesList = shift @ARGV;
+  		@projectNames = split(/,/, $projectNamesList);
+			print STDERR " NOT looking in";
+			print STDERR " projects $projectNamesList\n";
+  		$quotedProjectNamesList = $projectNamesList;
+  		$quotedProjectNamesList =~ s/^/('/;
+  		$quotedProjectNamesList =~ s/$/')/;
+  		$quotedProjectNamesList =~ s/,/','/;
+			print STDERR "For query use $quotedProjectNamesList\n";
+
+ 		}
+
+		if (($useInclude) && ($useExclude)) {
+    	print STDERR "ERROR: Please use either -include or -exclude for your project list.\n\n";
+    	&showUsage();
+    	exit(0);
+ 		}
+
     $myproject = shift @ARGV if ($nextword eq '-project');
 
     $onlyproject = shift @ARGV if ($nextword eq '-onlyproject');
@@ -55,9 +110,6 @@ while (my $nextword = shift @ARGV) {
     $shownames = 1 if ($nextword eq '-shownames');
 
     $usesilow = 1 if ($nextword eq '-usesilow');
-
-    $verbose = 1 if ($nextword eq '-verbose');
-    $progress = 1 if ($nextword eq '-progress');
 
     $updateproject = 1 if ($nextword eq '-updateproject');
 
@@ -184,9 +236,20 @@ my $sth;
 my $projectid2name = {};
 my $projectname2id = {};
 
-$sth = $statements->{'projects'};
-
-$sth->execute();
+if ($useInclude) {
+	print STDERR "Using the includeprojects query\n";
+	$sth = $statements->{'includeprojects'};
+	$sth->execute($quotedProjectNamesList);
+}
+elsif ($useExclude) {
+	print STDERR "Using the excludeprojects query\n";
+	$sth = $statements->{'excludeprojects'};
+	$sth->execute($quotedProjectNamesList);
+}
+else {
+	$sth = $statements->{'projects'};
+	$sth->execute();
+}
 
 while (my ($project_id, $projectname) = $sth->fetchrow_array()) {
     $projectid2name->{$project_id} = $projectname;
@@ -220,7 +283,43 @@ if (defined($onlyproject)) {
 
     $sth = $statements->{'currentcontigsfromproject'};
     $sth->execute($onlyprojectid, $minlen);
-} else {
+} 
+elsif (($useInclude) || ($useExclude)) {
+
+		my $projectcount = scalar keys %$projectid2name;
+		print STDERR "Found $projectcount projects from the project list $projectNamesList\n";
+
+    	unless ($projectcount > 0) {
+				print STDERR "No projects found from project list $projectNamesList\n";
+				exit(1);
+    	}
+
+	# build the list of ids for this query
+	#
+		my $projectIdList = "";
+		my $first = 1;
+
+    foreach my $projectid (keys %{$projectid2name}) {
+    	unless (defined($projectid)) {
+				print STDERR "Project $projectid not known (specified in project list $projectNamesList)\n";
+				exit(1);
+    	}
+			if ($first == 1) {
+				$projectIdList .= "($projectid";
+				$first = 0;
+			}
+			else {
+				$projectIdList .= ", $projectid";
+			}
+		}
+		$projectIdList .= ")";
+		if ($progress) {
+			print STDERR "Looking in project ids $projectIdList\n";
+		}
+    $sth = $statements->{'currentcontigsfromprojectlist'};
+    $sth->execute($projectIdList, $minlen);
+}
+else {
     $sth = $statements->{'currentcontigs'};
     $sth->execute($minlen);
 }
@@ -1154,6 +1253,10 @@ sub CreateStatements {
 		   "select contig_id,gap4name,length,nreads,project_id from CURRENTCONTIGS" .
 		   " where nreads > 1 and project_id= ? and length >= ?",
 
+		   "currentcontigsfromprojectlist",
+		   "select contig_id,gap4name,length,nreads,project_id from CURRENTCONTIGS" .
+		   " where nreads > 1 and project_id in (?) and length >= ?",
+
 		   "leftendreads", 
 		   "select read_id,cstart,cfinish,direction from" .
 		   " MAPPING left join SEQ2READ using(seq_id) where contig_id=?" .
@@ -1199,7 +1302,13 @@ sub CreateStatements {
 		   "select sequence from CONSENSUS where contig_id = ?",
 
 		   "projects",
-		   "select project_id,name from PROJECT"
+		   "select project_id,name from PROJECT",
+
+		   "excludeprojects",
+		   "select project_id,name from PROJECT where name not in ?",
+
+		   "includeprojects",
+		   "select project_id,name from PROJECT where name in ?"
 		   );
 
     my $statements = {};
@@ -1445,8 +1554,12 @@ sub showUsage {
     print STDERR "-updateproject\tUpdate each contig's project\n";
     print STDERR "-minprojectsize\tMinimum scaffold length to qualify as a project\n";
     print STDERR "-shownames\tShow names of reads and templates in XML output in addition to IDs\n";
+		print SDERR "";
     print STDERR "-project\tSelect seed contigs only from this project\n";
     print STDERR "-onlyproject\tUse only contigs from this project (implies -project option)\n";
+    print STDERR "-include project1,project2,..,projectn\tUse only contigs from these projects\n";
+    print STDERR "-exclude project1,project2,..,projectn\tUse only contigs NOT from these projects\n";
+		print SDERR "";
     print STDERR "-seedcontig\tUse this contig as the seed for pUC scaffolding\n";
     print STDERR "-fastadir\tDirectory for FASTA output of scaffold sequences\n";
     print STDERR "-depad\t\tDepad the FASTA sequences\n";
