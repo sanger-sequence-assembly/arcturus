@@ -271,10 +271,9 @@ public class BAMContigLoader {
     		
     		Arcturus.logFine(message);
     		
-    		//reportProgress("\n" + message);
+    		reportProgress("\n" + message);
     		
-     		// this has already been done in importChildContigs so that the comparison can be done for mappings and tags
-    		// contigBuilder.addMappingsToContig(contig, reader);
+     		contigBuilder.addMappingsToContig(contig, reader);
      		    	    
     	    adb.putContig(contig);
     	    
