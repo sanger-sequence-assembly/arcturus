@@ -69,8 +69,8 @@ while (my $nextword = shift @ARGV) {
 			print STDERR " looking in";
 			print STDERR " projects $projectNamesList\n";
   		$quotedProjectNamesList = $projectNamesList;
-  		$quotedProjectNamesList =~ s/^/('/;
-  		$quotedProjectNamesList =~ s/$/')/;
+  		$quotedProjectNamesList =~ s/^/'/;
+  		$quotedProjectNamesList =~ s/$/'/;
   		$quotedProjectNamesList =~ s/,/','/;
 			print STDERR "For query use $quotedProjectNamesList\n";
  		}
@@ -88,8 +88,8 @@ while (my $nextword = shift @ARGV) {
 			print STDERR " NOT looking in";
 			print STDERR " projects $projectNamesList\n";
   		$quotedProjectNamesList = $projectNamesList;
-  		$quotedProjectNamesList =~ s/^/('/;
-  		$quotedProjectNamesList =~ s/$/')/;
+  		$quotedProjectNamesList =~ s/^/'/;
+  		$quotedProjectNamesList =~ s/$/'/;
   		$quotedProjectNamesList =~ s/,/','/;
 			print STDERR "For query use $quotedProjectNamesList\n";
 
@@ -195,7 +195,7 @@ $xmlfile = 'DATABASE' if (defined($xmlfile) && $xmlfile eq 'DATABASE!');
 ### later.
 ###
 
-my $statements = &CreateStatements($dbh);
+my $statements = &CreateStatements($dbh, $quotedProjectNamesList);
 
 ###
 ### If XML output has been requested, and the user has asked for names
@@ -235,16 +235,17 @@ my $sth;
 
 my $projectid2name = {};
 my $projectname2id = {};
+my $DBIProjectNamesList = $dbh->quote( $quotedProjectNamesList);
 
 if ($useInclude) {
 	print STDERR "Using the includeprojects query\n";
 	$sth = $statements->{'includeprojects'};
-	$sth->execute($quotedProjectNamesList);
+	$sth->execute();
 }
 elsif ($useExclude) {
 	print STDERR "Using the excludeprojects query\n";
 	$sth = $statements->{'excludeprojects'};
-	$sth->execute($quotedProjectNamesList);
+	$sth->execute();
 }
 else {
 	$sth = $statements->{'projects'};
@@ -1244,6 +1245,7 @@ sub db_die {
 
 sub CreateStatements {
     my $dbh = shift;
+    my $quotedProjectNamesList = shift;
 
     my %queries = ("currentcontigs",
 		   "select contig_id,gap4name,length,nreads,project_id from CURRENTCONTIGS" .
@@ -1255,7 +1257,7 @@ sub CreateStatements {
 
 		   "currentcontigsfromprojectlist",
 		   "select contig_id,gap4name,length,nreads,project_id from CURRENTCONTIGS" .
-		   " where nreads > 1 and project_id in (?) and length >= ?",
+		   " where nreads > 1 and project_id in ($quotedProjectNamesList) and length >= ?",
 
 		   "leftendreads", 
 		   "select read_id,cstart,cfinish,direction from" .
@@ -1305,10 +1307,11 @@ sub CreateStatements {
 		   "select project_id,name from PROJECT",
 
 		   "excludeprojects",
-		   "select project_id,name from PROJECT where name not in ?",
+		   "select project_id,name from PROJECT where name not in ($quotedProjectNamesList)",
 
 		   "includeprojects",
-		   "select project_id,name from PROJECT where name in ?"
+		   #"select project_id,name from PROJECT where name in (?)"
+		   "select project_id,name from PROJECT where name in ($quotedProjectNamesList)"
 		   );
 
     my $statements = {};
