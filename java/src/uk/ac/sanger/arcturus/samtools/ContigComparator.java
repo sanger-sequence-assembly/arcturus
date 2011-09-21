@@ -93,7 +93,14 @@ public class ContigComparator {
 			Vector<Tag> oldTags =  parent.getTags();
 			reportProgress("Contig " + parent + " has tags: " + printTagSet(oldTags));
 			
-			equal = newTags.equals(oldTags);
+			if ((newTags == null) && (oldTags ==null)) 
+				equal = true;
+			else if ((newTags == null) && (oldTags != null))
+				equal = false;
+			else if ((newTags != null) && (oldTags == null))
+				equal = false;
+			else
+				equal = newTags.equals(oldTags);
 			
 			reportProgress("ContigComparator: contigs " + contig + " and " + parent + " have " + (equal ? " IDENTICAL" : " DIFFERENT") + " tag sets.");
 			
