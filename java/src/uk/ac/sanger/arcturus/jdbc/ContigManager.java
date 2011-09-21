@@ -1731,7 +1731,7 @@ public class ContigManager extends AbstractManager {
 	
 	public boolean putTags(Contig contig) throws ArcturusDatabaseException {
 		
-		// ("Zs", 'Z', "REPT", "Tag inserted at postion 25 at start of AAAA", 2005, 5, 1, 74294504, 'U', NULL);
+		// ("Zs", 'Z', "REPT", "Tag inserted at position 25 at start of AAAA", 2005, 5, 1, 74294504, 'U', NULL);
 		
 		if (contig == null)
 			throw new ArcturusDatabaseException("Cannot store tags for a null contig");
@@ -1743,30 +1743,33 @@ public class ContigManager extends AbstractManager {
 		
 		Vector<Tag> tags = contig.getTags();
 		Tag tag = null;
-		Iterator iterator = tags.iterator();
 		
-		try {
-			while (iterator.hasNext()) {		
-				tag = (Tag) iterator.next();
-				pstmtStoreSAMTag.setString(1, tag.getSAMTagType());
-				pstmtStoreSAMTag.setString(2, tag.getSAMTypeAsString());
-				pstmtStoreSAMTag.setString(3, tag.getGAPTagType());
-				pstmtStoreSAMTag.setString(4, tag.getComment());
-				pstmtStoreSAMTag.setInt(5, contig_id); 
-				pstmtStoreSAMTag.setInt(6, tag.getStart()); 
-				pstmtStoreSAMTag.setInt(7, tag.getLength()); 
-				pstmtStoreSAMTag.setInt(8,tag.getSequenceId());
-				pstmtStoreSAMTag.setString(9, tag.getStrandAsString()); 
-				pstmtStoreSAMTag.setString(10, null);
+		if (tags != null ){
+			Iterator iterator = tags.iterator();
 
-				pstmtStoreSAMTag.executeUpdate();
+			try {
+				while (iterator.hasNext()) {		
+					tag = (Tag) iterator.next();
+					pstmtStoreSAMTag.setString(1, tag.getSAMTagType());
+					pstmtStoreSAMTag.setString(2, tag.getSAMTypeAsString());
+					pstmtStoreSAMTag.setString(3, tag.getGAPTagType());
+					pstmtStoreSAMTag.setString(4, tag.getComment());
+					pstmtStoreSAMTag.setInt(5, contig_id); 
+					pstmtStoreSAMTag.setInt(6, tag.getStart()); 
+					pstmtStoreSAMTag.setInt(7, tag.getLength()); 
+					pstmtStoreSAMTag.setInt(8,tag.getSequenceId());
+					pstmtStoreSAMTag.setString(9, tag.getStrandAsString()); 
+					pstmtStoreSAMTag.setString(10, null);
+
+					pstmtStoreSAMTag.executeUpdate();
+				}
+
 			}
-
-		}
-		catch (SQLException e) {
-			adb.handleSQLException(e,
-					"Failed to store tags to contig mappings (SAMTAG) for contig ID =" + contig.getID(),
-					conn, this);											
+			catch (SQLException e) {
+				adb.handleSQLException(e,
+						"Failed to store tags to contig mappings (SAMTAG) for contig ID =" + contig.getID(),
+						conn, this);											
+			}
 		}
 		
 		return true;
