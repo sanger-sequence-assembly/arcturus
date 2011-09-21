@@ -230,7 +230,11 @@ public class Contig extends Core {
 	}
 	
 	public int getTagCount() {
-		return tags.size();
+		if (tags == null)
+			return 0;
+		else 
+			return tags.size();
+		
 	}
 	
 	public boolean equals(Object o) {
