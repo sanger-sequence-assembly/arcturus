@@ -182,7 +182,7 @@ public class ContigComparator {
 	
 	protected void reportProgress(String message) {
 		
-		boolean testing = true;
+		boolean testing = false;
 		
 		if (testing) {
 		System.out.println(message);
