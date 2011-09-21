@@ -175,7 +175,7 @@ public class ContigComparator {
 	
 	protected void reportProgress(String message) {
 		
-		boolean testing = false;
+		boolean testing = true;
 		
 		if (testing) {
 		System.out.println(message);
