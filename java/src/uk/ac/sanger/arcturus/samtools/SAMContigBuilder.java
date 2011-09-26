@@ -121,44 +121,35 @@ public class SAMContigBuilder {
 		
 		while (count < tagCount ) {	
 			SAMRecord.SAMTagAndValue samTag = tagList.get(count);
-			
+
 			gapTagType = samTag.tag;
-			//GAPTag tagValue = (GAPTag) samTag.value;
-							
-			if (isValidGapTagType(gapTagType)){
-				//gapTagString = record.getStringAttribute(gapTagType);  // keeps getting the first of the two Zs tags
-				//gapTagString =tagValue.toString();
-				gapTagString = (String) samTag.value;
-				
-				if (gapTagString != null) {
-					reportProgress("\taddTagsToContig: adding tag " + count + " of type " + gapTagType + " holding " + gapTagString);		
-					addTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
-				}
-				else {
-					throw new ArcturusDatabaseException("addTagsToContig: unexpectedly found null tag information at position " + count + " for tag type " + gapTagType);
-				}		
-				count++;
-			}
-			else
-			{
-				throw new ArcturusDatabaseException("addTagsToContig: unexpectedly found null tag or invalid tag (not Zc or Zs or FS) at position " + count + " for contig" + contig.getName() + " from SAMRecord " + record.getReadName());
-			}
 
-			if (diagnostics)
-				t0 = System.currentTimeMillis();
+			gapTagString = (String) samTag.value;
 
-			if (diagnostics && (count%10000) == 0) {
-				long dt = System.currentTimeMillis() - t0;
-				Arcturus.logFine("addTagsToContig: " + format.format(count) + " reads; " +
-						format.format(dt) + " ms; memory " + memoryUsage());
+			if (gapTagString != null) {
+				reportProgress("\taddTagsToContig: adding tag " + count + " of type " + gapTagType + " holding " + gapTagString);		
+				addTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
 			}
-
-			if (diagnostics) {
-				long dt = System.currentTimeMillis() - t0;
-				Arcturus.logFine("addTagsToContig: " + count + " " + dt + " ms");
-			}
+			else {
+				throw new ArcturusDatabaseException("addTagsToContig: unexpectedly found null tag information at position " + count + 
+							" for tag type " + gapTagType + " for contig" + contig.getName() + " on strand " + strand + "data taken from SAMRecord " + record.getReadName());
+			}		
+			count++;
 		}
-		
+
+		if (diagnostics)
+			t0 = System.currentTimeMillis();
+
+		if (diagnostics && (count%10000) == 0) {
+			long dt = System.currentTimeMillis() - t0;
+			Arcturus.logFine("addTagsToContig: " + format.format(count) + " reads; " +
+					format.format(dt) + " ms; memory " + memoryUsage());
+		}
+
+		if (diagnostics) {
+			long dt = System.currentTimeMillis() - t0;
+			Arcturus.logFine("addTagsToContig: " + count + " " + dt + " ms");
+		}
 	}
 	
 	public void addMappingsToContig(Contig contig,SAMFileReader reader) throws ArcturusDatabaseException {
