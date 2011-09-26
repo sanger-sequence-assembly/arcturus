@@ -102,7 +102,7 @@ public class SAMContigBuilder {
 	 * Contig tag looks like Zc:Z:POLY|31|42|weird Ns
 	 */
 	public void addTagsToContig(Contig contig, SAMRecord record)  throws ArcturusDatabaseException  {
-		//reportProgress("\taddTagsToContig: adding tags for contig " + contig.getName() + " from SAMRecord " + record.getReadName());
+		reportProgress("\taddTagsToContig: adding tags for contig " + contig.getName() + " from SAMRecord " + record.getReadName());
 		
 		String gapTagType = null;
 		String gapTagString = null;
@@ -117,24 +117,30 @@ public class SAMContigBuilder {
 		ArrayList<SAMRecord.SAMTagAndValue> tagList= (ArrayList<SAMRecord.SAMTagAndValue>) record.getAttributes();
 		int tagCount = tagList.size();
 		
-		//reportProgress("addTagsToContig: found " + tagCount + " tags: ");
+		reportProgress("addTagsToContig: found " + tagCount + " tags: ");
 		
 		while (count < tagCount ) {	
 			SAMRecord.SAMTagAndValue samTag = tagList.get(count);
 
 			gapTagType = samTag.tag;
-
-			gapTagString = (String) samTag.value;
-
-			if (gapTagString != null) {
-				reportProgress("\taddTagsToContig: adding tag " + count + " of type " + gapTagType + " holding " + gapTagString);		
-				addTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
+							
+			if (isValidGapTagType(gapTagType)){
+				gapTagString = (String) samTag.value;
+				
+				if (gapTagString != null) {
+					reportProgress("\taddTagsToContig: adding tag " + count + " of type " + gapTagType + " holding " + gapTagString);		
+					addTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
+				}
+				else {
+					throw new ArcturusDatabaseException("addTagsToContig: unexpectedly found null tag information at position " + count + " for tag type " + gapTagType);
+				}		
+				count++;
 			}
-			else {
-				throw new ArcturusDatabaseException("addTagsToContig: unexpectedly found null tag information at position " + count + 
-							" for tag type " + gapTagType + " for contig" + contig.getName() + " on strand " + strand + "data taken from SAMRecord " + record.getReadName());
-			}		
-			count++;
+			else
+			{
+				//throw new ArcturusDatabaseException("addTagsToContig: unexpectedly found null tag or invalid tag (not Zc or Zs or FS) at position " + count + " for contig" + contig.getName() + " from SAMRecord " + record.getReadName());
+			}
+
 		}
 
 		if (diagnostics)
