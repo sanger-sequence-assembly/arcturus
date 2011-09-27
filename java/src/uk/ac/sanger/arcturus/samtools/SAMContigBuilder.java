@@ -179,7 +179,7 @@ public class SAMContigBuilder {
 	    while (iterator.hasNext()) {
 	 	    SAMRecord record = iterator.next();
 	 	    
-	 		reportProgress("\taddMappingsToContig: adding sequence for SAMRecord " + record.getReadName());
+	 		System.out.println("\taddMappingsToContig: adding sequence for SAMRecord " + record.getReadName());
 	 		SequenceToContigMapping mapping = buildSequenceToContigMapping(record,contig);
 	 	    M.add(mapping);
 	 	   
@@ -249,8 +249,8 @@ public class SAMContigBuilder {
     protected void reportProgress(String message) {
     	if (testing) {
     		System.out.println(message);
+    		Arcturus.logInfo(message);
     	}
-    	Arcturus.logInfo(message);
 	}
 	   
     private String memoryUsage() {
