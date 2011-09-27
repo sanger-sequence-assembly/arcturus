@@ -179,7 +179,7 @@ public class SAMContigBuilder {
 	    while (iterator.hasNext()) {
 	 	    SAMRecord record = iterator.next();
 	 	    
-	 		System.out.println("\taddMappingsToContig: adding sequence for SAMRecord " + record.getReadName());
+	 		System.out.println("\tworking with SAMRecord " + record.getReadName() + " flags " + record.getFlags());
 	 		SequenceToContigMapping mapping = buildSequenceToContigMapping(record,contig);
 	 	    M.add(mapping);
 	 	   
