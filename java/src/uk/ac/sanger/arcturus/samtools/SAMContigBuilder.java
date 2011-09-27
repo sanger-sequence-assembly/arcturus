@@ -117,7 +117,7 @@ public class SAMContigBuilder {
 		ArrayList<SAMRecord.SAMTagAndValue> tagList= (ArrayList<SAMRecord.SAMTagAndValue>) record.getAttributes();
 		int tagCount = tagList.size();
 		
-		reportProgress("addTagsToContig: found " + tagCount + " tags: ");
+		reportProgress("addTagsToContig: found " + tagCount + " tags from tag list " + tagList.toString());
 		
 		while (count < tagCount ) {	
 			SAMRecord.SAMTagAndValue samTag = tagList.get(count);
@@ -138,6 +138,7 @@ public class SAMContigBuilder {
 			}
 			else
 			{
+				count++;
 				//throw new ArcturusDatabaseException("addTagsToContig: unexpectedly found null tag or invalid tag (not Zc or Zs or FS) at position " + count + " for contig" + contig.getName() + " from SAMRecord " + record.getReadName());
 			}
 
