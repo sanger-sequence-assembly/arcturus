@@ -21,7 +21,7 @@ public class SAMContigBuilder {
 	private DecimalFormat format = null;
 	protected long t0;
 	
-	private boolean testing = false;
+	private boolean scb_testing = false;
 	
 	public SAMContigBuilder(ArcturusDatabase adb, BAMReadLoader brl) {
 		this.adb = adb;
@@ -227,19 +227,19 @@ public class SAMContigBuilder {
 		//sequence.setDNA(null);
 		
 		int mapping_quality = record.getMappingQuality();
-		//reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + mapping_quality + " from record " + record.getReadName());
+		reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + mapping_quality + " from record " + record.getReadName());
 		
 	   
  	    SAMReadGroupRecord readGroup = record.getReadGroup();
  	    String readGroupIDvalue = readGroup.getId();
- 	    //reportProgress("\taddMappingsToContig: adding ID " + readGroupIDvalue + " for read group " + readGroup + " for contig " + contig.getName());
+ 	    reportProgress("\taddMappingsToContig: adding ID " + readGroupIDvalue + " for read group " + readGroup + " for contig " + contig.getName());
 		
 		CanonicalMapping mapping = new CanonicalMapping(0,span,span,cigar, mapping_quality, readGroupIDvalue);
 		CanonicalMapping cached = adb.findOrCreateCanonicalMapping(mapping);
 		
 		int stored_quality = cached.getMappingQuality();
 		
-		//reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + stored_quality + " from database\n");
+		reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + stored_quality + " from database\n");
 		
 		Direction direction = record.getReadNegativeStrandFlag() ? Direction.REVERSE : Direction.FORWARD;
 		
@@ -247,7 +247,7 @@ public class SAMContigBuilder {
 	}
 
     protected void reportProgress(String message) {
-    	if (testing) {
+    	if (scb_testing) {
     		System.out.println(message);
     		Arcturus.logInfo(message);
     	}
