@@ -282,7 +282,7 @@ public class MappingManager extends AbstractManager {
 				
 				return true;
 			} else	        
-				adb.handleSQLException(e,"Failed to insert new Sequence-Contig Mapping", conn, adb);			
+				adb.handleSQLException(e,"Failed to insert new Sequence-Contig Mapping: sqlState=*" + sqlState + "* allowDuplicateSequences=" + allowDuplicateSequences, conn, adb);			
 		}
 		
 		return false;
