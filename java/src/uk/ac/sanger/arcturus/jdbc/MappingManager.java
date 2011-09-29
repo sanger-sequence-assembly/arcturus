@@ -31,7 +31,7 @@ public class MappingManager extends AbstractManager {
 	protected PreparedStatement pstmtSelectSequenceToContigMappings = null;
 	protected PreparedStatement pstmtSelectSegment = null;
 	
-	private boolean allowDuplicateSequences = false;
+	private boolean allowDuplicateSequences = true;
 	
 	public MappingManager(ArcturusDatabase adb) throws ArcturusDatabaseException {
 		super(adb);
