@@ -238,12 +238,10 @@ my $projectname2id = {};
 my $DBIProjectNamesList = $dbh->quote( $quotedProjectNamesList);
 
 if ($useInclude) {
-	print STDERR "Using the includeprojects query\n";
 	$sth = $statements->{'includeprojects'};
 	$sth->execute();
 }
 elsif ($useExclude) {
-	print STDERR "Using the excludeprojects query\n";
 	$sth = $statements->{'excludeprojects'};
 	$sth->execute();
 }
@@ -317,15 +315,31 @@ elsif (($useInclude) || ($useExclude)) {
 		if ($progress) {
 			print STDERR "Looking in project ids $projectIdList\n";
 		}
-    $sth = $statements->{'currentcontigsfromprojectlist'};
-    $sth->execute($projectIdList, $minlen);
+
+		# cannot pass a quoted or bracketed list so build it here
+		my $query = "";
+
+		# logic above has already sorted out the exclude from the include, so the query here can be the same for both cases
+
+		$query =  "select contig_id,gap4name,length,nreads,project_id from CURRENTCONTIGS where nreads > 1 and project_id in $projectIdList and length >= ?";
+		
+		if ($progress) {
+			print STDERR "Using $query to find contigs\n";
+		}
+		 $sth = $dbh->prepare($query);
 }
 else {
     $sth = $statements->{'currentcontigs'};
-    $sth->execute($minlen);
 }
 
+$sth->execute($minlen);
+
+my $i = 1;
+
 while (my ($ctgid, $ctgname, $ctglen, $ctgreads, $ctgproject) = $sth->fetchrow_array()) {
+
+		$i ++;
+
     $contiglength->{$ctgid} = $ctglen;
     $contigreads->{$ctgid} = $ctgreads;
 
@@ -340,15 +354,18 @@ while (my ($ctgid, $ctgname, $ctglen, $ctgreads, $ctgproject) = $sth->fetchrow_a
     $project->{$ctgid} = $ctgproject;
     push @contiglist, $ctgid;
 }
+print STDERR "Retrieved $i contigs\n";
 
 $sth->finish();
 
 if (defined($seedcontig)) {
+		print STDERR "Using contig $seedcontig as the seed contig.\n";
     if (defined($contiglength->{$seedcontig})) {
-	@contiglist = ($seedcontig);
-    } else {
-	print STDERR "Contig $seedcontig is not in the list of current contigs.\n";
-	exit(1);
+			@contiglist = ($seedcontig);
+    } 
+		else {
+			print STDERR "Contig $seedcontig is not in the list of current contigs.\n";
+			exit(1);
     }
 }
 
@@ -1066,29 +1083,33 @@ if ($xmldata) {
     $xmltext = compress($xmltext) if $compressxml;
 
     if ($xmlfile eq 'DATABASE') {
-	my $query = "insert into NOTE(creator,created,type,format,content) " .
+			my $query = "insert into NOTE(creator,created,type,format,content) " .
 	    "VALUES (?,NOW(),?,?,?)";
 
-	my $sth = $dbh->prepare($query);
+			my $sth = $dbh->prepare($query);
 
-	my $username = getpwuid($>);
+			my $username = getpwuid($>);
 
-	my $format = $compressxml ? 'application/deflate' : 'text/xml';
+			my $format = $compressxml ? 'application/deflate' : 'text/xml';
 
-	$sth->execute($username, 'scaffold', $format, $xmltext);
+			$sth->execute($username, 'scaffold', $format, $xmltext);
 
-	$sth->finish();
-    } else {
-	my $xmlfh = new FileHandle($xmlfile, "w");
+			$sth->finish();
+			print STDERR "Writing the scaffold to the database\n";
+    } 
+		else {
+			print STDERR "Writing the scaffold to $xmlfile\n";
+			my $xmlfh = new FileHandle($xmlfile, "w");
 
-	print $xmlfh $xmltext;
+			print $xmlfh $xmltext;
 
-	$xmlfh->close();
+		$xmlfh->close();
     }
 }
 
 $dbh->disconnect();
 
+print STDERR "Done\n";
 exit(0);
 
 sub generateDTD {
@@ -1254,12 +1275,7 @@ sub CreateStatements {
 		   "currentcontigsfromproject",
 		   "select contig_id,gap4name,length,nreads,project_id from CURRENTCONTIGS" .
 		   " where nreads > 1 and project_id= ? and length >= ?",
-
-		   "currentcontigsfromprojectlist",
-		   "select contig_id,gap4name,length,nreads,project_id from CURRENTCONTIGS" .
-		   " where nreads > 1 and project_id in ($quotedProjectNamesList) and length >= ?",
-
-		   "leftendreads", 
+	   "leftendreads", 
 		   "select read_id,cstart,cfinish,direction from" .
 		   " MAPPING left join SEQ2READ using(seq_id) where contig_id=?" .
 		   " and cfinish < ? and direction = 'Reverse'",
