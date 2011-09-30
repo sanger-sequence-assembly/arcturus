@@ -38,7 +38,7 @@ public class MappingManager extends AbstractManager {
 
         cacheByChecksum = new HashMap<String,CanonicalMapping>();
         
-        allowDuplicateSequences = Boolean.getBoolean("mappingmanager.allowduplicatesequences");
+       // remove this for the initial load running on the farm because it always returns false: allowDuplicateSequences = Boolean.getBoolean("mappingmanager.allowduplicatesequences");
         
         if (allowDuplicateSequences)
         	Arcturus.logInfo("The mapping manager *WILL* ignore duplicate sequences");
