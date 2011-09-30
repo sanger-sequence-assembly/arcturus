@@ -10,35 +10,42 @@ set ARCTURUS_PACKAGE=uk.ac.sanger.arcturus
 # This is the utils package
 set ARCTURUS_UTILS_PACKAGE=${ARCTURUS_PACKAGE}.utils
 
-# This is the apps package
-set ARCTURUS_APPS_PACKAGE=${ARCTURUS_PACKAGE}.apps
-
 # This is the test package
 set ARCTURUS_TEST_PACKAGE=${ARCTURUS_PACKAGE}.test
 
-# Set default heap size
-
-if ( `uname -m` == 'x86_64' && $PROGNAME != 'minerva' && $PROGNAME != 'minerva2' ) then
-    set DEFAULT_JAVA_HEAP_SIZE=-Xmx4096M
-else
-    set DEFAULT_JAVA_HEAP_SIZE=-Xmx512M
-endif
-
 # Specify minimum heap size
 if ( ! $?JAVA_HEAP_SIZE) then
-    setenv JAVA_HEAP_SIZE $DEFAULT_JAVA_HEAP_SIZE
+    setenv JAVA_HEAP_SIZE -Xmx512M
 endif
+
+# Specify the additional run-time options for Java
+set EXTRA_OPTS="${JAVA_HEAP_SIZE}"
 
 # Set JAVA_HOME and location of Arcturus JAR file
 
 setenv JAVA_HOME /software/jdk1.6.0_13
 set ARCTURUS_JAR=${ARCTURUS_HOME}/../arcturus.jar
 
+# Augment heap size if running on a 64-bit cluster machine
+# initial heap size and maximum heap size should match to help garbage collector keep up
+# set a suitable size for the consistency checker then override if doing a direct initial load
+
+if ( `uname -m` == 'x86_64' && $PROGNAME != 'minerva' ) then
+		setenv JAVA_HEAP_SIZE -Xmx4096M
+		set EXTRA_OPTS="${JAVA_HEAP_SIZE} -Xms4096M"
+endif
+
+if ( `uname -m` == 'x86_64' && $PROGNAME == 'importbamfile' ) then
+		setenv JAVA_HEAP_SIZE -Xmx24576M
+		set EXTRA_OPTS="${JAVA_HEAP_SIZE} -Xms24576M"
+endif
+
+#echo ** Here are the extra Java options being used: **
+#echo ${EXTRA_OPTS}
+#echo **
+
 echo Using Java in $JAVA_HOME 
 echo Arcturus JAR file is $ARCTURUS_JAR
-
-# Specify the additional run-time options for Java
-set EXTRA_OPTS="${JAVA_HEAP_SIZE}"
 
 # Specify local host name parameter
 set HOSTNAME=`hostname -s`
@@ -55,6 +62,11 @@ if (! -d ${HOME}/.arcturus/logging ) then
 endif
 
 set EXTRA_OPTS="${EXTRA_OPTS} -Darcturus.jar=${ARCTURUS_JAR}"
+
+# Sun Java documentation states that this is the default for 2 CPU 64 bit machines but set it anyway 
+# http://java.sun.com/performance/reference/whitepapers/tuning.html
+
+set EXTRA_OPTS="${EXTRA_OPTS} -XX:+UseParallelGC"
 
 # Add the JDBC and JNDI options to the run-time options
 if ( $?JAVA_OPTS ) then

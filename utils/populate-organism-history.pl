@@ -309,6 +309,11 @@ sub checkFreeReadChange {
 				$message .= "\t free reads = $free_reads_stats_day\n\n";
 				$message .= "\t consensus reads  for both days = $consensus_reads\n\n";
 				$message .= "\t contigs with one read = $lone_contig_count\n" ;
+				$message .= "The list of names of reads that are free at this point in time has been built in ~arcturus/free-reads/$organism/$organism-free-reads.out. The list of names of reads that have become free since yesterday are stored in ~arcturus/free-reads/$organism/$organism-new-free-reads.out\n\n";
+
+
+				$message .= "The list of names of reads that are free at this point in time has been built in ~arcturus/free-reads/$organism/freereads.out\n\n";
+
 				$message .= "The following contigs were created or updated on $previous_date and $statsdate:\n\n";
 				$message .= "contig_id\tgap4name\t\t\t\tlength\tnreads\tproject_id\tnewreads\tcover\torigin\t\tcreator\tcreated\tupdated\n";
 
