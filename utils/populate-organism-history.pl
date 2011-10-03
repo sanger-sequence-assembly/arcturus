@@ -23,8 +23,9 @@ my $until="";
 my $threshold;
 
 my $debug;
+my $gap_version;
  
-my $validKeys  = "organism|o|instance|i|since|s|until|u|help|hi|threshold|t";
+my $validKeys  = "gap4|gap5|organism|o|instance|i|since|s|until|u|help|hi|threshold|t";
 
 while (my $nextword = shift @ARGV) {
 
@@ -42,6 +43,14 @@ while (my $nextword = shift @ARGV) {
 		&showUsage();
 		exit(0);
 	}
+
+  if ($nextword eq '-gap4') {
+    $gap_version   = 4;
+	}
+			
+  if ($nextword eq '-gap5') {
+      $gap_version   = 5;
+  }
 }
 
 unless (defined($threshold)) {
@@ -163,33 +172,44 @@ my $insert_query = "insert into ORGANISM_HISTORY (
 
 my $isth = $dbh->prepare_cached($insert_query);
 
-my $total_read_update = "update ORGANISM_HISTORY 
-set total_reads = (select count(*) from READINFO) 
-where statsdate = ?";
+my $total_read_update = "";
+my $next_gen_read_update = "";
+
+if ($gap_version == 4) {
+	$total_read_update = "update ORGANISM_HISTORY set total_reads = (select count(*) from READINFO) where statsdate = ?";
+  $next_gen_read_update = "update ORGANISM_HISTORY set next_gen_reads = total_reads - asped_reads where statsdate = ?";
+}
+else {
+	$next_gen_read_update = "update ORGANISM_HISTORY set next_gen_reads = (select count(*) from READNAME) where statsdate = ?";
+	$total_read_update = "update ORGANISM_HISTORY set total_reads = asped_reads + next_gen_reads where statsdate = ?";
+}
+
 my $usth = $dbh->prepare_cached($total_read_update);
 
-my $free_read_update = "update ORGANISM_HISTORY 
-set free_reads =  total_reads - reads_in_contigs
-where statsdate = ?";
+my $free_read_update = "update ORGANISM_HISTORY set free_reads =  total_reads - reads_in_contigs where statsdate = ?";
 my $uusth = $dbh->prepare_cached($free_read_update);
 
-my $asped_read_update = "update ORGANISM_HISTORY
-set asped_reads =  (select count(*) from READINFO where asped is not null )
-where statsdate = ?";
+my $asped_read_update = "update ORGANISM_HISTORY set asped_reads =  (select count(*) from READINFO where asped is not null ) where statsdate = ?";
 my $asth = $dbh->prepare_cached($asped_read_update);
 
-my $next_gen_read_update = "update ORGANISM_HISTORY
-set next_gen_reads = total_reads - asped_reads
-where statsdate = ?";
 my $nsth = $dbh->prepare_cached($next_gen_read_update);
+
 foreach my $date (@datelist) {
 	#print STDERR "Inserting line for $date\n";
 	my $insert_count = $isth->execute($organism, $date, $date, $date) || &queryFailed($insert_query);
-	my $total_read_update_count = $usth->execute($date) || &queryFailed($total_read_update);
-	my $free_read_update_count = $uusth->execute($date) || &queryFailed($free_read_update);
-	my $asped_read_update_count = $asth->execute($date) || &queryFailed($asped_read_update);
-	my $next_gen_read_update_count = $nsth->execute($date) || &queryFailed($next_gen_read_update);
 
+	if ($gap_version == 4) {
+		my $total_read_update_count = $usth->execute($date) || &queryFailed($total_read_update);
+		my $free_read_update_count = $uusth->execute($date) || &queryFailed($free_read_update);
+		my $asped_read_update_count = $asth->execute($date) || &queryFailed($asped_read_update);
+		my $next_gen_read_update_count = $nsth->execute($date) || &queryFailed($next_gen_read_update);
+  }
+  else {
+		my $asped_read_update_count = $asth->execute($date) || &queryFailed($asped_read_update);
+		my $next_gen_read_update_count = $nsth->execute($date) || &queryFailed($next_gen_read_update);
+		my $total_read_update_count = $usth->execute($date) || &queryFailed($total_read_update);
+		my $free_read_update_count = $uusth->execute($date) || &queryFailed($free_read_update);
+  }
 	#print STDERR "Checking for free read variation over the allowed threshold of $threshold reads\n";
 	&checkFreeReadChange( $dbh, $date, $threshold);
 } # end foreach date to populate
