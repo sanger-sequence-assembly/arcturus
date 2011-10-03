@@ -1,0 +1,1 @@
+java -jar /software/CGP/external-apps/picard-tools/ValidateSamFile.jar INPUT=/lustre/seq/scratch1/kt6/CELERA.sam.rebuilt VALIDATION_STRINGENCY=LENIENT | grep ERROR

@@ -1,0 +1,1 @@
+ /software/solexa/bin/aligners/samtools/samtools-0.1.7/samtools view -h  /lustre/scratch101/sanger/sn5/CELERA.bam > /lustre/scratch101/sanger/kt6/CELERA.sam.rebuilt
