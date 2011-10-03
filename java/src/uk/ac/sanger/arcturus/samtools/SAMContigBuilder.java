@@ -170,34 +170,43 @@ public class SAMContigBuilder {
 		    	    	
 	    CloseableIterator<SAMRecord> iterator = reader.query(referenceName, 0, 0, false);
 	 		
-	 	Vector<SequenceToContigMapping> M = new Vector<SequenceToContigMapping>();
+	 	Vector<SequenceToContigMapping> seqToContigMappings = new Vector<SequenceToContigMapping>();
 	 		
 	 	if (diagnostics)
 	 		t0 = System.currentTimeMillis();
 	 	
 	 	int count = 0;
-	    while (iterator.hasNext()) {
-	 	    SAMRecord record = iterator.next();
-	 	    
+	 	while (iterator.hasNext()) {
+	 		SAMRecord record = iterator.next();
+
 	 		System.out.println("\tworking with SAMRecord " + record.getReadName() + " flags " + record.getFlags());
 	 		SequenceToContigMapping mapping = buildSequenceToContigMapping(record,contig);
-	 	    M.add(mapping);
-	 	   
-	 	    count++;
-	 	    
-	 	    if (diagnostics && (count%10000) == 0) {
-	 	    	long dt = System.currentTimeMillis() - t0;
-	 	    	Arcturus.logFine("addMappingsToContig: before adding tags" + format.format(count) + " reads; " +
-	 	    			format.format(dt) + " ms; memory " + memoryUsage());
-	 	    }
-	 	    
-	 	   addTagsToContig(contig, record);
-	 	   
-	 	  if (diagnostics && (count%10000) == 0) {
-	 	    	long dt = System.currentTimeMillis() - t0;
-	 	    	Arcturus.logFine("addMappingsToContig: after adding tags" + format.format(count) + " reads; " +
-	 	    			format.format(dt) + " ms; memory " + memoryUsage());
-	 	    }
+
+	 		try {
+	 			seqToContigMappings.add(mapping);
+	 			count ++;
+	 			addTagsToContig(contig, record);
+
+	 			if (diagnostics && (count%10000) == 0) {
+	 				long dt = System.currentTimeMillis() - t0;
+	 				Arcturus.logFine("addMappingsToContig: before adding tags" + format.format(count) + " reads; " +
+	 						format.format(dt) + " ms; memory " + memoryUsage());
+	 			}
+
+	 			if (diagnostics && (count%10000) == 0) {
+	 				long dt = System.currentTimeMillis() - t0;
+	 				Arcturus.logFine("addMappingsToContig: after adding tags" + format.format(count) + " reads; " +
+	 						format.format(dt) + " ms; memory " + memoryUsage());
+	 			}
+	 		}
+	 		catch (NullPointerException e){
+	 			System.out.println("Vector class has returned a null pointer so moving on to the next SAMRecord\n");
+	 			count ++;
+	 		}
+	 		catch (ArcturusDatabaseException e) {
+	 			System.out.println("Adding tags has returned a database exception so moving on to the next SAMRecord\n");
+	 			count ++;
+	 		}
 	    }
 
 	    if (diagnostics) {
@@ -207,7 +216,7 @@ public class SAMContigBuilder {
 	    
 	    iterator.close();
 	 		
-	    contig.setSequenceToContigMappings(M.toArray(new SequenceToContigMapping[0]));
+	    contig.setSequenceToContigMappings(seqToContigMappings.toArray(new SequenceToContigMapping[0]));
     }
 
 	private SequenceToContigMapping buildSequenceToContigMapping(SAMRecord record, Contig contig) throws ArcturusDatabaseException {	    
