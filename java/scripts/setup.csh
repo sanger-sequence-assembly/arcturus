@@ -36,10 +36,11 @@ if ( `uname -m` == 'x86_64' && $PROGNAME != 'minerva' ) then
 endif
 
 # doing a complete reload so do not reserve the extra memory used for the partial load
-# if ( `uname -m` == 'x86_64' && $PROGNAME == 'importbamfile' ) then
-	#	setenv JAVA_HEAP_SIZE -Xmx24576M
-	#	set EXTRA_OPTS="${JAVA_HEAP_SIZE} -Xms24576M"
-#endif
+
+if ( `uname -m` == 'x86_64' && $PROGNAME == 'importbamfile' ) then
+		setenv JAVA_HEAP_SIZE -Xmx8192M
+		set EXTRA_OPTS="${JAVA_HEAP_SIZE} -Xms8192M"
+endif
 
 #echo ** Here are the extra Java options being used: **
 #echo ${EXTRA_OPTS}
