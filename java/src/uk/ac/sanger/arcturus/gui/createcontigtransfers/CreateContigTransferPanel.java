@@ -247,17 +247,23 @@ public class CreateContigTransferPanel extends MinervaPanel {
 
 				Contig contig = null;
 				Project project = null;
+				int contig_id = 0;
 
-					if (contigname.matches("^\\d+$")) {
-						int contig_id = Integer.parseInt(contigname);
-						contig = adb.isCurrentContig(contig_id) ? adb
-								.getContigByID(contig_id) : null;
-					} else {
+				if (contigname.matches("^\\d+$")) {
+					// note that both the contig name (00001.7180000827104) and the contig id (11977) are numeric for Minerva2
+
+					if (contigname.matches("^d+\\.")) {
 						contig = adb.getContigByReadName(contigname);
+						contig_id = contig.getID();
+						contig = adb.isCurrentContig(contig_id) ? contig : null;				
+					} else {	
+						contig_id = Integer.parseInt(contigname);
+						contig = adb.isCurrentContig(contig_id) ? adb.getContigByID(contig_id) : null;
 					}
+				}
 
-					project = words.length == 1 ? defaultProject : adb
-							.getProjectByName(null, pname);
+				project = words.length == 1 ? defaultProject : adb
+						.getProjectByName(null, pname);
 
 				if (contig == null) {
 					appendMessage(lines[i]
@@ -268,7 +274,7 @@ public class CreateContigTransferPanel extends MinervaPanel {
 				} else {
 					appendMessage("--------------------------------------------------------------------------------");
 					appendMessage("Submitting request to transfer contig "
-							+ contig.getID() + " to project "
+							+ contig_id + " to project "
 							+ project.getName());
 
 					try {
