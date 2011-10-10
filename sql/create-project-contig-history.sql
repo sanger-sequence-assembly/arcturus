@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS `PROJECT_CONTIG_HISTORY` (
 	`statsdate` date not null , 
 	`name` varchar(40) not null,
 	`total_contigs` int(12) unsigned NOT NULL default 0,
-	`total_reads` int(12) unsigned NOT NULL default 0,
+	`total_reads` int(18) unsigned NOT NULL default 0,
 	`total_contig_length` int(12) unsigned NOT NULL default 0,
 	`mean_contig_length` int(12) unsigned NOT NULL default 0,
 	`stddev_contig_length` int(12) unsigned NOT NULL default 0,
