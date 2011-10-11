@@ -289,10 +289,10 @@ public class CreateContigTransferPanel extends MinervaPanel {
 
 				if (contig == null) {
 					appendMessage(lines[i]
-							+ "  : Unable to find contig in current set");
+							+ "  : Unable to find contig " + contigname + " in current set");
 				} else if (project == null) {
 					appendMessage(lines[i]
-							+ " : Unable to find specified project");
+							+ " : Unable to find specified project" + projectName);
 				} else {
 					appendMessage("--------------------------------------------------------------------------------");
 					appendMessage("Submitting request to transfer contig "
