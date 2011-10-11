@@ -69,8 +69,8 @@ public class TestSAMRecordTags {
 		
 	}
  	
- 	private boolean isValidGapTagType(String gapTagType){
-		return ((gapTagType.equals("Zc")) || (gapTagType.equals("Zs"))||(gapTagType.equals("FS")));
+ 	private static boolean isValidGapTagType(String gapTagType){
+		return ( (gapTagType.equals("Zc") || gapTagType.equals("Zs") || gapTagType.equals("FS")) );
 	}
 	
 	/**
@@ -120,7 +120,7 @@ public class TestSAMRecordTags {
 			}
 			else
 			{
-				throw new ArcturusDatabaseException("addTagsToContig: unexpectedly found null tag or invalid tag (not Zc or Zs or FS) at position " + count + " for contig" + contig.getName() + " from SAMRecord " + record.getReadName());
+				//throw new ArcturusDatabaseException("addTagsToContig: unexpectedly found null tag or invalid tag (not Zc or Zs or FS) at position " + count + " for contig" + contig.getName() + " from SAMRecord " + record.getReadName());
 			}
 
 		}
@@ -151,25 +151,50 @@ static String printTagSet(Vector<Tag> tagSet) {
 	 * @param args
 	 */
 	public static void main(String[] args) {
+		
+		//  CELERA test case for RT 233 292 AS tags
+		//  1 @SQ SN:00076.7180000830927  LN:7163
+		//  2 @RG ID:4017_2_and_4149_3  SM:unknown  LB:4017_2_and_4149_3
+		//  3 IL21_4017:2:85:786:1676 99  00076.7180000830927 1 24  6S70M = 92  173 TTTCAGCATCTCGCTGACAACGGAATCAGTCGATTCCGAAAGCTACGAAATAAACGATCGCACGTTCACTGTTTGC  AAA>A@>A@?@=>??>@<@@>9<>>=<@?::9;<>;:;;=>979=<8<<<>;;<;3<450.9---80;833200/7  AS:i:70 RG:Z:4017_2_and_4149_3
+		//  4 IL21_4017:2:85:786:1676 147 00076.7180000830927 92  32  76M = 1 -173  CAATCAACTAGCCATTGGTTAGGTTGCTTCGGTGTTCTTACAGGGAACGGTAGATAGAACTCAACGGGTGCTCAAC  32(//3)/0-1/0729'5=:=;=8=9:9<7-7>>?<67=478;;729;==?<<<?:9:=<?>=?==<>?=?@>???  AS:i:76 RG:Z:4017_2_and_4149_3
+
 
 		// set up a contig with a tag
-		
-		String samTagType = "Fs";
-		String gapTagString = "REPT|5|1|Tag inserted at position 25 at start of AAAA";
+		String gapTagType = "AS";
+		String gapTagString = "";
 		Contig contig = new Contig();
+		int count = 1;
 		
-		addTagToContig(contig, samTagType, gapTagString, 74294504, 'F');
-		
-		Vector<Tag> tags = contig.getTags();
-		Iterator <Tag> iterator = tags.iterator();
-		
-		reportProgress("Checking tags for contig: ");
-		while (iterator.hasNext() ) {
-			reportProgress((iterator.next()).toSAMString() + "\n");
+		if (isValidGapTagType(gapTagType)){
+			
+			if (gapTagString != null) {
+				reportProgress("\taddTagsToContig: adding tag " + count + " of type " + gapTagType + " holding " + gapTagString);		
+				addTagToContig(contig, gapTagType, gapTagString, 74294504, 'F');	
+			}
+			else {
+				reportProgress("addTagsToContig: unexpectedly found null tag information at position " + count + " for tag type " + gapTagType);
+			}		
+			count++;
+		}
+		else {
+			reportProgress("don't need to process " + gapTagType);
 		}
 		
-		reportProgress("Printing this tag set: " + printTagSet(tags));
 		
+		Vector<Tag> tags = contig.getTags();
+		Iterator <Tag> iterator = null;
+		
+		if (tags != null) {
+			iterator = tags.iterator();
+			reportProgress("Checking tags for contig: ");
+			while (iterator.hasNext() ) {
+				reportProgress((iterator.next()).toSAMString() + "\n");
+			}
+			reportProgress("Printing this tag set: " + printTagSet(tags));
+		}
+		else {
+			reportProgress("no tags to process!");
+		}
 		reportProgress("Printing an empty tag set: " + printTagSet(null));
 		
 		// now try to get it back from the database

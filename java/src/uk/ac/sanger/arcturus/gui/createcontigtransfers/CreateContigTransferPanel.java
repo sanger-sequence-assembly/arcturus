@@ -222,6 +222,29 @@ public class CreateContigTransferPanel extends MinervaPanel {
 					+ file.getPath(), ioe);
 		}
 	}
+	
+	// note that both the contig name (00001.7180000827104) and the contig id (11977) are numeric for Minerva2
+	
+	protected boolean isName(String contigString) {
+
+		if (contigString.matches("^\\d{5}\\.\\d+$")) {
+			return true;			
+		} 
+		else {	
+			return false;
+		}
+	}
+
+
+	protected boolean isId(String contigString) {
+
+		if (contigString.matches("^\\d+$")){
+			return true;			
+		} 
+		else {	
+			return false;
+		}
+	}
 
 	protected void createContigTransferRequests() throws ArcturusDatabaseException {
 		ProjectProxy proxy = (ProjectProxy) lstProjects.getSelectedValue();
@@ -249,17 +272,16 @@ public class CreateContigTransferPanel extends MinervaPanel {
 				Project project = null;
 				int contig_id = 0;
 
-				if (contigname.matches("^\\d+$")) {
-					// note that both the contig name (00001.7180000827104) and the contig id (11977) are numeric for Minerva2
-
-					if (contigname.matches("^d+\\.\\d+$")) {
-						contig = adb.getContigByReadName(contigname);
-						contig_id = contig.getID();
-						contig = adb.isCurrentContig(contig_id) ? contig : null;				
-					} else {	
-						contig_id = Integer.parseInt(contigname);
-						contig = adb.isCurrentContig(contig_id) ? adb.getContigByID(contig_id) : null;
-					}
+				if (isName(contigname)) {
+					contig = adb.getContigByReadName(contigname);
+					contig_id = contig.getID();
+					contig = adb.isCurrentContig(contig_id) ? contig : null;				
+				} else if (isId(contigname)){	
+					contig_id = Integer.parseInt(contigname);
+					contig = adb.isCurrentContig(contig_id) ? adb.getContigByID(contig_id) : null;
+				}
+				else {
+					contig = null;
 				}
 
 				project = words.length == 1 ? defaultProject : adb
