@@ -77,7 +77,7 @@ public class Arcturus {
 	}
 
 	private static void setJarFileTimestamp() {
-		String jarfilename = System.getProperty("arcturus.jar");
+		String jarfilename = System.getProperty("arcturus2.jar");
 
 		if (jarfilename != null) {
 			File jarfile = new File(jarfilename);
