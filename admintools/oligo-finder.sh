@@ -8,9 +8,14 @@
 
 PATTERNFILE=$1
 FILE=$2
-echo Looking for the following strings in ${FILE}
-cat ${PATTERNFILE}
-echo
-echo Found the following matching lines in ${FILE}
-echo Calculate the position of the start of each line in the consensus by (line number -1 ) * 51
-grep -n --colour=auto -F -f ${PATTERNFILE} ${FILE} 
+
+if [ -f ${FILE} ]
+then
+  echo Looking for the following strings in ${FILE}
+  cat ${PATTERNFILE}
+  echo
+  echo Found the following matching lines in ${FILE}
+  grep -n --colour=auto -F -f ${PATTERNFILE} ${FILE} 
+else
+  echo $0: cannot find ${FILE}
+fi
