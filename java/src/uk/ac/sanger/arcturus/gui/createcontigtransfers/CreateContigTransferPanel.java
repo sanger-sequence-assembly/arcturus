@@ -273,7 +273,7 @@ public class CreateContigTransferPanel extends MinervaPanel {
 				int contig_id = 0;
 
 				if (isName(contigname)) {
-					contig = adb.getContigByReadName(contigname);
+					contig = adb.getContigByName(contigname);
 					contig_id = contig.getID();
 					contig = adb.isCurrentContig(contig_id) ? contig : null;				
 				} else if (isId(contigname)){	
