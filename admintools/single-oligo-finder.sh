@@ -13,12 +13,12 @@ if [ -f ${FILE} ]
 then
   echo Looking for oligo ${PATTERN} in ${FILE}...
   echo Found the following matching lines in ${FILE}
-  grep -c ${PATTERN} ${FILE} 
+  cat ${FILE} | tr -d "\n" | grep -c ${PATTERN}
   echo
   REVPATTERN=`echo ${PATTERN} | rev`
   echo Looking for reversed oligo ${REVPATTERN} in ${FILE}...
   echo Found the following matching lines in ${FILE}
-  grep -c ${REVPATTERN} ${FILE}
+  cat ${FILE} | tr -d "\n" | grep -c ${REVPATTERN} 
 else
   echo $0: cannot find file ${FILE}
 fi
