@@ -271,29 +271,6 @@ public class CreateContigTransferPanel extends MinervaPanel {
 				Contig contig = null;
 				Project project = null;
 				int contig_id = 0;
-
-				// from here
-				try {
-					contig = adb.getContigByName(contigname);
-					System.out.println("Found contig " + contig.getID());
-				}
-				catch (ArcturusDatabaseException e1) {
-					// TODO Auto-generated catch block
-					e1.printStackTrace();
-				}
-				
-				if (contig == null) {
-					System.out.println("Cannot find contig " + contigname + " by name");
-				}
-				
-				try {
-					if (adb.isCurrentContig(contig.getID())) System.out.println("Contig " + contigname + " is current");
-				} 
-				catch (ArcturusDatabaseException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}	
-				// to here from test program
 				
 				if (isName(contigname)) {
 					contig = adb.getContigByName(contigname);
