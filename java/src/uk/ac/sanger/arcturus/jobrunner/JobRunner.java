@@ -39,7 +39,7 @@ public class JobRunner extends SwingWorker<Void, JobOutput> {
 			conn = SSHConnection.getConnection(hostname);
 		}
 		catch (IOException ioe) {
-			Arcturus.logWarning("Failed to get an SSH connection", ioe);
+			Arcturus.logSevere("Failed to get an SSH connection", ioe);
 			throw ioe;
 		}
 
@@ -49,7 +49,7 @@ public class JobRunner extends SwingWorker<Void, JobOutput> {
 			sess = conn.openSession();
 		}
 		catch (IOException ioe) {
-			Arcturus.logWarning("Failed to open an SSH session", ioe);
+			Arcturus.logSevere("Failed to open an SSH session", ioe);
 			throw ioe;
 		}
 
@@ -62,7 +62,7 @@ public class JobRunner extends SwingWorker<Void, JobOutput> {
 			sess.execCommand("/bin/sh -c '" + command + "'");
 		}
 		catch (IOException ioe) {
-			Arcturus.logWarning("Failed to execute command \"" + command + "\" in the SSH session", ioe);
+			Arcturus.logSevere("Failed to execute command \"" + command + "\" in the SSH session", ioe);
 			throw ioe;
 		}
 
