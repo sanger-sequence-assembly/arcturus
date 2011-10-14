@@ -88,6 +88,16 @@ public class Tag extends Core {
 	}
 	
 	/**
+	 * Sequence (consensus) tag looks like Zs:Z:REPT|5|1|Tag inserted at position 25 at start of AAAA 
+	 * @return
+	 * Contig tag looks like Zc:Z:POLY|31|42|weird Ns
+	 */
+	public String toNewSAMString() {
+		
+		return (samTagType + ":" + samType + ":" + comment);
+		
+	}
+	/**
 	 * Tag DONE 1945220 1945242 "polymorphisms linked/unique"
 	 * @return
 	 */
