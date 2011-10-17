@@ -69,6 +69,20 @@ public class TestSAMRecordTags {
 		
 	}
 	
+	/**
+	 * @param contig
+	 * @param record
+	 * Contig tag (was Zc) now
+	 * PT:Z:REPT|5|5|Tag inserted at position 25 at start of AAAA 
+	 * 
+	 * Note that the third | separated field is the END not the LENGTH so this is a one position flag not a five position flag
+	 * Note that the fourth | separated field is now the direction which can be +/-/?
+	 * Multiple tags are merged into a flattened list
+	 * PT:Z:REPT|5|5|Tag inserted at position 25 at start of AAAA|COMM|25|28
+	 * 
+	 * @return
+	 */
+	
  	public static void addPTTagToContig (Contig contig, String samTagType, String gapTagString, int sequence_id, char strand){
 		//	String singleGapTagString = "26|32|-|COMM|gff3src=GenBankLifter";
  		
@@ -89,27 +103,28 @@ public class TestSAMRecordTags {
 		int thisRS = nextRS;
 		int stringEnd = gapTagString.length()- 1;
 		int tagEnd = stringEnd;
-		
 		int start = 0;
 		int end = 0;
 		
 		String gapTagType = "";
 		
-		gapTagType = gapTagString.substring((fs3+1),(fs4-1)); 
+		strand = gapTagString.charAt(fs3-1);
 		start = Integer.parseInt(gapTagString.substring(0, fs1));
 		end = Integer.parseInt(gapTagString.substring(fs1+1, fs2));
+		
+		gapTagType = gapTagString.substring(fs3 + 1, fs4); 
 		
 		nextRS = gapTagString.indexOf( recordSeparator, fs4+1);
 		
 		reportProgress("\t\t\taddPTTagToContig: read next record seperator as " + nextRS + ", bar4 as " + fs4  + " read gapTypeTag as " + gapTagType);
 		
 		if (nextRS < 0 ) {
-			tagEnd = stringEnd;
+			tagEnd = stringEnd + 1;
 		}
 		else {
 			tagEnd = thisRS;
 		}
-		String thisTagString = gapTagString.substring(fs4 + 1, tagEnd -1);
+		String thisTagString = gapTagString.substring(fs4 + 1, tagEnd);
 		
 		reportProgress("\t\t\taddPTTagToContig: read start as " + start + ", end as " + end + ",comment as " + thisTagString);
 		
@@ -118,15 +133,17 @@ public class TestSAMRecordTags {
 		
 		reportProgress("\t\taddPTTagToContig: tag stored and retrieved as: " + newTag.toPTSAMString());
 		
-		if (nextRS >fs4) {
+		while (nextRS >fs4) {
 			fs1 = gapTagString.indexOf(fieldSeparator, nextRS+1);
 			fs2 = gapTagString.indexOf(fieldSeparator, fs1+1);
 			fs3 = gapTagString.indexOf(fieldSeparator, fs2+1);
 			fs4 = gapTagString.indexOf(fieldSeparator, fs3+1);
 			
+			gapTagType = gapTagString.substring(fs3 + 1, fs4); 
+			
 			reportProgress("\t\t\taddPTTagToContig: field separator1=" + fs1 + " field separator2=" + fs2 + " field separator3=" + fs3 + " field separator4=" + fs4 + " read gapTypeTag as " + gapTagType );
 			
-			gapTagType = gapTagString.substring((fs3+1),(fs4-1)); 
+			strand = gapTagString.charAt(fs3-1);
 			start = Integer.parseInt(gapTagString.substring(nextRS+1, fs1));
 			end = Integer.parseInt(gapTagString.substring(fs1+1, fs2));
 			
@@ -137,11 +154,11 @@ public class TestSAMRecordTags {
 				tagEnd = stringEnd;
 			}
 			else {
-				tagEnd = thisRS;
+				tagEnd = nextRS;
 			}
-			thisTagString = gapTagString.substring(thisRS, fs4 + 1);
+			thisTagString = gapTagString.substring(fs4 + 1, tagEnd);
 			
-			reportProgress("\t\t\taddPTTagToContig: read start as " + start + ", end as " + end + ",comment as " + thisTagString);
+			reportProgress("\t\t\taddPTTagToContig: read start as " + start + ", end as " + end + ",comment as " + thisTagString + ", nextRS as " + nextRS);
 			
 			newTag = new Tag(samTagType, samType, gapTagType, start, end, thisTagString, sequence_id, strand );
 			contig.addTag(newTag);
@@ -150,6 +167,13 @@ public class TestSAMRecordTags {
 		}
 		
 	}
+ 	/**
+	 * @param contig
+	 * @param record
+	 * Sequence (consensus) tag (was Zc) looks like a fake read with flags 768 or 784 and an RT tag
+	 * *	768	Contig1	38	255	17M	*	0	0	CATWTTCACATTASCAA	*	RT:Z:COMM|Note=Looks like a problem here;gff3str=.;gff3src=gap4
+	 * No start/end or length
+	 **/
  	
  	public static void addRTTagToContig(Contig contig, String samTagType, String gapTagString, int sequence_id, char strand){
  	}
@@ -161,10 +185,6 @@ public class TestSAMRecordTags {
 	/**
 	 * @param contig
 	 * @param record
-	 * Sequence (consensus) tag (was Zc) looks like a fake read with flags 768 or 784 and an RT tag
-	 * *	768	Contig1	38	255	17M	*	0	0	CATWTTCACATTASCAA	*	RT:Z:COMM|Note=Looks like a problem here;gff3str=.;gff3src=gap4
-	 * No start/end or length
-	 *
 	 * Contig tag (was Zc) now
 	 * PT:Z:REPT|5|5|Tag inserted at position 25 at start of AAAA 
 	 * 
