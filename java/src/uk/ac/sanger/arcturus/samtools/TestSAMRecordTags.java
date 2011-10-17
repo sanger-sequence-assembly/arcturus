@@ -116,7 +116,7 @@ public class TestSAMRecordTags {
 		
 		nextRS = gapTagString.indexOf( recordSeparator, fs4+1);
 		
-		reportProgress("\t\t\taddPTTagToContig: read next record seperator as " + nextRS + ", bar4 as " + fs4  + " read gapTypeTag as " + gapTagType);
+		//reportProgress("\t\t\taddPTTagToContig: read next record seperator as " + nextRS + ", bar4 as " + fs4  + " read gapTypeTag as " + gapTagType);
 		
 		if (nextRS < 0 ) {
 			tagEnd = stringEnd + 1;
@@ -126,12 +126,12 @@ public class TestSAMRecordTags {
 		}
 		String thisTagString = gapTagString.substring(fs4 + 1, tagEnd);
 		
-		reportProgress("\t\t\taddPTTagToContig: read start as " + start + ", end as " + end + ",comment as " + thisTagString);
+		//reportProgress("\t\t\taddPTTagToContig: read start as " + start + ", end as " + end + ",comment as " + thisTagString);
 		
 		Tag newTag = new Tag(samTagType, samType, gapTagType, start, end, thisTagString, sequence_id, strand );
 		contig.addTag(newTag);
 		
-		reportProgress("\t\taddPTTagToContig: tag stored and retrieved as: " + newTag.toPTSAMString());
+		//reportProgress("\t\taddPTTagToContig: tag stored and retrieved from Java object as: " + newTag.toPTSAMString());
 		
 		while (nextRS >fs4) {
 			fs1 = gapTagString.indexOf(fieldSeparator, nextRS+1);
@@ -141,7 +141,7 @@ public class TestSAMRecordTags {
 			
 			gapTagType = gapTagString.substring(fs3 + 1, fs4); 
 			
-			reportProgress("\t\t\taddPTTagToContig: field separator1=" + fs1 + " field separator2=" + fs2 + " field separator3=" + fs3 + " field separator4=" + fs4 + " read gapTypeTag as " + gapTagType );
+			//reportProgress("\t\t\taddPTTagToContig: field separator1=" + fs1 + " field separator2=" + fs2 + " field separator3=" + fs3 + " field separator4=" + fs4 + " read gapTypeTag as " + gapTagType );
 			
 			strand = gapTagString.charAt(fs3-1);
 			start = Integer.parseInt(gapTagString.substring(nextRS+1, fs1));
@@ -158,12 +158,12 @@ public class TestSAMRecordTags {
 			}
 			thisTagString = gapTagString.substring(fs4 + 1, tagEnd);
 			
-			reportProgress("\t\t\taddPTTagToContig: read start as " + start + ", end as " + end + ",comment as " + thisTagString + ", nextRS as " + nextRS);
+			//reportProgress("\t\t\taddPTTagToContig: read start as " + start + ", end as " + end + ",comment as " + thisTagString + ", nextRS as " + nextRS);
 			
 			newTag = new Tag(samTagType, samType, gapTagType, start, end, thisTagString, sequence_id, strand );
 			contig.addTag(newTag);
 			
-			reportProgress("\t\taddPTTagToContig: tag stored and retrieved as: " + newTag.toPTSAMString());
+			reportProgress("\t\taddPTTagToContig: tag stored and retrieved from Java object as: " + newTag.toPTSAMString());
 		}
 		
 	}
@@ -176,6 +176,35 @@ public class TestSAMRecordTags {
 	 **/
  	
  	public static void addRTTagToContig(Contig contig, String samTagType, String gapTagString, int sequence_id, char strand){
+ 		char fieldSeparator = '|';
+ 		char recordSeparator = '|';
+ 		
+		char samType = 'Z';
+		int fs1 = gapTagString.indexOf(fieldSeparator);
+		
+		int stringEnd = gapTagString.length();
+		int tagEnd = stringEnd;
+		int start = 0;
+		int end = 0;
+		
+		String gapTagType = "";
+		
+		// may be a strand later
+		//strand = gapTagString.charAt(999);
+		
+		strand = '?';
+		gapTagType = gapTagString.substring(0,fs1); 
+		
+		reportProgress("\t\t\taddRTTagToContig: read bar1 as " + fs1  + " read gapTypeTag as " + gapTagType);
+		
+		String thisTagString = gapTagString.substring(fs1 + 1, stringEnd);
+		
+		reportProgress("\t\t\taddRTTagToContig: read start as " + start + ", end as " + end + ",comment as " + thisTagString);
+		
+		Tag newTag = new Tag(samTagType, samType, gapTagType, start, end, thisTagString, sequence_id, strand );
+		contig.addTag(newTag);
+		
+		reportProgress("\t\taddRTTagToContig: tag stored and retrieved from Java object as: " + newTag.toRTSAMString());
  	}
  	
  	private static boolean isValidGapTagType(String gapTagType){
@@ -252,7 +281,7 @@ public class TestSAMRecordTags {
 	
 static String printTagSet(Vector<Tag> tagSet) {
 		
-	String text = "";
+	String tagString = "";
 	
 	if (tagSet != null) {
 		Iterator<Tag> iterator = tagSet.iterator();
@@ -261,13 +290,23 @@ static String printTagSet(Vector<Tag> tagSet) {
 		
 		while (iterator.hasNext()) {
 			tag = iterator.next();
-			text = text + tag.toSAMString();
+			
+			String thisSAMTagType = tag.getSAMTagType();
+			if (thisSAMTagType.equals("PT")) {
+				tagString = tagString + tag.toPTSAMString() + " ";
+			}
+			else if (thisSAMTagType.equals("RT")) {
+				tagString = tagString + tag.toRTSAMString() + " ";
+			}
+			else if ((thisSAMTagType.equals("Zc")) ||  (thisSAMTagType.equals("Zs"))) {
+				tagString = tagString + tag.toZSAMString() + " ";
+			}
 		}
 	}
 	else {
-		text = "no tags found for this tag set.";
+		tagString = "no tags found for this tag set.";
 	}
-	return text;
+	return tagString;
 	}
 	
 	/**
@@ -295,6 +334,8 @@ static String printTagSet(Vector<Tag> tagSet) {
 				"25|25|+|WRMr|gff3src=MIRA|" +
 				"13|22|?|Frpr|gff3src=GenBankLifter|" +
 				"3|3|+|CRMr|gff3src=MIRA";
+		
+		String RTGapTagString = "COMM|Note=Looks like a problem here with * as read group and sequence :)";
 		Contig contig = new Contig();
 		int count = 1;
 		
@@ -317,7 +358,7 @@ static String printTagSet(Vector<Tag> tagSet) {
 		reportProgress("\nTest 2: multi PT tag\n"+ multiGapTagString +"\n");
 		if (isValidGapTagType(gapTagType)){
 			
-			if (singleGapTagString != null) {
+			if (multiGapTagString != null) {
 				reportProgress("\taddTagsToContig: adding multitag " + count + " of type " + gapTagType + " holding " + multiGapTagString);		
 				addPTTagToContig(contig, gapTagType, multiGapTagString, 74294504, 'F');	
 			}
@@ -329,6 +370,24 @@ static String printTagSet(Vector<Tag> tagSet) {
 		else {
 			reportProgress("don't need to process " + gapTagType);
 		}
+		
+		gapTagType = "RT";
+		reportProgress("\nTest 3: RT tag\n"+ RTGapTagString +"\n");
+		if (isValidGapTagType(gapTagType)){
+			
+			if (RTGapTagString != null) {
+				reportProgress("\taddTagsToContig: adding RT tag " + count + " of type " + gapTagType + " holding " + RTGapTagString);		
+				addRTTagToContig(contig, gapTagType, RTGapTagString, 74294504, 'F');	
+			}
+			else {
+				reportProgress("addTagsToContig: unexpectedly found null tag information at position " + count + " for tag type " + gapTagType);
+			}		
+			count++;
+		}
+		else {
+			reportProgress("don't need to process " + gapTagType);
+		}
+		
 		
 		Vector<Tag> tags = contig.getTags();
 		Iterator <Tag> iterator = null;
@@ -353,7 +412,7 @@ static String printTagSet(Vector<Tag> tagSet) {
 		testStrand = direction.substring(0,1);
 		//String testStrand  = direction.charAt(1);
 		
-		reportProgress("Test strand is "+ testStrand);
+		reportProgress("Really getting these tags from the database");
 		
 		String tagString = "";
 		String strand = "F";
@@ -398,21 +457,14 @@ static String printTagSet(Vector<Tag> tagSet) {
 			reportProgress("Tags retrieved successfully");
 			
 			tagList = seq.getTags();
-			if (tagList !=null) {
-				Iterator<Tag> search_iterator = tagList.iterator();	
-				
-				
-				while (search_iterator.hasNext()) {
-					tagString = tagString + (search_iterator.next()).toSAMString() + " ";
-				}
-			}
+			
 		}
 		catch (ArcturusDatabaseException e){
 			Arcturus.logSevere("writeAlignment: unable to find tags for contig "+ savedContig.getName());
 		}
 		
 		reportProgress("Printing the retrieved tag set: " + printTagSet(tagList));
-		
+		reportProgress("TESTS complete");
 	}
-
+	
 }
