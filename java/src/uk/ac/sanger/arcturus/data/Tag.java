@@ -100,10 +100,21 @@ public class Tag extends Core {
 	 * Contig PT tag looks like PT:Z:26|32|-|COMM|gff3src=GenBankLifter or PT:Z:26|32|-|COMM|gff3src=GenBankLifter|15|25|KATE|+|Here is a KATE type comment
 	 */
 	public String toPTSAMString() {
+		char fieldSeparator = '|';
+		char recordSeparator = '|';
 		
-		return (samTagType + ":" + samType + ":" + comment);
+		return (samTagType + ":" + samType + ":" + start + fieldSeparator + length + fieldSeparator + strand + fieldSeparator + gapTagType + fieldSeparator + comment);
 		
 	}
+	
+	public String toRTSAMString() {
+		char fieldSeparator = '|';
+		char recordSeparator = '|';
+		
+		return (samTagType + ":" + samType + ":" + gapTagType + fieldSeparator + comment);
+		
+	}
+	
 	/**
 	 * Tag DONE 1945220 1945242 "polymorphisms linked/unique"
 	 * @return
