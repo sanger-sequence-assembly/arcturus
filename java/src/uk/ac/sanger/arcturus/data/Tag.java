@@ -6,18 +6,21 @@ package uk.ac.sanger.arcturus.data;
  */
 public class Tag extends Core {
 	protected int start;
-	protected int length;
+	protected int end;
 	protected int sequence_id;
 	protected String samTagType;
 	protected String gapTagType;
 	protected String comment;
 	protected char strand;
 	protected char samType;
+	
+	char fieldSeparator = '|';
+	char recordSeparator = '|';
 
-	public Tag(String samTagType, char samType, String gapTagType, int start, int length, 
+	public Tag(String samTagType, char samType, String gapTagType, int start, int end, 
 			String comment, int sequence_id, char strand) {
 		this.start = start;
-		this.length = length;
+		this.end = end;
 		this.samType = samType;
 		this.gapTagType = gapTagType;
 		this.samTagType = samTagType;
@@ -31,11 +34,11 @@ public class Tag extends Core {
 	}
 
 	public int getLength() {
-		return length;
+		return ((end - start) + 1);
 	}
 	
 	public int getEnd() {
-		return (start + length);
+		return (end);
 	}
 	
 	public char getSAMType() {
@@ -80,18 +83,14 @@ public class Tag extends Core {
 	 * @return
 	 * Contig tag looks like Zc:Z:POLY|31|42|weird Ns
 	 */
-	public String toSAMString() {
-		
-		return samTagType + ":" + samType + ":" + gapTagType + "|" + start + "|" + length
-		+ (comment == null ? "" : "|" + comment);
-		
+	public String toSAMString() {	
+		return samTagType + ":" + samType + ":" + gapTagType + "|" + start + "|" + end
+		+ (comment == null ? "" : "|" + comment);	
 	}
 	
-	public String toZSAMString() {
-		
-		return samTagType + ":" + samType + ":" + gapTagType + "|" + start + "|" + length
-		+ (comment == null ? "" : "|" + comment);
-		
+	public String toZSAMString() {	
+		return samTagType + ":" + samType + ":" + gapTagType + "|" + start + "|" + end
+		+ (comment == null ? "" : "|" + comment);	
 	}
 	
 	/**
@@ -100,19 +99,15 @@ public class Tag extends Core {
 	 * Contig PT tag looks like PT:Z:26|32|-|COMM|gff3src=GenBankLifter or PT:Z:26|32|-|COMM|gff3src=GenBankLifter|15|25|KATE|+|Here is a KATE type comment
 	 */
 	public String toPTSAMString() {
-		char fieldSeparator = '|';
-		char recordSeparator = '|';
-		
-		return (samTagType + ":" + samType + ":" + start + fieldSeparator + length + fieldSeparator + strand + fieldSeparator + gapTagType + fieldSeparator + comment);
-		
+		return (samTagType + ":" + samType + ":" + start + fieldSeparator + end + fieldSeparator + strand + fieldSeparator + gapTagType + fieldSeparator + comment);
+	}
+	
+	public String toPartialPTSAMString() {
+		return (start + fieldSeparator + end + fieldSeparator + strand + fieldSeparator + gapTagType + fieldSeparator + comment);
 	}
 	
 	public String toCTSAMString() {
-		char fieldSeparator = '|';
-		char recordSeparator = '|';
-		
 		return (samTagType + ":" + samType + ":" + gapTagType + fieldSeparator + comment);
-		
 	}
 	
 	/**
@@ -120,9 +115,7 @@ public class Tag extends Core {
 	 * @return
 	 */
 	public String toCAFString() {
-		
-			return "Tag " + gapTagType + " " + start + " " + (start + length)
+			return "Tag " + gapTagType + " " + start + " " + end
 					+ (comment == null ? "" : " \"" + comment + "\"");
-		
 	}
 }
