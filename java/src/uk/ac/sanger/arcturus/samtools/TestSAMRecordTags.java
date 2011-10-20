@@ -1,6 +1,8 @@
 package uk.ac.sanger.arcturus.samtools;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Vector;
 
@@ -279,27 +281,42 @@ public class TestSAMRecordTags {
 		
 	}
 	
+static final Comparator<Tag> GAP_TAG_ORDER =new Comparator<Tag>() {
+		public int compare(Tag t1, Tag t2) {
+		return t2.getGAPTagType().compareTo(t1.getGAPTagType());		}
+};
+		
 static String printTagSet(Vector<Tag> tagSet) {
 		
 	String tagString = "";
-	
+	char tagSeparator = ' ';
+	char recordSeparator = '|';
+
 	if (tagSet != null) {
+		Collections.sort(tagSet, GAP_TAG_ORDER);
 		Iterator<Tag> iterator = tagSet.iterator();
 		
 		Tag tag = null;
+		boolean firstPTTag = true;
 		
 		while (iterator.hasNext()) {
 			tag = iterator.next();
 			
 			String thisSAMTagType = tag.getSAMTagType();
 			if (thisSAMTagType.equals("PT")) {
-				tagString = tagString + tag.toPTSAMString() + " ";
+				if (firstPTTag) {
+					tagString = tagString + tag.toPTSAMString();
+					firstPTTag = false;
+				}
+				else {
+					tagString = tagString + recordSeparator + tag.toPartialPTSAMString();
+				}
 			}
 			else if (thisSAMTagType.equals("CT")) {
-				tagString = tagString + tag.toCTSAMString() + " ";
+				tagString = tagString + " " + tag.toCTSAMString();
 			}
 			else if ((thisSAMTagType.equals("Zc")) ||  (thisSAMTagType.equals("Zs"))) {
-				tagString = tagString + tag.toZSAMString() + " ";
+				tagString = tagString + " " + tag.toZSAMString();
 			}
 		}
 	}
@@ -394,16 +411,16 @@ static String printTagSet(Vector<Tag> tagSet) {
 		
 		if (tags != null) {
 			iterator = tags.iterator();
-			reportProgress("Checking tags for contig: ");
+			reportProgress("\nTest 4: checking tags for contig: ");
 			while (iterator.hasNext() ) {
-				reportProgress((iterator.next()).toSAMString() + "\n");
+				reportProgress((iterator.next()).toSAMString());
 			}
-			reportProgress("Printing this tag set: " + printTagSet(tags));
+			reportProgress("\nTest 5: Printing this tag set: \n" + printTagSet(tags));
 		}
 		else {
 			reportProgress("no tags to process!");
 		}
-		reportProgress("Printing an empty tag set: " + printTagSet(null));
+		reportProgress("\n Test 6: Printing an empty tag set: " + printTagSet(null));
 		
 		// now try to get it back from the database
 		String direction = "Forwards";
@@ -412,7 +429,7 @@ static String printTagSet(Vector<Tag> tagSet) {
 		testStrand = direction.substring(0,1);
 		//String testStrand  = direction.charAt(1);
 		
-		reportProgress("Really getting these tags from the database");
+		reportProgress("\n Test 7: really getting these tags from the database");
 		
 		String tagString = "";
 		String strand = "F";

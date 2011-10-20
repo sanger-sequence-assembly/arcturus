@@ -4,7 +4,7 @@ package uk.ac.sanger.arcturus.data;
  * @author kt6
  *
  */
-public class Tag extends Core {
+public class Tag extends Core implements Comparable {
 	protected int start;
 	protected int end;
 	protected int sequence_id;
@@ -103,7 +103,7 @@ public class Tag extends Core {
 	}
 	
 	public String toPartialPTSAMString() {
-		return (start + fieldSeparator + end + fieldSeparator + strand + fieldSeparator + gapTagType + fieldSeparator + comment);
+		return ("" + start + fieldSeparator + end + fieldSeparator + strand + fieldSeparator + gapTagType + fieldSeparator + comment);
 	}
 	
 	public String toCTSAMString() {
@@ -117,5 +117,42 @@ public class Tag extends Core {
 	public String toCAFString() {
 			return "Tag " + gapTagType + " " + start + " " + end
 					+ (comment == null ? "" : " \"" + comment + "\"");
+	}
+
+	public int compareTo(Tag that) {
+		// this tag is greater than that tag if the Gap tag is alphabetically before it
+		// if both tags are PT tags, then the one with the greater start position is greater than the other
+		int gapTest = this.gapTagType.compareTo(that.gapTagType);
+		
+		if (gapTest != 0) {
+			return gapTest;
+		}
+		else if (this.gapTagType.equals("PT")) {
+			if (this.start > that.start){
+				return 1;
+			}
+			else if (this.start < that.start){
+				return -1;
+			}		
+			else {
+				if (this.end > that.end){
+					return 1;
+				}
+				else if (this.end < that.end){
+					return -1;
+				}		
+				else {
+					return 0;
+				}
+			}
+		}
+		else {
+			return 0;
+		}
+	}
+
+	public int compareTo(Object o) {
+		// TODO Auto-generated method stub
+		return 0;
 	}
 }
