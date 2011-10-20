@@ -173,7 +173,7 @@ public class TestSAMRecordTags {
 	 * @param contig
 	 * @param record
 	 * Sequence (consensus) tag (was Zc) looks like a fake read with flags 768 or 784 and an CT tag
-	 * *	768	Contig1	38	255	17M	*	0	0	CATWTTCACATTASCAA	*	CT:Z:COMM|Note=Looks like a problem here;gff3str=.;gff3src=gap4
+	 * *	768	Contig1	38	255	17M	*	0	0	CATWTTCACATTASCAA	*	CT:Z:?|COMM|Now has a direction as well as a tag type and comment
 	 * No start/end or length
 	 **/
  	
@@ -183,6 +183,7 @@ public class TestSAMRecordTags {
  		
 		char samType = 'Z';
 		int fs1 = gapTagString.indexOf(fieldSeparator);
+		int fs2 = gapTagString.indexOf(fieldSeparator, fs1+1);
 		
 		int stringEnd = gapTagString.length();
 		int tagEnd = stringEnd;
@@ -191,17 +192,15 @@ public class TestSAMRecordTags {
 		
 		String gapTagType = "";
 		
-		// may be a strand later
-		//strand = gapTagString.charAt(999);
+		strand = gapTagString.charAt(0);
 		
-		strand = '?';
-		gapTagType = gapTagString.substring(0,fs1); 
+		gapTagType = gapTagString.substring(fs1 + 1,fs2); 
 		
-		reportProgress("\t\t\taddCTTagToContig: read bar1 as " + fs1  + " read gapTypeTag as " + gapTagType);
+		reportProgress("\t\t\taddCTTagToContig: read bar1 as " + fs1  + " read bar2 as " + fs2  + " read gapTypeTag as " + gapTagType);
 		
-		String thisTagString = gapTagString.substring(fs1 + 1, stringEnd);
+		String thisTagString = gapTagString.substring(fs2 + 1, stringEnd);
 		
-		reportProgress("\t\t\taddCTTagToContig: read start as " + start + ", end as " + end + ",comment as " + thisTagString);
+		reportProgress("\t\t\taddCTTagToContig: read strand as " + strand + ",comment as " + thisTagString);
 		
 		Tag newTag = new Tag(samTagType, samType, gapTagType, start, end, thisTagString, sequence_id, strand );
 		contig.addTag(newTag);
@@ -352,7 +351,7 @@ static String printTagSet(Vector<Tag> tagSet) {
 				"13|22|?|Frpr|gff3src=GenBankLifter|" +
 				"3|3|+|CRMr|gff3src=MIRA";
 		
-		String CTTGapTagString = "COMM|Note=Looks like a problem here with * as read group and sequence :)";
+		String CTTGapTagString = "?|COMM|Note=Looks like a problem here with * as read group and sequence :)";
 		Contig contig = new Contig();
 		int count = 1;
 		
@@ -405,22 +404,16 @@ static String printTagSet(Vector<Tag> tagSet) {
 			reportProgress("don't need to process " + gapTagType);
 		}
 		
-		
 		Vector<Tag> tags = contig.getTags();
 		Iterator <Tag> iterator = null;
 		
 		if (tags != null) {
-			iterator = tags.iterator();
-			reportProgress("\nTest 4: checking tags for contig: ");
-			while (iterator.hasNext() ) {
-				reportProgress((iterator.next()).toSAMString());
-			}
-			reportProgress("\nTest 5: Printing this tag set: \n" + printTagSet(tags));
+			reportProgress("\nTest 4: Printing this tag set: \n" + printTagSet(tags));
 		}
 		else {
 			reportProgress("no tags to process!");
 		}
-		reportProgress("\n Test 6: Printing an empty tag set: " + printTagSet(null));
+		reportProgress("\nTest 5: Printing an empty tag set: " + printTagSet(null));
 		
 		// now try to get it back from the database
 		String direction = "Forwards";
@@ -429,7 +422,7 @@ static String printTagSet(Vector<Tag> tagSet) {
 		testStrand = direction.substring(0,1);
 		//String testStrand  = direction.charAt(1);
 		
-		reportProgress("\n Test 7: really getting these tags from the database");
+		reportProgress("\nTest 6: really getting these tags from the database");
 		
 		String tagString = "";
 		String strand = "F";

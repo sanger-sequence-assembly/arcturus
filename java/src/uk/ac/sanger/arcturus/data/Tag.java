@@ -107,7 +107,7 @@ public class Tag extends Core implements Comparable {
 	}
 	
 	public String toCTSAMString() {
-		return (samTagType + ":" + samType + ":" + gapTagType + fieldSeparator + comment);
+		return (samTagType + ":" + samType + ":" + strand + fieldSeparator + gapTagType + fieldSeparator + comment);
 	}
 	
 	/**
