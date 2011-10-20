@@ -170,12 +170,12 @@ public class TestSAMRecordTags {
  	/**
 	 * @param contig
 	 * @param record
-	 * Sequence (consensus) tag (was Zc) looks like a fake read with flags 768 or 784 and an RT tag
-	 * *	768	Contig1	38	255	17M	*	0	0	CATWTTCACATTASCAA	*	RT:Z:COMM|Note=Looks like a problem here;gff3str=.;gff3src=gap4
+	 * Sequence (consensus) tag (was Zc) looks like a fake read with flags 768 or 784 and an CT tag
+	 * *	768	Contig1	38	255	17M	*	0	0	CATWTTCACATTASCAA	*	CT:Z:COMM|Note=Looks like a problem here;gff3str=.;gff3src=gap4
 	 * No start/end or length
 	 **/
  	
- 	public static void addRTTagToContig(Contig contig, String samTagType, String gapTagString, int sequence_id, char strand){
+ 	public static void addCTTagToContig(Contig contig, String samTagType, String gapTagString, int sequence_id, char strand){
  		char fieldSeparator = '|';
  		char recordSeparator = '|';
  		
@@ -195,20 +195,20 @@ public class TestSAMRecordTags {
 		strand = '?';
 		gapTagType = gapTagString.substring(0,fs1); 
 		
-		reportProgress("\t\t\taddRTTagToContig: read bar1 as " + fs1  + " read gapTypeTag as " + gapTagType);
+		reportProgress("\t\t\taddCTTagToContig: read bar1 as " + fs1  + " read gapTypeTag as " + gapTagType);
 		
 		String thisTagString = gapTagString.substring(fs1 + 1, stringEnd);
 		
-		reportProgress("\t\t\taddRTTagToContig: read start as " + start + ", end as " + end + ",comment as " + thisTagString);
+		reportProgress("\t\t\taddCTTagToContig: read start as " + start + ", end as " + end + ",comment as " + thisTagString);
 		
 		Tag newTag = new Tag(samTagType, samType, gapTagType, start, end, thisTagString, sequence_id, strand );
 		contig.addTag(newTag);
 		
-		reportProgress("\t\taddRTTagToContig: tag stored and retrieved from Java object as: " + newTag.toRTSAMString());
+		reportProgress("\t\taddCTTagToContig: tag stored and retrieved from Java object as: " + newTag.toCTSAMString());
  	}
  	
  	private static boolean isValidGapTagType(String gapTagType){
-		return ( (gapTagType.equals("Zc") || gapTagType.equals("Zs") || gapTagType.equals("FS")) || gapTagType.equals("PT") || gapTagType.equals("RT"));
+		return ( (gapTagType.equals("Zc") || gapTagType.equals("Zs") || gapTagType.equals("FS")) || gapTagType.equals("PT") || gapTagType.equals("CT"));
 	}
 	
 	/**
@@ -258,8 +258,8 @@ public class TestSAMRecordTags {
 					if (gapTagType.equals("PT")){
 						addPTTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
 					}
-					else if (gapTagType.equals("RT")){
-						addRTTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
+					else if (gapTagType.equals("CT")){
+						addCTTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
 					}
 					else if ((gapTagType.equals("Zc"))||(gapTagType.equals("Zs"))) {
 						addZTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
@@ -295,8 +295,8 @@ static String printTagSet(Vector<Tag> tagSet) {
 			if (thisSAMTagType.equals("PT")) {
 				tagString = tagString + tag.toPTSAMString() + " ";
 			}
-			else if (thisSAMTagType.equals("RT")) {
-				tagString = tagString + tag.toRTSAMString() + " ";
+			else if (thisSAMTagType.equals("CT")) {
+				tagString = tagString + tag.toCTSAMString() + " ";
 			}
 			else if ((thisSAMTagType.equals("Zc")) ||  (thisSAMTagType.equals("Zs"))) {
 				tagString = tagString + tag.toZSAMString() + " ";
@@ -335,7 +335,7 @@ static String printTagSet(Vector<Tag> tagSet) {
 				"13|22|?|Frpr|gff3src=GenBankLifter|" +
 				"3|3|+|CRMr|gff3src=MIRA";
 		
-		String RTGapTagString = "COMM|Note=Looks like a problem here with * as read group and sequence :)";
+		String CTTGapTagString = "COMM|Note=Looks like a problem here with * as read group and sequence :)";
 		Contig contig = new Contig();
 		int count = 1;
 		
@@ -371,13 +371,13 @@ static String printTagSet(Vector<Tag> tagSet) {
 			reportProgress("don't need to process " + gapTagType);
 		}
 		
-		gapTagType = "RT";
-		reportProgress("\nTest 3: RT tag\n"+ RTGapTagString +"\n");
+		gapTagType = "CT";
+		reportProgress("\nTest 3: CT tag\n"+ CTTGapTagString +"\n");
 		if (isValidGapTagType(gapTagType)){
 			
-			if (RTGapTagString != null) {
-				reportProgress("\taddTagsToContig: adding RT tag " + count + " of type " + gapTagType + " holding " + RTGapTagString);		
-				addRTTagToContig(contig, gapTagType, RTGapTagString, 74294504, 'F');	
+			if (CTTGapTagString != null) {
+				reportProgress("\taddTagsToContig: adding CT tag " + count + " of type " + gapTagType + " holding " + CTTGapTagString);		
+				addCTTagToContig(contig, gapTagType, CTTGapTagString, 74294504, 'F');	
 			}
 			else {
 				reportProgress("addTagsToContig: unexpectedly found null tag information at position " + count + " for tag type " + gapTagType);

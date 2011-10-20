@@ -95,7 +95,7 @@ public class Tag extends Core {
 	}
 	
 	/**
-	 * Sequence (consensus) tag looks like RT:Z:REPT|5|1|Tag inserted at position 25 at start of AAAA 
+	 * Sequence (consensus) tag looks like CT:Z:REPT|5|1|Tag inserted at position 25 at start of AAAA 
 	 * @return
 	 * Contig PT tag looks like PT:Z:26|32|-|COMM|gff3src=GenBankLifter or PT:Z:26|32|-|COMM|gff3src=GenBankLifter|15|25|KATE|+|Here is a KATE type comment
 	 */
@@ -107,7 +107,7 @@ public class Tag extends Core {
 		
 	}
 	
-	public String toRTSAMString() {
+	public String toCTSAMString() {
 		char fieldSeparator = '|';
 		char recordSeparator = '|';
 		
