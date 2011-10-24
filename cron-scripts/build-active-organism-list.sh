@@ -34,11 +34,16 @@ case mcs8:
 	echo
 	echo Renaming TASMANIAN_DEVIL to TASMANIAN for LDAP lookup
 	sed '/^ZGTC_[0-9]*/d' $HOME/tmp_pathogen_active_organisms.list | sed 's/_DEVIL//' >> pathogen_active_organisms.list
+	echo Extracting ZGTC_nn and ZFISH2_POOLnn to vertebrates list for LDAP lookup
+	grep ZGTC $HOME/tmp_pathogen_active_organisms.list > vertebrates_active_organisms.list
+	echo
+	echo Renaming ZFISH2_POOLn to POOL2 for LDAP lookup
+	grep POOL2 $HOME/tmp_pathogen_active_organisms.list | sed 's/^ZFISH2_POOL[0-9]*/POOL2/' >> vertebrates_active_organisms.list
+	sed '/^ZFISH2_[0-9]*/d' $HOME/tmp_pathogen_active_organisms.list 
+	echo
 	echo Pathogen list built in $HOME/pathogen_active_organisms.list:
 	cat $HOME/pathogen_active_organisms.list
 	echo
-	echo Extracting ZGTC_nn to vertebrates list for LDAP lookup
-	grep ZGTC $HOME/tmp_pathogen_active_organisms.list > vertebrates_active_organisms.list
 	echo Vertebrate list built in $HOME/vertebrates_active_organisms.list:
 	cat $HOME/vertebrates_active_organisms.list
 	rm $HOME/tmp_pathogen_active_organisms.list

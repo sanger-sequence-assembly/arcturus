@@ -21,9 +21,11 @@ if ( $# > 0 ) then
   set INSTANCE = $1
 	set THRESHOLD = $2
 else
-  echo Please provide the instance name to run this script against: illumna, mysql, pathogen or test
+  echo Please provide the instance name to run this script against: illumna, mysql, pathogen or test, and an integer threshold for free read variation
 	exit(-1)
 endif
+
+set VERSION='-gap4'
 
 switch(${INSTANCE})
 	case mysql:
@@ -33,6 +35,7 @@ switch(${INSTANCE})
 	case test:
 	breaksw
 	case illumina:
+		set VERSION='-gap5'
 	breaksw
 	default:
 		echo populate-project-stats.csh does not recogonise instance ${INSTANCE} 
@@ -66,7 +69,7 @@ foreach ORG (`cat ${HOME}/${INSTANCE}_project_stats_organisms.list`)
 
 		echo Running ${READS_SCRIPT} to calculate free read statistics for the $ORG organism in the $INSTANCE database instance...
 		echo Any read variation over ${THRESHOLD} will be notified to email freereads and cc to arcturus-help
-		${READS_SCRIPT} -instance $INSTANCE -organism $ORG -threshold ${THRESHOLD} 
+		${READS_SCRIPT} -instance $INSTANCE -organism $ORG -threshold ${THRESHOLD} ${VERSION} 
   popd
 end
 
