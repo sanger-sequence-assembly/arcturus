@@ -14,7 +14,7 @@ public class Tag extends Core implements Comparable {
 	protected char strand;
 	protected char samType;
 	
-	char fieldSeparator = '|';
+	char fieldSeparator = ';';
 	char recordSeparator = '|';
 
 	public Tag(String samTagType, char samType, String gapTagType, int start, int end, 

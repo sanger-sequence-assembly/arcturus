@@ -19,6 +19,10 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 public class TestSAMRecordTags {
+	
+
+	static char fieldSeparator = ';';
+	static char recordSeparator = '|';
 
 	/**
 	 * @param contig
@@ -87,9 +91,7 @@ public class TestSAMRecordTags {
 	
  	public static void addPTTagToContig (Contig contig, String samTagType, String gapTagString, int sequence_id, char strand){
 		//	String singleGapTagString = "26|32|-|COMM|gff3src=GenBankLifter";
- 		
- 		char fieldSeparator = '|';
- 		char recordSeparator = '|';
+ 	
  		
 		char samType = 'Z';
 		int fs1 = gapTagString.indexOf(fieldSeparator);
@@ -178,8 +180,6 @@ public class TestSAMRecordTags {
 	 **/
  	
  	public static void addCTTagToContig(Contig contig, String samTagType, String gapTagString, int sequence_id, char strand){
- 		char fieldSeparator = '|';
- 		char recordSeparator = '|';
  		
 		char samType = 'Z';
 		int fs1 = gapTagString.indexOf(fieldSeparator);
@@ -339,19 +339,19 @@ static String printTagSet(Vector<Tag> tagSet) {
 
 		// set up a contig with a single tag
 		String gapTagType = "PT";
-		String singleGapTagString = "26|32|-|COMM|gff3src=GenBankLifter";
-		String multiGapTagString = "119|128|-|COMM|gff3src=GenBankLifter|" +
-				"105|113|+|COMM|gff3src=GenBankLifter|" +
-				"39|99|.|HAF3|gff3src=MIRA|" +
-				"84|90|+|PSHP|gff3src=MIRA|" +
-				"65|65|+|SRMr|gff3src=MIRA|" +
-				"55|55|+|SRMr|gff3src=MIRA|" +
-				"31|31|+|R454|gff3src=MIRA|" +
-				"25|25|+|WRMr|gff3src=MIRA|" +
-				"13|22|?|Frpr|gff3src=GenBankLifter|" +
-				"3|3|+|CRMr|gff3src=MIRA";
+		String singleGapTagString = "26;32;-;COMM;gff3src=unique";
+		String multiGapTagString = "119;128;-;COMM;gff3src=minus-one|" +
+				"105;113;+;COMM;gff3src=zero|" +
+				"39;99;.;HAF3;gff3src=one|" +
+				"84;90;+;PSHP;gff3src=two|" +
+				"65;65;+;SRMr;gff3src=three with a semi-colon ; in the middle of the comment|" +
+				"55;55;+;SRMr;gff3src=four|" +
+				"31;31;+;R454;gff3src=five|" +
+				"25;25;+;EMPT;|" +
+				"13;22;?;Frpr;gff3src=six|" +
+				"3;3;+;CRMr;gff3src=seven";
 		
-		String CTTGapTagString = "?|COMM|Note=Looks like a problem here with * as read group and sequence :)";
+		String CTTGapTagString = "?;COMM;Note=Looks like a problem here with * as read group and sequence :)";
 		Contig contig = new Contig();
 		int count = 1;
 		
