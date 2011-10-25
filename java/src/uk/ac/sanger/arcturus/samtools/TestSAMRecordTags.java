@@ -340,6 +340,8 @@ static String printTagSet(Vector<Tag> tagSet) {
 		// set up a contig with a single tag
 		String gapTagType = "PT";
 		String singleGapTagString = "26;32;-;COMM;gff3src=unique";
+		String invalidSingleGapTagString = "banana;32;-;9999;gff3src=unique";
+		
 		String multiGapTagString = "119;128;-;COMM;gff3src=minus-one|" +
 				"105;113;+;COMM;gff3src=zero|" +
 				"39;99;.;HAF3;gff3src=one|" +
@@ -350,12 +352,17 @@ static String printTagSet(Vector<Tag> tagSet) {
 				"25;25;+;EMPT;|" +
 				"13;22;?;Frpr;gff3src=six|" +
 				"3;3;+;CRMr;gff3src=seven";
-		
+		String invalidMultiGapTagString = "giraffe;128;-;0.543;gff3src=this one is invalid|" +
+				"105;113;+;COMM;gff3src=this one is OK";
+				
+	
 		String CTTGapTagString = "?;COMM;Note=Looks like a problem here with * as read group and sequence :)";
+		String invalidCTTGapTagString = "My tag has no separator";
+		
 		Contig contig = new Contig();
 		int count = 1;
 		
-		reportProgress("\nTest 1: single PT tag \n"+ singleGapTagString +"\n");
+		reportProgress("\nTest 1a: single PT tag \n"+ singleGapTagString +"\n");
 		if (isValidGapTagType(gapTagType)){
 			
 			if (singleGapTagString != null) {
@@ -371,7 +378,28 @@ static String printTagSet(Vector<Tag> tagSet) {
 			reportProgress("don't need to process " + gapTagType);
 		}
 		
-		reportProgress("\nTest 2: multi PT tag\n"+ multiGapTagString +"\n");
+		reportProgress("\nTest 1b: invalid single PT tag \n"+ singleGapTagString +"\n");
+		if (isValidGapTagType(gapTagType)){
+			
+			if (invalidSingleGapTagString != null) {
+				try {
+				reportProgress("\taddTagsToContig: adding tag " + count + " of type " + gapTagType + " holding " + invalidSingleGapTagString);		
+				addPTTagToContig(contig, gapTagType, invalidSingleGapTagString, 74294504, 'F');	
+				}
+				catch (Exception e) {
+					System.out.println("ERROR: Cannot parse tag " + invalidSingleGapTagString + ": this tag will NOT be stored\n");
+				}
+			}
+			else {
+				reportProgress("addTagsToContig: unexpectedly found null tag information at position " + count + " for tag type " + gapTagType);
+			}		
+			count++;
+		}
+		else {
+			reportProgress("don't need to process " + gapTagType);
+		}
+		
+		reportProgress("\nTest 2a: multi PT tag\n"+ multiGapTagString +"\n");
 		if (isValidGapTagType(gapTagType)){
 			
 			if (multiGapTagString != null) {
@@ -387,13 +415,55 @@ static String printTagSet(Vector<Tag> tagSet) {
 			reportProgress("don't need to process " + gapTagType);
 		}
 		
+		reportProgress("\nTest 2b: invalid multi PT tag\n"+ multiGapTagString +"\n");
+		if (isValidGapTagType(gapTagType)){
+			
+			if (invalidMultiGapTagString != null) {
+				try {
+					reportProgress("\taddTagsToContig: adding multitag " + count + " of type " + gapTagType + " holding " + invalidMultiGapTagString);		
+					addPTTagToContig(contig, gapTagType, invalidMultiGapTagString, 74294504, 'F');	
+				}
+				catch (Exception e) {
+					System.out.println("ERROR: Cannot parse tag " + invalidMultiGapTagString + ": this tag will NOT be stored\n");
+				}
+			}
+			else {
+				reportProgress("addTagsToContig: unexpectedly found null tag information at position " + count + " for tag type " + gapTagType);
+			}		
+			count++;
+		}
+		else {
+			reportProgress("don't need to process " + gapTagType);
+		}
+		
 		gapTagType = "CT";
-		reportProgress("\nTest 3: CT tag\n"+ CTTGapTagString +"\n");
+		reportProgress("\nTest 3a: CT tag\n"+ CTTGapTagString +"\n");
 		if (isValidGapTagType(gapTagType)){
 			
 			if (CTTGapTagString != null) {
 				reportProgress("\taddTagsToContig: adding CT tag " + count + " of type " + gapTagType + " holding " + CTTGapTagString);		
 				addCTTagToContig(contig, gapTagType, CTTGapTagString, 74294504, 'F');	
+			}
+			else {
+				reportProgress("addTagsToContig: unexpectedly found null tag information at position " + count + " for tag type " + gapTagType);
+			}		
+			count++;
+		}
+		else {
+			reportProgress("don't need to process " + gapTagType);
+		}
+		
+		reportProgress("\nTest 3b: invalid CT tag\n"+ invalidCTTGapTagString +"\n");
+		if (isValidGapTagType(gapTagType)){
+			
+			if (invalidCTTGapTagString != null) {
+				try {
+					reportProgress("\taddTagsToContig: adding CT tag " + count + " of type " + gapTagType + " holding " + invalidCTTGapTagString);		
+					addCTTagToContig(contig, gapTagType, invalidCTTGapTagString, 74294504, 'F');	
+				}
+				catch (Exception e) {
+					System.out.println("ERROR: Cannot parse tag " + invalidSingleGapTagString + ": this tag will NOT be stored\n");
+				}
 			}
 			else {
 				reportProgress("addTagsToContig: unexpectedly found null tag information at position " + count + " for tag type " + gapTagType);
