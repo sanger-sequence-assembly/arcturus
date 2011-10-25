@@ -646,7 +646,7 @@ my %readtagoptions;
 $readtagoptions{load} = 1 if $loadreadtags;
 $readtagoptions{sync} = 1 if $syncreadtags;
 $readtagoptions{echo} = 1 if $echoreadtags;
-# print STDOUT "l $loadreadtags  s  $syncreadtags  e $echoreadtags\n";
+print STDOUT "l $loadreadtags  s  $syncreadtags  e $echoreadtags\n";
 
 my %contigtagoptions;
 
