@@ -22,6 +22,9 @@ public class SAMContigBuilder {
 	protected long t0;
 	
 	private boolean scb_testing = false;
+
+	private char fieldSeparator = ';';
+	private char recordSeparator = '|';
 	
 	public SAMContigBuilder(ArcturusDatabase adb, BAMReadLoader brl) {
 		this.adb = adb;
@@ -33,6 +36,7 @@ public class SAMContigBuilder {
 		format = new DecimalFormat();
 	}
 	
+
 	/**
 	 * @param contig
 	 * @param samTagType
@@ -42,121 +46,269 @@ public class SAMContigBuilder {
 	 * @throws ArcturusDatabaseException
 	 * 
 	 */
-	public void addTagToContig (Contig contig, String samTagType, String gapTagString, int sequence_id, char strand)  throws ArcturusDatabaseException{
+	 
+	public void addZTagToContig (Contig contig, String samTagType, String gapTagString, int sequence_id, char strand){
 		
 		char samType = 'Z';
 		
-		if (gapTagString.length() < 10) {
-			 throw new ArcturusDatabaseException("addTagToContig: tag " + gapTagString + " looks too short so has not been added");
-		}
-		else
-		{
-			String gapTagType = gapTagString.substring(0,4);
-			reportProgress("\t\t\taddTagToContig: read gapTypeTag as " + gapTagType);
-		
-			int startOfNumeric = 5;
-			int endOfNumeric = gapTagString.lastIndexOf('|');
-			
-			String numberString = gapTagString.substring(startOfNumeric, endOfNumeric);
-			
-			int endOfStart = numberString.indexOf('|');
-			String startAsString = numberString.substring(0, endOfStart);
-			int start = Integer.parseInt(startAsString);
-		
-			String lengthAsString = numberString.substring(endOfStart+1, numberString.length());
-			int length = Integer.parseInt(lengthAsString);
-			
-			String comment = gapTagString.substring(endOfNumeric + 1, gapTagString.length());
-						
-			Tag tag = new Tag(samTagType, samType, gapTagType, start, length, comment, sequence_id, strand );
-			contig.addTag(tag);
-			
-			reportProgress("\t\taddTagToContig: tag stored and retrieved as: " + tag.toSAMString());
-		}
-	}
+		String gapTagType = gapTagString.substring(0,4);
+		reportProgress("\t\t\taddZTagToContig: read gapTypeTag as " + gapTagType);
 	
-	private boolean isValidGapTagType(String gapTagType){
-		return ((gapTagType.equals("Zc")) || (gapTagType.equals("Zs")) ||(gapTagType.equals("FS")));
-	}
+		int startOfNumeric = 5;
+		int endOfNumeric = gapTagString.lastIndexOf('|');
+		reportProgress("\t\t\taddZTagToContig: startOfNumeric = " + startOfNumeric + " end = " + endOfNumeric);
+		
+		String numberString = gapTagString.substring(startOfNumeric, endOfNumeric);
+		
+		//numberString holds 5|1
+		reportProgress("\t\t\taddZTagToContig: built numberString as " + numberString);
+		
+		int endOfStart = numberString.indexOf('|');
+		String startAsString = numberString.substring(0, endOfStart);
+		reportProgress("\t\t\taddZTagToContig: read startAsString as " + startAsString);
+		int start = Integer.parseInt(startAsString);
 	
-	private class GAPTag {
-		/**
-		 * holds the Sanger part of the tag e.g. REPT|5|1|Tag inserted at postion 25 at start of AAAA
-		 */
-		String gapTag = "";
+		String lengthAsString = numberString.substring(endOfStart+1, numberString.length());
+		reportProgress("\t\t\taddZTagToContig: read lengthAsString as " + lengthAsString);
+		int length = Integer.parseInt(lengthAsString);
 		
-		String getGapTag() {
-			return(gapTag);
-		}
+		String comment = gapTagString.substring(endOfNumeric + 1, gapTagString.length());
+		reportProgress("\t\t\taddZTagToContig: read comment as " + comment);
+					
+		Tag tag = new Tag(samTagType, samType, gapTagType, start, length, comment, sequence_id, strand );
+		contig.addTag(tag);
 		
-		public String toString() {
-			return (getGapTag());
-		}
+		reportProgress("\t\taddZTagToContig: tag stored and retrieved as: " + tag.toZSAMString());
+		
 	}
 	
 	/**
 	 * @param contig
 	 * @param record
-	 * Sequence (consensus) tag looks like Zs:Z:REPT|5|1|Tag inserted at position 25 at start of AAAA 
+	 * Contig tag (was Zc) now
+	 * PT:Z:119;128;-;COMM;gff3src=minus-one
+	 * 
+	 * Note that the third ; separated field is the END not the LENGTH so this is a one position flag not a five position flag
+	 * Note that the fourth ; separated field is now the direction which can be +/-/?
+	 * Multiple tags are merged into a flattened list
+	 * PT:Z:119;128;-;COMM;gff3src=minus-one|105;113;+;COMM;gff3src=zero|39;99;.;HAF3;gff3src=one
+	 * 
 	 * @return
-	 * Contig tag looks like Zc:Z:POLY|31|42|weird Ns
+	 */
+	
+ 	public void addPTTagToContig (Contig contig, String samTagType, String gapTagString, int sequence_id, char strand){
+
+		char samType = 'Z';
+		int fs1 = gapTagString.indexOf(fieldSeparator);
+		int fs2 = gapTagString.indexOf(fieldSeparator, fs1+1);
+		int fs3 =  gapTagString.indexOf(fieldSeparator, fs2+1);
+		int fs4 =  gapTagString.indexOf(fieldSeparator, fs3+1);
+		
+		int nextRS = gapTagString.indexOf( recordSeparator, fs4+1);
+		int thisRS = nextRS;
+		int stringEnd = gapTagString.length()- 1;
+		int tagEnd = stringEnd;
+		int start = 0;
+		int end = 0;
+		
+		String gapTagType = "";
+		
+		strand = gapTagString.charAt(fs3-1);
+		start = Integer.parseInt(gapTagString.substring(0, fs1));
+		end = Integer.parseInt(gapTagString.substring(fs1+1, fs2));
+		
+		gapTagType = gapTagString.substring(fs3 + 1, fs4); 
+		
+		nextRS = gapTagString.indexOf( recordSeparator, fs4+1);
+			if (nextRS < 0 ) {
+			tagEnd = stringEnd + 1;
+		}
+		else {
+			tagEnd = thisRS;
+		}
+		String thisTagString = gapTagString.substring(fs4 + 1, tagEnd);
+				
+		Tag newTag = new Tag(samTagType, samType, gapTagType, start, end, thisTagString, sequence_id, strand );
+		contig.addTag(newTag);
+		
+		reportProgress("\t\taddPTTagToContig: tag stored and retrieved from Java object as: " + newTag.toPTSAMString());
+		
+		while (nextRS >fs4) {
+			fs1 = gapTagString.indexOf(fieldSeparator, nextRS+1);
+			fs2 = gapTagString.indexOf(fieldSeparator, fs1+1);
+			fs3 = gapTagString.indexOf(fieldSeparator, fs2+1);
+			fs4 = gapTagString.indexOf(fieldSeparator, fs3+1);
+			
+			gapTagType = gapTagString.substring(fs3 + 1, fs4); 
+			
+			strand = gapTagString.charAt(fs3-1);
+			start = Integer.parseInt(gapTagString.substring(nextRS+1, fs1));
+			end = Integer.parseInt(gapTagString.substring(fs1+1, fs2));
+			
+			thisRS = nextRS;
+			nextRS = gapTagString.indexOf( recordSeparator, fs4+1);
+			
+			if (nextRS < 0 ) {
+				tagEnd = stringEnd;
+			}
+			else {
+				tagEnd = nextRS;
+			}
+			thisTagString = gapTagString.substring(fs4 + 1, tagEnd);
+			
+			newTag = new Tag(samTagType, samType, gapTagType, start, end, thisTagString, sequence_id, strand );
+			contig.addTag(newTag);
+			
+			reportProgress("\t\taddPTTagToContig: tag stored and retrieved from Java object as: " + newTag.toPTSAMString());
+		}
+		
+	}
+ 	/**
+	 * @param contig
+	 * @param record
+	 * Sequence (consensus) tag (was Zc) looks like a fake read with flags 768 or 784 and an CT tag
+	 * *	768	Contig1	38	255	17M	*	0	0	CATWTTCACATTASCAA	*	CT:Z:?;COMM;Now has a direction as well as a tag type and comment
+	 * No start/end or length
+	 **/
+ 	
+ 	public void addCTTagToContig(Contig contig, String samTagType, String gapTagString, int sequence_id, char strand){
+ 		
+		char samType = 'Z';
+		int fs1 = gapTagString.indexOf(fieldSeparator);
+		int fs2 = gapTagString.indexOf(fieldSeparator, fs1+1);
+		
+		int stringEnd = gapTagString.length();
+		int tagEnd = stringEnd;
+		int start = 0;
+		int end = 0;
+		
+		String gapTagType = "";
+		
+		strand = gapTagString.charAt(0);
+		
+		gapTagType = gapTagString.substring(fs1 + 1,fs2); 
+			
+		String thisTagString = gapTagString.substring(fs2 + 1, stringEnd);
+	
+		Tag newTag = new Tag(samTagType, samType, gapTagType, start, end, thisTagString, sequence_id, strand );
+		contig.addTag(newTag);
+		
+		reportProgress("\t\taddCTTagToContig: tag stored and retrieved from Java object as: " + newTag.toCTSAMString());
+ 	}
+ 	
+ 	private boolean isValidGapTagType(String gapTagType){
+		return ( (gapTagType.equals("Zc") || gapTagType.equals("Zs") || gapTagType.equals("FS")) || gapTagType.equals("PT") || gapTagType.equals("CT"));
+	}
+	
+	/**
+	 * @param contig
+	 * @param record
+	 * Contig tag (was Zc) now
+	 * PT:Z:REPT|5|5|Tag inserted at position 25 at start of AAAA 
+	 * 
+	 * Note that the third | separated field is the END not the LENGTH so this is a one position flag not a five position flag
+	 * Note that the fourth | separated field is now the direction which can be +/-/?
+	 * Multiple tags are merged into a flattened list
+	 * PT:Z:REPT|5|5|Tag inserted at position 25 at start of AAAA|COMM|25|28
+	 * 
+	 * @return
 	 */
 	public void addTagsToContig(Contig contig, SAMRecord record)  throws ArcturusDatabaseException  {
-		reportProgress("\taddTagsToContig: adding tags for contig " + contig.getName() + " from SAMRecord " + record.getReadName());
+		//reportProgress("\taddTagsToContig: adding tags for contig " + contig.getName() + " from SAMRecord " + record.getReadName());
 		
 		String gapTagType = null;
 		String gapTagString = null;
 		short count = 1;
 		
+	
 		Sequence sequence = brl.findOrCreateSequence(record);
 		if (sequence == null) 
 			 throw new ArcturusDatabaseException("addTagToContig: cannot find data for sequence for SAMRecord =" + record.getReadName());	 
 		int sequence_id = sequence.getID();
-		char strand =  record.getReadNegativeStrandFlag() ? 'R': 'F';
+	
+		char strand =  record.getReadNegativeStrandFlag() ? 'R': 'F';  
 
 		ArrayList<SAMRecord.SAMTagAndValue> tagList= (ArrayList<SAMRecord.SAMTagAndValue>) record.getAttributes();
 		int tagCount = tagList.size();
 		
-		reportProgress("addTagsToContig: found " + tagCount + " tags from tag list " + tagList.toString());
+		reportProgress("addTagsToContig: found " + tagCount + " tags: ");
 		
 		while (count < tagCount ) {	
 			SAMRecord.SAMTagAndValue samTag = tagList.get(count);
-
+			
 			gapTagType = samTag.tag;
-							
+						
 			if (isValidGapTagType(gapTagType)){
-				gapTagString = (String) samTag.value;
-				
+				gapTagString = record.getStringAttribute(gapTagType);
+
 				if (gapTagString != null) {
-					reportProgress("\taddTagsToContig: adding tag " + count + " of type " + gapTagType + " holding " + gapTagString);		
-					addTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
+					try {
+						reportProgress("\taddTagsToContig: adding tag " + count + " of type " + gapTagType + " holding " + gapTagString);	
+						if (gapTagType.equals("PT")){
+							addPTTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
+						}
+						else if (gapTagType.equals("CT")){
+							addCTTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
+						}
+						else if ((gapTagType.equals("Zc"))||(gapTagType.equals("Zs"))) {
+							addZTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
+						}
+					}
+					catch (Exception e) {
+						System.out.println("ERROR: Cannot parse tag " + gapTagString + ": this tag will NOT be stored\n");
+					}
 				}
 				else {
 					throw new ArcturusDatabaseException("addTagsToContig: unexpectedly found null tag information at position " + count + " for tag type " + gapTagType);
 				}		
 				count++;
 			}
-			else
-			{
-				count++;
-				//throw new ArcturusDatabaseException("addTagsToContig: unexpectedly found null tag or invalid tag (not Zc or Zs or FS) at position " + count + " for contig" + contig.getName() + " from SAMRecord " + record.getReadName());
+		}
+	}
+	
+private final Comparator<Tag> GAP_TAG_ORDER =new Comparator<Tag>() {
+		public int compare(Tag t1, Tag t2) {
+		return t2.getGAPTagType().compareTo(t1.getGAPTagType());		}
+};
+		
+public String printTagSet(Vector<Tag> tagSet) {
+		
+	String tagString = "";
+	char tagSeparator = ' ';
+	char recordSeparator = '|';
+
+	if (tagSet != null) {
+		Collections.sort(tagSet, GAP_TAG_ORDER);
+		Iterator<Tag> iterator = tagSet.iterator();
+		
+		Tag tag = null;
+		boolean firstPTTag = true;
+		
+		while (iterator.hasNext()) {
+			tag = iterator.next();
+			
+			String thisSAMTagType = tag.getSAMTagType();
+			if (thisSAMTagType.equals("PT")) {
+				if (firstPTTag) {
+					tagString = tagString + tag.toPTSAMString();
+					firstPTTag = false;
+				}
+				else {
+					tagString = tagString + recordSeparator + tag.toPartialPTSAMString();
+				}
 			}
-
+			else if (thisSAMTagType.equals("CT")) {
+				tagString = tagString + " " + tag.toCTSAMString();
+			}
+			else if ((thisSAMTagType.equals("Zc")) ||  (thisSAMTagType.equals("Zs"))) {
+				tagString = tagString + " " + tag.toZSAMString();
+			}
 		}
-
-		if (diagnostics)
-			t0 = System.currentTimeMillis();
-
-		if (diagnostics && (count%10000) == 0) {
-			long dt = System.currentTimeMillis() - t0;
-			Arcturus.logFine("addTagsToContig: " + format.format(count) + " reads; " +
-					format.format(dt) + " ms; memory " + memoryUsage());
-		}
-
-		if (diagnostics) {
-			long dt = System.currentTimeMillis() - t0;
-			Arcturus.logFine("addTagsToContig: " + count + " " + dt + " ms");
-		}
+	}
+	else {
+		tagString = "no tags found for this tag set.";
+	}
+	return tagString;
 	}
 	
 	public void addMappingsToContig(Contig contig,SAMFileReader reader) throws ArcturusDatabaseException {
@@ -258,8 +410,8 @@ public class SAMContigBuilder {
     protected void reportProgress(String message) {
     	if (scb_testing) {
     		System.out.println(message);
-    		Arcturus.logInfo(message);
     	}
+    	Arcturus.logInfo(message);
 	}
 	   
     private String memoryUsage() {
