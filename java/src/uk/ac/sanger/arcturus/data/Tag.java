@@ -84,8 +84,18 @@ public class Tag extends Core implements Comparable {
 	 * Contig tag looks like Zc:Z:POLY|31|42|weird Ns
 	 */
 	public String toSAMString() {	
-		return samTagType + ":" + samType + ":" + gapTagType + "|" + start + "|" + end
-		+ (comment == null ? "" : "|" + comment);	
+		String thisSAMTagType = this.getSAMTagType();
+		
+		if (thisSAMTagType.equals("PT")) {	
+			return this.toPTSAMString();
+		}
+		else if (thisSAMTagType.equals("CT")) {
+			return this.toCTSAMString();
+		}
+		else if ((thisSAMTagType.equals("Zc")) ||  (thisSAMTagType.equals("Zs"))) {
+			return this.toZSAMString();
+		}	
+		else return "Not a valid GAP tag";
 	}
 	
 	public String toZSAMString() {	

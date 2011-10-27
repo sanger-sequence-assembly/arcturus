@@ -1750,6 +1750,8 @@ public class ContigManager extends AbstractManager {
 			try {
 				while (iterator.hasNext()) {		
 					tag = (Tag) iterator.next();
+					System.out.println("This tag holds " + tag.toSAMString());
+					
 					pstmtStoreSAMTag.setString(1, tag.getSAMTagType());
 					pstmtStoreSAMTag.setString(2, tag.getSAMTypeAsString());
 					pstmtStoreSAMTag.setString(3, tag.getGAPTagType());
@@ -1767,11 +1769,57 @@ public class ContigManager extends AbstractManager {
 			}
 			catch (SQLException e) {
 				adb.handleSQLException(e,
-						"Failed to store tags to contig mappings (SAMTAG) for contig ID =" + contig.getID(),
+						"Failed to store tags to contig mappings (SAMTAG) for contig ID =" + contig.getID() +" for tag set " + printTagSet(tags),
 						conn, this);											
 			}
 		}
 		
 		return true;
 	}
+	
+	private final Comparator<Tag> GAP_TAG_ORDER =new Comparator<Tag>() {
+		public int compare(Tag t1, Tag t2) {
+			return t2.getGAPTagType().compareTo(t1.getGAPTagType());		}
+	};
+
+
+	public String printTagSet(Vector<Tag> tagSet) {
+		
+		String tagString = "";
+		char tagSeparator = ' ';
+		char recordSeparator = '|';
+
+		if (tagSet != null) {
+			Collections.sort(tagSet, GAP_TAG_ORDER);
+			Iterator<Tag> iterator = tagSet.iterator();
+			
+			Tag tag = null;
+			boolean firstPTTag = true;
+			
+			while (iterator.hasNext()) {
+				tag = iterator.next();
+				
+				String thisSAMTagType = tag.getSAMTagType();
+				if (thisSAMTagType.equals("PT")) {
+					if (firstPTTag) {
+						tagString = tagString + tag.toPTSAMString();
+						firstPTTag = false;
+					}
+					else {
+						tagString = tagString + recordSeparator + tag.toPartialPTSAMString();
+					}
+				}
+				else if (thisSAMTagType.equals("CT")) {
+					tagString = tagString + " " + tag.toCTSAMString();
+				}
+				else if ((thisSAMTagType.equals("Zc")) ||  (thisSAMTagType.equals("Zs"))) {
+					tagString = tagString + " " + tag.toZSAMString();
+				}
+			}
+		}
+		else {
+			tagString = "no tags found for this tag set.";
+		}
+		return tagString;
+		}
 }

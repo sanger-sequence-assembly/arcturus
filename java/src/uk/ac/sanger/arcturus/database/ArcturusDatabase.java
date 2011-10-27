@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
 import java.util.List;
+import java.util.Vector;
 import java.util.logging.Logger;
 
 import javax.sql.DataSource;
@@ -561,4 +562,6 @@ public interface ArcturusDatabase {
 	public void loadTagsForContig(Contig contig) throws ArcturusDatabaseException;
 	
 	public void loadTagsForSequence(Sequence sequence) throws ArcturusDatabaseException;
+
+	public String printTagSet(Vector<Tag> tagList);
 }

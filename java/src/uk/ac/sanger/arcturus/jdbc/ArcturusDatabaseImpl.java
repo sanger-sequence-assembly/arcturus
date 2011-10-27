@@ -1452,6 +1452,10 @@ public class ArcturusDatabaseImpl implements ArcturusDatabase {
 		sequenceManager.loadTagsForSequence(sequence);
 	}
 	
+	public String printTagSet(Vector<Tag> tagList) {
+		return contigManager.printTagSet(tagList);
+	}
+	
 	public void addReadGroupsFromThisImport(List<SAMReadGroupRecord> readGroups, int import_id) throws ArcturusDatabaseException {
 		try {
 			readGroupManager.addReadGroupsFromThisImport(readGroups, import_id);

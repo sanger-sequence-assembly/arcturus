@@ -17,6 +17,7 @@ import uk.ac.sanger.arcturus.data.Sequence;
 import uk.ac.sanger.arcturus.data.Tag;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
+import uk.ac.sanger.arcturus.jdbc.ContigManager;
 
 public class TestSAMRecordTags {
 	
@@ -279,51 +280,7 @@ public class TestSAMRecordTags {
 		}
 		
 	}
-	
-static final Comparator<Tag> GAP_TAG_ORDER =new Comparator<Tag>() {
-		public int compare(Tag t1, Tag t2) {
-		return t2.getGAPTagType().compareTo(t1.getGAPTagType());		}
-};
-		
-static String printTagSet(Vector<Tag> tagSet) {
-		
-	String tagString = "";
-	char tagSeparator = ' ';
-	char recordSeparator = '|';
 
-	if (tagSet != null) {
-		Collections.sort(tagSet, GAP_TAG_ORDER);
-		Iterator<Tag> iterator = tagSet.iterator();
-		
-		Tag tag = null;
-		boolean firstPTTag = true;
-		
-		while (iterator.hasNext()) {
-			tag = iterator.next();
-			
-			String thisSAMTagType = tag.getSAMTagType();
-			if (thisSAMTagType.equals("PT")) {
-				if (firstPTTag) {
-					tagString = tagString + tag.toPTSAMString();
-					firstPTTag = false;
-				}
-				else {
-					tagString = tagString + recordSeparator + tag.toPartialPTSAMString();
-				}
-			}
-			else if (thisSAMTagType.equals("CT")) {
-				tagString = tagString + " " + tag.toCTSAMString();
-			}
-			else if ((thisSAMTagType.equals("Zc")) ||  (thisSAMTagType.equals("Zs"))) {
-				tagString = tagString + " " + tag.toZSAMString();
-			}
-		}
-	}
-	else {
-		tagString = "no tags found for this tag set.";
-	}
-	return tagString;
-	}
 	
 	/**
 	 * @param args
@@ -347,8 +304,8 @@ static String printTagSet(Vector<Tag> tagSet) {
 				"39;99;.;HAF3;gff3src=one|" +
 				"84;90;+;PSHP;gff3src=two|" +
 				"65;65;+;SRMr;gff3src=three with a semi-colon ; in the middle of the comment|" +
-				"55;55;+;SRMr;gff3src=four|" +
-				"31;31;+;R454;gff3src=five|" +
+				"55;55;+;SRMr;gff3src=four with an escaped bar &#124; in the middle of the comment|" +
+				"31;31;;R454;gff3src=five with an empty direction field|" +
 				"25;25;+;EMPT;|" +
 				"13;22;?;Frpr;gff3src=six|" +
 				"3;3;+;CRMr;gff3src=seven";
@@ -363,6 +320,7 @@ static String printTagSet(Vector<Tag> tagSet) {
 		int count = 1;
 		
 		reportProgress("\nTest 1a: single PT tag \n"+ singleGapTagString +"\n");
+		
 		if (isValidGapTagType(gapTagType)){
 			
 			if (singleGapTagString != null) {
@@ -477,27 +435,6 @@ static String printTagSet(Vector<Tag> tagSet) {
 		Vector<Tag> tags = contig.getTags();
 		Iterator <Tag> iterator = null;
 		
-		if (tags != null) {
-			reportProgress("\nTest 4: Printing this tag set: \n" + printTagSet(tags));
-		}
-		else {
-			reportProgress("no tags to process!");
-		}
-		reportProgress("\nTest 5: Printing an empty tag set: " + printTagSet(null));
-		
-		// now try to get it back from the database
-		String direction = "Forwards";
-		//String testStrand = direction.substring(1,1);
-		String testStrand = "";
-		testStrand = direction.substring(0,1);
-		//String testStrand  = direction.charAt(1);
-		
-		reportProgress("\nTest 6: really getting these tags from the database");
-		
-		String tagString = "";
-		String strand = "F";
-		int seq_id = 74294853;
-		
 		ArcturusInstance ai = null;
 		try {
 			ai = ArcturusInstance.getInstance("test");
@@ -512,6 +449,27 @@ static String printTagSet(Vector<Tag> tagSet) {
 			// TODO Auto-generated catch block
 			e1.printStackTrace();
 		}
+		
+		if (tags != null) {
+			reportProgress("\nTest 4: Printing this tag set: \n" + adb.printTagSet(tags));
+		}
+		else {
+			reportProgress("no tags to process!");
+		}
+		reportProgress("\nTest 5: Printing an empty tag set: " + adb.printTagSet(null));
+		
+		// now try to get it back from the database
+		String direction = "Forwards";
+		//String testStrand = direction.substring(1,1);
+		String testStrand = "";
+		testStrand = direction.substring(0,1);
+		//String testStrand  = direction.charAt(1);
+		
+		reportProgress("\nTest 6: really getting these tags from the database");
+		
+		String tagString = "";
+		String strand = "F";
+		int seq_id = 74294853;
 		
 		Contig savedContig = null;
 		
@@ -543,7 +501,10 @@ static String printTagSet(Vector<Tag> tagSet) {
 			Arcturus.logSevere("writeAlignment: unable to find tags for contig "+ savedContig.getName());
 		}
 		
-		reportProgress("Printing the retrieved tag set: " + printTagSet(tagList));
+		reportProgress("\nTest 7: printing the retrieved tag set: " + adb.printTagSet(tagList));
+		
+		reportProgress("\nTest 8: printing the first tag " + tagList.firstElement().toSAMString());
+		
 		reportProgress("TESTS complete");
 	}
 	

@@ -47,6 +47,7 @@ public class MailHandler extends Handler {
 		// No-op.
 	}
 
+	
 	public void publish(LogRecord record) {
 		if (!isLoggable(record) || record.getThrown() == null)
 			return;
