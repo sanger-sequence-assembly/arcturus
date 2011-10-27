@@ -21,7 +21,7 @@ public class SAMContigBuilder {
 	private DecimalFormat format = null;
 	protected long t0;
 	
-	private boolean scb_testing = false;
+	private boolean scb_testing = true;
 
 	private char fieldSeparator = ';';
 	private char recordSeparator = '|';
