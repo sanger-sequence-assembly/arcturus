@@ -75,7 +75,7 @@ public class Tag extends Core implements Comparable {
 	}
 	
 	public boolean isContigTag(){
-		return (gapTagType.equals("Zc"));
+		return (gapTagType.equals("Zc") || gapTagType.equals("PT"));
 	}
 	
 	/**
