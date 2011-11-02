@@ -33,11 +33,11 @@ my $gap4dbname;             # default 'projectname.0' ??
 
 # caf file processing
 
-my $frugal = 0 ;            # (default) build object instances using minimal memory
+my $frugal = 1 ;            # (default) build object instances using minimal memory
 my $linelimit;              # specifying a line limit implies test mode 
 my $readlimit;              # scan until this number of reads is found
 my $parseonly;              # only parse the file (test mode)
-my $blocksize = 20;
+my $blocksize = 50;
 
 # contig specification
 
@@ -646,7 +646,7 @@ my %readtagoptions;
 $readtagoptions{load} = 1 if $loadreadtags;
 $readtagoptions{sync} = 1 if $syncreadtags;
 $readtagoptions{echo} = 1 if $echoreadtags;
-print STDOUT "l $loadreadtags  s  $syncreadtags  e $echoreadtags\n";
+#print STDOUT "l $loadreadtags  s  $syncreadtags  e $echoreadtags\n";
 
 my %contigtagoptions;
 
@@ -794,7 +794,7 @@ if ($frugal) { # this whole block should go to a contig "factory"
         if (defined $ignorereadnamelike) { # apply filter to readnames
 # ignorereadnamelike option suppresses autoloading and must be accompanied by cleanup of contig
             $ignorereadnamelike =~ s/[\:\;\,]+/|/g;
-            $ignorereadnamelike = wq($ignorereadnamelike);
+            $ignorereadnamelike = qw($ignorereadnamelike);
             my @filteredreadnames;
             foreach my $readname (@readnames) {
                 if ($readname =~ /$ignorereadnamelike/) {
