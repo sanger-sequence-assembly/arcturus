@@ -162,10 +162,16 @@ sub errorStatus {
 sub disconnect {
 # disconnect from the database
     my $this = shift;
+		my $statements = $this->{'statements'};
 
-    foreach my $key (keys(%{$this->{'statements'}})) {
-	$this->{'statements'}->{$key}->finish();
-    }
+		if (defined($statements)) {
+    	foreach my $key (keys(%{$this->{'statements'}})) {
+				my $key = $this->{'statements'}->{$key};
+				if (defined($key)) {
+					$key->finish();
+				}
+    	}
+		}
 
     my $dbh = $this->{Connection};
 
