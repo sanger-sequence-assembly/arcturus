@@ -209,12 +209,14 @@ public class BAMContigLoader {
     		Contig parent = getFirst(parents);
     		Contig child = getFirst(children);
     		
-    		contigBuilder.addMappingsToContig(child, reader);
+    		// this is already being done in importChildContigs so that the comparison can be done for mappings and tags	                 
+            // contigBuilder.addMappingsToContig(contig, reader);
     		
+    		reportProgress("BAMContigLoader:  about to check if the contigs are equal");
  			doImport = !contigComparator.equalsParentContig(child, parent);
  			
  			if (!doImport) {
- 				//reportProgress("BAMContigLoader:  about to check if the tag sets are equal");
+ 				reportProgress("BAMContigLoader:  parent and child are the same, so about to check if their tag sets are equal");
  				doImport = !contigComparator.equalsParentContigTags(child, parent);
  			}
  			
