@@ -214,13 +214,12 @@ public class SAMContigBuilder {
 	 * @return
 	 */
 	public void addTagsToContig(Contig contig, SAMRecord record)  throws ArcturusDatabaseException  {
-		//reportProgress("\taddTagsToContig: adding tags for contig " + contig.getName() + " from SAMRecord " + record.getReadName());
-		
+		reportProgress("\taddTagsToContig: adding tags for contig " + contig.getName() + " from SAMRecord " + record.getReadName());
+
 		String gapTagType = null;
 		String gapTagString = null;
 		short count = 1;
 		
-	
 		Sequence sequence = brl.findOrCreateSequence(record);
 		if (sequence == null) 
 			 throw new ArcturusDatabaseException("addTagToContig: cannot find data for sequence for SAMRecord =" + record.getReadName());	 
@@ -231,7 +230,13 @@ public class SAMContigBuilder {
 		ArrayList<SAMRecord.SAMTagAndValue> tagList= (ArrayList<SAMRecord.SAMTagAndValue>) record.getAttributes();
 		int tagCount = tagList.size();
 		
-		//reportProgress("\t\taddTagsToContig: found " + tagCount + " tags: ");
+		int flags = record.getFlags() ;
+		
+		if ((flags == 768) || (flags == 0)){
+			reportProgress("\t\taddTagsToContig: found a dummy read record with " + tagCount + " tags, flags " + flags + " and strand " + strand + "direction: ");
+			// no read group in a dummy read so start from 0 not 1.
+			count = 0;
+		}
 		
 		while (count < tagCount ) {	
 			SAMRecord.SAMTagAndValue samTag = tagList.get(count);
