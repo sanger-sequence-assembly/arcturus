@@ -1,5 +1,6 @@
 package uk.ac.sanger.arcturus.jdbc;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.people.*;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
@@ -1729,6 +1730,15 @@ public class ContigManager extends AbstractManager {
 		}
 	}
 	
+	private boolean testing = true;
+	
+	private void reportProgress(String message) {
+		if (testing) {
+			System.out.println(message);
+		}
+		Arcturus.logInfo(message);
+	}
+	 
 	public boolean putTags(Contig contig) throws ArcturusDatabaseException {
 		
 		// ("Zs", 'Z', "REPT", "Tag inserted at position 25 at start of AAAA", 2005, 5, 1, 74294504, 'U', NULL);
@@ -1750,7 +1760,7 @@ public class ContigManager extends AbstractManager {
 			try {
 				while (iterator.hasNext()) {		
 					tag = (Tag) iterator.next();
-					System.out.println("This tag holds " + tag.toSAMString());
+					reportProgress("\tputTags: tag for contig " + contig_id + " holds " + tag.toSAMString());
 					
 					pstmtStoreSAMTag.setString(1, tag.getSAMTagType());
 					pstmtStoreSAMTag.setString(2, tag.getSAMTypeAsString());

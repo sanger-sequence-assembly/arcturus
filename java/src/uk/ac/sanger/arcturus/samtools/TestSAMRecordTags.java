@@ -309,8 +309,9 @@ public class TestSAMRecordTags {
 				"25;25;+;EMPT;|" +
 				"13;22;?;Frpr;gff3src=six|" +
 				"3;3;+;CRMr;gff3src=seven";
-		String invalidMultiGapTagString = "giraffe;128;-;0.543;gff3src=this one is invalid|" +
-				"105;113;+;COMM;gff3src=this one is OK";
+		String invalidMultiGapTagString = "5;5;?;REPT;Tag inserted at postion 25 at start of AAAA|28;28;?;COMM;Tag inserted at position 48 as a comment at the start of AAAAAA";
+				//"giraffe;128;-;0.543;gff3src=this one is invalid|" +
+				//"105;113;+;COMM;gff3src=this one is OK";
 				
 	
 		String CTTGapTagString = "?;COMM;Note=Looks like a problem here with * as read group and sequence :)";
@@ -345,7 +346,7 @@ public class TestSAMRecordTags {
 				addPTTagToContig(contig, gapTagType, invalidSingleGapTagString, 74294504, 'F');	
 				}
 				catch (Exception e) {
-					System.out.println("ERROR: Cannot parse tag " + invalidSingleGapTagString + ": this tag will NOT be stored\n");
+					System.out.println("ERROR: Cannot parse tag " + invalidSingleGapTagString + "because of the error reported below: this tag will NOT be stored\n");
 				}
 			}
 			else {
@@ -359,7 +360,6 @@ public class TestSAMRecordTags {
 		
 		reportProgress("\nTest 2a: multi PT tag\n"+ multiGapTagString +"\n");
 		if (isValidGapTagType(gapTagType)){
-			
 			if (multiGapTagString != null) {
 				reportProgress("\taddTagsToContig: adding multitag " + count + " of type " + gapTagType + " holding " + multiGapTagString);		
 				addPTTagToContig(contig, gapTagType, multiGapTagString, 74294504, 'F');	
@@ -382,7 +382,8 @@ public class TestSAMRecordTags {
 					addPTTagToContig(contig, gapTagType, invalidMultiGapTagString, 74294504, 'F');	
 				}
 				catch (Exception e) {
-					System.out.println("ERROR: Cannot parse tag " + invalidMultiGapTagString + ": this tag will NOT be stored\n");
+					System.out.println("ERROR: Cannot parse tag " + invalidMultiGapTagString + "because of the exception shown below: this tag will NOT be stored\n");
+					System.out.println(e.toString());
 				}
 			}
 			else {
@@ -465,7 +466,16 @@ public class TestSAMRecordTags {
 		testStrand = direction.substring(0,1);
 		//String testStrand  = direction.charAt(1);
 		
-		reportProgress("\nTest 6: really getting these tags from the database");
+		reportProgress("\nTest 6: store the tags and contig in the database");
+		
+		try {
+			adb.putContig(contig);
+		} catch (ArcturusDatabaseException e2) {
+			// TODO Auto-generated catch block
+			e2.printStackTrace();
+		}
+		
+		reportProgress("\nTest 7: really getting these tags from the database");
 		
 		String tagString = "";
 		String strand = "F";
@@ -501,9 +511,9 @@ public class TestSAMRecordTags {
 			Arcturus.logSevere("writeAlignment: unable to find tags for contig "+ savedContig.getName());
 		}
 		
-		reportProgress("\nTest 7: printing the retrieved tag set: " + adb.printTagSet(tagList));
+		reportProgress("\nTest 8: printing the retrieved tag set: " + adb.printTagSet(tagList));
 		
-		reportProgress("\nTest 8: printing the first tag " + tagList.firstElement().toSAMString());
+		reportProgress("\nTest 9: printing the first tag " + tagList.firstElement().toSAMString());
 		
 		reportProgress("TESTS complete");
 	}

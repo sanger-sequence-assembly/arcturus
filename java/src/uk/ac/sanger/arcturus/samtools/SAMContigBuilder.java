@@ -231,7 +231,7 @@ public class SAMContigBuilder {
 		ArrayList<SAMRecord.SAMTagAndValue> tagList= (ArrayList<SAMRecord.SAMTagAndValue>) record.getAttributes();
 		int tagCount = tagList.size();
 		
-		reportProgress("addTagsToContig: found " + tagCount + " tags: ");
+		//reportProgress("\t\taddTagsToContig: found " + tagCount + " tags: ");
 		
 		while (count < tagCount ) {	
 			SAMRecord.SAMTagAndValue samTag = tagList.get(count);
@@ -347,7 +347,12 @@ public class SAMContigBuilder {
 		
 	   
  	    SAMReadGroupRecord readGroup = record.getReadGroup();
- 	    String readGroupIDvalue = readGroup.getId();
+ 	    String readGroupIDvalue = "*";
+ 	    
+ 	    if (readGroup != null) {
+ 	    	readGroupIDvalue = readGroup.getId();
+ 	    }
+ 	    
  	    reportProgress("\taddMappingsToContig: adding ID " + readGroupIDvalue + " for read group " + readGroup + " for contig " + contig.getName());
 		
 		CanonicalMapping mapping = new CanonicalMapping(0,span,span,cigar, mapping_quality, readGroupIDvalue);
