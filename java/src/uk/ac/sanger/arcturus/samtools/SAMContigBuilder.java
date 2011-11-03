@@ -292,6 +292,17 @@ public class SAMContigBuilder {
 	 		try {
 	 			seqToContigMappings.add(mapping);
 	 			count ++;
+	 		}
+	 		catch (NullPointerException e){
+	 			System.out.println("addMappingsToContig: adding SeqToContig mappings has returned a null pointer so moving on to the next SAMRecord\n");
+	 			count ++;
+	 		}
+	 		catch (Exception e) {
+	 			System.out.println("addMappingsToContig: adding SeqToContig mappings has returned an exception so moving on to the next SAMRecord\n");
+	 			count ++;
+	 		}
+	 		
+	 		try {
 	 			addTagsToContig(contig, record);
 
 	 			if (diagnostics && (count%10000) == 0) {
@@ -307,12 +318,13 @@ public class SAMContigBuilder {
 	 			}
 	 		}
 	 		catch (NullPointerException e){
-	 			System.out.println("Vector class has returned a null pointer so moving on to the next SAMRecord\n");
-	 			count ++;
+	 			System.out.println("addMappingsToContig: adding tags has returned a null pointer so moving on to the next SAMRecord\n");
 	 		}
 	 		catch (ArcturusDatabaseException e) {
-	 			System.out.println("Adding tags has returned a database exception so moving on to the next SAMRecord\n");
-	 			count ++;
+	 			System.out.println("addMappingsToContig: adding tags has returned a database exception so moving on to the next SAMRecord\n");
+	 		}
+	 		catch (Exception e) {
+	 			System.out.println("addMappingsToContig: adding tags has returned an exception so moving on to the next SAMRecord\n");
 	 		}
 	    }
 
