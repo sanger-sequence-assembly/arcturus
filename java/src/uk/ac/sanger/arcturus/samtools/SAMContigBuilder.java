@@ -247,6 +247,7 @@ public class SAMContigBuilder {
 				gapTagType = samTag.tag;
 			}
 			catch (Exception e) {
+				System.out.println("ERROR: Picard SAMTagAndValue cannot read tag because \n" + e.toString());
 				throw new Exception("ERROR: Picard SAMTagAndValue cannot read tag because \n" + e.toString());
 			}
 						
@@ -260,6 +261,7 @@ public class SAMContigBuilder {
 					gapTagString = record.getStringAttribute(gapTagType);
 				}
 				catch (Exception e) {
+					System.out.println("ERROR: Picard getStringAttributes cannot read tag string because \n" + e.toString());
 					throw new Exception("ERROR: Picard getStringAttributes cannot read tag string because \n" + e.toString());
 				}
 
