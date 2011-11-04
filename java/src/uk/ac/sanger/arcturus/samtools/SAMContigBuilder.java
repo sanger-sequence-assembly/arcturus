@@ -197,7 +197,7 @@ public class SAMContigBuilder {
  	}
  	
  	private boolean isValidGapTagType(String gapTagType){
-		return ( (gapTagType.equals("Zc") || gapTagType.equals("Zs") || gapTagType.equals("FS")) || gapTagType.equals("PT") || gapTagType.equals("CT"));
+		return ( (gapTagType.equals("Zc") || gapTagType.equals("Zs") || gapTagType.equals("FS")) || gapTagType.equals("PT") || gapTagType.equals("CT")|| gapTagType.equals("RT"));
 	}
 	
 	/**
@@ -243,6 +243,10 @@ public class SAMContigBuilder {
 			
 			gapTagType = samTag.tag;
 						
+			if ((flags == 768) || (flags == 0)){
+				reportProgress("\t\taddTagsToContig: dummy read is of type " + gapTagType );
+			}
+			
 			if (isValidGapTagType(gapTagType)){
 				gapTagString = record.getStringAttribute(gapTagType);
 
@@ -252,7 +256,7 @@ public class SAMContigBuilder {
 						if (gapTagType.equals("PT")){
 							addPTTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
 						}
-						else if (gapTagType.equals("CT")){
+						else if ((gapTagType.equals("CT")) || (gapTagType.equals("RT"))){
 							addCTTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
 						}
 						else if ((gapTagType.equals("Zc"))||(gapTagType.equals("Zs"))) {
@@ -273,7 +277,7 @@ public class SAMContigBuilder {
 	
 	public void addMappingsToContig(Contig contig,SAMFileReader reader) throws ArcturusDatabaseException {
 		
-		reportProgress("addMappingsToContig: working with contig " + contig.getName() + " which has " + contig.getParentContigCount() + " parents and " + contig.getReadCount() + " reads.");
+		reportProgress("\naddMappingsToContig: working with contig " + contig.getName() + " which has " + contig.getParentContigCount() + " parents and " + contig.getReadCount() + " reads.");
 		
 		if (contig.getContigToParentMappings() != null)
 			return;
@@ -360,7 +364,7 @@ public class SAMContigBuilder {
 		//sequence.setDNA(null);
 		
 		int mapping_quality = record.getMappingQuality();
-		reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + mapping_quality + " from record " + record.getReadName());
+		//reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + mapping_quality + " from record " + record.getReadName());
 		
 	   
  	    SAMReadGroupRecord readGroup = record.getReadGroup();
@@ -377,7 +381,7 @@ public class SAMContigBuilder {
 		
 		int stored_quality = cached.getMappingQuality();
 		
-		reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + stored_quality + " from database\n");
+		//reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + stored_quality + " from database");
 		
 		Direction direction = record.getReadNegativeStrandFlag() ? Direction.REVERSE : Direction.FORWARD;
 		

@@ -89,10 +89,10 @@ public class Tag extends Core implements Comparable {
 		if (thisSAMTagType.equals("PT")) {	
 			return this.toPTSAMString();
 		}
-		else if (thisSAMTagType.equals("CT")) {
+		else if ((thisSAMTagType.equals("CT")) || (thisSAMTagType.equals("RT"))){
 			return this.toCTSAMString();
 		}
-		else if ((thisSAMTagType.equals("Zc")) ||  (thisSAMTagType.equals("Zs"))) {
+		else if ((thisSAMTagType.equals("Zc")) ||  (thisSAMTagType.equals("Zs")) || (thisSAMTagType.equals("FS"))) {
 			return this.toZSAMString();
 		}	
 		else return "Not a valid GAP tag";
