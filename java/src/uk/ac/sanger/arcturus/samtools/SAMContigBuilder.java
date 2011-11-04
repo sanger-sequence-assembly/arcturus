@@ -233,9 +233,9 @@ public class SAMContigBuilder {
 		int flags = record.getFlags() ;
 		
 		if ((flags == 768) || (flags == 0)){
-			reportProgress("\t\taddTagsToContig: found a dummy read record with " + tagCount + " tags, flags " + flags + " and strand " + strand + "direction: ");
-			// no read group in a dummy read so start from 0 not 1.
-			count = 0;
+			reportProgress("\t\taddTagsToContig: found a dummy read record with " + tagCount + " tags, flags " + flags + " and strand " + strand + " : ");
+			// no read group in a dummy read.  Picard structure starts from index 1 so increment tagCount to effectively read tagList[1]
+			tagCount++;
 		}
 		
 		while (count < tagCount ) {	
