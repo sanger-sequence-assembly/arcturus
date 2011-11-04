@@ -60,7 +60,7 @@ public class SequenceManager extends AbstractManager {
 		"select cvleft,cvright from CLONEVEC where seq_id = ?";
 	
 	private static final String GET_TAGS =
-		"select samTagType, samType, GAPtagtype,start, length, tagcomment, tag_seq_id, strand from SAMTAG " +
+		"select distinct samTagType, samType, GAPtagtype,start, length, tagcomment, tag_seq_id, strand from SAMTAG " +
 		"where tag_seq_id = ? order by SAMtagtype, start";
 	
 	private static final String GET_SEQUENCE_BY_READNAME_FLAGS_AND_HASH =
