@@ -64,12 +64,12 @@ CREATE TABLE `READTAG` (
   CONSTRAINT `READTAG_FK_SEQUENCE` FOREIGN KEY (`seq_id`) REFERENCES `SEQUENCE` (`seq_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
--- GAP% support
+-- GAP5 support
 
 DROP TABLE IF EXISTS `SAMTAG`;
 CREATE TABLE `SAMTAG` (
   `tag_id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `SAMtagtype` ENUM("Zc", "Zs") NOT NULL,
+  `SAMtagtype` enum('Zc','Zs','CT','PT', 'RT', 'FS') NOT NULL,
   `SAMtype` ENUM('A', 'i', 'f', 'Z', 'H', 'B') NOT NULL,
   `GAPtagtype` varchar(4) CHARACTER SET latin1 COLLATE latin1_bin NOT NULL DEFAULT 'COMM',
   `tagcomment` text,
@@ -77,7 +77,7 @@ CREATE TABLE `SAMTAG` (
   `start` int(11) unsigned NOT NULL DEFAULT '0',
   `length` int(11) unsigned NOT NULL DEFAULT '0',
   `tag_seq_id` int(10) unsigned NOT NULL DEFAULT '0',
-  `strand` enum('F','R','U') NOT NULL DEFAULT 'U',
+  `strand` enum('+','-','?','.') NOT NULL DEFAULT 'U',
   `comment` tinytext,
   PRIMARY KEY (`tag_id`),
   KEY `GAPtagtype` (`GAPtagtype`),
