@@ -241,16 +241,27 @@ public class SAMContigBuilder {
 		}
 		
 		while (count < tagCount ) {	
-			SAMRecord.SAMTagAndValue samTag = tagList.get(count);
 			
-			gapTagType = samTag.tag;
+			try {
+				SAMRecord.SAMTagAndValue samTag = tagList.get(count);
+				gapTagType = samTag.tag;
+			}
+			catch (Exception e) {
+				throw new Exception("ERROR: Picard SAMTagAndValue cannot read tag because \n" + e.toString());
+			}
 						
 			if (flags == 768){
 				reportProgress("\t\taddTagsToContig: dummy read is of type " + gapTagType );
 			}
 			
 			if (isValidGapTagType(gapTagType)){
-				gapTagString = record.getStringAttribute(gapTagType);
+				
+				try {
+					gapTagString = record.getStringAttribute(gapTagType);
+				}
+				catch (Exception e) {
+					throw new Exception("ERROR: Picard getStringAttributes cannot read tag string because \n" + e.toString());
+				}
 
 				if (gapTagString != null) {
 					try {
@@ -351,7 +362,7 @@ public class SAMContigBuilder {
 
 	private SequenceToContigMapping buildSequenceToContigMapping(SAMRecord record, Contig contig) throws ArcturusDatabaseException {	    
 	    
-		reportProgress("\tbuildSequenceToContigMapping: working with SAMRecord " + record.getReadName() + " and contig " + contig.getName());
+		//reportProgress("\tbuildSequenceToContigMapping: working with SAMRecord " + record.getReadName() + " and contig " + contig.getName());
 		
 		String cigar = record.getCigarString();
 		int contigStartPosition = record.getAlignmentStart();
