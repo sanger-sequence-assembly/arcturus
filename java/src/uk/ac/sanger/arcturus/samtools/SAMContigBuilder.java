@@ -236,8 +236,8 @@ public class SAMContigBuilder {
 		
 		if (flags == 768){
 			reportProgress("\t\taddTagsToContig: found a dummy read record with " + tagCount + " tags, flags " + flags + " and strand " + strand + " : ");
-			// no read group in a dummy read.  Picard structure starts from index 1 so increment tagCount to effectively read tagList[1]
-			tagCount++;
+			// no read group in a dummy read.  
+			count--;
 		}
 		
 		while (count < tagCount ) {	
@@ -247,8 +247,9 @@ public class SAMContigBuilder {
 				gapTagType = samTag.tag;
 			}
 			catch (Exception e) {
-				System.out.println("ERROR: Picard SAMTagAndValue cannot read tag because \n" + e.toString());
-				throw new Exception("ERROR: Picard SAMTagAndValue cannot read tag because \n" + e.toString());
+				System.out.println("ERROR: Picard SAMTagAndValue cannot read tag at position " + count + " because \n" + e.toString() + "\n");
+				e.printStackTrace();
+				throw new Exception("ERROR: Picard SAMTagAndValue cannot read tag " + count + " because \n" + e.toString());
 			}
 						
 			if (flags == 768){
@@ -261,7 +262,8 @@ public class SAMContigBuilder {
 					gapTagString = record.getStringAttribute(gapTagType);
 				}
 				catch (Exception e) {
-					System.out.println("ERROR: Picard getStringAttributes cannot read tag string because \n" + e.toString());
+					System.out.println("ERROR: Picard getStringAttributes cannot read tag string because \n" + e.toString()+ "\n");
+					e.printStackTrace();
 					throw new Exception("ERROR: Picard getStringAttributes cannot read tag string because \n" + e.toString());
 				}
 
