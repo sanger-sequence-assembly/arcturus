@@ -1819,7 +1819,7 @@ public class ContigManager extends AbstractManager {
 						tagString = tagString + recordSeparator + tag.toPartialPTSAMString();
 					}
 				}
-				else if (thisSAMTagType.equals("CT")) {
+				else if ((thisSAMTagType.equals("CT")) || (thisSAMTagType.equals("RT")) ){
 					tagString = tagString + " " + tag.toCTSAMString();
 				}
 				else if ((thisSAMTagType.equals("Zc")) ||  (thisSAMTagType.equals("Zs"))) {

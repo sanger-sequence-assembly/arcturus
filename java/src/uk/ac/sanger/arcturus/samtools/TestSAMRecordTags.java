@@ -314,7 +314,7 @@ public class TestSAMRecordTags {
 				//"105;113;+;COMM;gff3src=this one is OK";
 				
 	
-		String CTTGapTagString = "?;COMM;Note=Looks like a problem here with * as read group and sequence :)";
+		String CTTGapTagString = ".;COMM;Note=Looks like a problem here with * as read group and sequence :)";
 		String invalidCTTGapTagString = "My tag has no separator";
 		
 		Contig contig = new Contig();
