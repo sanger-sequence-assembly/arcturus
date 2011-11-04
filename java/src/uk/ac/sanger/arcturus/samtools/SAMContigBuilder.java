@@ -173,6 +173,8 @@ public class SAMContigBuilder {
  	
  	public void addCTTagToContig(Contig contig, String samTagType, String gapTagString, int sequence_id, char strand){
  		
+ 		reportProgress("\t\taddCTTagToContig: tag string is " + gapTagString);
+ 		
 		char samType = 'Z';
 		int fs1 = gapTagString.indexOf(fieldSeparator);
 		int fs2 = gapTagString.indexOf(fieldSeparator, fs1+1);
@@ -213,8 +215,8 @@ public class SAMContigBuilder {
 	 * 
 	 * @return
 	 */
-	public void addTagsToContig(Contig contig, SAMRecord record)  throws ArcturusDatabaseException  {
-		reportProgress("\taddTagsToContig: adding tags for contig " + contig.getName() + " from SAMRecord " + record.getReadName());
+	public void addTagsToContig(Contig contig, SAMRecord record)  throws ArcturusDatabaseException, Exception  {
+		//reportProgress("\taddTagsToContig: adding tags for contig " + contig.getName() + " from SAMRecord " + record.getReadName());
 
 		String gapTagType = null;
 		String gapTagString = null;
@@ -232,7 +234,7 @@ public class SAMContigBuilder {
 		
 		int flags = record.getFlags() ;
 		
-		if ((flags == 768) || (flags == 0)){
+		if (flags == 768){
 			reportProgress("\t\taddTagsToContig: found a dummy read record with " + tagCount + " tags, flags " + flags + " and strand " + strand + " : ");
 			// no read group in a dummy read.  Picard structure starts from index 1 so increment tagCount to effectively read tagList[1]
 			tagCount++;
@@ -243,7 +245,7 @@ public class SAMContigBuilder {
 			
 			gapTagType = samTag.tag;
 						
-			if ((flags == 768) || (flags == 0)){
+			if (flags == 768){
 				reportProgress("\t\taddTagsToContig: dummy read is of type " + gapTagType );
 			}
 			
@@ -252,7 +254,7 @@ public class SAMContigBuilder {
 
 				if (gapTagString != null) {
 					try {
-						reportProgress("\taddTagsToContig: adding tag " + count + " of type " + gapTagType + " holding " + gapTagString);	
+						reportProgress("\taddTagsToContig: adding tag " + count + " of type " + gapTagType + " holding " + gapTagString + "\n");	
 						if (gapTagType.equals("PT")){
 							addPTTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
 						}
@@ -264,7 +266,7 @@ public class SAMContigBuilder {
 						}
 					}
 					catch (Exception e) {
-						System.out.println("ERROR: Cannot parse tag " + gapTagString + ": this tag will NOT be stored\n");
+						throw new Exception("ERROR: Cannot read tag " + gapTagString + " because \n" + e.toString());
 					}
 				}
 				else {
@@ -277,7 +279,7 @@ public class SAMContigBuilder {
 	
 	public void addMappingsToContig(Contig contig,SAMFileReader reader) throws ArcturusDatabaseException {
 		
-		reportProgress("\naddMappingsToContig: working with contig " + contig.getName() + " which has " + contig.getParentContigCount() + " parents and " + contig.getReadCount() + " reads.");
+		//reportProgress("\naddMappingsToContig: working with contig " + contig.getName() + " which has " + contig.getParentContigCount() + " parents and " + contig.getReadCount() + " reads.");
 		
 		if (contig.getContigToParentMappings() != null)
 			return;
@@ -295,7 +297,7 @@ public class SAMContigBuilder {
 	 	while (iterator.hasNext()) {
 	 		SAMRecord record = iterator.next();
 
-	 		System.out.println("\tworking with SAMRecord " + record.getReadName() + " flags " + record.getFlags());
+	 		System.out.println("\n\tworking with SAMRecord " + record.getReadName() + " flags " + record.getFlags());
 	 		SequenceToContigMapping mapping = buildSequenceToContigMapping(record,contig);
 
 	 		try {
@@ -374,7 +376,7 @@ public class SAMContigBuilder {
  	    	readGroupIDvalue = readGroup.getId();
  	    }
  	    
- 	    reportProgress("\taddMappingsToContig: adding ID " + readGroupIDvalue + " for read group " + readGroup + " for contig " + contig.getName());
+ 	    //reportProgress("\taddMappingsToContig: adding ID " + readGroupIDvalue + " for read group " + readGroup + " for contig " + contig.getName());
 		
 		CanonicalMapping mapping = new CanonicalMapping(0,span,span,cigar, mapping_quality, readGroupIDvalue);
 		CanonicalMapping cached = adb.findOrCreateCanonicalMapping(mapping);
