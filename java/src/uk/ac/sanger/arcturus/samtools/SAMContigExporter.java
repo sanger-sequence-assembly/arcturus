@@ -279,7 +279,7 @@ public class SAMContigExporter {
 				DNA + TAB + 
 				qualityString;
 		
-		if ((readGroupIDvalue != null) || (!readGroupIDvalue.equals("*"))){
+		if ((readGroupIDvalue != null) && (!readGroupIDvalue.equals("*"))){
 			alignmentString = alignmentString +  TAB + "RG:Z:" + readGroupIDvalue;
 		}
 		
