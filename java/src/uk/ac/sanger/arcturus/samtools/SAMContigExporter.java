@@ -263,7 +263,7 @@ public class SAMContigExporter {
 		}
 
 
-		if (DNA.equals(null)) {
+		if (DNA == null) {
 			DNA = "*";
 		}
 
@@ -276,7 +276,7 @@ public class SAMContigExporter {
 		}
 
 	
-		if (quality.equals(null)) {
+		if (quality == null) {
 			qualityString = "*";
 		}
 		
