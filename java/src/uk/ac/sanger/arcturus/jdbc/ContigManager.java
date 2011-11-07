@@ -1796,7 +1796,7 @@ public class ContigManager extends AbstractManager {
 	public String printTagSet(Vector<Tag> tagSet) {
 		
 		String tagString = "";
-		char tagSeparator = ' ';
+		char TAB = '\t';
 		char recordSeparator = '|';
 
 		if (tagSet != null) {
@@ -1805,6 +1805,7 @@ public class ContigManager extends AbstractManager {
 			
 			Tag tag = null;
 			boolean firstPTTag = true;
+			boolean firstTag = true;
 			
 			while (iterator.hasNext()) {
 				tag = iterator.next();
@@ -1814,16 +1815,29 @@ public class ContigManager extends AbstractManager {
 					if (firstPTTag) {
 						tagString = tagString + tag.toPTSAMString();
 						firstPTTag = false;
+						firstTag = false;
 					}
 					else {
 						tagString = tagString + recordSeparator + tag.toPartialPTSAMString();
 					}
 				}
 				else if ((thisSAMTagType.equals("CT")) || (thisSAMTagType.equals("RT")) ){
-					tagString = tagString + " " + tag.toCTSAMString();
+					if (firstTag) {
+						tagString = tag.toCTSAMString();
+					}
+					else {
+							tagString = tagString + TAB + tag.toCTSAMString();
+					}
+					firstTag = false;
 				}
 				else if ((thisSAMTagType.equals("Zc")) ||  (thisSAMTagType.equals("Zs"))) {
-					tagString = tagString + " " + tag.toZSAMString();
+					if (firstTag) {
+						tagString = tag.toZSAMString();
+					}
+					else {
+						tagString = tagString + TAB + tag.toZSAMString();
+					}
+					firstTag = false;
 				}
 			}
 		}
