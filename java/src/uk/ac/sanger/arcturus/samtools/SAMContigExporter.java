@@ -203,21 +203,18 @@ public class SAMContigExporter {
 		String strand = direction.substring(0,1);
 		
 		Sequence seq = adb.getSequenceBySequenceID(seq_id);
+		Vector<Tag>  tagList = null;
 		
 		try {
 			adb.loadTagsForSequence(seq);
-			Vector<Tag>  tagList = seq.getTags();
-			if (tagList !=null) {
-				Iterator<Tag> iterator = tagList.iterator();	
-				
-				
-				while (iterator.hasNext()) {
-					tagString = tagString + (iterator.next()).toSAMString() + " ";
-				}
-			}
+			tagList = seq.getTags();
 		}
 		catch (ArcturusDatabaseException e){
-			Arcturus.logSevere("writeAlignment: unable to create a string version of the tags for contig "+ contigName);
+			Arcturus.logSevere("writeAlignment: unable to find tags for sequence " + seq_id + " for contig "+ contigName);
+		}
+		
+		if (tagList != null) {
+			tagString = adb.printTagSet(tagList);
 		}
 		
 		if (sequence != null) {
