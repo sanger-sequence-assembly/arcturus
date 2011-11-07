@@ -246,39 +246,35 @@ public class SAMContigExporter {
 		
         for (int i = 0; i < quality.length; i++)	
         	quality[i] += FASTQ_QUALITY_OFFSET;
-	
-        if (flags != 768) { 
+
+		String DNA = null;
+		String qualityString = null;
+		
+		if (flags != 768) { 
         	flags = Utility.maskReadFlags(flags);
 
         	if (!forward)
         		flags |= 0x0010;
+        	
+            for (int i = 0; i < quality.length; i++)	
+            	quality[i] += FASTQ_QUALITY_OFFSET;
+    		
+    		try {
+    			DNA = new String(sequence, "US-ASCII");
+    		} catch (UnsupportedEncodingException e) {
+    			e.printStackTrace();
+    		}
+
+    		try {
+    			qualityString = new String(quality, "US-ASCII");
+    		} catch (UnsupportedEncodingException e) {
+    			e.printStackTrace();
+    		}
         }
-        
-		String DNA = null;
-		
-		try {
-			DNA = new String(sequence, "US-ASCII");
-		} catch (UnsupportedEncodingException e) {
-			e.printStackTrace();
-		}
-
-
-		if (DNA == null) {
-			DNA = "*";
-		}
-
-		String qualityString = null;
-
-		try {
-			qualityString = new String(quality, "US-ASCII");
-		} catch (UnsupportedEncodingException e) {
-			e.printStackTrace();
-		}
-
-	
-		if (quality == null) {
-			qualityString = "*";
-		}
+        else {
+        	DNA = "*";
+        	qualityString = "*";
+        }
 		
 		String alignmentString = 
 				readname + TAB + 
