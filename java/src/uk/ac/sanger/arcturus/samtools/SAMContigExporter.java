@@ -42,7 +42,7 @@ public class SAMContigExporter {
 	
 	private final char TAB = '\t';
 	
-	private boolean testing = false;
+	private boolean testing = true;
 	
 	private static final String GET_ALIGNMENT_DATA =
 		" select RN.readname,RN.flags,SC.coffset,SC.direction,CM.cigar,CM.mapping_quality, CM.read_group_IDvalue, S.seq_id,S.seqlen,S.sequence,S.quality" +
@@ -256,24 +256,30 @@ public class SAMContigExporter {
         
 		String DNA = null;
 		
-		if (!DNA.equals("*")) {
-			try {
-				DNA = new String(sequence, "US-ASCII");
-			} catch (UnsupportedEncodingException e) {
-				e.printStackTrace();
-			}
+		try {
+			DNA = new String(sequence, "US-ASCII");
+		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
 		}
-		
+
+
+		if (DNA.equals(null)) {
+			DNA = "*";
+		}
+
 		String qualityString = null;
-		
-		if (!quality.equals("*")) {
-			try {
-				qualityString = new String(quality, "US-ASCII");
-			} catch (UnsupportedEncodingException e) {
-				e.printStackTrace();
-			}
+
+		try {
+			qualityString = new String(quality, "US-ASCII");
+		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
 		}
+
 	
+		if (quality.equals(null)) {
+			qualityString = "*";
+		}
+		
 		String alignmentString = 
 				readname + TAB + 
 				flags + TAB + 
