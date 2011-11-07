@@ -81,7 +81,15 @@ public class BAMReadLoader {
 	public Sequence findOrCreateSequence(SAMRecord record) throws ArcturusDatabaseException {
 		String readname = record.getReadName();
 		
-		int maskedFlags = Utility.maskReadFlags(record.getFlags());
+		int maskedFlags = 0;
+		int flags = record.getFlags();
+		
+		if (flags != 768) {
+			maskedFlags = Utility.maskReadFlags(flags);
+		}
+		else {
+			maskedFlags = flags;
+		}
 		
 		byte[] dna = record.getReadBases();
 		
