@@ -4033,6 +4033,21 @@ sub retireReadTag {
               . "   and strand = '"    .  $strand . "'";
     $query   .= "   and comment = $tagcomment" if $tagcomment;
 
+		$dbh->do($query);
+
+# now check for previous generations of this tag, which also need to be deprecated
+# the sequence id will not be the same if the sequence has been edited in the meantime.
+
+	  $query = "update READTAG set deprecated = 'Y'"
+	           . " where deprecated != 'Y'"
+	           . "   and tagtype = '"   .  $tag->getType() . "'"
+	           . "   and tag_seq_id = " . ($tag->getTagSequenceID() || 0)
+	           . "   and pstart = "     .  $pstart
+	           . "   and pfinal = "     .  $pfinal
+	           . "   and strand = '"    .  $strand . "'";
+	    $query   .= "   and comment = $tagcomment" if $tagcomment;
+	 
+
     return $dbh->do($query); # true for success
 }
 
