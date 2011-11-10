@@ -21,10 +21,12 @@ set MYSQL_USER=arcturus
 set MYSQL_PASSWORD=***REMOVED***
 
 switch($MYSQL_HOST)
-case mcs6:
+case mcs10:
 # check for a LIVE database used in the last $TIME_IN_DAYS days
 	perl $MYPERL_SCRIPT -host $MYSQL_HOST -port 15001  -username $MYSQL_USER -password $MYSQL_PASSWORD -since $TIME_IN_DAYS > $LISTDIR/hlm_active_organisms.list
 	perl $MYPERL_SCRIPT -host $MYSQL_HOST -port 15003  -username $MYSQL_USER -password $MYSQL_PASSWORD -since $TIME_IN_DAYS > $LISTDIR/arc_active_organisms.list
+	breaksw
+case mcs7:
 	perl $MYPERL_SCRIPT -host $MYSQL_HOST -port 15005  -username $MYSQL_USER -password $MYSQL_PASSWORD -since $TIME_IN_DAYS > $LISTDIR/zeb_active_organisms.list
 	breaksw
 case mcs4a:
