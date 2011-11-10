@@ -101,7 +101,7 @@ fi
 
 if [ "x" == "x$instance" ]
 then
-    echo -n "Enter Arcturus instance [pathogen,vertebrates,test,...] > "
+    echo -n "Enter Arcturus instance [pathogen,vertebrates,test,illumina...] > "
     read instance
 fi
 
@@ -109,7 +109,7 @@ if [ "$createdb" -ne "0" ]
 then
     if [ "x" == "x$node" ]
 	then
-	echo -n "Enter MySQL instance [arcp,hlmp,zebp,arct,...] > "
+	echo -n "Enter MySQL instance [arcp,hlmp,zebp,arct,illp...] > "
 	read node
     fi
 
