@@ -54,7 +54,7 @@ public class CheckConsistency {
 
 	public void checkConsistency(ArcturusDatabase adb, CheckConsistencyListener listener)
 		throws ArcturusDatabaseException {
-		checkConsistency(adb, listener, false);
+		checkConsistency(adb, listener, true);
 	}
 	
 	public void checkConsistency(ArcturusDatabase adb, CheckConsistencyListener listener, boolean criticalOnly)
