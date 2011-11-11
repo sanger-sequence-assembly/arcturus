@@ -7,8 +7,8 @@ LDAP_URL="ldap://ldap.internal.sanger.ac.uk/"
 LDAP_ROOT_DN="cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk"
 LDAP_USER="uid=${USER},ou=people,dc=sanger,dc=ac,dc=uk"
 
-ARCTURUS_INSTANCES=pathogen,vertebrates,test
-MYSQL_INSTANCES=arcp,hlmp,zebp,arct
+ARCTURUS_INSTANCES=pathogen,vertebrates,test,illumina
+MYSQL_INSTANCES=arcp,hlmp,zebp,arct,illp
 
 LIVE_ACTIVE_ORGANISMS_LIST=~arcturus/active-organisms.list
 #########################################################################
