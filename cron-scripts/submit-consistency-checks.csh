@@ -10,7 +10,7 @@ if ( $# > 0 ) then
   set ORG=$2
 	set JAR=$3
 else
-  echo "submit-consistency-check is expecting INSTANCE, ORGANISM and JAR as parametersi e.g. test TRICHURIS arcturus2 or test TESTRATTI arcturus"
+  echo "submit-consistency-check is expecting INSTANCE, ORGANISM and JAR as parameters e.g. test TRICHURIS arcturus2 or test TESTRATTI arcturus"
 	die 1
 endif
 
@@ -37,7 +37,7 @@ cd ${CONSISTENCYFOLDER}
   pushd $ORG
 
 	echo Starting to check the consistency of the $ORG organism in the $INSTANCE Arcturus using the JAR ${JARFILE}...
-  	/software/jdk/bin/java -classpath ${JARFILE} uk.ac.sanger.arcturus.consistencychecker.CheckConsistency -instance $INSTANCE -organism $ORG -log_full_path ${CONSISTENCYFOLDER}/$ORG/$ORG 
+  	/software/jdk/bin/java -classpath ${JARFILE} uk.ac.sanger.arcturus.consistencychecker.CheckConsistency -instance $INSTANCE -organism $ORG -log_full_path ${CONSISTENCYFOLDER}/$ORG/ -critical
 
   popd
 
