@@ -1,0 +1,58 @@
+#!/usr/local/bin/perl
+
+use WrapMySQL;
+
+while ($nextword = shift) {
+    $inifile = shift if ($nextword eq '-inifile');
+
+    $instance = shift if ($nextword eq '-instance');
+
+    $registercommand = shift if ($nextword eq '-registercommand');
+
+    $ldap = 1 if ($nextword eq '-ldap');
+}
+
+$ldap = 0 unless defined($ldap);
+
+die "You must specify a configuration file (-inifile FILENAME)" unless defined($inifile);
+
+die "Configuration file $inifile does not exist" unless -f $inifile;
+
+die "You must specify an Arcturus instance name (-instance NAME)" unless defined($instance);
+
+die "You must specify a command to register the JNDI datasource (-registercommand COMMAND)"
+    unless defined($registercommand);
+
+WrapMySQL->initFromFile($inifile);
+
+@organisms = WrapMySQL->listInstances();
+
+foreach $organism (@organisms) {
+    $database = WrapMySQL->getDatabase($organism);
+    $hostname = WrapMySQL->getHostname($organism);
+    $port = WrapMySQL->getPort($organism);
+
+    ($username, $password) = WrapMySQL->getRole($organism, 'write');
+
+    if (defined($hostname) && defined($port) && defined($username) && defined($password) &&
+	defined($database)) {
+	$organism = "cn=$organism" if ($ldap);
+
+	$cmd = "$registercommand -organism $organism -instance $instance -host $hostname " .
+	    "-port $port -username $username -password $password -database $database";
+
+	print STDERR "$cmd\n";
+
+	$rc = system($cmd);
+
+	print STDERR "rc=$rc\n" if ($rc != 0);
+
+	exit($rc) if ($rc != 0);
+    } else {
+	print STDERR "Some information is missing for $organism\n";
+    }
+}
+
+
+
+exit(0);

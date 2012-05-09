@@ -1,0 +1,116 @@
+#!/usr/local/bin/perl
+#
+# reads2fas
+#
+# This script extracts one or more reads and generates a FASTA file
+
+use DBI;
+use FileHandle;
+use DataSource;
+use Compress::Zlib;
+
+$verbose = 0;
+@dblist = ();
+
+while ($nextword = shift @ARGV) {
+    $instance = shift @ARGV if ($nextword eq '-instance');
+    $organism = shift @ARGV if ($nextword eq '-organism');
+
+    $verbose = 1 if ($nextword eq '-verbose');
+
+    if ($nextword eq '-help') {
+	&showUsage();
+	exit(0);
+    }
+}
+
+unless (defined($organism)) {
+    print STDERR "One or more mandatory parameters are missing.\n\n";
+    &showUsage();
+    exit(1);
+}
+
+$instance = 'dev' unless defined($instance);
+
+$ds = new DataSource(-instance => $instance, -organism => $organism);
+
+$dbh = $ds->getConnection();
+
+if (defined($dbh)) {
+    if ($verbose) {
+	print STDERR "Connected to DataSource(instance=$instance, organism=$organism)\n";
+	print STDERR "DataSource URL is ", $ds->getURL(), "\n";
+    }
+} else {
+    print STDERR "Failed to connect to DataSource(instance=$instance, organism=$organism)\n";
+    print STDERR "DataSource URL is ", $ds->getURL(), "\n";
+    print STDERR "DBI error is $DBI::errstr\n";
+    die "getConnection failed";
+}
+
+$outfh = new FileHandle($outfile, "w");
+
+print STDERR "\n" if $verbose;
+
+$ndone = 0;
+$nfound = 0;
+
+$query = "SELECT SEQ2READ.seq_id,sequence FROM SEQ2READ left join SEQUENCE using(seq_id) WHERE version=0";
+
+$sth = $dbh->prepare($query);
+&db_die("prepare($query) failed on $dsn");
+
+$query = "UPDATE SEQUENCE SET sequence=? WHERE seq_id=?";
+
+$update_sth = $dbh->prepare($query);
+&db_die("prepare($query) failed on $dsn");
+
+printf STDERR "%8d", $ndone unless $verbose;
+$format = "\010\010\010\010\010\010\010\010%8d";
+
+$sth->execute();
+
+while (@ary = $sth->fetchrow_array()) {
+    ($seqid, $sequence) = @ary;
+
+    $sequence = uncompress($sequence);
+
+    $sequence =~ s/\-/N/g;
+
+    $sequence = compress($sequence);
+
+    $update_sth->execute($sequence, $seqid);
+
+    $ndone++;
+
+    printf STDERR $format, $ndone if (!$verbose && ($ndone % 50) == 0);
+}
+
+unless ($verbose) {
+    printf STDERR $format, $ndone;
+    print STDERR "\n";
+}
+
+
+$sth->finish();
+$update_sth->finish();
+
+$dbh->disconnect();
+
+exit(0);
+
+sub db_die {
+    my $msg = shift;
+    return unless $DBI::err;
+    print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
+    exit(0);
+}
+
+
+sub showUsage {
+    print STDERR "MANDATORY PARAMETERS:\n";
+    print STDERR "    -organism\t\tName of organism\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "    -instance\t\tName of instance [default: prod]\n";
+}

@@ -1,0 +1,241 @@
+#!/usr/local/bin/perl
+#
+# reads2zlib
+#
+# This script changes the compression of DNA sequences to Zlib
+
+use DBI;
+use Term::ReadKey;
+use Compress;
+
+$verbose = 0;
+@dblist = ();
+
+while ($nextword = shift @ARGV) {
+    $host = shift @ARGV if ($nextword eq '-host');
+
+    $port = shift @ARGV if ($nextword eq '-port');
+
+    $mysqluser = shift @ARGV if ($nextword eq '-user');
+
+    $mysqlpass = shift @ARGV if ($nextword eq '-pass');
+
+    $limit = shift @ARGV if ($nextword eq '-limit');
+
+    $dodna = 1 if ($nextword eq '-dodna');
+
+    $doquality = 1 if ($nextword eq '-doquality');
+
+    if ($nextword eq '-databases') {
+	while (@ARGV && ! ($ARGV[0] =~ /^-/)) {
+	    push @dblist, shift @ARGV;
+	}
+    }
+
+    $verbose = 1 if ($nextword eq '-verbose');
+
+    $batchmode = 1 if ($nextword eq '-batchmode');
+
+    $optimise = 1 if ($nextword eq '-optimise' || $nextword eq '-optimize');
+
+    if ($nextword eq '-help') {
+	&showUsage();
+	exit(0);
+    }
+}
+
+unless (defined($host) &&
+	defined($port) &&
+	defined($mysqluser) &&
+	scalar(@dblist) > 0) {
+    print STDERR "One or more mandatory parameters are missing.\n\n";
+    &showUsage();
+    exit(1);
+}
+
+$dbname = $dblist[0];
+
+$dsn = 'DBI:mysql:' . $dbname . ';host=' . $host . ';port=' . $port;
+
+unless (defined($mysqlpass)) {
+    print STDERR "Enter MySQL password for $mysqluser\n";
+    ReadMode 'noecho';
+    $mysqlpass = ReadLine 0;
+    ReadMode 'normal';
+    chop $mysqlpass;
+}
+
+$dbh = DBI->connect($dsn, $mysqluser, $mysqlpass,
+		    {PrintError => 1, RaiseError => 1});
+
+$compressor = new Compress('ACGT- ');
+
+foreach $dbname (@dblist) {
+    $query = "USE $dbname";
+    print STDERR "Switching to database $dbname\n";
+    print STDERR "\n$query\n" if $verbose;
+    $dbh->do($query);
+    &db_die("$query failed");
+    print STDERR "\n" if $verbose;
+
+    $ndna = 0;
+    $nquality = 0;
+
+    if ($dodna) {
+	$query = "SELECT read_id,sequence,scompress FROM READS WHERE scompress != 99";
+	$query .= " LIMIT $limit" if defined($limit);
+
+	$sth = $dbh->prepare($query);
+	&db_die("prepare($query) failed on $dsn");
+
+	$sth->execute();
+	&db_die("execute($query) failed on $dsn");
+
+	$updatequery = "UPDATE READS SET scompress=99, sequence=? WHERE read_id=?";
+
+	$update = $dbh->prepare($updatequery);
+	&db_die("prepare($updatequery) failed on $dsn");
+ 
+	$ndone = 0;
+	$oldlen = 0;
+	$newlen = 0;
+
+	print STDERR "Compressing and updating DNA data ...\n";
+
+	unless ($batchmode) {
+	    printf STDERR "%8d", $ndone;
+	    $format = "\010\010\010\010\010\010\010\010%8d";
+	}
+
+	while(@ary = $sth->fetchrow_array()) {
+	    ($readid, $sequence, $scompress) = @ary;
+
+	    $oldlen += length($sequence);
+
+	    ($slen, $sequence) = $compressor->sequenceDecoder($sequence, $scompress)
+		if $scompress;
+
+	    ($slen, $sequence) = $compressor->sequenceEncoder($sequence, 99);
+
+	    $update->execute($sequence, $readid);
+	    &db_die("execute($updatequery) failed on $dsn for readid $readid");
+
+	    $newlen += length($sequence);
+
+	    $ndone++;
+	    printf STDERR $format, $ndone if (($ndone % 50) == 0 && !defined($batchmode));
+	}
+
+	$sth->finish();
+
+	if ($batchmode) {
+	    print STDERR "$ndone reads processed\n";
+	} else {
+	    printf STDERR $format, $ndone;
+	    print STDERR " ... compressed and updated\n";
+	}
+	
+	$update->finish();
+
+	print STDERR "Total sequence length was $oldlen, now $newlen\n" if ($ndone > 0);
+
+	$ndna = $ndone;
+    }
+
+    if ($doquality) {
+	$query = "SELECT read_id,quality,qcompress FROM READS WHERE qcompress != 99";
+	$query .= " LIMIT $limit" if defined($limit);
+
+	$sth = $dbh->prepare($query);
+	&db_die("prepare($query) failed on $dsn");
+
+	$sth->execute();
+	&db_die("execute($query) failed on $dsn");
+
+	$updatequery = "UPDATE READS SET qcompress=99, quality=? WHERE read_id=?";
+
+	$update = $dbh->prepare($updatequery);
+	&db_die("prepare($updatequery) failed on $dsn");
+ 
+	$ndone = 0;
+	$oldlen = 0;
+	$newlen = 0;
+
+	print STDERR "Compressing and updating base quality data ...\n";
+
+	unless ($batchmode) {
+	    printf STDERR "%8d", $ndone;
+	    $format = "\010\010\010\010\010\010\010\010%8d";
+	}
+
+	while(@ary = $sth->fetchrow_array()) {
+	    ($readid, $quality, $qcompress) = @ary;
+
+	    $oldlen += length($quality);
+
+	    ($qlen, $quality) = $compressor->qualityDecoder($quality, $qcompress) if $qcompress;
+
+	    ($qlen, $quality) = $compressor->qualityEncoder($quality, 99);
+
+	    $update->execute($quality, $readid);
+	    &db_die("execute($updatequery) failed on $dsn for readid $readid");
+
+	    $newlen += length($quality);
+
+	    $ndone++;
+	    printf STDERR $format, $ndone if (($ndone % 50) == 0 && !defined($batchmode));
+	}
+
+	$sth->finish();
+
+	if ($batchmode) {
+	    print STDERR "$ndone reads processed\n";
+	} else {
+	    printf STDERR $format, $ndone;
+	    print STDERR " ... compressed and updated\n";
+	}
+	
+	$update->finish();
+
+	print STDERR "Total quality length was $oldlen, now $newlen\n" if ($ndone > 0);
+
+	$nquality = $ndone;
+    }
+
+    if ($optimise && ($ndna >0 || $nquality > 0)) {
+	$query = "OPTIMIZE TABLE READS";
+	print STDERR "Optimising READS table\n";
+	$dbh->do($query);
+	&db_die("$query failed");
+    }
+}
+
+$dbh->disconnect();
+
+exit(0);
+
+sub db_die {
+    my $msg = shift;
+    return unless $DBI::err;
+    print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
+    exit(0);
+}
+
+sub showUsage {
+    print STDERR "MANDATORY PARAMETERS:\n";
+    print STDERR "    -host\t\tHostname of server\n";
+    print STDERR "    -port\t\tPort number of server\n";
+    print STDERR "    -user\t\tMySQL username\n";
+    print STDERR "    -databases\t\tOne or more databases to be modified\n";
+    print STDERR "\n";
+    print STDERR "MODE CONTROL OPTIONS:\n";
+    print STDERR "    -dodna\t\tProcess DNA sequence data\n";
+    print STDERR "    -doquality\t\tProcess base quality data\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "    -pass\t\tMySQL password (you will be prompted for one if absent)\n";
+    print STDERR "    -verbose\t\tVerbose output\n";
+    print STDERR "    -batchmode\t\tDo not display progress info\n";
+    print STDERR "    -limit\t\tSpecify the maximum number of reads to process\n";
+    print STDERR "    -optimise\t\tOptimise the READS table after updating\n";
+}

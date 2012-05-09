@@ -1,0 +1,54 @@
+CREATING A NEW ARCTURUS DATABASE
+
+These are the steps which must be followed in order to add a new
+assembly to Arcturus.
+
+STAGE 1
+
+1. Login to the MySQL server as root.
+
+2. Create a new database.
+
+3. Create the tables in the database.  The easiest way to do this
+   is by using the "CREATE TABLE ... LIKE ..." syntax, with an
+   existing database as a template.
+
+4. Grant the appropriate privileges on the new database to the MySQL
+   users "arcturus" and "arcturus_dba".  Again, the easiest way to
+   do this is by copying the privileges from an existing database.
+
+STAGE 2
+
+1. Login to the MySQL server as arcturus_dba.
+
+2. Load the views from <arcturus_home>/sql/views/*.sql
+
+3. Load the stored procedures from <arcturus_home>/sql/procedures/*.sql
+
+   The easiest way to perform steps 2 and 3 is with a command such
+   as
+
+     cd <arcturus_home>/sql
+     cat views/*.sql procedures/*.sql | mysql -u arcturus_dba ...
+
+4. Create a new entry in the ASSEMBLY table.
+
+5. Create a new entry in the PROJECT table for the BIN project.
+
+6. Populate the USER and PRIVILEGE tables.  The easiest way to do this
+   is to use an existing database as a template, and copy the entries
+   from its USER and PRIVILEGE tables.
+
+STAGE 3
+
+1. Login to the LDAP server (using the JXplorer tool) as the Arcturus
+   administrator user i.e. a user with write access to the Arcturus
+   sub-tree. 
+
+2. Create a new entry in the cn=pathogen,cn=jdbc tree for the MySQL
+   database that has just been created.  The easiest way to do this is
+   to modify an entry in the cn=tmp,cn=jdbc tree, and then copy and paste
+   it into cn=pathogen,cn=jdbc.
+
+3. Create an alias for the new entry in the appropriate sub-tree e.g.
+   bacteria, fungi, etc.

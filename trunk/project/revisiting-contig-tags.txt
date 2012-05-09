@@ -1,0 +1,73 @@
+Arcturus Project
+================
+
+
+Revisting Contig Tags
+---------------------
+
+
+The contig-tag remapping exercise for the SCHISTO project has thrown up
+some issues about how contig tags are represented in the database and
+processed, which made me revisit some of my efforts in this respect in the
+past for other projects and make an assessment of the methods and ideas 
+used. 
+
+This has now cristalized in a proposal to radically change the way we 
+treat contig tags in Arcturus.
+
+The current model for tags on reads and contigs was the simple concept of
+a begin and end position on the (consensus) sequence and some descriptors
+and comment. This model still is fine for read tags, but was at the root 
+of many difficulties with the processing of contig tags.
+   
+The problem is in the fact that we store the unpadded representation of
+the data, which means that the contig consensus can contain pads. If a
+tag is straddling a pad position the tag's span is changed with respect
+to the positions in the GAP database, the original source of the data. This
+in itself is no problem as the caf padding and depadding methods take care
+of the difference between the padded and unpadded consensus. However, it
+gives Arcturus a headache when such a tag is subjected to the propagation
+from a contig to one of its offspring: basically Arcturus can't readily
+distinguish between a pad in the tag introduced by the caf_depad process
+and a frameshift introduced by a feature of the mapping between the two
+contigs. Hence a number of non-trivial hacks were required in the earlier 
+mentioned efforts in order to arrive at the correct result and record
+things like real frameshifts or truncations of the tag. A complicating
+factor was also that finishing tags and annotation tags can behave subtly
+different, depending on what format is chosen for export (e.g. EMBL vs CAF).
+
+Frankly speaking, it all looks a bit messy, also after a good clean-up of
+the code during the SCHISTO remapping.
+
+
+The possible alternative
+------------------------
+
+The current model used to store contig tags is with the TAG2CONTIG, CONTIGTAG
+and TAGSEQUENCE. The first table contains the position information of the tag
+on the contig, the latter two metadata and possibly tag sequence info.
+
+I want to replace the TAG2CONTIG info by a mapping (from a static tag sequence
+to the contig), hence replace the table by two new ones: T2CMAPPING and 
+T2CSEGMENT. The advantages thus obtained are:
+
+- The propagation of a tag is now simply a multiplication of the tag-to-contig
+  mapping by the parent-to-contig mapping; this is how it works already, but
+  the initial tag mapping has to be constructed first.
+
+- All contig tags are treated the same; the choice of how to format the tag is
+  on export from Arcturus only.
+
+- All information of the tag positions is preserved, hence the occurrence of
+  frame shifts or truncations can be obtained dynamically from the mapping at
+  the point of export, instead of being kept track of during whatever the tag 
+  is going through during its lifetime.
+
+- The code base will be simplified in several places and easier to maintain.
+
+
+
+
+Ed Zuiderwijk
+
+03-11-2009
