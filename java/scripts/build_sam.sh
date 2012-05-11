@@ -1,0 +1,1 @@
+bsub -q long -P helminth-ga /software/solexa/bin/aligners/samtools/current/samtools view -h -o /lustre/scratch101/sanger/kt6/Eimeria/all_cappair.sam /lustre/scratch101/sanger/kt6/Eimeria/all_cappair.bam

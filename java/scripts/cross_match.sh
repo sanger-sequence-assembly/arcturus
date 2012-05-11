@@ -1,0 +1,1 @@
+/software/badger/bin/cross_match /lustre/scratch101/sanger/kt6/Eimeria/all_cappair_rg_head_cons.fas -minmatch 20 -minscore 100 -masklevel 101 -raw > /lustre/scratch101/sanger/kt6/Eimeria/minmatch20minscore100/all_cappair_rg_head_cons_on_farm.xma
