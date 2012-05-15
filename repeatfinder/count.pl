@@ -10,7 +10,7 @@ while (<STDIN>)
 			print "$sequence_length\n"  if (($sequence_length >= $min) && ($sequence_length <= $max)) ;
 			$sequence_length = 0;
 	}
-	elsif ((/\s*[atcg]+$/) || (/\s*[ATCG]+$/)) {
+	elsif ((/\s*[atcgn]+$/) || (/\s*[ATCGN]+$/)) {
 		$sequence_length = $sequence_length + length $_;
 	}
 	else {
