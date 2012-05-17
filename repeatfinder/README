@@ -1,0 +1,132 @@
+David Harper's repeat-finder pipeline
+=====================================
+
+This set of scripts is a repeat-finding pipeline which I designed
+several years ago as an alternative to RepeatScout, RepeatMasker
+and other packages.
+
+It is based on a fairly simple idea, but it appears to be quite
+effective at finding repeats of 100bp or longer.  Paul Mooney
+compared it with RepeatScout in 2007.  He ran both methods on 8,500
+contigs from the Eimeria tenella assembly.  RepeatScout found 370
+repeats and this pipeline found 325.  Of those, 259 were found by
+both methods.  Paul tested some of the 66 repeats that were found
+only by my pipeline, and found that they did indeed match the
+assembly quite well and repeatedly.
+
+------------
+How it works
+------------
+
+The algorithm is based on the principle that a repeat is any sequence
+which occurs more than once in a genome or set of contigs.
+
+The first stage of the pipeline is a cross_match screening of all
+of the chromosomes or contigs to find matching sequences.  Cross_match
+can be run in a mode where it compares all sequences in a FASTA file
+with one another and with themselves, to find both inter-contig and
+intra-contig matches.
+
+In the second stage of the pipeline, the output of the cross_match
+screening is analysed.  For each input chromosome or contig, a histogram
+of the number of cross_match hits at each base in the sequence is
+constructed.
+
+The third stage of the pipeline looks for plateaus in the histograms.
+These plateaus represent sub-sequences which have a substantially greater
+number of hits elsewhere in the genome than the surrounding sequence.
+The script which performs this stage has parameters which allow you to
+specify the minimum length of contig to consider, and the minimum length
+and height of plateau.
+
+The output of the third stage is a list of subsequences of the input
+chromosomes or contigs which appear more than once in the set of input
+sequences.  In the fourth stage, we extract them from the original FASTA
+file.
+
+The subsequences may contain partial repeat sequences, so in the fifth
+stage, we run them through phrap to join any partial repeats.
+
+The sixth stage merges the two sets of sequences and renames them.
+
+-----------------------
+How to use the pipeline
+-----------------------
+
+1. Create a FASTA file containing the chromosomes or contigs from
+   the genome which you wish to process.
+
+   Run cross_match on the FASTA file, using a command such as
+
+  cross_match contigs.fas -minmatch 50 -minscore 100 -masklevel 101 \
+     -raw > contigs.xma
+
+   you might want to experiment with the -minmatch and -minscore
+   parameters, but you *must* specify "-masklevel 101 -raw".
+
+2. Create a temporary directory e.g.
+
+  mkdir /tmp/histo.$$
+
+   then run the xma2histo.pl script:
+
+  xma2histo.pl -dir /tmp/histo.$$ < contigs.xma
+
+3. Run the findpeaks.pl script.  It has four command-line parameters
+
+  -dir specifies the directory which you created in step 2 [mandatory]
+
+  -thresh is the minimum height of a plateau in the histogram [default: 10]
+
+  -minreplen is the minimum length of a plateau [default: 100]
+
+  -minlen is the minimum length of an input contig [default: 1000]
+
+   and should be run like this:
+
+  findpeaks.pl -dir /tmp/histo.$$ > findpeaks.out
+
+4. Run the subsequence.pl script to extract candidate repeat sequences.
+   The name of the riginal FASTA file from step 1 should be provided
+   as the sole command-line parameter, and the output of step 3 as the
+   standard input:
+
+  subsequence.pl contigs.fas < findpeaks.out > subseqs.fas
+
+5. Run the subsequences through phrap to join any partial repeats:
+
+  phrap subseqs.fas
+
+   This produces two FASTA files named subseqs.fas.contigs and
+   subseqs.fas.singlets, which contain, respectively, the joined
+   partial repeats and the input sequences which could not be joined.
+
+6. Merge the output FASTA files from phrap and rename the sequences
+   using the fastarename.pl script:
+
+  cat subseqs.fas.contigs subseqs.fas.singlets |\
+    fastarename.pl -prefix REP > repeats.fas
+
+7. You should now screen the set of potential repeats to identify those
+   which do not match in multiple places.  The simplest method is to use
+   cross_match again:
+
+  cross_match contigs.fas repeats.fas -minmatch 50 -minscore 100 \
+    -masklevel 101 -raw > repeats.xma
+
+   then filter the output using xmatchfilter.pl:
+
+  xmatchfilter.pl -in repeats.xma > repeats.matches
+
+   and finally, count the hits using standard Unix tools:
+
+  awk '{print $9} repeats.matches | sort -b -k1 | uniq -c | sort -b -k1rn
+
+   which produces a list of the repeat sequence names and the number of
+   times each one matches the original chromosomes or contigs, in
+   descending order of number of hits.
+
+
+David Harper
+
+19 February 2009
