@@ -147,6 +147,7 @@ public class SAMContigExporter {
 			throw new ArcturusDatabaseException("Cannot export a contig without a valid ID");
 			
 		String contigName = getNameForContig(contig);
+		writeContigTags(contigName, contig, pw);
 		
 		try {
 			checkConnection();
@@ -174,6 +175,7 @@ public class SAMContigExporter {
 		}
 		catch (SQLException e) {
 			adb.handleSQLException(e, "An error occurred when exporting a contig", conn, this);
+			
 		}
 	}
 	  
@@ -296,6 +298,56 @@ public class SAMContigExporter {
 		
 		reportProgress("writeAlignment: Writing line for sequence " + seq_id + ":\n" + alignmentString);
 		pw.println( alignmentString);
+	}
+	
+	private void writeContigTags(String contigName, Contig contig, PrintWriter pw) {
+		
+		int column = 1;
+		int flags = 768;
+		String cigar = "1M";
+		String tagString = "";
+		String contigTagString = "";
+		Vector<Tag>  tags = null;
+		Tag tag = null;
+		
+		try {
+			adb.loadTagsForContig(contig);
+		}
+		catch (ArcturusDatabaseException e){
+			Arcturus.logSevere("writeContigTags: unable to find tags for contig "+ contigName);
+		}
+		
+		tags = contig.getTags();
+		if (tags != null ){
+			Iterator iterator = tags.iterator();
+
+			try {
+				while (iterator.hasNext()) {	
+					tag = (Tag) iterator.next();
+					// * 768 00016.contig03989 48  255 1M  * 0 0 * * CT:Z:.;COMM;Note=5 As at pos 49
+					contigTagString = 
+						"*" + TAB + 
+						flags + TAB + 
+						contigName + TAB + 
+						tag.getStart() + TAB + 
+						"255" + TAB + 
+						cigar + TAB + "*\t0\t0\t" + 
+						"0" + TAB + 
+						"0" + TAB + 
+						"*" + TAB +
+						"*";
+					if (tagString !=null) {
+						contigTagString = contigTagString + TAB + tagString;
+					}
+				}
+			}
+			catch (Exception e) {
+				Arcturus.logSevere("writeContigTags: unable to find tags for contig "+ contigName);											
+			}
+		}
+		
+		reportProgress("writeAlignment: Writing line for contig tag for contig  " + contigName + ":\n" + contigTagString);
+		pw.println( contigTagString);
 	}
 	
 	private void checkConnection() throws SQLException, ArcturusDatabaseException {
