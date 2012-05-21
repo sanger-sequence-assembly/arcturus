@@ -336,6 +336,10 @@ public class SAMContigExporter {
 						"0" + TAB + 
 						"*" + TAB +
 						"*";
+					
+					if (tag != null) {
+						tagString = tag.toCTSAMString();
+					}
 					if (tagString !=null) {
 						contigTagString = contigTagString + TAB + tagString;
 					}
