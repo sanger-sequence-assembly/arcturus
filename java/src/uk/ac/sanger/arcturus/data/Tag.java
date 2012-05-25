@@ -117,7 +117,8 @@ public class Tag extends Core implements Comparable {
 	}
 	
 	public String toCTSAMString() {
-		return (samTagType + ":" + samType + ":" + strand + fieldSeparator + gapTagType + fieldSeparator + comment);
+		// CT:Z:+;ANNO;Note=Annotation to see format of CT tag in Gap5 1.2.14-r2891M
+		return (samTagType + ":" + "Z" + ":" + strand + fieldSeparator + gapTagType + fieldSeparator + "Note=" + comment);
 	}
 	
 	/**
