@@ -75,7 +75,7 @@ public class SAMContigExporter {
 	
 	private void exportReadGroupSet(List<SAMReadGroupRecord> readGroups, PrintWriter pw) throws ArcturusDatabaseException {
 		//@RG	ID:GE6QGXJ01.sff	SM:unknown	LB:GE6QGXJ01.sff
-		
+
 		pw.println("@PG\tID:" + getClass().getName());
 		
 		for (SAMReadGroupRecord readGroup : readGroups){
@@ -331,7 +331,7 @@ public class SAMContigExporter {
 						contigName + TAB + 
 						tag.getStart() + TAB + 
 						"255" + TAB + 
-						cigar + TAB + "*\t0\t0\t" + 
+						cigar + TAB + "*" + 
 						"0" + TAB + 
 						"0" + TAB + 
 						"*" + TAB +
