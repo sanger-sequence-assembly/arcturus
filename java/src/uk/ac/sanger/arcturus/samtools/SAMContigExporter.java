@@ -201,7 +201,7 @@ public class SAMContigExporter {
 		int seqlen = rs.getInt(column++);
 		byte[] sequence = rs.getBytes(column++);
 		byte[] quality = rs.getBytes(column++);
-		String tagString = "";
+		String tagString = null;
 		String strand = direction.substring(0,1);
 		
 		Sequence seq = adb.getSequenceBySequenceID(seq_id);
