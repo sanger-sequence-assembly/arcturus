@@ -1,6 +1,0 @@
-#!/bin/csh -f
-
-set basedir=`dirname $0`
-source ${basedir}/setup.csh
-
-java ${JAVA_OPTS} ${ARCTURUS_TEST_PACKAGE}.TestLigationManager $*
