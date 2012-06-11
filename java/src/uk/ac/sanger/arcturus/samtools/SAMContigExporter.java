@@ -349,10 +349,9 @@ public class SAMContigExporter {
 			catch (Exception e) {
 				Arcturus.logSevere("writeContigTags: unable to find tags for contig "+ contigName);											
 			}
+			reportProgress("writeAlignment: Writing line for contig tag for contig  " + contigName + ":\n" + contigTagString);
+			pw.println( contigTagString);
 		}
-		
-		reportProgress("writeAlignment: Writing line for contig tag for contig  " + contigName + ":\n" + contigTagString);
-		pw.println( contigTagString);
 	}
 	
 	private void checkConnection() throws SQLException, ArcturusDatabaseException {
