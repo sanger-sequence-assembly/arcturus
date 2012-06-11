@@ -486,6 +486,7 @@ if ($gap_version == 4) {
     $export_script = "${arcturus_home}/java/scripts/exportsamfile" unless defined($export_script);
 
     my $samfile = "$tmpdir/$projectname.sam";
+    my $sorted_samfile = "$tmpdir/sorted$projectname.sam";
 
     my $command = "$export_script -instance $instance -organism $organism -out $samfile";
 
@@ -527,6 +528,21 @@ if ($gap_version == 4) {
      exit 1;
 	}
 
+#---------------------------------------------------------------------------------------
+# use Picard SamSort to sort sam file to get contigs tag in correct co-ordinate position
+#---------------------------------------------------------------------------------------
+
+   my $sorting_command = "java -jar /software/arcturus2/java/lib/SortSam.jar I=$samfile O=$sorted_samfile SORT_ORDER=coordinate VALIDATION_STRINGENCY=SILENT";
+ 
+   print STDERR "Sorting SAM file $samfile to $sorted_samfile\n";
+    
+   print STDERR "Command: $sorting_command\n";
+   my $src = &mySystem ($sorting_command);
+
+   if ($src) {
+		print STDERR "!! -- FAILED to sort SAM file $samfile to $sorted_samfile($?) --\n";
+		exit 1;
+   }
 
 #------------------------------------------------------------------------------
 # converting SAM file into gap database
@@ -553,8 +569,7 @@ if ($gap_version == 4) {
 	    exit 1;
 	}
     }
-
-    &mySystem("${badgerbin}/tg_index -test -s $samfile -o $gapname.$version");
+   &mySystem("${badgerbin}/tg_index -test -s $sorted_samfile -o $gapname.$version");
 
     unless ($? == 0) {
 	print STDERR "!! -- FAILED to create a Gap database ($?) --\n";
