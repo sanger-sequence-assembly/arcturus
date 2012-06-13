@@ -26,7 +26,7 @@ jmxdb.username=arcturus
 jmxdb.password=***REMOVED***
 
 jobplacer.prefix=ssh
-jobplacer.host=seq1
+jobplacer.host=seq2
 jobplacer.command=/software/arcturus/utils/find_a_host.csh
 
 mappingmanager.allowduplicatesequences=true
