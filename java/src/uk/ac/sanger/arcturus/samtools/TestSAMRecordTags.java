@@ -436,7 +436,6 @@ public class TestSAMRecordTags {
 		}
 		
 		Vector<Tag> tags = contig.getTags();
-		Iterator <Tag> iterator = null;
 		
 		ArcturusInstance ai = null;
 		try {
@@ -454,7 +453,14 @@ public class TestSAMRecordTags {
 		}
 		
 		if (tags != null) {
-			reportProgress("\nTest 4: Printing this tag set: \n" + adb.printTagSet(tags));
+			reportProgress("\nTest 4: Printing this tag set with " + tags.size() + " elements: \n" + adb.printTagSet(tags));
+			
+			Iterator <Tag> iterator = tags.iterator();
+			
+			while (iterator.hasNext() ){
+				Tag tag = iterator.next();
+				reportProgress("\t\t\tprinting tag length: " + tag.getLength());
+			}
 		}
 		else {
 			reportProgress("no tags to process!");
