@@ -146,7 +146,7 @@ public class SAMContigExporter {
 		if (contig.getID() <= 0)
 			throw new ArcturusDatabaseException("Cannot export a contig without a valid ID");
 			
-		String contigName = getNameForContig(contig);
+		String contigName = contig.getName();
 		writeContigTags(contigName, contig, pw);
 		
 		try {
