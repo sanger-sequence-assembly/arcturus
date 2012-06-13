@@ -569,7 +569,7 @@ if ($gap_version == 4) {
 	    exit 1;
 	}
     }
-   &mySystem("${badgerbin}/tg_index -test -s $sorted_samfile -o $gapname.$version");
+   &mySystem("${badgerbin}/tg_index -s $sorted_samfile -o $gapname.$version");
 
     unless ($? == 0) {
 	print STDERR "!! -- FAILED to create a Gap database ($?) --\n";
