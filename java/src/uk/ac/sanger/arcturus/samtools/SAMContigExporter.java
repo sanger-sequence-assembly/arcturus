@@ -42,7 +42,7 @@ public class SAMContigExporter {
 	
 	private final char TAB = '\t';
 	
-	private boolean testing = false;
+	private boolean testing = true;
 	
 	private static final String GET_ALIGNMENT_DATA =
 		" select RN.readname,RN.flags,SC.coffset,SC.direction,CM.cigar,CM.mapping_quality, CM.read_group_IDvalue, S.seq_id,S.seqlen,S.sequence,S.quality" +
@@ -308,7 +308,6 @@ public class SAMContigExporter {
 		String tagString = "";
 		String contigTagString = "";
 		Vector<Tag>  tags = null;
-		Tag tag = null;
 		
 		try {
 			adb.loadTagsForContig(contig);
@@ -319,19 +318,19 @@ public class SAMContigExporter {
 		
 		tags = contig.getTags();
 		if (tags != null ){
-			Iterator iterator = tags.iterator();
+			Iterator <Tag> iterator = tags.iterator();
 
 			try {
 				while (iterator.hasNext()) {	
-					tag = (Tag) iterator.next();
-					// * 768 00016.contig03989 48  255 1M  * 0 0 * * CT:Z:.;COMM;Note=5 As at pos 49
+					Tag tag = iterator.next();
+					// * 768 00016.contig03989 48  255 55M  * 0 0 * * CT:Z:.;COMM;Note=5 As at pos 49
 					contigTagString = 
 						"*" + TAB + 
 						flags + TAB + 
 						contigName + TAB + 
 						tag.getStart() + TAB + 
 						"255" + TAB + 
-						tag.getLength() + "M" + TAB +
+						tag.getLength() + "M" + TAB + 
 						"*" + TAB + 
 						"0" + TAB + 
 						"0" + TAB + 
@@ -344,13 +343,13 @@ public class SAMContigExporter {
 					if (tagString !=null) {
 						contigTagString = contigTagString + TAB + tagString;
 					}
+					reportProgress("writeAlignment: Writing line for contig tag for contig  " + contigName + ":\n" + contigTagString);
+					pw.println( contigTagString);
 				}
 			}
 			catch (Exception e) {
 				Arcturus.logSevere("writeContigTags: unable to find tags for contig "+ contigName);											
 			}
-			reportProgress("writeAlignment: Writing line for contig tag for contig  " + contigName + ":\n" + contigTagString);
-			pw.println( contigTagString);
 		}
 	}
 	
