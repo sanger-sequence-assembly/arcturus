@@ -122,7 +122,7 @@ public class SAMContigExporter {
 		notifyEvent(Type.START_CONTIG_SET, 0);
 	
 		for (Contig contig : contigSet)
-			pw.println("@SQ\tSN:" + getNameForContig(contig) + "\tLN:" + contig.getLength());
+			pw.println("@SQ\tSN:" + contig.getName() + "\tLN:" + contig.getLength());
 		
 		int count = 0;
 		
