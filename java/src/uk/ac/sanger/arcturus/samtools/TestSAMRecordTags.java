@@ -188,8 +188,8 @@ public class TestSAMRecordTags {
 		
 		int stringEnd = gapTagString.length();
 		int tagEnd = stringEnd;
-		int start = 0;
-		int end = 0;
+		int start = 15;
+		int length = 25;
 		
 		String gapTagType = "";
 		
@@ -203,10 +203,12 @@ public class TestSAMRecordTags {
 		
 		reportProgress("\t\t\taddCTTagToContig: read strand as " + strand + ",comment as " + thisTagString);
 		
-		Tag newTag = new Tag(samTagType, samType, gapTagType, start, end, thisTagString, sequence_id, strand );
+		Tag newTag = new Tag(samTagType, samType, gapTagType, start, length, thisTagString, sequence_id, strand );
 		contig.addTag(newTag);
 		
 		reportProgress("\t\taddCTTagToContig: tag stored and retrieved from Java object as: " + newTag.toCTSAMString());
+		
+		reportProgress("\t\taddCTTagToContig: length retrieved from Java object as: " + newTag.getLength());
  	}
  	
  	private static boolean isValidGapTagType(String gapTagType){

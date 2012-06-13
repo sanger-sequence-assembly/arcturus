@@ -331,7 +331,7 @@ public class SAMContigExporter {
 						contigName + TAB + 
 						tag.getStart() + TAB + 
 						"255" + TAB + 
-						cigar + TAB + 
+						tag.getLength() + "M" + TAB +
 						"*" + TAB + 
 						"0" + TAB + 
 						"0" + TAB + 

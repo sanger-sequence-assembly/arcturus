@@ -6,7 +6,7 @@ package uk.ac.sanger.arcturus.data;
  */
 public class Tag extends Core implements Comparable {
 	protected int start;
-	protected int end;
+	protected int tag_length;
 	protected int sequence_id;
 	protected String samTagType;
 	protected String gapTagType;
@@ -17,10 +17,10 @@ public class Tag extends Core implements Comparable {
 	char fieldSeparator = ';';
 	char recordSeparator = '|';
 
-	public Tag(String samTagType, char samType, String gapTagType, int start, int end, 
+	public Tag(String samTagType, char samType, String gapTagType, int start, int tag_length, 
 			String comment, int sequence_id, char strand) {
 		this.start = start;
-		this.end = end;
+		this.tag_length = tag_length;
 		this.samType = samType;
 		this.gapTagType = gapTagType;
 		this.samTagType = samTagType;
@@ -34,11 +34,11 @@ public class Tag extends Core implements Comparable {
 	}
 
 	public int getLength() {
-		return ((end - start) + 1);
+		return (tag_length);
 	}
 	
 	public int getEnd() {
-		return (end);
+		return ((tag_length + start) - 1);
 	}
 	
 	public char getSAMType() {
@@ -99,7 +99,7 @@ public class Tag extends Core implements Comparable {
 	}
 	
 	public String toZSAMString() {	
-		return samTagType + ":" + samType + ":" + gapTagType + "|" + start + "|" + end
+		return samTagType + ":" + samType + ":" + gapTagType + "|" + start + "|" + tag_length
 		+ (comment == null ? "" : "|" + comment);	
 	}
 	
@@ -109,11 +109,11 @@ public class Tag extends Core implements Comparable {
 	 * Contig PT tag looks like PT:Z:26|32|-|COMM|gff3src=GenBankLifter or PT:Z:26|32|-|COMM|gff3src=GenBankLifter|15|25|KATE|+|Here is a KATE type comment
 	 */
 	public String toPTSAMString() {
-		return (samTagType + ":" + samType + ":" + start + fieldSeparator + end + fieldSeparator + strand + fieldSeparator + gapTagType + fieldSeparator + comment);
+		return (samTagType + ":" + samType + ":" + start + fieldSeparator + tag_length + fieldSeparator + strand + fieldSeparator + gapTagType + fieldSeparator + comment);
 	}
 	
 	public String toPartialPTSAMString() {
-		return ("" + start + fieldSeparator + end + fieldSeparator + strand + fieldSeparator + gapTagType + fieldSeparator + comment);
+		return ("" + start + fieldSeparator + tag_length + fieldSeparator + strand + fieldSeparator + gapTagType + fieldSeparator + comment);
 	}
 	
 	public String toCTSAMString() {
@@ -126,7 +126,7 @@ public class Tag extends Core implements Comparable {
 	 * @return
 	 */
 	public String toCAFString() {
-			return "Tag " + gapTagType + " " + start + " " + end
+			return "Tag " + gapTagType + " " + start + " " + tag_length
 					+ (comment == null ? "" : " \"" + comment + "\"");
 	}
 
@@ -146,10 +146,10 @@ public class Tag extends Core implements Comparable {
 				return -1;
 			}		
 			else {
-				if (this.end > that.end){
+				if (this.tag_length > that.tag_length){
 					return 1;
 				}
-				else if (this.end < that.end){
+				else if (this.tag_length < that.tag_length){
 					return -1;
 				}		
 				else {

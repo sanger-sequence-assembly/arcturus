@@ -109,13 +109,13 @@ public class SAMContigBuilder {
 		int stringEnd = gapTagString.length()- 1;
 		int tagEnd = stringEnd;
 		int start = 0;
-		int end = 0;
+		int length = 0;
 		
 		String gapTagType = "";
 		
 		strand = gapTagString.charAt(fs3-1);
 		start = Integer.parseInt(gapTagString.substring(0, fs1));
-		end = Integer.parseInt(gapTagString.substring(fs1+1, fs2));
+		length = Integer.parseInt(gapTagString.substring(fs1+1, fs2));
 		
 		gapTagType = gapTagString.substring(fs3 + 1, fs4); 
 		
@@ -128,7 +128,7 @@ public class SAMContigBuilder {
 		}
 		String thisTagString = gapTagString.substring(fs4 + 1, tagEnd);
 				
-		Tag newTag = new Tag(samTagType, samType, gapTagType, start, end, thisTagString, sequence_id, strand );
+		Tag newTag = new Tag(samTagType, samType, gapTagType, start, length, thisTagString, sequence_id, strand );
 		contig.addTag(newTag);
 		
 		reportProgress("\t\taddPTTagToContig: tag stored and retrieved from Java object as: " + newTag.toPTSAMString());
@@ -143,7 +143,7 @@ public class SAMContigBuilder {
 			
 			strand = gapTagString.charAt(fs3-1);
 			start = Integer.parseInt(gapTagString.substring(nextRS+1, fs1));
-			end = Integer.parseInt(gapTagString.substring(fs1+1, fs2));
+			length = Integer.parseInt(gapTagString.substring(fs1+1, fs2));
 			
 			thisRS = nextRS;
 			nextRS = gapTagString.indexOf( recordSeparator, fs4+1);
@@ -156,7 +156,7 @@ public class SAMContigBuilder {
 			}
 			thisTagString = gapTagString.substring(fs4 + 1, tagEnd);
 			
-			newTag = new Tag(samTagType, samType, gapTagType, start, end, thisTagString, sequence_id, strand );
+			newTag = new Tag(samTagType, samType, gapTagType, start, length, thisTagString, sequence_id, strand );
 			contig.addTag(newTag);
 			
 			reportProgress("\t\taddPTTagToContig: tag stored and retrieved from Java object as: " + newTag.toPTSAMString());
@@ -171,7 +171,7 @@ public class SAMContigBuilder {
 	 * No start/end or length
 	 **/
  	
- 	public void addCTTagToContig(Contig contig, String samTagType, String gapTagString, int sequence_id, char strand){
+ 	public void addCTTagToContig(Contig contig, String samTagType, String gapTagString, int sequence_id, int start, int length){
  		
  		reportProgress("\t\taddCTTagToContig: tag string is " + gapTagString);
  		
@@ -181,18 +181,16 @@ public class SAMContigBuilder {
 		
 		int stringEnd = gapTagString.length();
 		int tagEnd = stringEnd;
-		int start = 0;
-		int end = 0;
 		
 		String gapTagType = "";
 		
-		strand = gapTagString.charAt(0);
+		char strand = gapTagString.charAt(0);
 		
 		gapTagType = gapTagString.substring(fs1 + 1,fs2); 
 			
 		String thisTagString = gapTagString.substring(fs2 + 1, stringEnd);
 	
-		Tag newTag = new Tag(samTagType, samType, gapTagType, start, end, thisTagString, sequence_id, strand );
+		Tag newTag = new Tag(samTagType, samType, gapTagType, start, length, thisTagString, sequence_id, strand );
 		contig.addTag(newTag);
 		
 		reportProgress("\t\taddCTTagToContig: tag stored and retrieved from Java object as: " + newTag.toCTSAMString());
@@ -233,9 +231,11 @@ public class SAMContigBuilder {
 		int tagCount = tagList.size();
 		
 		int flags = record.getFlags() ;
+		int length = record.getCigarLength();
+		int start = record.getReadLength();
 		
 		if (flags == 768){
-			reportProgress("\t\taddTagsToContig: found a dummy read record with " + tagCount + " tags, flags " + flags + " and strand " + strand + " : ");
+			reportProgress("\t\taddTagsToContig: found a dummy read record with " + tagCount + " tags, flags " + flags + " and strand " + strand+ " and length " + length);
 			// no read group in a dummy read.  
 			count--;
 		}
@@ -274,7 +274,7 @@ public class SAMContigBuilder {
 							addPTTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
 						}
 						else if ((gapTagType.equals("CT")) || (gapTagType.equals("RT"))){
-							addCTTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
+							addCTTagToContig(contig, gapTagType, gapTagString, sequence_id,start, length);	
 						}
 						else if ((gapTagType.equals("Zc"))||(gapTagType.equals("Zs"))) {
 							addZTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
@@ -391,14 +391,14 @@ public class SAMContigBuilder {
  	    	readGroupIDvalue = readGroup.getId();
  	    }
  	    
- 	    //reportProgress("\taddMappingsToContig: adding ID " + readGroupIDvalue + " for read group " + readGroup + " for contig " + contig.getName());
+ 	    reportProgress("\taddMappingsToContig: adding ID " + readGroupIDvalue + " for read group " + readGroup + " for contig " + contig.getName());
 		
 		CanonicalMapping mapping = new CanonicalMapping(0,span,span,cigar, mapping_quality, readGroupIDvalue);
 		CanonicalMapping cached = adb.findOrCreateCanonicalMapping(mapping);
 		
 		int stored_quality = cached.getMappingQuality();
 		
-		//reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + stored_quality + " from database");
+		reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + stored_quality + " from database");
 		
 		Direction direction = record.getReadNegativeStrandFlag() ? Direction.REVERSE : Direction.FORWARD;
 		
