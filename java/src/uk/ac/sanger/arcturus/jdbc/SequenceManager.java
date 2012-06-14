@@ -61,7 +61,7 @@ public class SequenceManager extends AbstractManager {
 	
 	private static final String GET_TAGS =
 		"select distinct samTagType, samType, GAPtagtype,start, length, tagcomment, tag_seq_id, strand from SAMTAG " +
-		"where tag_seq_id = ? order by SAMtagtype, start";
+		"where tag_seq_id = ? and SAMtagtype = ? order by SAMtagtype, start";
 	
 	private static final String GET_SEQUENCE_BY_READNAME_FLAGS_AND_HASH =
 		"select RN.read_id,S.seq_id from READNAME RN,SEQ2READ SR,SEQUENCE S" +
@@ -733,6 +733,7 @@ public class SequenceManager extends AbstractManager {
 		
 		try {
 			pstmtGetTags.setInt(1, req_seqid);
+			pstmtGetTags.setString(2, "PT");
 			ResultSet rs = pstmtGetTags.executeQuery();
 
 			while (rs.next()) {

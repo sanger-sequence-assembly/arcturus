@@ -168,7 +168,7 @@ public class ContigManager extends AbstractManager {
 
 		query = "select SAMtagtype, SAMtype, Gaptagtype, start,length, tagcomment, tag_seq_id, strand"
 				+ " from SAMTAG"
-				+ " where contig_id = ? order by SAMtagtype, start";
+				+ " where contig_id = ? and SAMtagtype = ? order by SAMtagtype, start";
 
 		pstmtTags = prepareStatement(query);
 
@@ -1126,6 +1126,7 @@ public class ContigManager extends AbstractManager {
 
 		try {
 			pstmtTags.setInt(1, contig_id);
+			pstmtTags.setString(2, "CT");
 			ResultSet rs = pstmtTags.executeQuery();
 			
 			while (rs.next()) {
