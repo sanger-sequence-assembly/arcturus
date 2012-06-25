@@ -933,6 +933,43 @@ sub isEqual {
     return $equal;
 }
 
+sub hasSameTagSet {
+   my $this = shift;
+   my $compare = shift;
+
+   my %options = @_; # bidirectional=>1 for recognition of counter-alignment
+
+   &verifyKeys('isEqual',\%options,'sequenceonly','bidirectional');
+ 
+ 	 my $thisHasNoTags = $this->hasTags();
+ 	 my $compareHasNoTags = $compare->hasTags();
+
+ 	if (($thisHasNoTags == 0) && ($compareHasNoTags == 0))  {
+		return 1;
+	}
+ 	else {
+ 		my %newTags = $this->getTags(($options{asis} ? 0 : 1),sort=>'full',merge=>1);
+ 		my %oldTags = $compare->getTags(($options{asis} ? 0 : 1),sort=>'full',merge=>1);
+
+  	my $equal = 1;
+		my $found = 0;
+
+		while (my ($oldTagIndex, $name) = each %oldTags){
+	   	$found = 0;
+		 	foreach my $newTagIndex (keys %newTags) {
+		   	if ($newTagIndex == $oldTagIndex) {
+			       $found = 1;
+			 	}
+			}
+			if ($found == 0) {
+				$equal = 0;
+   			return $equal;
+#		  print "\tNeed to delete $name with id $oldTagIndex\n";
+			}
+		}	
+   	return $equal;
+	}
+}
 
 sub linkToContig {
 # compare two contigs using sequence IDs in their read-to-contig mappings
