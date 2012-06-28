@@ -39,7 +39,7 @@ my $gapconsensus = "$badgerbin/gap5_consensus -test ";
 
 my $gapconsistency = "$badgerbin/gap4_check_db";
 
-my $samtools = "/software/solexa/bin/aligners/samtools/samtools-0.1.7/samtools";
+my $samtools = "/software/solexa/bin/aligners/samtools/current/samtools";
 
 my $java_opts = defined($ENV{'JAVA_DEBUG'}) ?
     "-Ddebugging=true -Dtesting=true -Xmx4000M" : "-Xmx4000M";
@@ -436,9 +436,31 @@ if ($gap_version == 4) {
 
     &mySystem("$samtools view -S -b -u $samfile > $tmpfile") if ($? == 0);    # create raw bam file
 
-    print STDOUT "using samtools to sort and index\n";
+   if ($?) {
+		print STDERR "!! -- FAILED to convert SAM file $samfile to $tmpfile($?) --\n";
+		print STDERR "!! -- Import of $gapname.$version aborted --\n";
+		exit 1;
+   }
 
-    &mySystem("$samtools sort $tmpfile $bamroot")            if ($? == 0);    # sort bam file
+#---------------------------------------------------------------------------------------
+# use Picard SamSort to sort bam file to get contigs tag in correct co-ordinate position
+#---------------------------------------------------------------------------------------
+
+   my $sorting_command = "java -jar /software/arcturus2/java/lib/SortSam.jar I=$tmpfile O=$bamfile SORT_ORDER=coordinate VALIDATION_STRINGENCY=SILENT";
+ 
+   print STDERR "Sorting BAM file $tmpfile to $bamfile\n";
+    
+   print STDERR "Command: $sorting_command\n";
+   my $rc = &mySystem ($sorting_command);
+
+   if ($rc) {
+		print STDERR "!! -- FAILED to sort BAM file $tmpfile to $bamfile($?) --\n";
+		print STDERR "!! -- Import of $gapname.$version aborted --\n";
+		exit 1;
+   }
+
+    print STDOUT "using samtools to index bamfile\n";
+    #&mySystem("$samtools sort $tmpfile $bamroot")            if ($? == 0);    # sort bam file
 
     &mySystem("$samtools index $bamfile $idxfile")           if ($? == 0);    # index bam file
 
@@ -503,13 +525,11 @@ my ($other_username, $action, $starttime, $endtime) = $project->getImportExportA
 print STDERR "Checking if project $projectname already has an IMPORT or EXPORT running in the $organism database\n";
 
 if ( defined($other_username) && defined($action) && defined($starttime) && defined($endtime)){
-	if ($other_username eq "" ) {
-		$first_time = 1;
+		$first_time = 0;
 	}	
 	else {
-		$first_time = 0;
+		$first_time = 1;
 	}
-}
 
 unless (defined($endtime) || ($first_time == 1)) {
    	print STDERR "Project $projectname already has a $action running started by $other_username at $starttime so this import has been ABORTED\n";
