@@ -1,5 +1,6 @@
-David Harper's repeat-finder pipeline
-=====================================
+David Harper's repeat-finder pipeline NOW with BAM, GFF and SQL generation 
+capabilities for next generation and mixed assemblies!!!
+==========================================================================
 
 This set of scripts is a repeat-finding pipeline which I designed
 several years ago as an alternative to RepeatScout, RepeatMasker
@@ -48,6 +49,21 @@ The subsequences may contain partial repeat sequences, so in the fifth
 stage, we run them through phrap to join any partial repeats.
 
 The sixth stage merges the two sets of sequences and renames them.
+
+(May 2012) 
+Now that we are using Gap5 and BAM for mixed assemblies, we need to add 
+the ability to generate BAM contig tags for repeats.  This is done by a new 
+final stage in the pipeline.
+
+Where the assemblies are being sub-divided for several finishers to work on, 
+Minerva2 is still used.  As the division is in some part driven by where the 
+repeats are, the pipeline also generates SQL so that the tags can be read 
+into Minerva2, and then the assembly sub-divided. It is envisaged that this 
+functionality will end up entirely in Gap5.
+
+The pipeline now also writes out in gff format for Artemis.
+
+All the scripts have been incorporated into /software/arcturus/repeatfinder.
 
 -----------------------
 How to use the pipeline
@@ -126,7 +142,18 @@ How to use the pipeline
    times each one matches the original chromosomes or contigs, in
    descending order of number of hits.
 
+8. Now you can use your Minerva2 import of the Gap5 database to produce three different kinds of repeats files:
+
+Gap5:  use -mode sam
+Minerva2:  use -mode sql
+Artemis: use -mode gff
+
+perl -I/software/arcturus/lib/  /software/arcturus/repeatfinder/reptile.pl -instance illumina -organism EIMERIA_TENELLA -mode sql < repeats.matches > repeats.sql
 
 David Harper
 
 19 February 2009
+
+Kate Taylor
+
+19 May 2012
