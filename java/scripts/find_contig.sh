@@ -1,0 +1,1 @@
+bsub -q small -P helminth-ga -o /lustre/scratch101/sanger/kt6/Eimeria/NODE_21850_length_9460_cov_8.547040again.log -J find_record grep NODE_21850_length_9460_cov_8.547040 /lustre/scratch101/sanger/kt6/Eimeria/all_cappair.sam

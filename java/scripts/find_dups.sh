@@ -1,0 +1,1 @@
+bsub -q long -P helminth-ga -o /lustre/scratch101/sanger/kt6/Eimeria/eimeria_check_dups.log /software/solexa/bin/aligners/samtools/current/samtools rmdup /lustre/scratch101/sanger/kt6/Eimeria/all_cappair.bam /lustre/scratch101/sanger/kt6/Eimeria/all_cappair_no_dups.bam

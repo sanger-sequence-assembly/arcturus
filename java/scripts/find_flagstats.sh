@@ -1,0 +1,1 @@
+bsub -q small -P helminth-ga -o /lustre/scratch101/sanger/kt6/Eimeria/build_flagstats_after_gap.log -J find_flagstats /software/solexa/bin/aligners/samtools/current/samtools flagstat /lustre/scratch101/sanger/kt6/Eimeria/all_cappair_rg_head.bam
