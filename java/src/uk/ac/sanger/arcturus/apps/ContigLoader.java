@@ -13,7 +13,12 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.fasta.FastqFileReader;
 import uk.ac.sanger.arcturus.fasta.SequenceProcessor;
 
-import net.sf.samtools.*;
+import net.sf.samtools.SAMFileHeader;
+import net.sf.samtools.SAMFileReader;
+import net.sf.samtools.SAMFileReader.ValidationStringency;
+import net.sf.samtools.SAMRecord;
+import net.sf.samtools.SAMRecordIterator;
+import net.sf.samtools.SAMSequenceRecord;
 
 public class ContigLoader extends AbstractLoader {
 	public static void main (String[] args) {

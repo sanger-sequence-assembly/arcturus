@@ -12,7 +12,7 @@ import uk.ac.sanger.arcturus.utils.ReadNameFilter;
 
 import net.sf.samtools.SAMFileReader;
 import net.sf.samtools.SAMRecord;
-import net.sf.samtools.util.CloseableIterator;
+import net.sf.samtools.SAMRecordIterator;
 
 public class BAMReadLoader {
 	private ArcturusDatabase adb;
@@ -41,7 +41,7 @@ public class BAMReadLoader {
 	}
 	
 	public void processFile(SAMFileReader reader) throws ArcturusDatabaseException {
-		CloseableIterator<SAMRecord> iterator = reader.iterator();
+		SAMRecordIterator iterator = reader.iterator();
 
 		int n = 0;
 		

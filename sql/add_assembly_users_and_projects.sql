@@ -16,3 +16,6 @@ insert into PROJECT values(2, 1, 'PROBLEMS', now(), NULL, NULL, NULL, now(), 'ar
 
 select * from PROJECT;
 
+insert into IMPORTEXPORT values ();
+select * from IMPORTEXPORT;
+

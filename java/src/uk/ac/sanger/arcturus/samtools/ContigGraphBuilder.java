@@ -8,7 +8,7 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 
 import net.sf.samtools.*;
-import net.sf.samtools.util.CloseableIterator;
+import net.sf.samtools.SAMRecordIterator;
 
 import org.jgrapht.graph.DefaultWeightedEdge;
 import org.jgrapht.graph.SimpleDirectedWeightedGraph;
@@ -49,7 +49,7 @@ public class ContigGraphBuilder {
 		
 		String referenceSequenceName = contig.getName();
 
-		CloseableIterator<SAMRecord> iterator = reader.query(
+		SAMRecordIterator iterator = reader.query(
 				referenceSequenceName, 0, 0, false);
 
 		int readCount = 0;

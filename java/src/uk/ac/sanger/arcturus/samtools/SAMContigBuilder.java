@@ -12,7 +12,7 @@ import uk.ac.sanger.arcturus.data.GenericMapping.Direction;
 
 import net.sf.samtools.*;
 import net.sf.samtools.SAMRecord.SAMTagAndValue;
-import net.sf.samtools.util.CloseableIterator;
+import net.sf.samtools.SAMRecordIterator;
 
 public class SAMContigBuilder {
 	protected ArcturusDatabase adb = null;
@@ -233,7 +233,7 @@ public class SAMContigBuilder {
 		int flags = record.getFlags() ;
 		int length = record.getCigarLength();
 		int start = record.getReadLength();
-		
+
 		if (flags == 768){
 			reportProgress("\t\taddTagsToContig: found a dummy read record with " + tagCount + " tags, flags " + flags + " and strand " + strand+ " and length " + length);
 			// no read group in a dummy read.  
@@ -294,14 +294,14 @@ public class SAMContigBuilder {
 	
 	public void addMappingsToContig(Contig contig,SAMFileReader reader) throws ArcturusDatabaseException {
 		
-		//reportProgress("\naddMappingsToContig: working with contig " + contig.getName() + " which has " + contig.getParentContigCount() + " parents and " + contig.getReadCount() + " reads.");
+		reportProgress("\naddMappingsToContig: working with contig " + contig.getName() + " which has " + contig.getParentContigCount() + " parents and " + contig.getReadCount() + " reads.");
 		
 		if (contig.getContigToParentMappings() != null)
 			return;
 
 		String referenceName = contig.getName();
 		    	    	
-	    CloseableIterator<SAMRecord> iterator = reader.query(referenceName, 0, 0, false);
+	  SAMRecordIterator iterator = reader.query(referenceName, 0, 0, false);
 	 		
 	 	Vector<SequenceToContigMapping> seqToContigMappings = new Vector<SequenceToContigMapping>();
 	 		

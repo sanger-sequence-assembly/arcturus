@@ -29,7 +29,7 @@ set ARCTURUS_JAR=${ARCTURUS_HOME}/../arcturus.jar
 # Augment heap size if running on a 64-bit cluster machine
 # initial heap size and maximum heap size should match to help garbage collector keep up
 # set a suitable size for the consistency checker then override if doing a direct initial load
-
+echo $PROGNAME
 if ( `uname -m` == 'x86_64' && $PROGNAME != 'minerva' ) then
 		setenv JAVA_HEAP_SIZE -Xmx4096M
 		set EXTRA_OPTS="${JAVA_HEAP_SIZE} -Xms4096M"
