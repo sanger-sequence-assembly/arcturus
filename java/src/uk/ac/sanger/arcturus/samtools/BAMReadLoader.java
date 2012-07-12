@@ -11,8 +11,11 @@ import uk.ac.sanger.arcturus.traceserver.TraceServerClient;
 import uk.ac.sanger.arcturus.utils.ReadNameFilter;
 
 import net.sf.samtools.SAMFileReader;
+import net.sf.samtools.SAMFileReader.ValidationStringency;
 import net.sf.samtools.SAMRecord;
 import net.sf.samtools.SAMRecordIterator;
+import net.sf.samtools.SAMFileHeader;
+import net.sf.samtools.SAMSequenceRecord;
 
 public class BAMReadLoader {
 	private ArcturusDatabase adb;

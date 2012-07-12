@@ -149,7 +149,7 @@
 		</exec>
 	</target>
 
-	<target name="all" depends="clean,jar,webzip"
+	<target name="all" depends="clean,jar"
           description="Cleans, compiles, then builds the JAR file." />
 
 	<target name="docs" depends="prepare" description="Generates Javadoc documentation">

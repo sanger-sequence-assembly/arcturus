@@ -13,12 +13,8 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabaseException;
 import uk.ac.sanger.arcturus.fasta.FastqFileReader;
 import uk.ac.sanger.arcturus.fasta.SequenceProcessor;
 
-import net.sf.samtools.SAMFileHeader;
-import net.sf.samtools.SAMFileReader;
-import net.sf.samtools.SAMFileReader.ValidationStringency;
-import net.sf.samtools.SAMRecord;
-import net.sf.samtools.SAMRecordIterator;
-import net.sf.samtools.SAMSequenceRecord;
+import net.sf.samtools.*;
+import net.sf.samtools.SAMFileReader.*;
 
 public class ContigLoader extends AbstractLoader {
 	public static void main (String[] args) {
@@ -31,6 +27,7 @@ public class ContigLoader extends AbstractLoader {
 	
 	public int run(String[] args) {
 		File bamFile = null;
+		File baiFile = null;
 		String projectName = null;
 		String assemblyName = null;
 		String instance = null;
@@ -86,10 +83,9 @@ public class ContigLoader extends AbstractLoader {
  			Map<String, Integer> nameToID = null;
  
  			if (bamFile != null) {
-				SAMFileReader
-						.setDefaultValidationStringency(SAMFileReader.ValidationStringency.SILENT);
 
 				SAMFileReader reader = new SAMFileReader(bamFile);
+				reader.setValidationStringency(ValidationStringency.SILENT);
 
 				if (reader.isBinary() == false || reader.hasIndex() == false)
 					throw new IllegalArgumentException(
