@@ -109,13 +109,14 @@ public class SAMContigBuilder {
 		int stringEnd = gapTagString.length()- 1;
 		int tagEnd = stringEnd;
 		int start = 0;
+		int end = 0;
 		int length = 0;
 		
 		String gapTagType = "";
 		
 		strand = gapTagString.charAt(fs3-1);
 		start = Integer.parseInt(gapTagString.substring(0, fs1));
-		length = Integer.parseInt(gapTagString.substring(fs1+1, fs2));
+		end = Integer.parseInt(gapTagString.substring(fs1+1, fs2));
 		
 		gapTagType = gapTagString.substring(fs3 + 1, fs4); 
 		
@@ -127,7 +128,11 @@ public class SAMContigBuilder {
 			tagEnd = thisRS;
 		}
 		String thisTagString = gapTagString.substring(fs4 + 1, tagEnd);
-				
+		
+		length = (end - start) + 1;
+		
+		// Gap provides start and end for these tags, so convert to start and length before storing in Tag 
+		
 		Tag newTag = new Tag(samTagType, samType, gapTagType, start, length, thisTagString, sequence_id, strand );
 		contig.addTag(newTag);
 		
@@ -196,7 +201,7 @@ public class SAMContigBuilder {
 		reportProgress("\t\taddCTTagToContig: tag stored and retrieved from Java object as: " + newTag.toCTSAMString());
  	}
  	
- 	private boolean isValidGapTagType(String gapTagType){
+ 	public boolean isValidGapTagType(String gapTagType){
 		return ( (gapTagType.equals("Zc") || gapTagType.equals("Zs") || gapTagType.equals("FS")) || gapTagType.equals("PT") || gapTagType.equals("CT")|| gapTagType.equals("RT"));
 	}
 	
@@ -269,12 +274,12 @@ public class SAMContigBuilder {
 
 				if (gapTagString != null) {
 					try {
-						reportProgress("\taddTagsToContig: adding tag " + count + " of type " + gapTagType + " holding " + gapTagString + "\n");	
+						reportProgress("\t\taddTagsToContig: adding tag " + count + " of type " + gapTagType + " holding " + gapTagString + "\n");	
 						if (gapTagType.equals("PT")){
 							addPTTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	
 						}
 						else if ((gapTagType.equals("CT")) || (gapTagType.equals("RT"))){
-							addCTTagToContig(contig, gapTagType, gapTagString, sequence_id,start, length);	
+							addCTTagToContig(contig, gapTagType, gapTagString, sequence_id, start, length);	
 						}
 						else if ((gapTagType.equals("Zc"))||(gapTagType.equals("Zs"))) {
 							addZTagToContig(contig, gapTagType, gapTagString, sequence_id, strand);	

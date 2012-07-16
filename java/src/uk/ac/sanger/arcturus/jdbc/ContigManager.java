@@ -1763,6 +1763,8 @@ public class ContigManager extends AbstractManager {
 					tag = (Tag) iterator.next();
 					reportProgress("\tputTags: tag for contig " + contig_id + " holds " + tag.toSAMString());
 					
+					String strandString = "";
+
 					pstmtStoreSAMTag.setString(1, tag.getSAMTagType());
 					pstmtStoreSAMTag.setString(2, tag.getSAMTypeAsString());
 					pstmtStoreSAMTag.setString(3, tag.getGAPTagType());
@@ -1771,7 +1773,18 @@ public class ContigManager extends AbstractManager {
 					pstmtStoreSAMTag.setInt(6, tag.getStart()); 
 					pstmtStoreSAMTag.setInt(7, tag.getLength()); 
 					pstmtStoreSAMTag.setInt(8,tag.getSequenceId());
-					pstmtStoreSAMTag.setString(9, tag.getStrandAsString()); 
+					
+					switch (tag.getStrand()) {
+						case '+': strandString = "F";
+						case '-': strandString = "R";
+						case '.': strandString = "U";
+						case 'F': strandString = "F";
+						case 'R': strandString = "R";
+						case 'U': strandString = "U";
+						default : strandString = "U";
+					}
+					
+					pstmtStoreSAMTag.setString(9, strandString); 
 					pstmtStoreSAMTag.setString(10, null);
 
 					pstmtStoreSAMTag.executeUpdate();

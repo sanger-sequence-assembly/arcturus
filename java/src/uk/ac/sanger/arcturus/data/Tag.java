@@ -29,12 +29,8 @@ public class Tag extends Core implements Comparable {
 		this.samType = samType;
 		this.gapTagType = gapTagType;
 		this.samTagType = samTagType;
-		if (samTagType == "CT") {
-			this.tag_length = tag_length;
-		}
-		else {
-			this.tag_length = (tag_length - start) + 1;
-		}
+	
+		this.tag_length = tag_length;
 		this.comment = comment;
 		this.strand = strand;
 
