@@ -37,6 +37,17 @@ public class Tag extends Core implements Comparable {
 		}
 		this.comment = comment;
 		this.strand = strand;
+
+		switch (strand) {
+			case '+': this.strand = 'F';
+			case '-': this.strand = 'R';
+			case '.': this.strand = 'U';
+			case 'F': this.strand = 'F';
+			case 'R': this.strand = 'R';
+			case 'U': this.strand = 'U';
+			default : this.strand = 'U';
+		}
+		
 		this.sequence_id = sequence_id;
 	}
 
@@ -77,8 +88,19 @@ public class Tag extends Core implements Comparable {
 		return strand;
 	}
 	
-	public String getStrandAsString() {
-		return "" + strand;
+	public String getStrandAsString()  {
+		String strandString = "";
+		
+		switch (strand) {
+			case 'F': strandString +="+";
+			case 'R': strandString +="-";
+			case 'U': strandString +=".";
+			case '+': strandString += strand;
+			case '-': strandString += strand;
+			case '.': strandString += strand;
+			default : strandString +=".";
+		}
+		return strandString;
 	}
 	
 	public int getSequenceId() {
