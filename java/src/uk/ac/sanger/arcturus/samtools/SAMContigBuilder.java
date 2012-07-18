@@ -21,7 +21,7 @@ public class SAMContigBuilder {
 	private DecimalFormat format = null;
 	protected long t0;
 	
-	private boolean scb_testing = true;
+	private boolean scb_testing = false;
 
 	private char fieldSeparator = ';';
 	private char recordSeparator = '|';
@@ -376,7 +376,7 @@ public class SAMContigBuilder {
 
 	private SequenceToContigMapping buildSequenceToContigMapping(SAMRecord record, Contig contig) throws ArcturusDatabaseException {	    
 	    
-		//reportProgress("\tbuildSequenceToContigMapping: working with SAMRecord " + record.getReadName() + " and contig " + contig.getName());
+		reportProgress("\tbuildSequenceToContigMapping: working with SAMRecord " + record.getReadName() + " and contig " + contig.getName());
 		
 		String cigar = record.getCigarString();
 		int contigStartPosition = record.getAlignmentStart();
@@ -391,7 +391,7 @@ public class SAMContigBuilder {
 		//sequence.setDNA(null);
 		
 		int mapping_quality = record.getMappingQuality();
-		//reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + mapping_quality + " from record " + record.getReadName());
+		reportProgress("\t\tbuildSequenceToContigMapping: got mapping quality of " + mapping_quality + " from record " + record.getReadName());
 		
 	   
  	    SAMReadGroupRecord readGroup = record.getReadGroup();

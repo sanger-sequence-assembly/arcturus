@@ -86,12 +86,16 @@ public class BAMReadLoader {
 		
 		int maskedFlags = 0;
 		int flags = record.getFlags();
+		int start = record.getAlignmentStart();
+		Integer startInt = new Integer(start);
+		String startString = startInt.toString();
 		
 		if (flags != 768) {
 			maskedFlags = Utility.maskReadFlags(flags);
 		}
 		else {
 			maskedFlags = flags;
+			readname = "Dummy" + startString;
 		}
 		
 		byte[] dna = record.getReadBases();

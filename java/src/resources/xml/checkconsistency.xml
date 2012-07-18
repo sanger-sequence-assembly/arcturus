@@ -57,7 +57,7 @@
 		
 		<query>
 		        select R.readname,DR.hits,CC.contig_id,P.name,CC.length,CC.nreads,CC.created,M.coffset,M.direction
-		        from DUPLICATEREADS DR left join (READNAME R,SEQ2READ SR,SEQ2CONTIG M,CURRENTCONTIGS CC,PROJECT P)
+		        from DUPLICATEREADS DR left join (READNAME R,SEQ2READ SR,SEQ2CONTIG M,CURRENTCONTIGS CC,PROJECT P) 
 		        on (DR.read_id=R.read_id)
 		        where R.read_id=SR.read_id and SR.seq_id=M.seq_id and M.contig_id=CC.contig_id and CC.project_id=P.project_id
 		        order by DR.read_id asc,CC.contig_id asc
