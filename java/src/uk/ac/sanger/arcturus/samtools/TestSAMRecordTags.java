@@ -189,7 +189,7 @@ public class TestSAMRecordTags {
 			
 			if (CTTGapTagString != null) {
 				reportProgress("\taddTagsToContig: adding CT tag " + count + " of type " + gapTagType + " holding " + CTTGapTagString);		
-				contigBuilder.addCTTagToContig(contig, gapTagType, CTTGapTagString, 74294504, 4, 26);	
+				contigBuilder.addCTTagToContig(contig, gapTagType, CTTGapTagString, 74294504, 67, 5);	
 			}
 			else {
 				reportProgress("addTagsToContig: unexpectedly found null tag information at position " + count + " for tag type " + gapTagType);
@@ -266,7 +266,7 @@ public class TestSAMRecordTags {
 		Contig savedContig = null;
 		
 		try {
-			savedContig = adb.getContigByID(2012);
+			savedContig = adb.getContigByID(2048);
 		} catch (ArcturusDatabaseException e1) {
 			// TODO Auto-generated catch block
 			e1.getMessage();
@@ -325,7 +325,7 @@ public class TestSAMRecordTags {
 			
 			while (iterator.hasNext() ){
 				Tag tag = iterator.next();
-				reportProgress("\tprinting tag : " + tag.toCTSAMString());
+				reportProgress("\ttag should be from position 67 for 5 bases\n\tprinting tag from " + tag.getStart() + " length " + tag.getLength() + ": " + tag.toCTSAMString());
 			}
 		}
 		else {

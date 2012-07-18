@@ -178,7 +178,7 @@ public class SAMContigBuilder {
  	
  	public void addCTTagToContig(Contig contig, String samTagType, String gapTagString, int sequence_id, int start, int length){
  		
- 		reportProgress("\t\taddCTTagToContig: tag string is " + gapTagString);
+ 		reportProgress("\t\taddCTTagToContig: tag starts at " + start + " for " + length + " bases, tag string is " + gapTagString);
  		
 		char samType = 'Z';
 		int fs1 = gapTagString.indexOf(fieldSeparator);
@@ -240,7 +240,8 @@ public class SAMContigBuilder {
 		int start = record.getReadLength();
 
 		if (flags == 768){
-			reportProgress("\t\taddTagsToContig: found a dummy read record with " + tagCount + " tags, flags " + flags + " and strand " + strand+ " and length " + length);
+			reportProgress("\t\taddTagsToContig: found a dummy read record  " + record.getSAMString());
+			reportProgress("\t\taddTagsToContig: " + tagCount + " tags, flags " + flags + ", strand " + strand + ", start = " + start + " and length " + length);
 			// no read group in a dummy read.  
 			count--;
 		}
