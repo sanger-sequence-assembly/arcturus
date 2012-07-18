@@ -236,10 +236,14 @@ public class SAMContigBuilder {
 		int tagCount = tagList.size();
 		
 		int flags = record.getFlags() ;
-		int length = record.getCigarLength();
-		int start = record.getReadLength();
+		int length = 0;
+		int start = 0;
 
 		if (flags == 768){
+			Cigar cigar = record.getCigar(); // column 6 CIGAR
+			length = cigar.getReadLength();
+			start = record.getAlignmentStart(); // column 4 POS
+			
 			reportProgress("\t\taddTagsToContig: found a dummy read record  " + record.getSAMString());
 			reportProgress("\t\taddTagsToContig: " + tagCount + " tags, flags " + flags + ", strand " + strand + ", start = " + start + " and length " + length);
 			// no read group in a dummy read.  
