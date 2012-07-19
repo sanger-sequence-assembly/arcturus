@@ -1093,7 +1093,7 @@ sub writeToCaf {
     my @validoptionkeys = ('noreads',     # don't export reads, only contig
                            'readsonly',   # only export reads
                            'qualitymask', # if readsonly: mask low quality read sequence
- #                          'gap4name',   # 
+                           'gap4name',   # 
                            'notags',      # don't export tags
 		           'alltags',
                            'includetag',
@@ -1102,8 +1102,8 @@ sub writeToCaf {
     &verifyKeys('writeToCaf',\%options,@validoptionkeys);
 
     return "Missing file handle for Caf output" unless $FILE;
-
-    my $contigname = $this->getContigName();
+   
+    my $contigname .= " ".$this->getGap4Name() if $options{gap4name};
 
 # dump all reads, in frugal mode destroy read after it has been written
 

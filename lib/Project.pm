@@ -545,10 +545,16 @@ sub writeContigsToCaf {
     my $maximum = $options{maxnrofreads};
 
     my %woptions;
-    foreach my $option ('readsonly','notags','alltags','includetag','excludetag') {
+    foreach my $option ('readsonly','notags','alltags','includetag','excludetag', 'gap4name') {
         next unless defined $options{$option};
         $woptions{$option} = $options{$option};
     }
+
+# add gap4name option
+    if ($options{gap4name}) {
+        $woptions{gap4name} = $options{gap4name};
+    }
+		
 # add quality masking option (if any) when readsonly export
     if ($options{readsonly}  &&  $options{qualitymask}) {
         $woptions{qualitymask} = $options{qualitymask};
