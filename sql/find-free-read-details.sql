@@ -26,3 +26,4 @@ where
 	READINFO.read_id not in
      (select read_id from yesterday_reads_in_contigs);
 
+select * from yesterday_free_reads order by asped, readname;

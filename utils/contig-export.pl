@@ -10,6 +10,8 @@ use Logging;
 # ingest command line parameters
 #----------------------------------------------------------------
 
+
+my $project;
 my $organism;
 my $instance;
 my $verbose;
@@ -36,7 +38,7 @@ my $endregiononly;
 my $gap4name;
 my $dir;
 
-my $validKeys  = "organism|instance|contig|contigs|fofn|focn|ignoreblocked|caf|"
+my $validKeys  = "organism|instance|contig|contigs|fofn|focn|ignoreblocked|caf|gap4name|"
                . "embl|fasta|quality|padded|mask|symbol|shrink|readsonly|noreads|"
                . "qualityclip|qc|qclipthreshold|qct|qclipsymbol|qcs|alltags|"
                . "endregiontrim|ert|endegiononly|ero|verbose|help|dir";
@@ -291,11 +293,13 @@ if (defined($fastafile)) {
     }
 }
 elsif (defined($caffile)) {
+print "Setting -gap4name\n";
 # caf options
     $woptions{noreads} = 1 if $noreads;
     $woptions{qualitymask} = $masking if $masking;
     $woptions{qualitymask} = $msymbol if $msymbol; # overrides
     $woptions{alltags} = 1 if $alltags;
+    $woptions{gap4name} = 1 if $gap4name;
 }
 
 my $errorcount = 0;

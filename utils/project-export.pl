@@ -51,7 +51,7 @@ my $append = 0;
 
 my $validKeys  = "organism|o|instance|i|project|p|assembly|a|"
                . "fopn|fofn|ignore|scaffold|"
-               . "caf|maf|fasta|quality|lock|minNX|minerva|"
+               . "caf|maf|fasta|quality|lock|minNX|minerva|gap4name|"
                . "minimum|min|maximum|max|singletons|readsonly|"
 #               . "mask|symbol|shrink|ref|readexcludefilter|"
                . "mask|symbol|shrink|filterreads|fr|restorereads|rr|"
@@ -452,6 +452,8 @@ if (defined($caffile)) {
     }
     $exportoptions{restore_masked_reads} = 1 if $restore_reads; 
     $exportoptions{remove_invalid_read_names} = 1 if $filter_reads; 
+    $exportoptions{gap4name}  = 1 if $gap4name;
+    $singleoptions{gap4name}  = 1 if $gap4name;
 }
 elsif (defined($fastafile)) {
     $exportoptions{readsonly} = 1 if $readsonly;
