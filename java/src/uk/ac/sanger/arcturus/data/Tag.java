@@ -88,12 +88,12 @@ public class Tag extends Core implements Comparable {
 		String strandString = "";
 		
 		switch (strand) {
-			case 'F': strandString +="+";
-			case 'R': strandString +="-";
-			case 'U': strandString +=".";
-			case '+': strandString += strand;
-			case '-': strandString += strand;
-			case '.': strandString += strand;
+			case 'F': strandString +="+"; break;
+			case 'R': strandString +="-"; break;
+			case 'U': strandString +="."; break;
+			case '+': strandString += strand; break;
+			case '-': strandString += strand; break;
+			case '.': strandString += strand; break;
 			default : strandString +=".";
 		}
 		return strandString;
@@ -132,22 +132,23 @@ public class Tag extends Core implements Comparable {
 		+ (comment == null ? "" : "|" + comment);	
 	}
 	
+
 	/**
 	 * Sequence (consensus) tag looks like CT:Z:REPT|5|1|Tag inserted at position 25 at start of AAAA 
 	 * @return
 	 * Contig PT tag looks like PT:Z:26|32|-|COMM|gff3src=GenBankLifter or PT:Z:26|32|-|COMM|gff3src=GenBankLifter|15|25|KATE|+|Here is a KATE type comment
 	 */
 	public String toPTSAMString() {
-		return (samTagType + ":" + samType + ":" + start + fieldSeparator + tag_length + fieldSeparator + strand + fieldSeparator + gapTagType + fieldSeparator + comment);
+		return (samTagType + ":" + samType + ":" + start + fieldSeparator + tag_length + fieldSeparator + getStrandAsString() + fieldSeparator + gapTagType + fieldSeparator + comment);
 	}
 	
 	public String toPartialPTSAMString() {
-		return ("" + start + fieldSeparator + tag_length + fieldSeparator + strand + fieldSeparator + gapTagType + fieldSeparator + comment);
+		return ("" + start + fieldSeparator + tag_length + fieldSeparator + getStrandAsString() + fieldSeparator + gapTagType + fieldSeparator + comment);
 	}
 	
 	public String toCTSAMString() {
 		// CT:Z:+;ANNO;Note=Annotation to see format of CT tag in Gap5 1.2.14-r2891M
-		return (samTagType + ":" + "Z" + ":" + strand + fieldSeparator + gapTagType + fieldSeparator + "Note=" + comment);
+		return (samTagType + ":" + "Z" + ":" + getStrandAsString() + fieldSeparator + gapTagType + fieldSeparator + "Note=" + comment);
 	}
 	
 	/**
