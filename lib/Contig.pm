@@ -1103,7 +1103,13 @@ sub writeToCaf {
 
     return "Missing file handle for Caf output" unless $FILE;
    
-    my $contigname .= " ".$this->getGap4Name() if $options{gap4name};
+    my $contigname = "";
+	 	if ($options{gap4name}) {
+    	$contigname .= "contig".$this->getGap4Name();
+		}
+		else{
+			$contigname = $this->getContigName();
+		}
 
 # dump all reads, in frugal mode destroy read after it has been written
 
