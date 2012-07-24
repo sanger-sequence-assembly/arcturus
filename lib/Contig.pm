@@ -12,6 +12,8 @@ use Logging;
 
 use Digest::MD5 qw(md5 md5_hex md5_base64);
 
+my $contig_prefix = "contig-";
+
 # ----------------------------------------------------------------------------
 # constructor and initialisation
 #-----------------------------------------------------------------------------
@@ -1068,7 +1070,7 @@ sub writeToCaf {
    
     my $contigname = "";
 	 	if ($options{gap4name}) {
-    	$contigname .= "contig".$this->getGap4Name();
+    	$contigname .= "$contig_prefix".$this->getGap4Name();
 		}
 		else{
 			$contigname = $this->getContigName();
@@ -1148,9 +1150,11 @@ sub writeToCaf {
 
 # to write the DNA and BaseQuality we use the two private methods
 
-    my $errors = $this->writeDNA($FILE,marker => "\nDNA : "); # CAF marker
+		$options{marker} = "\nDNA : ";
+    my $errors = $this->writeDNA($FILE,%options); # CAF marker
 
-    $errors += $this->writeBaseQuality($FILE,marker => "\nBaseQuality : ");
+		$options{marker} = "\nBaseQuality : ";
+    $errors += $this->writeBaseQuality($FILE,%options);
 
     print $FILE "\n";
 
@@ -1239,7 +1243,7 @@ sub writeDNA {
     my $identifier = $this->getContigName();
 # optionally add gap4name (generally: extended descriptor)
     if ($options{gap4name}) {
-        $identifier .= " - ".$this->getGap4Name();
+        $identifier = "$contig_prefix".$this->getGap4Name();
         if (my $note = $this->getContigNote()) {
             $identifier .= " ".$note;
         }
@@ -1280,7 +1284,7 @@ sub writeBaseQuality {
     my $identifier = $this->getContigName();
 # optionally add gap4name 
     if ($options{gap4name}) {
-        $identifier .= " - ".$this->getGap4Name();
+        $identifier = "$contig_prefix".$this->getGap4Name();
     }
 
     if (!$QFILE) {
