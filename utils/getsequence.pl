@@ -6,6 +6,7 @@ use DBI;
 use FileHandle;
 use DataSource;
 use Compress::Zlib;
+use Digest::MD5 qw(md5 md5_hex md5_base64);
 
 my $raw = 0;
 my $mask = 1;
@@ -45,14 +46,14 @@ unless (defined($dbh)) {
     die "getConnection failed";
 }
 
-$query = "SELECT sequence from SEQUENCE where seq_id = ?";
+$query = "SELECT sequence, quality from SEQUENCE where seq_id = ?";
 
 $sth = $dbh->prepare($query);
 &db_die("prepare($query) failed on $dsn");
 
 $sth->execute($seqid);
 
-($sequence) = $sth->fetchrow_array();
+($sequence, $quality) = $sth->fetchrow_array();
 
 $sth->finish();
 
@@ -102,15 +103,40 @@ if (defined($sequence)) {
 	$sth->finish();
     }
 
+		if (defined($quality)) {
+			$quality = uncompress($quality);
+
+			my @bq = unpack("c*", $quality);
+ 
+  		my @fq = map { ($_ <= 93? $_ : 93) + 33 } @bq;
+ 
+  		$quality = pack("c*", @fq);
+
+		}
+
+		my $slen =length($sequence);
+		my $qlen =length($quality) ; 
     if ($raw) {
-	print $sequence,"\n";
-    } else {
-	print ">seq$seqid\n";
-	while (length($sequence)) {
-	    print substr($sequence, 0, 50),"\n";
-	    $sequence = substr($sequence, 50);
-	}
+			print $sequence,"\n";
+			print $quality,"\n";
+    } 
+		else {
+			my $keep_sequence = $sequence;
+
+			print ">seq$seqid\n";
+			while (length($sequence)) {
+	    	print substr($sequence, 0, 50),"\n";
+	    	$sequence = substr($sequence, 50);
+			}
+				print $quality,"\n";
+
+				foreach $q (split //, $quality) {
+					print ord($q), "\t";
+				}
+				print "\n";
     }
+		print "Length of sequence: $slen\n";
+		print "Length of quality: $qlen\n";
 }
 
 $dbh->disconnect();
