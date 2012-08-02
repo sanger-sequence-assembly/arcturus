@@ -246,9 +246,6 @@ public class SAMContigExporter {
 			quality = Utility.reverseQuality(quality);
 		}
 		
-        for (int i = 0; i < quality.length; i++)	
-        	quality[i] += FASTQ_QUALITY_OFFSET;
-
 		String DNA = null;
 		String qualityString = null;
 		
@@ -258,8 +255,8 @@ public class SAMContigExporter {
         	if (!forward)
         		flags |= 0x0010;
         	
-            for (int i = 0; i < quality.length; i++)	
-            	quality[i] += FASTQ_QUALITY_OFFSET;
+          for (int i = 0; i < quality.length; i++)	
+          	quality[i] += FASTQ_QUALITY_OFFSET;
     		
     		try {
     			DNA = new String(sequence, "US-ASCII");
