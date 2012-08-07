@@ -97,15 +97,25 @@ public class SAMReadGroupRecordManager  extends AbstractManager{
 		pstmtCreateReadGroup.setInt(1, line_no);
 		pstmtCreateReadGroup.setInt(2, import_id);
 	
+		String read_group = "";
+
 		try {
-			pstmtCreateReadGroup.setString(3, readGroup.getId());
+			read_group = readGroup.getId();
+			pstmtCreateReadGroup.setString(3, read_group);
 		}
 		catch (NullPointerException e){
 			Arcturus.logSevere("Failed to read the the Read Group Identifier(ID) tag");
 		}
 		
+		String sample_name = "";
 		try {
-			pstmtCreateReadGroup.setString(4, readGroup.getSample());
+			sample_name = readGroup.getSample();
+			// Picard 1.70 enforces this
+			if (!(sample_name.equals(read_group))){
+				sample_name = read_group;
+				System.out.println("addreadGroup: setting the SM tag to the ID tag *" + read_group + "* to please Picard");
+			}
+			pstmtCreateReadGroup.setString(4, sample_name);
 		}
 		catch (NullPointerException e){
 			Arcturus.logSevere("Failed to read the the Sample(SM) tag");
