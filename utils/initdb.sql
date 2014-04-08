@@ -32,4 +32,4 @@ GRANT FILE ON *.* TO slave@"%" IDENTIFIED BY "spartacus";
 GRANT RELOAD ON *.* TO flusher@"%" IDENTIFIED BY "FlushedWithPride";
 
 # This is the first real user
-GRANT ALL ON *.* TO arcturus@"%" IDENTIFIED BY "***REMOVED***";
+GRANT ALL ON *.* TO arcturus@"%" IDENTIFIED BY "*** REMOVED ***";

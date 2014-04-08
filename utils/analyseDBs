@@ -12,7 +12,7 @@ die "Usage: analyseDBs host:port" unless (defined($dbhost) && defined($dbport));
 
 $dsn = 'DBI:mysql:arcturus;host=' . $dbhost . ';port=' . $dbport;
 
-$dbh = DBI->connect($dsn, 'arcturus', '***REMOVED***',
+$dbh = DBI->connect($dsn, 'arcturus', '*** REMOVED ***',
 		    {PrintError => 0, RaiseError => 0});
 
 &db_die("Unable to connect to $dsn") unless $dbh;

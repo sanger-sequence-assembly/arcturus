@@ -18,7 +18,7 @@ set SCRIPTDIR=`dirname .`
 set LISTDIR=`dirname ~/whoami`
 set MYPERL_SCRIPT=build-active-organism-list.pl
 set MYSQL_USER=arcturus
-set MYSQL_PASSWORD=***REMOVED***
+set MYSQL_PASSWORD=*** REMOVED ***
 
 switch($MYSQL_HOST)
 case mcs10:

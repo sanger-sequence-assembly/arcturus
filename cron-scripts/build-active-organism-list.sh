@@ -6,7 +6,7 @@ set SCRIPT_NAME=`basename $0`
 
 set PERL_SCRIPT=build-active-organism-list.pl
 set MYSQL_USER=arcturus
-set MYSQL_PASSWORD=***REMOVED***
+set MYSQL_PASSWORD=*** REMOVED ***
 
 if ( $# > 0 ) then
 	set MYSQL_HOST=$1

@@ -23,7 +23,7 @@ $table = 'READS' unless defined($table);
 
 $dsna = 'DBI:mysql:' . $dbname . ';host=' . $hosta . ';port=' . $porta;
 
-$dbha = DBI->connect($dsna, 'arcturus', '***REMOVED***',
+$dbha = DBI->connect($dsna, 'arcturus', '*** REMOVED ***',
 		     {PrintError => 0, RaiseError => 0});
 
 &db_die("Unable to connect to $dsna") unless $dbha;

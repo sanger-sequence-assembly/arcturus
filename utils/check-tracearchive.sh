@@ -3,7 +3,7 @@
 set MYSQL_HOST=mcs3a
 set MYSQL_PORT=15001
 set MYSQL_USER=arcturus
-set MYSQL_PASSWORD=***REMOVED***
+set MYSQL_PASSWORD=*** REMOVED ***
 
 set MYSQL="mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER --password=$MYSQL_PASSWORD"
 

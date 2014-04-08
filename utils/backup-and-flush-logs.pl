@@ -126,7 +126,7 @@ $dbname = 'arcturus' unless defined($dbname);
 
 unless (defined($username) && defined($password)) {
     $username = 'arcturus';
-    $password = '***REMOVED***';
+    $password = '*** REMOVED ***';
 }
 
 ###

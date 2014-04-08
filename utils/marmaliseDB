@@ -9,7 +9,7 @@ $dsn = 'DBI:mysql:arcturus;host=' . $dbhost . ';port=' . $dbport;
 
 print STDERR "Marmalising MYSQL server at $dbhost:$dbport\n";
 
-$dbh = DBI->connect($dsn, 'arcturus', '***REMOVED***',
+$dbh = DBI->connect($dsn, 'arcturus', '*** REMOVED ***',
 		    {PrintError => 0, RaiseError => 0});
 
 &db_die("Unable to connect to $dsn") unless $dbh;

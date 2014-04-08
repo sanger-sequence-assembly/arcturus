@@ -10,7 +10,7 @@ DB=$1
 
 SERVER="-h mcs8 -P 15001"
 
-CREDENTIALS="-u arcturus -p***REMOVED***"
+CREDENTIALS="-u arcturus -p*** REMOVED ***"
 
 OPTIONS="--batch --skip-column-names"
 
