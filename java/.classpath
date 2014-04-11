@@ -13,6 +13,7 @@
 	<classpathentry kind="lib" path="lib/mockito-all-1.8.4.jar"/>
 	<classpathentry kind="lib" path="lib/mysql-connector-java-5.1.12-bin.jar"/>
 	<classpathentry kind="lib" path="lib/jgrapht-jdk1.6.jar"/>
+	<classpathentry kind="lib" path="lib/sam-1.70.jar"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="output" path="classes"/>
 </classpath>
